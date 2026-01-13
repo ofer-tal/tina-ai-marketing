@@ -150,6 +150,85 @@ router.get('/metrics', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/mrr-trend
+ * Get MRR trend data over time for strategic dashboard
+ * Query params:
+ *   - range: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/mrr-trend', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+
+    // Validate range parameter
+    const validRanges = ['30d', '90d', '180d'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({
+        error: 'Invalid range. Must be one of: ' + validRanges.join(', ')
+      });
+    }
+
+    console.log(`Fetching MRR trend data for range: ${range}`);
+
+    // Calculate number of days
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // TODO: In production, fetch from MongoDB marketing_metrics collection
+    // For now, generate mock trend data
+    const data = [];
+    let currentMrr = 300;
+    const targetMrr = 10000;
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      // Simulate growth with some randomness
+      const progress = i / days;
+      const growth = (targetMrr - currentMrr) / (days - i + 1);
+      const randomFactor = (Math.random() - 0.4) * 50;
+      currentMrr = Math.max(300, currentMrr + growth + randomFactor);
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        mrr: Math.round(currentMrr),
+        target: Math.round(targetMrr * progress)
+      });
+    }
+
+    // Calculate summary metrics
+    const current = data[data.length - 1].mrr;
+    const previousIndex = Math.max(0, data.length - 8); // 7 days ago
+    const previous = data[previousIndex].mrr;
+    const change = ((current - previous) / previous * 100);
+
+    const trendData = {
+      range: range,
+      startDate: startDate.toISOString(),
+      endDate: new Date().toISOString(),
+      data: data,
+      summary: {
+        current: Math.round(current),
+        previous: Math.round(previous),
+        change: parseFloat(change.toFixed(1)),
+        trend: current >= previous ? 'up' : 'down'
+      }
+    };
+
+    console.log(`MRR trend data fetched successfully for range: ${range}`);
+    res.json(trendData);
+
+  } catch (error) {
+    console.error('Error fetching MRR trend data:', error);
+    res.status(500).json({
+      error: 'Failed to fetch MRR trend data',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */

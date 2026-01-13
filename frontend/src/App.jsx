@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import styled from 'styled-components';
 import Settings from './pages/Settings';
 import Dashboard from './pages/Dashboard';
+import StrategicDashboard from './pages/StrategicDashboard';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -155,6 +156,7 @@ function App() {
           <Nav>
             <NavLink to="/">Home</NavLink>
             <NavLink to="/dashboard">Dashboard</NavLink>
+            <NavLink to="/dashboard/strategic">Strategic</NavLink>
             <NavLink to="/settings">Settings</NavLink>
           </Nav>
         </Header>
@@ -163,6 +165,7 @@ function App() {
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/dashboard/strategic" element={<StrategicDashboard />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Content>
