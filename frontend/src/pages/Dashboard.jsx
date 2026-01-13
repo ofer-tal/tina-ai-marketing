@@ -79,6 +79,30 @@ const GlobalRefreshButton = styled.button`
   }
 `;
 
+const ExportButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: ${props => props.$exporting ? '#2d3561' : '#00d26a'};
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: ${props => props.$exporting ? 'not-allowed' : 'pointer'};
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: ${props => props.$exporting ? 0.6 : 1};
+
+  &:hover:not([disabled]) {
+    background: #00f080;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+`;
+
 const LastUpdatedDisplay = styled.div`
   font-size: 0.8rem;
   color: #a0a0a0;
@@ -975,6 +999,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
   // Mock keyword rankings data
@@ -1220,6 +1245,142 @@ function Dashboard() {
     return `${diffDays}d ago`;
   };
 
+  const exportToCSV = async () => {
+    try {
+      setExporting(true);
+
+      // Create CSV content
+      const csvRows = [];
+
+      // Metadata
+      csvRows.push(['Blush Marketing Dashboard Export']);
+      csvRows.push([`Export Date: ${new Date().toISOString()}`]);
+      csvRows.push([`Time Period: ${timePeriod}`]);
+      csvRows.push([]);
+
+      // Key Metrics
+      csvRows.push(['KEY METRICS']);
+      csvRows.push(['Metric', 'Current', 'Previous', 'Change %']);
+
+      if (metrics) {
+        csvRows.push(['Monthly Recurring Revenue', metrics.mrr?.current || 0, metrics.mrr?.previous || 0, metrics.mrr?.change || 0]);
+        csvRows.push(['Active Subscribers', metrics.subscribers?.current || 0, metrics.subscribers?.previous || 0, metrics.subscribers?.change || 0]);
+        csvRows.push(['Active Users', metrics.users?.current || 0, metrics.users?.previous || 0, metrics.users?.change || 0]);
+        csvRows.push(['Ad Spend', metrics.spend?.current || 0, metrics.spend?.previous || 0, metrics.spend?.change || 0]);
+        csvRows.push(['Content Posted', metrics.posts?.current || 0, metrics.posts?.previous || 0, metrics.posts?.change || 0]);
+      }
+      csvRows.push([]);
+
+      // Budget Utilization
+      csvRows.push(['BUDGET UTILIZATION']);
+      csvRows.push(['Metric', 'Value']);
+
+      if (budgetData) {
+        csvRows.push(['Monthly Budget', budgetData.monthlyBudget || 0]);
+        csvRows.push(['Actual Spend', budgetData.actualSpend || 0]);
+        csvRows.push(['Remaining', budgetData.remaining || 0]);
+        csvRows.push(['Projected Spend', budgetData.projectedSpend || 0]);
+        csvRows.push(['Utilization %', budgetData.utilizationPercent || 0]);
+        csvRows.push(['Daily Spend Rate', budgetData.dailySpendRate || 0]);
+        csvRows.push(['Budget Health', budgetData.health || 'Unknown']);
+      }
+      csvRows.push([]);
+
+      // Engagement Metrics
+      csvRows.push(['ENGAGEMENT METRICS']);
+      csvRows.push(['Metric', 'Value']);
+
+      if (engagementData) {
+        csvRows.push(['Total Views', engagementData.totalViews || 0]);
+        csvRows.push(['Total Likes', engagementData.totalLikes || 0]);
+        csvRows.push(['Total Comments', engagementData.totalComments || 0]);
+        csvRows.push(['Total Shares', engagementData.totalShares || 0]);
+        csvRows.push(['Avg Engagement Rate', engagementData.avgEngagementRate || 0]);
+      }
+      csvRows.push([]);
+
+      // Platform Breakdown
+      csvRows.push(['PLATFORM BREAKDOWN']);
+      csvRows.push(['Platform', 'Views', 'Likes', 'Comments', 'Shares', 'Engagement Rate']);
+
+      if (engagementData?.platforms) {
+        engagementData.platforms.forEach(platform => {
+          csvRows.push([
+            platform.platform,
+            platform.views || 0,
+            platform.likes || 0,
+            platform.comments || 0,
+            platform.shares || 0,
+            platform.engagementRate || 0
+          ]);
+        });
+      }
+      csvRows.push([]);
+
+      // Recent Posts Performance
+      csvRows.push(['RECENT POSTS PERFORMANCE']);
+      csvRows.push(['Title', 'Platform', 'Views', 'Likes', 'Comments', 'Shares', 'Engagement Rate', 'Posted At']);
+
+      if (postsPerformance?.posts) {
+        postsPerformance.posts.forEach(post => {
+          csvRows.push([
+            post.title,
+            post.platform,
+            post.views || 0,
+            post.likes || 0,
+            post.comments || 0,
+            post.shares || 0,
+            post.engagementRate || 0,
+            post.postedAt
+          ]);
+        });
+      }
+      csvRows.push([]);
+
+      // Keyword Rankings
+      csvRows.push(['KEYWORD RANKINGS']);
+      csvRows.push(['Keyword', 'Ranking', 'Volume', 'Competition', 'Change']);
+
+      mockKeywordData.forEach(keyword => {
+        csvRows.push([
+          keyword.keyword,
+          keyword.ranking,
+          keyword.volume,
+          keyword.competition,
+          keyword.change
+        ]);
+      });
+
+      // Convert to CSV string
+      const csvString = csvRows.map(row => row.map(cell => {
+        // Escape quotes and wrap in quotes if contains comma or quote
+        const cellString = String(cell ?? '');
+        if (cellString.includes(',') || cellString.includes('"') || cellString.includes('\n')) {
+          return `"${cellString.replace(/"/g, '""')}"`;
+        }
+        return cellString;
+      }).join(',')).join('\n');
+
+      // Create blob and download
+      const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute('href', url);
+      link.setAttribute('download', `blush-dashboard-${timePeriod}-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      console.log('Dashboard data exported to CSV');
+    } catch (error) {
+      console.error('Failed to export CSV:', error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const getEngagementLevel = (rate) => {
     if (rate >= 12) return 'high';
     if (rate >= 8) return 'medium';
@@ -1295,6 +1456,14 @@ function Dashboard() {
           <LastUpdatedDisplay>
             🕒 <LastUpdatedText>Updated {getTimeAgo(lastUpdated)}</LastUpdatedText>
           </LastUpdatedDisplay>
+
+          <ExportButton
+            onClick={exportToCSV}
+            disabled={exporting}
+            $exporting={exporting}
+          >
+            {exporting ? '📥 Exporting...' : '📥 Export CSV'}
+          </ExportButton>
 
           <GlobalRefreshButton
             onClick={refreshAllData}
