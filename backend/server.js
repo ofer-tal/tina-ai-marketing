@@ -6,14 +6,33 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import databaseService from "./services/database.js";
+import configService, { configSchema } from "./services/config.js";
 
 dotenv.config();
+
+// Validate environment variables on startup
+console.log("Validating environment configuration...");
+const configValidation = configService.validate();
+
+// Print configuration report in development
+if (process.env.NODE_ENV !== "production") {
+  configService.printReport();
+}
+
+// Exit if critical configuration is missing
+if (!configValidation.valid) {
+  const criticalErrors = configValidation.errors.filter(e => e.severity === "critical");
+  if (criticalErrors.length > 0) {
+    console.error("\n❌ Critical configuration errors detected. Server cannot start.");
+    process.exit(1);
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = configService.get('PORT', 3001);
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors());
@@ -55,6 +74,43 @@ app.get("/api/database/test", async (req, res) => {
   }
 });
 
+app.get("/api/config/status", (req, res) => {
+  try {
+    const validation = configService.validate();
+    const config = configService.getAll();
+
+    // Remove sensitive values from response
+    const sanitizedConfig = {};
+    for (const [key, value] of Object.entries(config)) {
+      const sensitiveKeys = ['SECRET', 'KEY', 'PASSWORD', 'TOKEN', 'PRIVATE_KEY', 'CREDENTIALS'];
+      const isSensitive = sensitiveKeys.some(sensitiveKey => key.includes(sensitiveKey));
+
+      if (isSensitive && value) {
+        sanitizedConfig[key] = '****';
+      } else {
+        sanitizedConfig[key] = value;
+      }
+    }
+
+    res.json({
+      status: validation.valid ? "ok" : "warning",
+      timestamp: new Date().toISOString(),
+      valid: validation.valid,
+      errors: validation.errors,
+      warnings: validation.warnings,
+      config: sanitizedConfig,
+      summary: {
+        totalVariables: Object.keys(configSchema).length,
+        configuredVariables: Object.keys(config).length,
+        errorCount: validation.errors.length,
+        warningCount: validation.warnings.length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 app.get("/api", (req, res) => {
   res.json({
     name: "Blush Marketing Operations Center API",
@@ -81,16 +137,24 @@ app.use((req, res) => {
 });
 
 async function startServer() {
+  // Start Express server first
+  app.listen(PORT, () => {
+    console.log("Blush Marketing Operations Center API Server running on port " + PORT);
+  });
+
+  // Try to connect to MongoDB (non-blocking in development)
   try {
     console.log("Connecting to MongoDB...");
     await databaseService.connect();
     console.log("MongoDB connection established");
-    app.listen(PORT, () => {
-      console.log("Blush Marketing Operations Center API Server running on port " + PORT);
-    });
   } catch (error) {
-    console.error("Failed to start server:", error.message);
-    process.exit(1);
+    console.error("Failed to connect to MongoDB:", error.message);
+    if (process.env.NODE_ENV === "production") {
+      console.error("In production mode, MongoDB is required. Exiting...");
+      process.exit(1);
+    } else {
+      console.warn("Running in development mode without MongoDB connection. Some features may not work.");
+    }
   }
 }
 
