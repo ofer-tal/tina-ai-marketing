@@ -5,9 +5,120 @@
 **Goal**: AI-powered marketing automation for the Blush iPhone App
 **Target**: Grow from $425 MRR to $10,000/month in 6 months
 **Total Features**: 338
-**Completed**: 56/338 (16.6%)
+**Completed**: 58/338 (17.2%)
 
-## Session: 2026-01-13 (Feature #56 COMPLETED ✅)
+## Session: 2026-01-13 (Feature #58 COMPLETED ✅)
+
+### Feature #58: Caption generation with brand voice ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation**: Caption generation service with brand voice
+- **Backend Changes**:
+  * Created CaptionGenerationService (backend/services/captionGenerationService.js)
+    - Spiciness-aware tone adjustment (0-3: sweet, romantic sexy, suggestive)
+    - Brand voice: sex-positive, romantic, empowering, sexy
+    - Platform-specific generation (TikTok 150 chars, Instagram 2200 chars, YouTube 500 chars)
+    - Story theme analysis and keyword extraction
+    - Emoji selection based on spiciness
+    - Tone verification for appropriate content
+    - Caption length validation and adjustment
+    - Mock mode for testing without GLM4.7 API
+    - GLM4.7 integration ready (when API key configured)
+  * Enhanced Content API endpoints (backend/api/content.js)
+    - POST /api/content/caption/generate - Main caption generation endpoint
+    - POST /api/content/caption/batch - Batch caption generation
+    - GET /api/content/caption/health - Service health check
+    - Request validation: story (required), platform (tiktok/instagram/youtube_shorts), spiciness (0-3)
+- **Testing Completed**:
+  * ✅ Health check: PASSED
+  * ✅ Mild story (Spiciness 1) - TikTok: PASSED
+  * ✅ Medium story (Spiciness 2) - Instagram: PASSED
+  * ✅ Spicy story (Spiciness 3) - YouTube Shorts: PASSED
+  * ✅ Validation error handling: PASSED (4 validation tests)
+  * ✅ Batch caption generation: PASSED (3 captions in parallel)
+  * ✅ All 5 feature steps verified:
+    - Step 1: Analyze story theme and spiciness ✅
+    - Step 2: Generate caption with brand voice keywords ✅
+    - Step 3: Verify tone is empowering and sex-positive ✅
+    - Step 4: Check caption length appropriate for platform ✅
+    - Step 5: Include relevant emojis ✅
+  * ✅ Test suite created (test_feature_58_caption_generation.js)
+  * ✅ All 6 tests PASSED (100% success rate)
+  * ✅ Regression tests: Features #21 (Organic vs paid) and #34 (Export CSV) PASSED
+- **Files Created**:
+  * backend/services/captionGenerationService.js (650+ lines)
+  * test_feature_58_caption_generation.js (400+ lines)
+  * verification/feature-58-test-results.md (detailed test documentation)
+- **Files Modified**:
+  * backend/api/content.js (added caption endpoints)
+  * claude-progress.txt (this file)
+
+### Summary: This Session
+
+**Features Completed**: 1 (Feature #58)
+**Regression Tests**: 2 passed (Features #21, #34)
+**Key Achievements**:
+- Caption generation service fully implemented
+- Brand voice implementation (sex-positive, romantic, empowering)
+- Spiciness-aware tone adjustment working correctly
+- Platform-specific limits enforced (TikTok, Instagram, YouTube)
+- Comprehensive validation (tone, length, emojis, CTA)
+- Batch processing support implemented
+- Mock mode for testing without API credentials
+- All API endpoints tested and verified
+- Production-ready implementation with logging and error handling
+- All 5 feature steps verified end-to-end
+- Previously implemented features still working correctly
+
+**Next Session Priorities**:
+1. **Feature #59**: Hashtag strategy and generation
+2. **Feature #60**: Platform-specific content optimization
+3. Continue with Content_Generation_Pipeline features
+
+**Technical Notes - Caption Generation Service**:
+
+The Caption generation service provides:
+1. **Story Analysis**:
+   - Extracts keywords from title, category, and tags
+   - Determines tone based on spiciness (0-3)
+   - Suggests emojis appropriate for spiciness level
+   - Generates hook suggestions (teaser, question, statement)
+
+2. **Brand Voice Implementation**:
+   - Spiciness 0-1: Sweet romantic, wholesome, PG-13
+     - Keywords: romance, love story, heartwarming, sweet, tender
+     - Emojis: 💕 🌸 ✨ 💗 🦋 🌷 💫 🥰 💘 🌺
+   - Spiciness 2: Romantic sexy, empowering, passionate
+     - Keywords: spicy, romance, passionate, chemistry, tension, steamy
+     - Emojis: 🔥 💋 ❤️‍🔥 💕 ✨ 🌶️ 💗 🔮 💫 😏
+   - Spiciness 3: Suggestive romantic, intense, careful
+     - Keywords: passionate, intense, forbidden, temptation, desire
+     - Emojis: 🔥 ❤️‍🔥 🌶️ 💋 😏 ✨ 🔮 💫 🌙 🖤
+
+3. **Caption Generation**:
+   - Mock mode: Generates realistic captions without AI
+   - AI mode: Integrates with GLM4.7 API for intelligent generation
+   - Hook selection from suggested hooks
+   - Story description based on category and spiciness
+   - Emoji injection (2-3 emojis minimum)
+   - CTA addition (link in bio, subscribe)
+
+4. **Validation**:
+   - Tone check: Ensures empowering, sex-positive language
+   - Length check: Enforces platform limits
+   - Emoji check: Ensures relevant emojis included
+   - CTA check: Verifies call-to-action present
+
+5. **Platform Support**:
+   - TikTok: 150 characters, short and punchy
+   - Instagram: 2200 characters, more detailed
+   - YouTube Shorts: 500 characters, balanced
+
+### Overall Progress (Updated)
+
+- **Total Features**: 338
+- **Completed**: 58/338 (17.2%)
+- **Current Focus**: Content Generation Pipeline
+- **Session**: 2026-01-13
 
 ### Feature #56: Audio excerpt extraction from story chapters ✅
 - **Status**: COMPLETED AND VERIFIED
