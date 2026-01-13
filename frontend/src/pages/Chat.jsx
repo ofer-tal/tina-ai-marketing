@@ -267,11 +267,57 @@ const LoadingDots = styled.span`
   }
 `;
 
+const CreateTodoButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: linear-gradient(135deg, #00d26a 0%, #00a854 100%);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 210, 106, 0.3);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const TodoCreatedBadge = styled.div`
+  padding: 0.4rem 0.8rem;
+  background: rgba(0, 210, 106, 0.1);
+  border: 1px solid #00d26a;
+  border-radius: 6px;
+  color: #00d26a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-top: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+`;
+
 function Chat() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
+  const [todosCreated, setTodosCreated] = useState(new Set());
+  const [creatingTodo, setCreatingTodo] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Scroll to bottom when messages change
@@ -383,6 +429,68 @@ function Chat() {
     setInputValue(suggestion);
   };
 
+  const handleCreateTodo = async (message) => {
+    if (todosCreated.has(message.id) || creatingTodo === message.id) return;
+
+    setCreatingTodo(message.id);
+
+    try {
+      // Extract a title from the AI message (first line or first 100 chars)
+      const lines = message.content.split('\n').filter(l => l.trim());
+      let title = lines[0]?.replace(/[*#•]/g, '').trim() || 'AI Suggestion';
+      if (title.length > 100) title = title.substring(0, 100) + '...';
+
+      // Determine category based on content
+      let category = 'review';
+      const contentLower = message.content.toLowerCase();
+      if (contentLower.includes('content') || contentLower.includes('post') || contentLower.includes('video')) {
+        category = 'posting';
+      } else if (contentLower.includes('budget') || contentLower.includes('ad') || contentLower.includes('campaign')) {
+        category = 'analysis';
+      } else if (contentLower.includes('aso') || contentLower.includes('keyword') || contentLower.includes('ranking')) {
+        category = 'configuration';
+      } else if (contentLower.includes('revenue') || contentLower.includes('mrr') || contentLower.includes('growth')) {
+        category = 'analysis';
+      }
+
+      // Determine priority based on content
+      let priority = 'medium';
+      if (contentLower.includes('urgent') || contentLower.includes('immediate') || contentLower.includes('pause') || contentLower.includes('critical')) {
+        priority = 'high';
+      } else if (contentLower.includes('important') || contentLower.includes('priority')) {
+        priority = 'high';
+      }
+
+      const response = await fetch('http://localhost:4001/api/chat/create-todo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title: title,
+          description: message.content.substring(0, 500),
+          category: category,
+          priority: priority,
+          relatedStrategyId: message.id,
+          estimatedTime: 30
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setTodosCreated(prev => new Set([...prev, message.id]));
+      } else {
+        throw new Error(data.error || 'Failed to create todo');
+      }
+    } catch (error) {
+      console.error('Error creating todo:', error);
+      alert('Failed to create todo: ' + error.message);
+    } finally {
+      setCreatingTodo(null);
+    }
+  };
+
   const formatMessage = (content) => {
     // Convert markdown-like syntax to HTML
     let formatted = content;
@@ -462,6 +570,24 @@ function Chat() {
               <MessageBubble $isUser={msg.role === 'user'}>
                 <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
                 <MessageTime>{formatTime(msg.timestamp)}</MessageTime>
+                {msg.role === 'assistant' && (
+                  <>
+                    {todosCreated.has(msg.id) ? (
+                      <TodoCreatedBadge>
+                        <span>✓</span>
+                        Todo Created
+                      </TodoCreatedBadge>
+                    ) : (
+                      <CreateTodoButton
+                        onClick={() => handleCreateTodo(msg)}
+                        disabled={creatingTodo === msg.id}
+                      >
+                        <span>+</span>
+                        {creatingTodo === msg.id ? 'Creating...' : 'Create Todo'}
+                      </CreateTodoButton>
+                    )}
+                  </>
+                )}
               </MessageBubble>
             </MessageWrapper>
           ))

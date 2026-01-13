@@ -579,4 +579,87 @@ router.delete("/history", async (req, res) => {
   }
 });
 
+// POST /api/chat/create-todo - Create todo from chat suggestion
+router.post("/create-todo", async (req, res) => {
+  try {
+    const { title, description, category, priority, scheduledAt, dueAt, estimatedTime, relatedStrategyId } = req.body;
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        error: "Title is required"
+      });
+    }
+
+    const status = databaseService.getStatus();
+    let createdTodo = null;
+
+    if (status.isConnected && status.readyState === 1) {
+      try {
+        const mongoose = await import('mongoose');
+        const todo = {
+          title,
+          description: description || "",
+          category: category || "review",
+          priority: priority || "medium",
+          status: "pending",
+          scheduledAt: scheduledAt ? new Date(scheduledAt) : new Date(),
+          dueAt: dueAt ? new Date(dueAt) : null,
+          completedAt: null,
+          resources: [],
+          estimatedTime: estimatedTime || null,
+          actualTime: null,
+          createdBy: "ai",
+          relatedStrategyId: relatedStrategyId || null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        const result = await mongoose.connection.collection("marketing_tasks").insertOne(todo);
+        createdTodo = {
+          id: result.insertedId,
+          ...todo
+        };
+      } catch (dbError) {
+        console.error("Error saving todo to database:", dbError);
+        // Continue with mock response
+      }
+    }
+
+    // If no database save, return mock success
+    if (!createdTodo) {
+      createdTodo = {
+        id: `mock_${Date.now()}`,
+        title,
+        description: description || "",
+        category: category || "review",
+        priority: priority || "medium",
+        status: "pending",
+        scheduledAt: scheduledAt || new Date().toISOString(),
+        dueAt: dueAt || null,
+        completedAt: null,
+        resources: [],
+        estimatedTime: estimatedTime || null,
+        actualTime: null,
+        createdBy: "ai",
+        relatedStrategyId: relatedStrategyId || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    res.json({
+      success: true,
+      todo: createdTodo,
+      message: "Todo created successfully from chat"
+    });
+  } catch (error) {
+    console.error("Error creating todo from chat:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

@@ -11,6 +11,7 @@ import settingsRouter from "./api/settings.js";
 import storageRouter from "./api/storage.js";
 import dashboardRouter from "./api/dashboard.js";
 import chatRouter from "./api/chat.js";
+import todosRouter from "./api/todos.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -144,6 +145,7 @@ app.use("/api/settings", settingsRouter);
 app.use("/api/storage", storageRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/chat", chatRouter);
+app.use("/api/todos", todosRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
