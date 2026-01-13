@@ -915,6 +915,143 @@ router.get('/roi-by-channel', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/engagement
+ * Get aggregate engagement metrics with breakdown by platform
+ * Query params:
+ *   - period: '24h', '7d', '30d' (default: '24h')
+ */
+router.get('/engagement', async (req, res) => {
+  try {
+    const { period = '24h' } = req.query;
+
+    // Validate period parameter
+    const validPeriods = ['24h', '7d', '30d'];
+    if (!validPeriods.includes(period)) {
+      return res.status(400).json({
+        error: 'Invalid period. Must be one of: ' + validPeriods.join(', ')
+      });
+    }
+
+    console.log(`Fetching engagement metrics for period: ${period}`);
+
+    // Calculate time range based on period
+    const days = period === '24h' ? 1 : period === '7d' ? 7 : 30;
+
+    // TODO: In production, fetch from MongoDB marketing_posts collection
+    // For now, generate mock engagement data by platform
+
+    const platforms = [
+      { id: 'tiktok', name: 'TikTok', icon: '🎵', color: '#000000' },
+      { id: 'instagram', name: 'Instagram', icon: '📸', color: '#E4405F' },
+      { id: 'youtube_shorts', name: 'YouTube Shorts', icon: '📺', color: '#FF0000' }
+    ];
+
+    // Generate platform-specific engagement data
+    const platformData = platforms.map(platform => {
+      // Base values scaled by period
+      const multiplier = days === 1 ? 1 : days === 7 ? 5 : 15;
+
+      let views, likes, comments, shares;
+
+      // Platform-specific engagement patterns
+      if (platform.id === 'tiktok') {
+        // TikTok: High views, moderate engagement
+        views = Math.round((150000 + Math.random() * 50000) * multiplier);
+        likes = Math.round(views * (0.08 + Math.random() * 0.04)); // 8-12%
+        comments = Math.round(likes * 0.02); // ~2% of likes
+        shares = Math.round(likes * 0.03); // ~3% of likes
+      } else if (platform.id === 'instagram') {
+        // Instagram: Moderate views, high engagement
+        views = Math.round((80000 + Math.random() * 40000) * multiplier);
+        likes = Math.round(views * (0.10 + Math.random() * 0.05)); // 10-15%
+        comments = Math.round(likes * 0.025); // ~2.5% of likes
+        shares = Math.round(likes * 0.04); // ~4% of likes
+      } else {
+        // YouTube Shorts: Lower views, lower engagement
+        views = Math.round((100000 + Math.random() * 60000) * multiplier);
+        likes = Math.round(views * (0.05 + Math.random() * 0.03)); // 5-8%
+        comments = Math.round(likes * 0.015); // ~1.5% of likes
+        shares = Math.round(likes * 0.02); // ~2% of likes
+      }
+
+      const engagementRate = ((likes + comments + shares) / views * 100);
+      const posts = Math.round((5 + Math.random() * 10) * multiplier);
+
+      return {
+        id: platform.id,
+        name: platform.name,
+        icon: platform.icon,
+        color: platform.color,
+        metrics: {
+          posts: posts,
+          views: views,
+          likes: likes,
+          comments: comments,
+          shares: shares,
+          engagementRate: parseFloat(engagementRate.toFixed(2)),
+          avgViewsPerPost: Math.round(views / posts),
+          avgEngagementPerPost: parseFloat((engagementRate / posts).toFixed(2))
+        }
+      };
+    });
+
+    // Calculate aggregate totals
+    const totalPosts = platformData.reduce((sum, p) => sum + p.metrics.posts, 0);
+    const totalViews = platformData.reduce((sum, p) => sum + p.metrics.views, 0);
+    const totalLikes = platformData.reduce((sum, p) => sum + p.metrics.likes, 0);
+    const totalComments = platformData.reduce((sum, p) => sum + p.metrics.comments, 0);
+    const totalShares = platformData.reduce((sum, p) => sum + p.metrics.shares, 0);
+    const avgEngagementRate = platformData.reduce((sum, p) => sum + p.metrics.engagementRate, 0) / platformData.length;
+
+    // Calculate previous period for comparison
+    const previousMultiplier = 0.75; // Previous period had 75% of current
+    const previousViews = Math.round(totalViews * previousMultiplier);
+    const previousLikes = Math.round(totalLikes * previousMultiplier);
+    const previousComments = Math.round(totalComments * previousMultiplier);
+    const previousShares = Math.round(totalShares * previousMultiplier);
+    const previousEngagementRate = avgEngagementRate - 1.2; // Previous was 1.2% lower
+
+    const engagementData = {
+      period: period,
+      platforms: platformData,
+      aggregate: {
+        totalPosts: totalPosts,
+        totalViews: totalViews,
+        totalLikes: totalLikes,
+        totalComments: totalComments,
+        totalShares: totalShares,
+        avgEngagementRate: parseFloat(avgEngagementRate.toFixed(2)),
+        avgViewsPerPost: Math.round(totalViews / totalPosts),
+        previous: {
+          views: previousViews,
+          likes: previousLikes,
+          comments: previousComments,
+          shares: previousShares,
+          engagementRate: parseFloat(previousEngagementRate.toFixed(2))
+        },
+        changes: {
+          views: parseFloat(((totalViews - previousViews) / previousViews * 100).toFixed(1)),
+          likes: parseFloat(((totalLikes - previousLikes) / previousLikes * 100).toFixed(1)),
+          comments: parseFloat(((totalComments - previousComments) / previousComments * 100).toFixed(1)),
+          shares: parseFloat(((totalShares - previousShares) / previousShares * 100).toFixed(1)),
+          engagementRate: parseFloat((avgEngagementRate - previousEngagementRate).toFixed(2))
+        }
+      }
+    };
+
+    console.log(`Engagement metrics fetched successfully for period: ${period}`);
+    res.json(engagementData);
+
+  } catch (error) {
+    console.error('Error fetching engagement metrics:', error);
+    res.status(500).json({
+      error: 'Failed to fetch engagement metrics',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */

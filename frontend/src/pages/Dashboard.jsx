@@ -342,10 +342,135 @@ const RefreshButton = styled.button`
   }
 `;
 
+const EngagementSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const EngagementMetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const EngagementMetricCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1.25rem;
+  text-align: center;
+  transition: all 0.3s;
+
+  &:hover {
+    border-color: #e94560;
+    box-shadow: 0 4px 20px rgba(233, 69, 96, 0.1);
+    transform: translateY(-2px);
+  }
+`;
+
+const EngagementMetricIcon = styled.div`
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+`;
+
+const EngagementMetricValue = styled.div`
+  font-size: 1.75rem;
+  font-weight: bold;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const EngagementMetricLabel = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+`;
+
+const EngagementMetricChange = styled.div`
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  color: ${props => props.$positive ? '#00d26a' : props.$negative ? '#e94560' : '#a0a0a0'};
+`;
+
+const PlatformBreakdownGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+`;
+
+const PlatformCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    border-color: ${props => props.$color || '#e94560'};
+    box-shadow: 0 4px 20px ${props => props.$color ? `${props.$color}20` : 'rgba(233, 69, 96, 0.1)'};
+    transform: translateY(-2px);
+  }
+`;
+
+const PlatformHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #2d3561;
+`;
+
+const PlatformName = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const PlatformEngagementRate = styled.div`
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: ${props => props.$high ? '#00d26a20' : props.$medium ? '#ffb02020' : '#2d3561'};
+  color: ${props => props.$high ? '#00d26a' : props.$medium ? '#ffb020' : '#a0a0a0'};
+  border: 1px solid ${props => props.$high ? '#00d26a' : props.$medium ? '#ffb020' : '#2d3561'};
+`;
+
+const PlatformMetrics = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+`;
+
+const PlatformMetric = styled.div`
+  text-align: center;
+`;
+
+const PlatformMetricValue = styled.div`
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: ${props => props.$color || '#eaeaea'};
+`;
+
+const PlatformMetricLabel = styled.div`
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  margin-top: 0.1rem;
+`;
+
 function Dashboard() {
   const [timePeriod, setTimePeriod] = useState('24h');
   const [metrics, setMetrics] = useState(null);
   const [postsPerformance, setPostsPerformance] = useState(null);
+  const [engagementData, setEngagementData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -364,6 +489,7 @@ function Dashboard() {
   useEffect(() => {
     fetchMetrics();
     fetchPostsPerformance();
+    fetchEngagementMetrics();
   }, [timePeriod]);
 
   const fetchMetrics = async () => {
@@ -415,6 +541,23 @@ function Dashboard() {
     setRefreshing(true);
     await fetchPostsPerformance();
     setRefreshing(false);
+  };
+
+  const fetchEngagementMetrics = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/engagement?period=${timePeriod}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setEngagementData(data);
+    } catch (err) {
+      console.error('Failed to fetch engagement metrics:', err);
+      // Set mock data for development
+      setEngagementData(null);
+    }
   };
 
   const formatCurrency = (value) => {
@@ -570,6 +713,130 @@ function Dashboard() {
           </KeywordCard>
         ))}
       </KeywordsGrid>
+
+      <DashboardHeader>
+        <Title>Engagement Metrics</Title>
+      </DashboardHeader>
+
+      {engagementData && (
+        <EngagementSection>
+          <EngagementMetricsGrid>
+            <EngagementMetricCard>
+              <EngagementMetricIcon>👁️</EngagementMetricIcon>
+              <EngagementMetricValue>{formatCompactNumber(engagementData.aggregate.totalViews)}</EngagementMetricValue>
+              <EngagementMetricLabel>Total Views</EngagementMetricLabel>
+              <EngagementMetricChange
+                $positive={engagementData.aggregate.changes.views > 0}
+                $negative={engagementData.aggregate.changes.views < 0}
+              >
+                {engagementData.aggregate.changes.views > 0 && '↑'}
+                {engagementData.aggregate.changes.views < 0 && '↓'}
+                {Math.abs(engagementData.aggregate.changes.views)}% vs prev
+              </EngagementMetricChange>
+            </EngagementMetricCard>
+
+            <EngagementMetricCard>
+              <EngagementMetricIcon>❤️</EngagementMetricIcon>
+              <EngagementMetricValue>{formatCompactNumber(engagementData.aggregate.totalLikes)}</EngagementMetricValue>
+              <EngagementMetricLabel>Total Likes</EngagementMetricLabel>
+              <EngagementMetricChange
+                $positive={engagementData.aggregate.changes.likes > 0}
+                $negative={engagementData.aggregate.changes.likes < 0}
+              >
+                {engagementData.aggregate.changes.likes > 0 && '↑'}
+                {engagementData.aggregate.changes.likes < 0 && '↓'}
+                {Math.abs(engagementData.aggregate.changes.likes)}% vs prev
+              </EngagementMetricChange>
+            </EngagementMetricCard>
+
+            <EngagementMetricCard>
+              <EngagementMetricIcon>💬</EngagementMetricIcon>
+              <EngagementMetricValue>{formatCompactNumber(engagementData.aggregate.totalComments)}</EngagementMetricValue>
+              <EngagementMetricLabel>Total Comments</EngagementMetricLabel>
+              <EngagementMetricChange
+                $positive={engagementData.aggregate.changes.comments > 0}
+                $negative={engagementData.aggregate.changes.comments < 0}
+              >
+                {engagementData.aggregate.changes.comments > 0 && '↑'}
+                {engagementData.aggregate.changes.comments < 0 && '↓'}
+                {Math.abs(engagementData.aggregate.changes.comments)}% vs prev
+              </EngagementMetricChange>
+            </EngagementMetricCard>
+
+            <EngagementMetricCard>
+              <EngagementMetricIcon>🔄</EngagementMetricIcon>
+              <EngagementMetricValue>{formatCompactNumber(engagementData.aggregate.totalShares)}</EngagementMetricValue>
+              <EngagementMetricLabel>Total Shares</EngagementMetricLabel>
+              <EngagementMetricChange
+                $positive={engagementData.aggregate.changes.shares > 0}
+                $negative={engagementData.aggregate.changes.shares < 0}
+              >
+                {engagementData.aggregate.changes.shares > 0 && '↑'}
+                {engagementData.aggregate.changes.shares < 0 && '↓'}
+                {Math.abs(engagementData.aggregate.changes.shares)}% vs prev
+              </EngagementMetricChange>
+            </EngagementMetricCard>
+
+            <EngagementMetricCard>
+              <EngagementMetricIcon>📊</EngagementMetricIcon>
+              <EngagementMetricValue>{engagementData.aggregate.avgEngagementRate}%</EngagementMetricValue>
+              <EngagementMetricLabel>Avg Engagement Rate</EngagementMetricLabel>
+              <EngagementMetricChange
+                $positive={engagementData.aggregate.changes.engagementRate > 0}
+                $negative={engagementData.aggregate.changes.engagementRate < 0}
+              >
+                {engagementData.aggregate.changes.engagementRate > 0 && '↑'}
+                {engagementData.aggregate.changes.engagementRate < 0 && '↓'}
+                {Math.abs(engagementData.aggregate.changes.engagementRate)}% pts vs prev
+              </EngagementMetricChange>
+            </EngagementMetricCard>
+          </EngagementMetricsGrid>
+
+          <PlatformBreakdownGrid>
+            {engagementData.platforms.map((platform) => (
+              <PlatformCard
+                key={platform.id}
+                $color={platform.color}
+                onClick={() => window.location.href = `/content?platform=${platform.id}`}
+              >
+                <PlatformHeader>
+                  <PlatformName>
+                    {platform.icon} {platform.name}
+                  </PlatformName>
+                  <PlatformEngagementRate
+                    $high={platform.metrics.engagementRate >= 12}
+                    $medium={platform.metrics.engagementRate >= 8 && platform.metrics.engagementRate < 12}
+                  >
+                    {platform.metrics.engagementRate}%
+                  </PlatformEngagementRate>
+                </PlatformHeader>
+
+                <PlatformMetrics>
+                  <PlatformMetric>
+                    <PlatformMetricValue $color="#7b2cbf">{formatCompactNumber(platform.metrics.views)}</PlatformMetricValue>
+                    <PlatformMetricLabel>Views</PlatformMetricLabel>
+                  </PlatformMetric>
+
+                  <PlatformMetric>
+                    <PlatformMetricValue $color="#e94560">{formatCompactNumber(platform.metrics.likes)}</PlatformMetricValue>
+                    <PlatformMetricLabel>Likes</PlatformMetricLabel>
+                  </PlatformMetric>
+
+                  <PlatformMetric>
+                    <PlatformMetricValue $color="#00d26a">{formatCompactNumber(platform.metrics.comments)}</PlatformMetricValue>
+                    <PlatformMetricLabel>Comments</PlatformMetricLabel>
+                  </PlatformMetric>
+
+                  <PlatformMetric>
+                    <PlatformMetricValue $color="#ffb020">{formatCompactNumber(platform.metrics.shares)}</PlatformMetricValue>
+                    <PlatformMetricLabel>Shares</PlatformMetricLabel>
+                  </PlatformMetric>
+                </PlatformMetrics>
+              </PlatformCard>
+            ))}
+          </PlatformBreakdownGrid>
+        </EngagementSection>
+      )}
 
       <DashboardHeader>
         <Title>Recent Post Performance</Title>
