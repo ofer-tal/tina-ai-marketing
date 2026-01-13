@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { useNavigate } from 'react-router-dom';
 import {
   LineChart,
   Line,
@@ -135,13 +136,97 @@ const ErrorState = styled.div`
   margin-bottom: 1rem;
 `;
 
+const ROIChannelGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+`;
+
+const ROIChannelCard = styled.div`
+  background: #16213e;
+  border: 1px solid ${props => props.$color || '#2d3561'};
+  border-radius: 12px;
+  padding: 1.25rem;
+  cursor: pointer;
+  transition: all 0.3s;
+
+  &:hover {
+    border-color: ${props => props.$color || '#e94560'};
+    box-shadow: 0 4px 20px ${props => props.$color ? props.$color + '20' : 'rgba(233, 69, 96, 0.2)'};
+    transform: translateY(-2px);
+  }
+`;
+
+const ROIChannelHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const ROIChannelName = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 1rem;
+`;
+
+const ROIChannelIcon = styled.span`
+  font-size: 1.25rem;
+`;
+
+const ROIChannelBadge = styled.div`
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: ${props => props.$category === 'paid' ? '#e9456020' : '#00d26a20'};
+  color: ${props => props.$category === 'paid' ? '#e94560' : '#00d26a'};
+  font-weight: 500;
+  text-transform: uppercase;
+`;
+
+const ROIMetric = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+`;
+
+const ROIMetricLabel = styled.div`
+  color: #a0a0a0;
+`;
+
+const ROIMetricValue = styled.div`
+  font-weight: 600;
+  color: ${props => props.$positive ? '#00d26a' : props.$positive === false ? '#e94560' : '#eaeaea'};
+`;
+
+const ROIMainValue = styled.div`
+  font-size: 2rem;
+  font-weight: bold;
+  color: ${props => props.$positive ? '#00d26a' : props.$positive === false ? '#e94560' : props.$color || '#eaeaea'};
+  text-align: center;
+  margin: 1rem 0;
+`;
+
+const ROIMainLabel = styled.div`
+  text-align: center;
+  color: #a0a0a0;
+  font-size: 0.85rem;
+`;
+
 function StrategicDashboard() {
+  const navigate = useNavigate();
   const [dateRange, setDateRange] = useState('30d');
   const [mrrData, setMrrData] = useState(null);
   const [userGrowthData, setUserGrowthData] = useState(null);
   const [cacData, setCacData] = useState(null);
   const [acquisitionData, setAcquisitionData] = useState(null);
   const [revenueSpendData, setRevenueSpendData] = useState(null);
+  const [roiData, setRoiData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -151,6 +236,7 @@ function StrategicDashboard() {
     fetchCacTrend();
     fetchAcquisitionSplit();
     fetchRevenueSpendTrend();
+    fetchRoiByChannel();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -247,6 +333,129 @@ function StrategicDashboard() {
       const mockData = generateMockRevenueSpendData(dateRange);
       setRevenueSpendData(mockData);
     }
+  };
+
+  const fetchRoiByChannel = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/roi-by-channel?range=${dateRange}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setRoiData(data);
+    } catch (err) {
+      console.error('Failed to fetch ROI by channel data:', err);
+      // Set mock data for development
+      const mockData = generateMockRoiData(dateRange);
+      setRoiData(mockData);
+    }
+  };
+
+  const generateMockRoiData = (range) => {
+    const channels = [
+      {
+        id: 'apple_search_ads',
+        name: 'Apple Search Ads',
+        category: 'paid',
+        icon: '🍎',
+        color: '#00d26a'
+      },
+      {
+        id: 'tiktok_ads',
+        name: 'TikTok Ads',
+        category: 'paid',
+        icon: '🎵',
+        color: '#e94560'
+      },
+      {
+        id: 'instagram_ads',
+        name: 'Instagram Ads',
+        category: 'paid',
+        icon: '📸',
+        color: '#7b2cbf'
+      },
+      {
+        id: 'organic_app_store',
+        name: 'Organic (App Store)',
+        category: 'organic',
+        icon: '🔍',
+        color: '#00d4ff'
+      },
+      {
+        id: 'social_organic',
+        name: 'Social Organic',
+        category: 'organic',
+        icon: '💬',
+        color: '#ffb020'
+      }
+    ];
+
+    const channelData = channels.map(channel => {
+      let revenue, spend, users;
+
+      if (channel.category === 'paid') {
+        if (channel.id === 'apple_search_ads') {
+          spend = 800 + Math.random() * 200;
+          users = Math.round(spend / 25);
+          revenue = users * 15;
+        } else if (channel.id === 'tiktok_ads') {
+          spend = 500 + Math.random() * 300;
+          users = Math.round(spend / 35);
+          revenue = users * 12;
+        } else {
+          spend = 400 + Math.random() * 200;
+          users = Math.round(spend / 40);
+          revenue = users * 11;
+        }
+      } else {
+        spend = 0;
+        users = Math.round(50 + Math.random() * 150);
+        revenue = users * 14;
+      }
+
+      const profit = revenue - spend;
+      const roi = spend > 0 ? ((profit / spend) * 100) : Infinity;
+
+      return {
+        id: channel.id,
+        name: channel.name,
+        category: channel.category,
+        icon: channel.icon,
+        color: channel.color,
+        metrics: {
+          spend: parseFloat(spend.toFixed(2)),
+          revenue: parseFloat(revenue.toFixed(2)),
+          profit: parseFloat(profit.toFixed(2)),
+          users: users,
+          roi: parseFloat(roi.toFixed(1)),
+          cac: parseFloat((spend / users).toFixed(2)) || 0,
+          ltv: parseFloat((revenue / users).toFixed(2)) || 0
+        }
+      };
+    });
+
+    const totalSpend = channelData.reduce((sum, ch) => sum + ch.metrics.spend, 0);
+    const totalRevenue = channelData.reduce((sum, ch) => sum + ch.metrics.revenue, 0);
+    const totalProfit = channelData.reduce((sum, ch) => sum + ch.metrics.profit, 0);
+    const totalUsers = channelData.reduce((sum, ch) => sum + ch.metrics.users, 0);
+    const overallROI = totalSpend > 0 ? ((totalProfit / totalSpend) * 100).toFixed(1) : 'N/A';
+
+    channelData.sort((a, b) => b.metrics.roi - a.metrics.roi);
+
+    return {
+      channels: channelData,
+      summary: {
+        totalSpend: parseFloat(totalSpend.toFixed(2)),
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+        totalProfit: parseFloat(totalProfit.toFixed(2)),
+        totalUsers: totalUsers,
+        overallROI: overallROI === 'N/A' ? null : parseFloat(overallROI),
+        bestChannel: channelData[0].name,
+        worstChannel: channelData[channelData.length - 1].name
+      }
+    };
   };
 
   const generateMockRevenueSpendData = (range) => {
@@ -929,6 +1138,8 @@ function StrategicDashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </ChartContainer>
+            </>
+          )}
 
           {/* Revenue vs Spend Section */}
           {revenueSpendData && (
@@ -1028,6 +1239,101 @@ function StrategicDashboard() {
               </ChartContainer>
             </>
           )}
+
+          {/* ROI by Channel Section */}
+          {roiData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Total Spend</MetricLabel>
+                  <MetricValue>{formatCurrency(roiData.summary.totalSpend)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Total Revenue</MetricLabel>
+                  <MetricValue>{formatCurrency(roiData.summary.totalRevenue)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Overall ROI</MetricLabel>
+                  <MetricValue $positive={roiData.summary.overallROI > 0}>
+                    {roiData.summary.overallROI !== null ? roiData.summary.overallROI + '%' : '∞'}
+                  </MetricValue>
+                  <MetricChange>
+                    Best: {roiData.summary.bestChannel}
+                  </MetricChange>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Total Profit</MetricLabel>
+                  <MetricValue $positive={roiData.summary.totalProfit > 0}>
+                    {formatCurrency(roiData.summary.totalProfit)}
+                  </MetricValue>
+                  <MetricChange>
+                    From {roiData.channels.length} channels
+                  </MetricChange>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>ROI by Marketing Channel</ChartTitle>
+                <ROIChannelGrid>
+                  {roiData.channels.map((channel) => (
+                    <ROIChannelCard
+                      key={channel.id}
+                      $color={channel.color}
+                      onClick={() => navigate(`/dashboard/channel/${channel.id}`)}
+                      title="Click to view channel details"
+                    >
+                      <ROIChannelHeader>
+                        <ROIChannelName>
+                          <ROIChannelIcon>{channel.icon}</ROIChannelIcon>
+                          {channel.name}
+                        </ROIChannelName>
+                        <ROIChannelBadge $category={channel.category}>
+                          {channel.category}
+                        </ROIChannelBadge>
+                      </ROIChannelHeader>
+
+                      <ROIMainLabel>ROI</ROIMainLabel>
+                      <ROIMainValue
+                        $positive={channel.metrics.roi === 'Infinity' || channel.metrics.roi === Infinity ? true : channel.metrics.roi > 0}
+                        $color={channel.color}
+                      >
+                        {channel.metrics.roi === 'Infinity' || channel.metrics.roi === Infinity ? '∞' : channel.metrics.roi + '%'}
+                      </ROIMainValue>
+
+                      <ROIMetric>
+                        <ROIMetricLabel>Spend</ROIMetricLabel>
+                        <ROIMetricValue>{formatCurrency(channel.metrics.spend)}</ROIMetricValue>
+                      </ROIMetric>
+                      <ROIMetric>
+                        <ROIMetricLabel>Revenue</ROIMetricLabel>
+                        <ROIMetricValue $positive={true}>{formatCurrency(channel.metrics.revenue)}</ROIMetricValue>
+                      </ROIMetric>
+                      <ROIMetric>
+                        <ROIMetricLabel>Profit</ROIMetricLabel>
+                        <ROIMetricValue $positive={channel.metrics.profit > 0}>
+                          {formatCurrency(channel.metrics.profit)}
+                        </ROIMetricValue>
+                      </ROIMetric>
+                      <ROIMetric>
+                        <ROIMetricLabel>Users</ROIMetricLabel>
+                        <ROIMetricValue>{formatNumber(channel.metrics.users)}</ROIMetricValue>
+                      </ROIMetric>
+                      <ROIMetric>
+                        <ROIMetricLabel>CAC</ROIMetricLabel>
+                        <ROIMetricValue>
+                          {channel.metrics.cac > 0 ? formatCurrency(channel.metrics.cac) : 'N/A'}
+                        </ROIMetricValue>
+                      </ROIMetric>
+                      <ROIMetric>
+                        <ROIMetricLabel>LTV</ROIMetricLabel>
+                        <ROIMetricValue $positive={true}>
+                          {formatCurrency(channel.metrics.ltv)}/mo
+                        </ROIMetricValue>
+                      </ROIMetric>
+                    </ROIChannelCard>
+                  ))}
+                </ROIChannelGrid>
+              </ChartContainer>
             </>
           )}
         </>

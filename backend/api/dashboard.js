@@ -732,6 +732,171 @@ router.get('/revenue-spend-trend', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/roi-by-channel
+ * Get ROI breakdown by marketing channel for strategic dashboard
+ * Query params:
+ *   - range: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/roi-by-channel', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+
+    // Validate range parameter
+    const validRanges = ['30d', '90d', '180d'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({
+        error: 'Invalid range. Must be one of: ' + validRanges.join(', ')
+      });
+    }
+
+    console.log(`Fetching ROI by channel data for range: ${range}`);
+
+    // Calculate number of days
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // TODO: In production, fetch from MongoDB marketing_metrics collection
+    // For now, generate mock ROI data by channel
+    // Channels: Apple Search Ads, TikTok Ads, Instagram Ads, Organic (App Store), Social (Organic)
+
+    const channels = [
+      {
+        id: 'apple_search_ads',
+        name: 'Apple Search Ads',
+        category: 'paid',
+        icon: '🍎',
+        color: '#00d26a'
+      },
+      {
+        id: 'tiktok_ads',
+        name: 'TikTok Ads',
+        category: 'paid',
+        icon: '🎵',
+        color: '#e94560'
+      },
+      {
+        id: 'instagram_ads',
+        name: 'Instagram Ads',
+        category: 'paid',
+        icon: '📸',
+        color: '#7b2cbf'
+      },
+      {
+        id: 'organic_app_store',
+        name: 'Organic (App Store)',
+        category: 'organic',
+        icon: '🔍',
+        color: '#00d4ff'
+      },
+      {
+        id: 'social_organic',
+        name: 'Social Organic',
+        category: 'organic',
+        icon: '💬',
+        color: '#ffb020'
+      }
+    ];
+
+    const channelData = channels.map(channel => {
+      // Generate realistic ROI data based on channel type
+      let revenue, spend, users, avgCAC;
+
+      if (channel.category === 'paid') {
+        // Paid channels: higher spend, variable ROI
+        if (channel.id === 'apple_search_ads') {
+          // Apple Search Ads: Best ROI (high intent)
+          spend = 800 + Math.random() * 200;
+          users = Math.round(spend / 25); // CAC ~$25
+          revenue = users * 15; // $15/user/month
+        } else if (channel.id === 'tiktok_ads') {
+          // TikTok Ads: Good ROI but improving
+          spend = 500 + Math.random() * 300;
+          users = Math.round(spend / 35); // CAC ~$35
+          revenue = users * 12; // $12/user/month (lower retention)
+        } else {
+          // Instagram Ads: Moderate ROI
+          spend = 400 + Math.random() * 200;
+          users = Math.round(spend / 40); // CAC ~$40
+          revenue = users * 11; // $11/user/month
+        }
+      } else {
+        // Organic channels: zero spend, infinite ROI
+        spend = 0;
+        users = Math.round(50 + Math.random() * 150); // Organic users
+        revenue = users * 14; // $14/user/month
+      }
+
+      const profit = revenue - spend;
+      const roi = spend > 0 ? ((profit / spend) * 100) : 'Infinity';
+      const roas = spend > 0 ? (revenue / spend) : 'Infinity'; // Return on Ad Spend
+
+      return {
+        id: channel.id,
+        name: channel.name,
+        category: channel.category,
+        icon: channel.icon,
+        color: channel.color,
+        metrics: {
+          spend: parseFloat(spend.toFixed(2)),
+          revenue: parseFloat(revenue.toFixed(2)),
+          profit: parseFloat(profit.toFixed(2)),
+          users: users,
+          roi: roi === 'Infinity' ? 'Infinity' : parseFloat(roi.toFixed(1)),
+          roas: roas === 'Infinity' ? 'Infinity' : parseFloat(roas.toFixed(2)),
+          cac: parseFloat((spend / users).toFixed(2)) || 0,
+          ltv: parseFloat((revenue / users).toFixed(2)) || 0 // Lifetime Value (monthly)
+        }
+      };
+    });
+
+    // Calculate summary stats
+    const totalSpend = channelData.reduce((sum, ch) => sum + ch.metrics.spend, 0);
+    const totalRevenue = channelData.reduce((sum, ch) => sum + ch.metrics.revenue, 0);
+    const totalProfit = channelData.reduce((sum, ch) => sum + ch.metrics.profit, 0);
+    const totalUsers = channelData.reduce((sum, ch) => sum + ch.metrics.users, 0);
+    const overallROI = totalSpend > 0 ? ((totalProfit / totalSpend) * 100).toFixed(1) : 'N/A';
+    const overallROAS = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : 'N/A';
+    const avgCAC = totalUsers > 0 ? (totalSpend / totalUsers).toFixed(2) : 'N/A';
+
+    // Sort by ROI (descending) - 'Infinity' should come first
+    channelData.sort((a, b) => {
+      const aRoi = a.metrics.roi === 'Infinity' ? Number.MAX_VALUE : a.metrics.roi;
+      const bRoi = b.metrics.roi === 'Infinity' ? Number.MAX_VALUE : b.metrics.roi;
+      return bRoi - aRoi;
+    });
+
+    const roiData = {
+      range: range,
+      startDate: startDate.toISOString(),
+      endDate: new Date().toISOString(),
+      channels: channelData,
+      summary: {
+        totalSpend: parseFloat(totalSpend.toFixed(2)),
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+        totalProfit: parseFloat(totalProfit.toFixed(2)),
+        totalUsers: totalUsers,
+        overallROI: overallROI === 'N/A' ? null : parseFloat(overallROI),
+        overallROAS: overallROAS === 'N/A' ? null : parseFloat(overallROAS),
+        avgCAC: avgCAC === 'N/A' ? null : parseFloat(avgCAC),
+        bestChannel: channelData[0].name,
+        worstChannel: channelData[channelData.length - 1].name
+      }
+    };
+
+    console.log(`ROI by channel data fetched successfully for range: ${range}`);
+    res.json(roiData);
+
+  } catch (error) {
+    console.error('Error fetching ROI by channel data:', error);
+    res.status(500).json({
+      error: 'Failed to fetch ROI by channel data',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */
