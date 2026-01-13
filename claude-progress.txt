@@ -5,9 +5,60 @@
 **Goal**: AI-powered marketing automation for the Blush iPhone App
 **Target**: Grow from $425 MRR to $10,000/month in 6 months
 **Total Features**: 338
-**Completed**: 50/338 (14.8%)
+**Completed**: 51/338 (15.1%)
 
-## Session: 2026-01-13 (Feature #50 COMPLETED ✅)
+## Session: 2026-01-13 (Feature #51 COMPLETED ✅)
+
+### Feature #51: Story selection from database ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation**: Content generation job with intelligent story selection
+- **Backend Changes**:
+  * Created Story model (backend/models/Story.js)
+    - Read-only access to existing stories collection
+    - Schema fields: userId, title, category, spiciness, status, chapters, coverPrompt
+    - Static method: findForMarketing() with filter options
+    - Indexes for efficient querying
+  * Created StoryBlacklist model (backend/models/StoryBlacklist.js)
+    - Schema: storyId, storyName, reason, blacklistedAt, blacklistedBy, category, spiciness, isActive
+    - Static methods: addToBlacklist(), removeFromBlacklist(), getActiveBlacklistedIds()
+  * Created content generation job (backend/jobs/contentGeneration.js)
+    - Query filters: userId=null, status='ready', category != 'LGBTQ+', not blacklisted
+    - Sorting: spiciness (asc), createdAt (desc)
+    - Methods: execute(), getSingleStory(), verifySelection(), startSchedule(), stopSchedule()
+  * Created content API endpoints (backend/api/content.js)
+    - POST /api/content/generate - Run content generation job
+    - GET /api/content/stories - Get single story for generation
+    - POST /api/content/verify - Verify story selection criteria
+    - GET /api/content/status - Get job status
+    - POST /api/content/schedule/start - Start scheduled job
+    - POST /api/content/schedule/stop - Stop scheduled job
+  * Added content router to backend/server.js
+- **Story Selection Criteria**:
+  * ✅ userId=null (system stories only, no user-generated content)
+  * ✅ status='ready' (published and ready to use)
+  * ✅ category != 'LGBTQ+' (excluded for marketing)
+  * ✅ spiciness preference: prefer 1-2, careful with 3
+  * ✅ storyId not in blacklist
+- **Testing Completed**:
+  * ✅ All query filters implemented correctly
+  * ✅ Blacklist checking implemented
+  * ✅ Spiciness-based prioritization working
+  * ✅ API endpoints functional
+  * ✅ Unit test script created (test_feature_51.js)
+  * ✅ Regression test: Feature #33 (Date range selector) still working
+  * ✅ Screenshot captured: feature-51-api-status.png
+- **Files Created**:
+  * backend/models/Story.js
+  * backend/models/StoryBlacklist.js
+  * backend/jobs/contentGeneration.js
+  * backend/api/content.js
+  * backend/scripts/seedTestStories.js
+  * test_feature_51.js
+- **Files Modified**:
+  * backend/server.js (added content router)
+  * claude-progress.txt (this file)
+
+### Previous Session
 
 ### Feature #50: Context window management for long conversations ✅
 - **Status**: COMPLETED AND VERIFIED
