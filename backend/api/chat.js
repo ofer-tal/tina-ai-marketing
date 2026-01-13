@@ -1045,6 +1045,156 @@ router.get("/history", async (req, res) => {
   }
 });
 
+// GET /api/chat/search - Search chat history
+router.get("/search", async (req, res) => {
+  try {
+    const { q, limit = 20 } = req.query;
+
+    if (!q) {
+      return res.status(400).json({
+        success: false,
+        error: "Search query is required"
+      });
+    }
+
+    const status = databaseService.getStatus();
+
+    if (!status.isConnected || status.readyState !== 1) {
+      // Return mock search results if no database connection
+      const mockConversation = {
+        id: "mock_conv_1",
+        title: "What is my current MRR?",
+        content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
+        createdAt: new Date(Date.now() - 300000).toISOString(),
+        messages: [
+          {
+            role: "user",
+            content: "What is my current MRR?",
+            timestamp: new Date(Date.now() - 300000).toISOString()
+          },
+          {
+            role: "assistant",
+            content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
+            timestamp: new Date(Date.now() - 290000).toISOString()
+          }
+        ]
+      };
+
+      // Search in mock data
+      const searchLower = q.toLowerCase();
+      const titleMatch = mockConversation.title.toLowerCase().includes(searchLower);
+      const contentMatch = mockConversation.content.toLowerCase().includes(searchLower);
+      const messagesMatch = mockConversation.messages.some(msg =>
+        msg.content.toLowerCase().includes(searchLower)
+      );
+
+      if (titleMatch || contentMatch || messagesMatch) {
+        // Find highlight
+        let highlight = '';
+        const contentLower = mockConversation.content.toLowerCase();
+        const queryIndex = contentLower.indexOf(searchLower);
+
+        if (queryIndex !== -1) {
+          const start = Math.max(0, queryIndex - 50);
+          const end = Math.min(mockConversation.content.length, queryIndex + q.length + 50);
+          highlight = (start > 0 ? '...' : '') + mockConversation.content.substring(start, end) + (end < mockConversation.content.length ? '...' : '');
+        } else {
+          highlight = mockConversation.content.substring(0, 150) + '...';
+        }
+
+        return res.json({
+          success: true,
+          query: q,
+          results: [{
+            id: mockConversation.id,
+            title: mockConversation.title,
+            highlight: highlight,
+            createdAt: mockConversation.createdAt,
+            messages: mockConversation.messages
+          }],
+          count: 1,
+          message: "Mock data - no database connection"
+        });
+      }
+
+      return res.json({
+        success: true,
+        query: q,
+        results: [],
+        count: 0,
+        message: "Mock data - no database connection"
+      });
+    }
+
+    const mongoose = await import('mongoose');
+    const searchQuery = q.toLowerCase();
+
+    // Search in title, content, reasoning, and messages array
+    const conversations = await mongoose.connection
+      .collection("marketing_strategy")
+      .find({
+        type: "chat",
+        $or: [
+          { title: { $regex: searchQuery, $options: 'i' } },
+          { content: { $regex: searchQuery, $options: 'i' } },
+          { reasoning: { $regex: searchQuery, $options: 'i' } },
+          { 'messages.content': { $regex: searchQuery, $options: 'i' } }
+        ]
+      })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    // Highlight matching context in results
+    const results = conversations.map(conv => {
+      let highlight = '';
+      const content = conv.content || '';
+      const title = conv.title || '';
+      const messages = conv.messages || [];
+
+      // Find relevant excerpt
+      const contentLower = content.toLowerCase();
+      const queryIndex = contentLower.indexOf(searchQuery);
+
+      if (queryIndex !== -1) {
+        // Get 100 chars around the match
+        const start = Math.max(0, queryIndex - 50);
+        const end = Math.min(content.length, queryIndex + q.length + 50);
+        highlight = (start > 0 ? '...' : '') + content.substring(start, end) + (end < content.length ? '...' : '');
+      } else if (messages && messages.length > 0) {
+        // Check messages array for matches
+        const matchingMessage = messages.find(msg =>
+          msg.content && msg.content.toLowerCase().includes(searchQuery)
+        );
+        if (matchingMessage) {
+          highlight = `Message: ${matchingMessage.content.substring(0, 150)}${matchingMessage.content.length > 150 ? '...' : ''}`;
+        }
+      }
+
+      return {
+        id: conv._id,
+        title: title,
+        highlight: highlight || content.substring(0, 150) + (content.length > 150 ? '...' : ''),
+        createdAt: conv.createdAt,
+        messages: messages
+      };
+    });
+
+    res.json({
+      success: true,
+      query: q,
+      results: results,
+      count: results.length
+    });
+  } catch (error) {
+    console.error("Error searching chat history:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // POST /api/chat/message - Send a message and get AI response
 router.post("/message", async (req, res) => {
   try {

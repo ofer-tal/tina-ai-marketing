@@ -397,6 +397,218 @@ const ProposalButton = styled.button`
   }
 `;
 
+const SearchButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+  }
+`;
+
+const SearchModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease-out;
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+`;
+
+const SearchModalContent = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const SearchModalHeader = styled.div`
+  padding: 1.5rem;
+  border-bottom: 1px solid #2d3561;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const SearchModalTitle = styled.h3`
+  margin: 0;
+  color: #eaeaea;
+  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  color: #a0a0a0;
+  cursor: pointer;
+  font-size: 1.5rem;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #eaeaea;
+  }
+`;
+
+const SearchModalBody = styled.div`
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #1a1a2e;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #2d3561;
+    border-radius: 4px;
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background: #e94560;
+  }
+`;
+
+const SearchInput = styled.input`
+  width: 100%;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  font-family: inherit;
+  margin-bottom: 1rem;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+
+  &::placeholder {
+    color: #a0a0a0;
+  }
+`;
+
+const SearchResults = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const SearchResultItem = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    background: rgba(233, 69, 96, 0.05);
+    transform: translateX(4px);
+  }
+`;
+
+const SearchResultTitle = styled.div`
+  font-weight: 600;
+  color: #e94560;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const SearchResultHighlight = styled.div`
+  color: #a0a0a0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+
+  mark {
+    background: rgba(233, 69, 96, 0.3);
+    color: #eaeaea;
+    padding: 0.1rem 0.2rem;
+    border-radius: 2px;
+  }
+`;
+
+const SearchResultMeta = styled.div`
+  font-size: 0.75rem;
+  color: #7b2cbf;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const NoResults = styled.div`
+  text-align: center;
+  color: #a0a0a0;
+  padding: 2rem;
+`;
+
+const LoadingSpinner = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  color: #e94560;
+`;
+
 function Chat() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -406,6 +618,11 @@ function Chat() {
   const [creatingTodo, setCreatingTodo] = useState(null);
   const [proposals, setProposals] = useState({});
   const [processingProposal, setProcessingProposal] = useState(null);
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const searchTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
   // Scroll to bottom when messages change
@@ -801,6 +1018,67 @@ What would you like to focus on today?`;
     return date.toLocaleDateString();
   };
 
+  const handleSearch = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+
+    try {
+      const response = await fetch(`http://localhost:4001/api/chat/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+
+      if (data.success) {
+        setSearchResults(data.results || []);
+      } else {
+        console.error('Search failed:', data.error);
+        setSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching chat history:', error);
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const loadConversation = (conversation) => {
+    // Convert conversation messages to message format
+    const historyMessages = [];
+
+    if (conversation.messages && conversation.messages.length > 0) {
+      conversation.messages.forEach(msg => {
+        historyMessages.push({
+          id: `${conversation.id}_${msg.role}_${msg.timestamp}`,
+          role: msg.role,
+          content: msg.content,
+          timestamp: msg.timestamp
+        });
+      });
+    } else {
+      // Fallback: use content field
+      historyMessages.push({
+        id: conversation.id,
+        role: 'assistant',
+        content: conversation.highlight || conversation.content,
+        timestamp: conversation.createdAt
+      });
+    }
+
+    setMessages(historyMessages);
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  };
+
+  const highlightText = (text, query) => {
+    if (!query) return text;
+    const regex = new RegExp(`(${query})`, 'gi');
+    return text.replace(regex, '<mark>$1</mark>');
+  };
+
   return (
     <ChatContainer>
       <ChatHeader>
@@ -813,9 +1091,15 @@ What would you like to focus on today?`;
             {isConnected ? '🟢 Online' : '🔴 Offline'} • GLM4.7 Powered
           </ChatStatus>
         </div>
-        <ClearButton onClick={handleClearHistory} disabled={messages.length === 0}>
-          Clear History
-        </ClearButton>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <SearchButton onClick={() => setShowSearch(true)}>
+            <span>🔍</span>
+            Search
+          </SearchButton>
+          <ClearButton onClick={handleClearHistory} disabled={messages.length === 0}>
+            Clear History
+          </ClearButton>
+        </div>
       </ChatHeader>
 
       <MessagesContainer>
@@ -932,6 +1216,83 @@ What would you like to focus on today?`;
           {isLoading ? 'Sending...' : 'Send'}
         </SendButton>
       </InputContainer>
+
+      {showSearch && (
+        <SearchModal>
+          <SearchModalContent>
+            <SearchModalHeader>
+              <SearchModalTitle>
+                <span>🔍</span>
+                Search Chat History
+              </SearchModalTitle>
+              <CloseButton onClick={() => {
+                setShowSearch(false);
+                setSearchQuery('');
+                setSearchResults([]);
+              }}>
+                ×
+              </CloseButton>
+            </SearchModalHeader>
+            <SearchModalBody>
+              <SearchInput
+                type="text"
+                placeholder="Search for keywords, topics, or questions..."
+                value={searchQuery}
+                onChange={(e) => {
+                  const query = e.target.value;
+                  setSearchQuery(query);
+
+                  // Clear existing timeout
+                  if (searchTimeoutRef.current) {
+                    clearTimeout(searchTimeoutRef.current);
+                  }
+
+                  // Debounce search
+                  searchTimeoutRef.current = setTimeout(() => {
+                    handleSearch(query);
+                  }, 300);
+                }}
+                autoFocus
+              />
+              {isSearching ? (
+                <LoadingSpinner>
+                  <LoadingDots>Searching</LoadingDots>
+                </LoadingSpinner>
+              ) : searchQuery && searchResults.length === 0 ? (
+                <NoResults>
+                  No results found for "{searchQuery}"
+                </NoResults>
+              ) : searchQuery && searchResults.length > 0 ? (
+                <SearchResults>
+                  <div style={{ color: '#a0a0a0', fontSize: '0.875rem', marginBottom: '0.5rem' }}>
+                    Found {searchResults.length} result{searchResults.length !== 1 ? 's' : ''}
+                  </div>
+                  {searchResults.map((result) => (
+                    <SearchResultItem
+                      key={result.id}
+                      onClick={() => loadConversation(result)}
+                    >
+                      <SearchResultTitle>
+                        <span>💬</span>
+                        {result.title}
+                      </SearchResultTitle>
+                      <SearchResultHighlight
+                        dangerouslySetInnerHTML={{
+                          __html: highlightText(result.highlight, searchQuery)
+                        }}
+                      />
+                      <SearchResultMeta>
+                        <span>📅</span>
+                        {formatTime(result.createdAt)}
+                      </SearchResultMeta>
+                    </SearchResultItem>
+                  ))}
+                </SearchResults>
+              ) : null}
+            </SearchModalBody>
+          </SearchModalContent>
+        </SearchModal>
+      )}
     </ChatContainer>
   );
 }
