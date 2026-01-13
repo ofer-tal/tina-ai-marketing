@@ -448,3 +448,95 @@ de20340 Implement Feature #5: Error handling with exponential backoff
 - Can be used for AI service calls
 - Can wrap social media posting operations
 - Configurable per service requirements
+
+## Session: 2025-01-12 (Regression Investigation)
+
+### Critical Infrastructure Issues Found
+
+**REGRESSION ISSUE**: Feature #4 (Settings page) cannot be verified due to infrastructure problems.
+
+### Root Cause Analysis
+
+1. **Vite Proxy Configuration Issue** ✅ FIXED
+   - **Problem**: `vite.config.ts` proxy target was set to port 5000
+   - **Backend runs on**: port 3001
+   - **Fix applied**: Updated proxy target to `http://localhost:3001`
+   - **File modified**: `vite.config.ts` line 19
+
+2. **Backend Server Issue** ⚠️ REQUIRES USER INTERVENTION
+   - **Problem**: Backend returns HTML ("Blush Marketing Analytics") instead of JSON
+   - **Expected**: API endpoints should return JSON
+   - **Actual**: Returns HTML with TikTok/Pinterest metrics dashboard
+   - **Root Cause**: Stale node process running outdated code
+   - **Node process PID**: Running since 17:35:04
+   - **Impact**: All API endpoints non-functional
+
+3. **Frontend Server Issue** ⚠️ REQUIRES USER INTERVENTION
+   - **Problem**: Frontend on port 3000 timing out
+   - **Expected**: Vite dev server serving React app
+   - **Actual**: Connection timeouts after 5 seconds
+   - **Impact**: Cannot test any frontend functionality
+
+### Recommended Actions for User
+
+**To restore functionality:**
+
+1. **Stop all node processes:**
+   ```bash
+   # Kill all node processes
+   pkill -9 node
+   ```
+
+2. **Restart servers fresh:**
+   ```bash
+   cd /c/Projects/blush-marketing
+   npm run dev
+   ```
+
+3. **Verify servers:**
+   ```bash
+   # Check backend
+   curl http://localhost:3001/api/health
+   # Should return: {"status":"ok",...}
+   
+   # Check frontend
+   curl http://localhost:3000
+   # Should return HTML with "Blush Marketing Operations Center"
+   ```
+
+4. **Test Settings page:**
+   ```bash
+   curl http://localhost:3001/api/settings
+   # Should return JSON with settings object
+   ```
+
+### Files Modified This Session
+
+- `vite.config.ts` - Fixed proxy target port (5000 → 3001)
+
+### Testing Status
+
+- **Feature #1** (Project initialization): ⚠️ Cannot verify - frontend unresponsive
+- **Feature #2** (MongoDB connection): ⚠️ Cannot verify - backend returning wrong content
+- **Feature #3** (Environment variables): ⚠️ Cannot verify - backend API endpoints failing
+- **Feature #4** (Settings page): ⚠️ Cannot verify - backend API endpoints failing
+- **Feature #5** (Retry logic): ✅ Code completed, tested in isolation
+
+### Next Steps
+
+**CRITICAL PRIORITY**: Infrastructure must be restored before continuing with Feature #6.
+
+Once servers are restarted and functional:
+1. Re-verify Feature #4 (Settings page)
+2. Verify all previously passing features still work
+3. Continue with Feature #6 (Logging system)
+
+### Technical Notes
+
+The backend is serving HTML content that does not exist in the current codebase. This suggests:
+- A stale node process with cached/in-memory code
+- Possible issue with nodemon not detecting file changes
+- Need for clean process restart
+
+The HTML being returned ("Blush Marketing Analytics") appears to be from an older version of the application that included TikTok and Pinterest analytics, which is not part of the current "Blush Marketing Operations Center" scope.
+
