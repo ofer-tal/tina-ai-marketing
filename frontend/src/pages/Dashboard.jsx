@@ -48,6 +48,49 @@ const TimeButton = styled.button`
   }
 `;
 
+const HeaderControls = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+`;
+
+const GlobalRefreshButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: ${props => props.$refreshing ? '#2d3561' : '#7b2cbf'};
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: ${props => props.$refreshing ? 'not-allowed' : 'pointer'};
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  opacity: ${props => props.$refreshing ? 0.6 : 1};
+
+  &:hover:not([disabled]) {
+    background: #9d4edd;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+  }
+`;
+
+const LastUpdatedDisplay = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const LastUpdatedText = styled.span`
+  color: #a0a0a0;
+`;
+
 const MetricsGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -932,6 +975,7 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   // Mock keyword rankings data
   const mockKeywordData = [
@@ -945,12 +989,28 @@ function Dashboard() {
   ];
 
   useEffect(() => {
-    fetchMetrics();
-    fetchPostsPerformance();
-    fetchEngagementMetrics();
-    fetchBudgetUtilization();
-    fetchAlerts();
+    const loadData = async () => {
+      await Promise.all([
+        fetchMetrics(),
+        fetchPostsPerformance(),
+        fetchEngagementMetrics(),
+        fetchBudgetUtilization(),
+        fetchAlerts()
+      ]);
+      setLastUpdated(new Date());
+    };
+    loadData();
   }, [timePeriod]);
+
+  // Update timestamp display every minute
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Force re-render by updating state
+      setLastUpdated(prev => new Date(prev));
+    }, 60000); // Every minute
+
+    return () => clearInterval(interval);
+  }, []);
 
   const fetchMetrics = async () => {
     try {
@@ -1051,6 +1111,24 @@ function Dashboard() {
       console.error('Failed to fetch alerts:', err);
       // Set empty array on error
       setAlerts([]);
+    }
+  };
+
+  const refreshAllData = async () => {
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        fetchMetrics(),
+        fetchPostsPerformance(),
+        fetchEngagementMetrics(),
+        fetchBudgetUtilization(),
+        fetchAlerts()
+      ]);
+      setLastUpdated(new Date());
+    } catch (err) {
+      console.error('Failed to refresh data:', err);
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -1192,26 +1270,40 @@ function Dashboard() {
     <DashboardContainer>
       <DashboardHeader>
         <Title>Tactical Dashboard</Title>
-        <TimePeriodSelector>
-          <TimeButton
-            $active={timePeriod === '24h'}
-            onClick={() => setTimePeriod('24h')}
+        <HeaderControls>
+          <TimePeriodSelector>
+            <TimeButton
+              $active={timePeriod === '24h'}
+              onClick={() => setTimePeriod('24h')}
+            >
+              24h
+            </TimeButton>
+            <TimeButton
+              $active={timePeriod === '7d'}
+              onClick={() => setTimePeriod('7d')}
+            >
+              7d
+            </TimeButton>
+            <TimeButton
+              $active={timePeriod === '30d'}
+              onClick={() => setTimePeriod('30d')}
+            >
+              30d
+            </TimeButton>
+          </TimePeriodSelector>
+
+          <LastUpdatedDisplay>
+            🕒 <LastUpdatedText>Updated {getTimeAgo(lastUpdated)}</LastUpdatedText>
+          </LastUpdatedDisplay>
+
+          <GlobalRefreshButton
+            onClick={refreshAllData}
+            disabled={refreshing}
+            $refreshing={refreshing}
           >
-            24h
-          </TimeButton>
-          <TimeButton
-            $active={timePeriod === '7d'}
-            onClick={() => setTimePeriod('7d')}
-          >
-            7d
-          </TimeButton>
-          <TimeButton
-            $active={timePeriod === '30d'}
-            onClick={() => setTimePeriod('30d')}
-          >
-            30d
-          </TimeButton>
-        </TimePeriodSelector>
+            {refreshing ? '🔄 Refreshing...' : '🔄 Refresh All'}
+          </GlobalRefreshButton>
+        </HeaderControls>
       </DashboardHeader>
 
       {error && (
