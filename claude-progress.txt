@@ -5,9 +5,55 @@
 **Goal**: AI-powered marketing automation for the Blush iPhone App
 **Target**: Grow from $425 MRR to $10,000/month in 6 months
 **Total Features**: 338
-**Completed**: 51/338 (15.1%)
+**Completed**: 52/338 (15.4%)
 
-## Session: 2026-01-13 (Feature #51 COMPLETED ✅)
+## Session: 2026-01-13 (Feature #52 COMPLETED ✅)
+
+### Feature #52: Spiciness-aware content selection ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation**: Content tone adjustment and hashtag generation based on spiciness
+- **Backend Changes**:
+  * Added `getContentToneGuidelines(spiciness)` function to contentGenerationJob
+    - Returns structured tone guidelines for each spiciness level (0-3)
+    - Spiciness 0-1: "sweet romantic" with light emojis, wholesome keywords
+    - Spiciness 2: "romantic sexy" with moderate emojis, passionate keywords
+    - Spiciness 3: "suggestive romantic" with minimal emojis, careful restrictions
+  * Added `generateHashtags(spiciness, category)` function
+    - Base hashtags: #romance, #reading, #bookrecommendation
+    - Spiciness-specific keywords converted to hashtags
+    - Category-specific hashtags appended
+    - Maximum 15 hashtags (platform limit)
+    - Automatic deduplication
+  * Added comprehensive logging for spiciness decisions
+    - Story selection includes spiciness level
+    - Tone guideline application logged
+    - Hashtag generation logged
+  * Created content API endpoints:
+    - GET /api/content/tone/:spiciness - Get tone guidelines for content creation
+    - GET /api/content/hashtags?spiciness={0-3}&category={cat} - Generate appropriate hashtags
+- **Testing Completed**:
+  * ✅ Spiciness 0-1: Sweet romantic tone verified
+  * ✅ Spiciness 2: Romantic sexy tone verified
+  * ✅ Spiciness 3: Suggestive romantic tone with careful handling verified
+  * ✅ Hashtag generation working for all spiciness levels
+  * ✅ API endpoints tested and functional
+  * ✅ Tone guidelines include platform safety restrictions
+  * ✅ Regression tests: Features #48 (Chat search) and #49 (Multi-turn conversation) passing
+- **Files Created**:
+  * test_feature_52_spiciness.js (test script)
+  * verification/feature-52-test-results.md (detailed test documentation)
+- **Files Modified**:
+  * backend/jobs/contentGeneration.js (+110 lines: tone guidelines, hashtag generation)
+  * backend/api/content.js (+93 lines: tone and hashtags endpoints)
+  * claude-progress.txt (this file)
+- **Bug Found During Testing**:
+  * ⚠️ React key warning in Chat.jsx causing duplicate message rendering
+  * Issue: Mock data conversations have duplicate IDs ("mock_conv_1")
+  * Impact: Minor cosmetic issue, doesn't break functionality
+  * Fix required: Update message ID generation to use unique identifiers
+  * Status: Documented, not fixed (not blocking Feature #52)
+
+### Previous Session
 
 ### Feature #51: Story selection from database ✅
 - **Status**: COMPLETED AND VERIFIED

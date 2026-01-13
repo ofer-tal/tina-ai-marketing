@@ -304,6 +304,103 @@ class ContentGenerationJob {
       isScheduled: !!this.task
     };
   }
+
+  /**
+   * Get content tone guidelines based on spiciness level
+   * This helps adjust caption and hashtag generation for appropriate tone
+   *
+   * @param {number} spiciness - Story spiciness level (0-3)
+   * @returns {object} Tone guidelines for content generation
+   */
+  getContentToneGuidelines(spiciness) {
+    const guidelines = {
+      spiciness,
+      tone: 'romantic',
+      emojiStyle: 'moderate',
+      keywords: [],
+      restrictions: []
+    };
+
+    if (spiciness <= 1) {
+      // Mild content - sweet, romantic, wholesome
+      guidelines.tone = 'sweet romantic';
+      guidelines.emojiStyle = 'light';
+      guidelines.keywords = [
+        'romance', 'love story', 'heartwarming', 'sweet',
+        'butterflies', 'first love', 'tender', 'wholesome'
+      ];
+      guidelines.restrictions = [
+        'Avoid overly suggestive language',
+        'Keep content PG-13',
+        'Focus on emotional connection rather than physical'
+      ];
+    } else if (spiciness === 2) {
+      // Medium content - romantic, sexy, empowering
+      guidelines.tone = 'romantic sexy';
+      guidelines.emojiStyle = 'moderate';
+      guidelines.keywords = [
+        'spicy', 'romance', 'passionate', 'chemistry',
+        'tension', 'desire', 'steamy', 'hot', 'romantic'
+      ];
+      guidelines.restrictions = [
+        'Sex-positive and empowering',
+        'Romantic and sensual but not explicit',
+        'Focus on tension and chemistry',
+        'Avoid graphic descriptions'
+      ];
+    } else if (spiciness === 3) {
+      // Spicy content - careful handling needed
+      guidelines.tone = 'suggestive romantic';
+      guidelines.emojiStyle = 'minimal';
+      guidelines.keywords = [
+        'passionate', 'intense', 'forbidden', 'temptation',
+        'desire', 'scandalous', 'bold'
+      ];
+      guidelines.restrictions = [
+        'Careful with explicit content - keep it suggestive',
+        'Focus on emotional intensity rather than graphic details',
+        'Use double entendre and innuendo',
+        'Avoid explicit descriptions',
+        'Maintain romantic context',
+        'Platform guidelines: ensure content meets TikTok/Instagram community standards'
+      ];
+    }
+
+    logger.info('Content tone guidelines applied', {
+      spiciness,
+      tone: guidelines.tone,
+      keywordCount: guidelines.keywords.length
+    });
+
+    return guidelines;
+  }
+
+  /**
+   * Generate appropriate hashtags based on spiciness level
+   *
+   * @param {number} spiciness - Story spiciness level (0-3)
+   * @param {string} category - Story category
+   * @returns {string[]} Appropriate hashtags for the content
+   */
+  generateHashtags(spiciness, category = '') {
+    const guidelines = this.getContentToneGuidelines(spiciness);
+
+    // Base hashtags (always included)
+    const baseHashtags = ['#romance', '#reading', '#bookrecommendation'];
+
+    // Spiciness-specific hashtags
+    const spicinessHashtags = guidelines.keywords.map(k => `#${k.replace(/\s+/g, '')}`);
+
+    // Category-specific hashtags
+    const categoryHashtags = [];
+    if (category) {
+      categoryHashtags.push(`#${category.replace(/\s+/g, '')}Romance`);
+    }
+
+    // Combine and deduplicate
+    const allHashtags = [...baseHashtags, ...spicinessHashtags, ...categoryHashtags];
+    return [...new Set(allHashtags)].slice(0, 15); // Max 15 hashtags
+  }
 }
 
 // Create singleton instance

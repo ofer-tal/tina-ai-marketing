@@ -208,4 +208,96 @@ router.post('/schedule/stop', (req, res) => {
   }
 });
 
+/**
+ * GET /api/content/tone/:spiciness
+ * Get content tone guidelines for a given spiciness level
+ */
+router.get('/tone/:spiciness', (req, res) => {
+  try {
+    const spiciness = parseInt(req.params.spiciness, 10);
+
+    if (isNaN(spiciness) || spiciness < 0 || spiciness > 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Spiciness must be a number between 0 and 3'
+      });
+    }
+
+    const guidelines = contentGenerationJob.getContentToneGuidelines(spiciness);
+
+    logger.info('Content tone guidelines requested', { spiciness });
+
+    res.json({
+      success: true,
+      data: guidelines
+    });
+
+  } catch (error) {
+    logger.error('Get tone guidelines API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/hashtags
+ * Generate appropriate hashtags based on spiciness and category
+ */
+router.get('/hashtags', (req, res) => {
+  try {
+    const { spiciness, category } = req.query;
+
+    if (!spiciness) {
+      return res.status(400).json({
+        success: false,
+        error: 'Spiciness parameter is required'
+      });
+    }
+
+    const spicinessNum = parseInt(spiciness, 10);
+
+    if (isNaN(spicinessNum) || spicinessNum < 0 || spicinessNum > 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Spiciness must be a number between 0 and 3'
+      });
+    }
+
+    const hashtags = contentGenerationJob.generateHashtags(spicinessNum, category || '');
+
+    logger.info('Hashtags generated', {
+      spiciness: spicinessNum,
+      category: category || 'none',
+      hashtagCount: hashtags.length
+    });
+
+    res.json({
+      success: true,
+      data: {
+        spiciness: spicinessNum,
+        category: category || null,
+        hashtags,
+        count: hashtags.length
+      }
+    });
+
+  } catch (error) {
+    logger.error('Generate hashtags API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
