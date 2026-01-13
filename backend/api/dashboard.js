@@ -317,6 +317,104 @@ router.get('/user-growth', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/cac-trend
+ * Get Customer Acquisition Cost (CAC) trend data over time for strategic dashboard
+ * Query params:
+ *   - range: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/cac-trend', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+
+    // Validate range parameter
+    const validRanges = ['30d', '90d', '180d'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({
+        error: 'Invalid range. Must be one of: ' + validRanges.join(', ')
+      });
+    }
+
+    console.log(`Fetching CAC trend data for range: ${range}`);
+
+    // Calculate number of days
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // TODO: In production, fetch from MongoDB marketing_metrics collection
+    // For now, generate mock trend data simulating CAC optimization over time
+    const data = [];
+    let cac = 45.00; // Starting CAC in dollars (high initial acquisition cost)
+    const targetCac = 15.00; // Target CAC as we optimize
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      // Simulate CAC decreasing over time as marketing improves
+      // Early days: higher CAC (poor targeting)
+      // Later days: lower CAC (better optimization, word-of-mouth)
+      const progress = i / days;
+      const optimization = (cac - targetCac) * (1 - Math.pow(progress, 0.5)); // Slower improvement at first
+      const randomFactor = (Math.random() - 0.5) * 3; // Random variation
+      cac = Math.max(targetCac, cac - optimization * 0.1 + randomFactor);
+
+      // Calculate marketing spend and new users for this day
+      const dailySpend = 25 + Math.random() * 50; // $25-75 per day
+      const dailyNewUsers = Math.round(dailySpend / cac);
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        cac: parseFloat(cac.toFixed(2)),
+        marketingSpend: parseFloat(dailySpend.toFixed(2)),
+        newUsers: dailyNewUsers
+      });
+    }
+
+    // Calculate summary metrics
+    const current = data[data.length - 1].cac;
+    const previousIndex = Math.max(0, data.length - 8); // 7 days ago
+    const previous = data[previousIndex].cac;
+    const change = current - previous;
+    const changePercent = ((change / previous) * 100).toFixed(1);
+
+    // Calculate average CAC over the period
+    const avgCac = data.reduce((sum, day) => sum + day.cac, 0) / data.length;
+
+    // Calculate total spend and total users for the period
+    const totalSpend = data.reduce((sum, day) => sum + day.marketingSpend, 0);
+    const totalNewUsers = data.reduce((sum, day) => sum + day.newUsers, 0);
+
+    const trendData = {
+      range: range,
+      startDate: startDate.toISOString(),
+      endDate: new Date().toISOString(),
+      data: data,
+      summary: {
+        current: parseFloat(current.toFixed(2)),
+        previous: parseFloat(previous.toFixed(2)),
+        change: parseFloat(change.toFixed(2)),
+        changePercent: parseFloat(changePercent),
+        average: parseFloat(avgCac.toFixed(2)),
+        totalSpend: parseFloat(totalSpend.toFixed(2)),
+        totalNewUsers: totalNewUsers,
+        trend: change <= 0 ? 'down' : 'up' // Down is good for CAC
+      }
+    };
+
+    console.log(`CAC trend data fetched successfully for range: ${range}`);
+    res.json(trendData);
+
+  } catch (error) {
+    console.error('Error fetching CAC trend data:', error);
+    res.status(500).json({
+      error: 'Failed to fetch CAC trend data',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */

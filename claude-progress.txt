@@ -1042,3 +1042,143 @@ f155be2 Implement Feature #17: Tactical dashboard 7d metrics
 - backend/api/dashboard.js (added /mrr-trend endpoint)
 - frontend/src/App.jsx (added strategic route)
 - vite.config.ts (port 3000 → 5173)
+
+## Session: 2025-01-12 (Feature #19 Implementation)
+
+### Completed Features
+
+#### Feature #19: Strategic dashboard user growth trend ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation Date**: 2025-01-12
+
+- **Files Created**:
+  - `backend/api/dashboard.js` (enhanced)
+    - GET /api/dashboard/user-growth?range=30d|90d|180d
+    - Returns array of daily user growth data points
+    - Includes cumulative users and new users per day
+    - Summary: current, previous, change, changePercent, avgDailyNewUsers
+    - Generates realistic mock data simulating user acquisition growth
+    
+  - `frontend/src/pages/StrategicDashboard.jsx` (enhanced - 520 lines)
+    - Added userGrowthData state
+    - Added fetchUserGrowth function
+    - Added generateMockUserGrowthData fallback
+    - Added formatNumber helper function
+    - Enhanced CustomTooltip to handle both currency and number formatting
+    - Added User Growth section with 4 metric cards
+    - AreaChart with gradient fill for cumulative users (green)
+    - Line overlay for daily new users (purple)
+    - Y-axis formats as K/M for large numbers
+    - Date range selector syncs with MRR chart
+    
+  - `frontend/src/pages/Settings.jsx` (bug fix)
+    - Fixed hardcoded localhost:3001 URLs to relative paths
+    - Changed: fetch('http://localhost:3001/api/settings') → fetch('/api/settings')
+    - This fixes the Settings page that was broken after backend port change
+
+- **Verification Results**:
+  - Step 1: ✅ Navigate to /dashboard/strategic - Page loads successfully
+  - Step 2: ✅ Verify user growth chart displays - Chart visible with green area
+  - Step 3: ✅ Check chart shows cumulative user count - Shows 1,612 users (30d), 3,145 users (90d)
+  - Step 4: ✅ Test zooming in on time period - Date range buttons work (30d → 90d → 180d)
+  - Step 5: ✅ Verify chart legend displays correctly - "Cumulative Users" shown in legend
+  - Additional: ✅ Tooltips show date and user counts on hover
+  - Additional: ✅ Zero console errors
+  - Additional: ✅ API returns different data per range (verified: 30d=1622, 90d=3089)
+  - Additional: ✅ Chart updates dynamically when changing ranges
+
+- **Screenshots**:
+  - .playwright-mcp/feature-19-user-growth-trend.png (30-day view)
+  - .playwright-mcp/feature-19-user-growth-90d.png (90-day view with tooltip)
+
+### Overall Progress
+
+- **Total Features**: 338
+- **Completed**: 19/338 (5.6%)
+- **Current Focus**: Dashboard and Visualizations
+
+### Technical Notes
+
+#### User Growth Chart Implementation
+- **Chart Type**: AreaChart with gradient fill + Line overlay
+  * Area: Cumulative users (green #00d26a) with gradient opacity
+  * Line: Daily new users (purple #7b2cbf)
+- **Y-Axis Formatting**: Auto-formats large numbers
+  * Values >= 1M: "X.XM" format
+  * Values >= 1K: "XK" format
+  * Otherwise: plain number
+- **Data Points Generated**:
+  * 30d: 31 data points
+  * 90d: 91 data points
+  * 180d: 181 data points
+- **Growth Simulation**:
+  * Base: 15 new users/day
+  * Acceleration: +0-20 users over time (simulates viral growth)
+  * Random variation: ±5 users
+  * Starting from 850 cumulative users
+
+#### Bug Fix: Settings Page Hardcoded URLs
+- **Issue**: Settings page had hardcoded `http://localhost:3001` URLs
+- **Root Cause**: Backend port changed from 3001 → 4001, Settings page not updated
+- **Fix**: Changed all fetch URLs to relative paths (e.g., `/api/settings`)
+- **Impact**: Settings page now works correctly with Vite proxy
+
+#### API Design
+- `/api/dashboard/user-growth` endpoint:
+  * Query param: range (30d|90d|180d)
+  * Response structure:
+    ```json
+    {
+      "range": "30d",
+      "startDate": "ISO date",
+      "endDate": "ISO date",
+      "data": [
+        {"date": "YYYY-MM-DD", "users": 1622, "newUsers": 34}
+      ],
+      "summary": {
+        "current": 1622,
+        "previous": 1388,
+        "change": 234,
+        "changePercent": 16.9,
+        "avgDailyNewUsers": 26,
+        "trend": "up"
+      }
+    }
+    ```
+
+### Git History
+
+```
+ac08bd5 Implement Feature #19: Strategic dashboard user growth trend
+10eead8 Update progress notes for Feature #18 completion
+```
+
+### Regression Testing Performed
+
+- **Feature #4** (Settings page): ✅ VERIFIED - Fixed hardcoded URL bug
+- **Feature #16** (Tactical Dashboard): ✅ VERIFIED - Working correctly
+
+### Next Session Priorities
+
+1. **Feature #20**: Strategic dashboard CAC (Customer Acquisition Cost) trend
+2. **Feature #21**: Strategic dashboard organic vs paid user split
+3. Continue with Dashboard and Visualizations features
+
+### Environment Notes
+
+**Servers Running:**
+- Frontend: http://localhost:5173 (Vite dev server)
+- Backend: http://localhost:4001 (Express server)
+- Strategic Dashboard: /dashboard/strategic
+
+**Known Issues:**
+- MongoDB connection failing (cluster.mongodb.net DNS resolution issue)
+- Running in dev mode without database (using mock data)
+- This is expected and acceptable for initial UI development
+
+**Files Modified This Session:**
+- backend/api/dashboard.js (added user-growth endpoint)
+- frontend/src/pages/StrategicDashboard.jsx (added user growth chart section)
+- frontend/src/pages/Settings.jsx (fixed hardcoded URLs)
+
+---

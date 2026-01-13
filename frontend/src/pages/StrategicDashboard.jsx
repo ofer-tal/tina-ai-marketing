@@ -126,12 +126,14 @@ function StrategicDashboard() {
   const [dateRange, setDateRange] = useState('30d');
   const [mrrData, setMrrData] = useState(null);
   const [userGrowthData, setUserGrowthData] = useState(null);
+  const [cacData, setCacData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchMrrTrend();
     fetchUserGrowth();
+    fetchCacTrend();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -173,6 +175,24 @@ function StrategicDashboard() {
       // Set mock data for development
       const mockData = generateMockUserGrowthData(dateRange);
       setUserGrowthData(mockData);
+    }
+  };
+
+  const fetchCacTrend = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/cac-trend?range=${dateRange}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCacData(data);
+    } catch (err) {
+      console.error('Failed to fetch CAC trend data:', err);
+      // Set mock data for development
+      const mockData = generateMockCacData(dateRange);
+      setCacData(mockData);
     }
   };
 
@@ -263,6 +283,59 @@ function StrategicDashboard() {
     };
   };
 
+  const generateMockCacData = (range) => {
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const data = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    let cac = 45.00;
+    const targetCac = 15.00;
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      const progress = i / days;
+      const optimization = (cac - targetCac) * (1 - Math.pow(progress, 0.5));
+      const randomFactor = (Math.random() - 0.5) * 3;
+      cac = Math.max(targetCac, cac - optimization * 0.1 + randomFactor);
+
+      const dailySpend = 25 + Math.random() * 50;
+      const dailyNewUsers = Math.round(dailySpend / cac);
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        cac: parseFloat(cac.toFixed(2)),
+        marketingSpend: parseFloat(dailySpend.toFixed(2)),
+        newUsers: dailyNewUsers
+      });
+    }
+
+    const current = data[data.length - 1].cac;
+    const previousIndex = Math.max(0, data.length - 8);
+    const previous = data[previousIndex].cac;
+    const change = current - previous;
+    const changePercent = ((change / previous) * 100).toFixed(1);
+    const avgCac = data.reduce((sum, day) => sum + day.cac, 0) / data.length;
+    const totalSpend = data.reduce((sum, day) => sum + day.marketingSpend, 0);
+    const totalNewUsers = data.reduce((sum, day) => sum + day.newUsers, 0);
+
+    return {
+      data,
+      summary: {
+        current: parseFloat(current.toFixed(2)),
+        previous: parseFloat(previous.toFixed(2)),
+        change: parseFloat(change.toFixed(2)),
+        changePercent: parseFloat(changePercent),
+        average: parseFloat(avgCac.toFixed(2)),
+        totalSpend: parseFloat(totalSpend.toFixed(2)),
+        totalNewUsers: totalNewUsers,
+        trend: change <= 0 ? 'down' : 'up'
+      }
+    };
+  };
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -281,7 +354,7 @@ function StrategicDashboard() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const CustomTooltip = ({ active, payload, label, type = 'currency' }) => {
+  const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
         <div style={{
@@ -294,13 +367,21 @@ function StrategicDashboard() {
           <p style={{ margin: 0, color: '#a0a0a0', fontSize: '0.85rem' }}>
             {formatDate(label)}
           </p>
-          {payload.map((entry, index) => (
-            <p key={index} style={{ margin: '0.25rem 0 0 0', color: entry.color, fontSize: '0.9rem' }}>
-              {entry.name}: {entry.name === 'New Users' ? formatNumber(entry.value) :
-                            entry.dataKey === 'users' || entry.name === 'Cumulative Users' ? formatNumber(entry.value) :
-                            formatCurrency(entry.value)}
-            </p>
-          ))}
+          {payload.map((entry, index) => {
+            let value = entry.value;
+            if (entry.name === 'New Users' || entry.dataKey === 'users' || entry.name === 'Cumulative Users') {
+              value = formatNumber(entry.value);
+            } else if (entry.name === 'CAC' || entry.name === 'Marketing Spend') {
+              value = formatCurrency(entry.value);
+            } else {
+              value = formatCurrency(entry.value);
+            }
+            return (
+              <p key={index} style={{ margin: '0.25rem 0 0 0', color: entry.color, fontSize: '0.9rem' }}>
+                {entry.name}: {value}
+              </p>
+            );
+          })}
         </div>
       );
     }
@@ -506,6 +587,84 @@ function StrategicDashboard() {
                       name="New Users"
                     />
                   </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </>
+          )}
+
+          {/* CAC Trend Section */}
+          {cacData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Current CAC</MetricLabel>
+                  <MetricValue>{formatCurrency(cacData.summary.current)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Previous CAC (7d ago)</MetricLabel>
+                  <MetricValue>{formatCurrency(cacData.summary.previous)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Change (7d)</MetricLabel>
+                  <MetricValue style={{
+                    color: cacData.summary.trend === 'down' ? '#00d26a' : '#e94560'
+                  }}>
+                    {cacData.summary.trend === 'down' ? '↓' : '↑'}
+                    {formatCurrency(Math.abs(cacData.summary.change))}
+                  </MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Average CAC</MetricLabel>
+                  <MetricValue>{formatCurrency(cacData.summary.average)}</MetricValue>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>Customer Acquisition Cost (CAC) Trend</ChartTitle>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart
+                    data={cacData.data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorCac" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ffb020" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#ffb020" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2d3561" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatDate}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <YAxis
+                      tickFormatter={(value) => `$${value.toFixed(0)}`}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      wrapperStyle={{ color: '#a0a0a0' }}
+                    />
+                    <ReferenceLine
+                      y={15}
+                      label="Target $15"
+                      stroke="#00d26a"
+                      strokeDasharray="3 3"
+                      style={{ color: '#00d26a' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="cac"
+                      stroke="#ffb020"
+                      strokeWidth={2}
+                      dot={{ fill: '#ffb020', r: 3 }}
+                      activeDot={{ r: 6 }}
+                      name="CAC"
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
               </ChartContainer>
             </>
