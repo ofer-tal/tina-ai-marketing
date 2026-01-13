@@ -1,0 +1,38 @@
+version: '3.8'
+
+# Development docker-compose with hot-reload and source mounting
+# Usage: docker-compose -f docker-compose.dev.yml up
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:8.0-rc
+    container_name: blush-marketing-mongodb-dev
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_DATABASE: blush-marketing
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+    networks:
+      - blush-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  mongodb_data:
+    driver: local
+  mongodb_config:
+    driver: local
+
+networks:
+  blush-network:
+    driver: bridge

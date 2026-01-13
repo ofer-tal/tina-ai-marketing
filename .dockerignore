@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.md
+docs/
+
+# Testing
+coverage/
+.nyc_output/
+*.test.js
+*.spec.js
+__tests__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+dist/
+build/
+.next/
+out/
+
+# Logs
+logs/
+*.log
+
+# Storage (will be mounted as volume)
+storage/
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+nginx.conf
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+tmpclaude-*-cwd
+
+# Feature database
+features.db
+
+# Playwright
+.playwright-mcp/
+
+# Verification screenshots
+verification/
+
+# Claude files
+CLAUDE.md
+INITIALIZER_PROGRESS.txt
+claude-progress.txt
+RESTART_SERVERS.md
