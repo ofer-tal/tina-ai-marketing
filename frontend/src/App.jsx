@@ -4,6 +4,7 @@ import styled from 'styled-components';
 import Settings from './pages/Settings';
 import Dashboard from './pages/Dashboard';
 import StrategicDashboard from './pages/StrategicDashboard';
+import Chat from './pages/Chat';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -157,6 +158,7 @@ function App() {
             <NavLink to="/">Home</NavLink>
             <NavLink to="/dashboard">Dashboard</NavLink>
             <NavLink to="/dashboard/strategic">Strategic</NavLink>
+            <NavLink to="/chat">AI Chat</NavLink>
             <NavLink to="/settings">Settings</NavLink>
           </Nav>
         </Header>
@@ -166,6 +168,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/strategic" element={<StrategicDashboard />} />
+            <Route path="/chat" element={<Chat />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
         </Content>
