@@ -1,1 +1,1 @@
-83248
+ sleep 8 echo === Backend started on port 3002 === tail -30 logs/backend.log

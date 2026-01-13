@@ -4,6 +4,7 @@ import contentGenerationJob from '../jobs/contentGeneration.js';
 import captionGenerationService from '../services/captionGenerationService.js';
 import hashtagGenerationService from '../services/hashtagGenerationService.js';
 import tiktokOptimizationService from '../services/tiktokOptimizationService.js';
+import instagramOptimizationService from '../services/instagramOptimizationService.js';
 
 const router = express.Router();
 
@@ -945,6 +946,288 @@ router.get('/tiktok/health', (req, res) => {
 
   } catch (error) {
     logger.error('TikTok health check error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// Instagram Optimization Endpoints
+// ========================================
+
+/**
+ * GET /api/content/instagram/trending-audio
+ * Get trending Instagram audio tracks for Reels
+ */
+router.get('/instagram/trending-audio', (req, res) => {
+  try {
+    const { limit = 5, category = 'all' } = req.query;
+
+    logger.info('Instagram trending audio requested', { limit, category });
+
+    const result = instagramOptimizationService.getTrendingAudio({
+      limit: parseInt(limit),
+      category
+    });
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram trending audio error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/instagram/validate-video
+ * Validate video format for Instagram Reels specs
+ */
+router.post('/instagram/validate-video', (req, res) => {
+  try {
+    const { video } = req.body;
+
+    if (!video) {
+      return res.status(400).json({
+        success: false,
+        error: 'Video data is required'
+      });
+    }
+
+    logger.info('Instagram video validation requested', {
+      duration: video.duration,
+      resolution: video.resolution
+    });
+
+    const result = instagramOptimizationService.validateVideoFormat(video);
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram video validation error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/instagram/optimize-caption
+ * Optimize caption for Instagram audience
+ */
+router.post('/instagram/optimize-caption', (req, res) => {
+  try {
+    const { caption, story, spiciness = 1 } = req.body;
+
+    if (!caption) {
+      return res.status(400).json({
+        success: false,
+        error: 'Caption is required'
+      });
+    }
+
+    logger.info('Instagram caption optimization requested', {
+      captionLength: caption.length,
+      story: story?.title,
+      spiciness
+    });
+
+    const result = instagramOptimizationService.optimizeCaption({
+      caption,
+      story,
+      spiciness
+    });
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram caption optimization error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/instagram/hashtags
+ * Get Instagram-specific hashtags
+ */
+router.get('/instagram/hashtags', (req, res) => {
+  try {
+    const { count = 10, category = 'romance', spiciness = 1 } = req.query;
+
+    logger.info('Instagram hashtags requested', { count, category, spiciness });
+
+    const result = instagramOptimizationService.getInstagramHashtags({
+      count: parseInt(count),
+      category,
+      spiciness: parseInt(spiciness)
+    });
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram hashtags error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/instagram/verify-aspect-ratio
+ * Verify 9:16 aspect ratio for Instagram Reels
+ */
+router.post('/instagram/verify-aspect-ratio', (req, res) => {
+  try {
+    const { video } = req.body;
+
+    if (!video || (!video.aspectRatio && (!video.width || !video.height))) {
+      return res.status(400).json({
+        success: false,
+        error: 'Video with aspectRatio or width/height is required'
+      });
+    }
+
+    logger.info('Instagram aspect ratio verification requested', video);
+
+    const result = instagramOptimizationService.verifyAspectRatio(video);
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram aspect ratio verification error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/instagram/verify-duration
+ * Verify video duration under 90 seconds for Instagram Reels
+ */
+router.post('/instagram/verify-duration', (req, res) => {
+  try {
+    const { video } = req.body;
+
+    if (!video || !video.duration) {
+      return res.status(400).json({
+        success: false,
+        error: 'Video with duration is required'
+      });
+    }
+
+    logger.info('Instagram duration verification requested', { duration: video.duration });
+
+    const result = instagramOptimizationService.verifyDuration(video);
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram duration verification error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/instagram/optimize
+ * Comprehensive Instagram Reels optimization
+ * Combines all optimization steps
+ */
+router.post('/instagram/optimize', (req, res) => {
+  try {
+    const content = req.body;
+
+    logger.info('Instagram comprehensive optimization requested', {
+      story: content.story?.title,
+      spiciness: content.spiciness
+    });
+
+    const result = instagramOptimizationService.optimizeForInstagram(content);
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Instagram comprehensive optimization error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/instagram/health
+ * Health check for Instagram optimization service
+ */
+router.get('/instagram/health', (req, res) => {
+  try {
+    const health = instagramOptimizationService.healthCheck();
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('Instagram health check error', {
       error: error.message
     });
 
