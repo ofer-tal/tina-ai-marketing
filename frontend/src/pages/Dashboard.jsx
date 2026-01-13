@@ -216,6 +216,110 @@ const LastUpdated = styled.div`
   margin-top: 1rem;
 `;
 
+const KeywordsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const KeywordCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1.25rem;
+  transition: all 0.3s;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #e94560;
+    box-shadow: 0 4px 20px rgba(233, 69, 96, 0.1);
+    transform: translateY(-2px);
+  }
+`;
+
+const KeywordHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const KeywordName = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const RankBadge = styled.div`
+  padding: 0.25rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: ${props => {
+    if (props.$rank <= 10) return '#00d26a40';
+    if (props.$rank <= 50) return '#ffb02040';
+    return '#2d3561';
+  }};
+  color: ${props => {
+    if (props.$rank <= 10) return '#00d26a';
+    if (props.$rank <= 50) return '#ffb020';
+    return '#a0a0a0';
+  }};
+  border: 1px solid ${props => {
+    if (props.$rank <= 10) return '#00d26a';
+    if (props.$rank <= 50) return '#ffb020';
+    return '#2d3561';
+  }};
+`;
+
+const KeywordMeta = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const KeywordMetric = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const CompetitionBadge = styled.span`
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: ${props => {
+    switch (props.$level) {
+      case 'low': return '#00d26a20';
+      case 'medium': return '#ffb02020';
+      case 'high': return '#e9456020';
+      default: return '#2d3561';
+    }
+  }};
+  color: ${props => {
+    switch (props.$level) {
+      case 'low': return '#00d26a';
+      case 'medium': return '#ffb020';
+      case 'high': return '#e94560';
+      default: return '#a0a0a0';
+    }
+  }};
+`;
+
+const RankChange = styled.div`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: ${props => {
+    if (props.$change > 0) return '#00d26a';
+    if (props.$change < 0) return '#e94560';
+    return '#a0a0a0';
+  }};
+`;
+
 const RefreshButton = styled.button`
   padding: 0.5rem 1rem;
   background: #e94560;
@@ -245,6 +349,17 @@ function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Mock keyword rankings data
+  const mockKeywordData = [
+    { keyword: 'romantic stories', ranking: 3, volume: 65000, competition: 'high', change: 2 },
+    { keyword: 'spicy fiction', ranking: 7, volume: 48000, competition: 'medium', change: -1 },
+    { keyword: 'romance novels', ranking: 12, volume: 82000, competition: 'high', change: 5 },
+    { keyword: 'love stories', ranking: 18, volume: 54000, competition: 'medium', change: 0 },
+    { keyword: 'fantasy romance', ranking: 24, volume: 36000, competition: 'low', change: 3 },
+    { keyword: 'erotic fiction', ranking: 31, volume: 29000, competition: 'medium', change: -2 },
+    { keyword: 'romantic audiobooks', ranking: 45, volume: 22000, competition: 'low', change: 1 }
+  ];
 
   useEffect(() => {
     fetchMetrics();
@@ -423,6 +538,38 @@ function Dashboard() {
         {renderMetricCard('spend', 'Ad Spend', '📊', '$')}
         {renderMetricCard('posts', 'Content Posted', '📱')}
       </MetricsGrid>
+
+      <DashboardHeader>
+        <Title>App Store Keyword Rankings</Title>
+      </DashboardHeader>
+
+      <KeywordsGrid>
+        {mockKeywordData.map((keyword) => (
+          <KeywordCard key={keyword.keyword} onClick={() => window.location.href = '/aso'}>
+            <KeywordHeader>
+              <KeywordName>{keyword.keyword}</KeywordName>
+              <RankBadge $rank={keyword.ranking}>
+                #{keyword.ranking}
+              </RankBadge>
+            </KeywordHeader>
+            <KeywordMeta>
+              <KeywordMetric>
+                <MetricLabel>Volume</MetricLabel>
+                <MetricValue>{formatNumber(keyword.volume)}</MetricValue>
+              </KeywordMetric>
+              <KeywordMetric>
+                <MetricLabel>Competition</MetricLabel>
+                <CompetitionBadge $level={keyword.competition}>
+                  {keyword.competition}
+                </CompetitionBadge>
+              </KeywordMetric>
+              <RankChange $change={keyword.change}>
+                {keyword.change > 0 ? `↑${keyword.change}` : keyword.change < 0 ? `↓${Math.abs(keyword.change)}` : '→'}
+              </RankChange>
+            </KeywordMeta>
+          </KeywordCard>
+        ))}
+      </KeywordsGrid>
 
       <DashboardHeader>
         <Title>Recent Post Performance</Title>
