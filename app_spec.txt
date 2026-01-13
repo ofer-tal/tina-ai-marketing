@@ -1,0 +1,978 @@
+<project_specification>
+  <project_name>blush-marketing</project_name>
+
+  <overview>
+    blush-marketing is an AI-powered marketing operations center for the "blush" iPhone app - a romantic/spicy AI story generator.
+    The system acts as an autonomous AI Marketing Executive that proactively manages social media content generation, ASO optimization,
+    paid ad campaigns, and strategic decision-making to grow the app from $300-500/month MRR to $10,000/month in 6 months.
+    Target audience is 90%+ female, 85% straight, ages 18-45 interested in romantic fiction.
+  </overview>
+
+  <technology_stack>
+    <frontend>
+      <framework>React</framework>
+      <styling>CSS-in-JS (styled-components or emotion) - dark mode default with blue/purple/red accent colors from blush brand</styling>
+      <charts>Recharts or Chart.js for data visualization</charts>
+    </frontend>
+    <backend>
+      <runtime>Node.js 22+ with TypeScript</runtime>
+      <microservice>Python for AI/ML integrations (video generation, image processing)</microservice>
+      <database>MongoDB Atlas (existing) - read access to app collections, write access to marketing_* prefixed collections</database>
+      <background_jobs>node-cron for local execution (future: AWS Lambda with S3 storage)</background_jobs>
+    </backend>
+    <communication>
+      <api>REST API with Express.js</api>
+      <ai_provider>GLM4.7 via Anthropic-compatible API endpoint</ai_provider>
+      <external_apis>App Store Connect, Apple Search Ads, TikTok, Google Analytics, Fal.ai, RunPod (PixelWave/Flux)</external_apis>
+    </communication>
+  </technology_stack>
+
+  <prerequisites>
+    <environment_setup>
+      - Windows 11 with WSL2 or Docker Desktop
+      - Node.js 22+
+      - Python 3.9+ for AI/ML microservice
+      - MongoDB Atlas connection (existing)
+      - API keys for: App Store Connect, Apple Search Ads, TikTok, Google Analytics, Fal.ai, RunPod, GLM4.7
+      - FFmpeg for video processing (with GPU access in Docker)
+      - Local filesystem storage for generated content (images, videos, audio)
+    </environment_setup>
+  </prerequisites>
+
+  <feature_count>330</feature_count>
+
+  <security_and_access_control>
+    <user_roles>
+      <role name="founder">
+        <permissions>
+          - Full access to all features and data
+          - Can approve/reject content
+          - Can authorize budget changes
+          - Can configure all settings and API keys
+          - Can view all analytics and dashboards
+        </permissions>
+        <protected_routes>
+          - All routes available (single-user system)
+        </protected_routes>
+      </role>
+    </user_roles>
+    <authentication>
+      <method>Local only - no authentication required (single user system)</method>
+      <session_timeout>None (local application)</session_timeout>
+      <password_requirements>N/A</password_requirements>
+    </authentication>
+    <sensitive_operations>
+      - Budget changes above $100 require explicit confirmation
+      - Deleting marketing campaigns requires confirmation
+      - Blacklisting stories requires confirmation with reason
+    </sensitive_operations>
+  </security_and_access_control>
+
+  <core_features>
+    <Foundation_and_Infrastructure>
+      - Project initialization with React + TypeScript + Node.js
+      - MongoDB connection and configuration
+      - Environment variable management (.env file)
+      - Settings page for API key management
+      - Error handling and retry logic with exponential backoff
+      - Logging system for debugging and monitoring
+      - Git repository initialization with .gitignore
+      - Docker configuration for development environment
+      - Local filesystem storage management for generated content
+      - Background job scheduling with node-cron
+      - Rate limiting handling for external APIs
+      - Health check endpoint for monitoring
+      - Configuration validation on startup
+      - Graceful shutdown handling
+    </Foundation_and_Infrastructure>
+
+    <Dashboard_and_Visualizations>
+      - Tactical dashboard showing last 24 hours metrics
+      - Tactical dashboard showing last 7 days metrics
+      - Strategic dashboard with MRR trend over time
+      - Strategic dashboard with user growth trend
+      - Strategic dashboard with CAC (Customer Acquisition Cost) trend
+      - Strategic dashboard with organic vs paid user split
+      - Real-time post performance metrics
+      - Revenue vs spend visualization
+      - ROI by marketing channel
+      - Active subscribers count and trend
+      - Daily new users/downloads tracking
+      - App Store keyword rankings visualization
+      - Engagement metrics (likes, comments, shares)
+      - Conversion funnel visualization
+      - Budget utilization tracking (70%/90% alerts)
+      - Alert notifications system
+      - Data refresh with manual refresh option
+      - Date range selector for strategic view
+      - Export dashboard data as CSV
+      - Responsive layout for different screen sizes
+    </Dashboard_and_Visualizations>
+
+    <AI_Chat_and_Strategy>
+      - Chat interface with GLM4.7 AI integration
+      - Full historical data access for AI context
+      - Strategy recommendations based on performance data
+      - Action item creation from chat conversations
+      - Budget change proposals from AI (awaiting approval)
+      - Strategic pivot recommendations with reasoning
+      - Content strategy suggestions
+      - Daily briefing generation and display
+      - Campaign review scheduling and summaries
+      - Conversation persistence in MongoDB (marketing_strategy collection)
+      - Long-term strategy conclusion storage
+      - Collaborative tone with detailed reasoning explanations
+      - Chat history search and reference
+      - Multi-turn conversation handling
+      - Context window management for long conversations
+    </AI_Chat_and_Strategy>
+
+    <Content_Generation_Pipeline>
+      - Story selection from database (filtering userId=null, status="ready", category!=LGBTQ+)
+      - Spiciness-aware content selection (prefer spiciness 1-2, careful with 3)
+      - Video content generation using Fal.ai models
+      - Video generation using RunPod PixelWave/Flux endpoint
+      - Image generation for cover art using existing prompts
+      - Audio excerpt extraction from story chapters
+      - Text hook generation for social media posts
+      - Caption generation with brand voice (sex-positive, romantic, empowering, sexy)
+      - Hashtag strategy and generation
+      - Platform-specific content optimization (TikTok, Instagram, YouTube Shorts)
+      - Content batching (generate 1-2 days ahead)
+      - Vertical video format (9:16 aspect ratio)
+      - Brand watermark/logo overlay on videos
+      - CTA (Call to Action) inclusion in content
+      - Content moderation check before generation
+      - Story blacklist management
+      - Content regeneration with feedback incorporation
+      - Content library for storing all generated assets
+    </Content_Generation_Pipeline>
+
+    <Content_Library_and_Management>
+      - Content library page showing all generated posts
+      - Filter content by status (draft, ready, posted, rejected)
+      - Filter content by platform (TikTok, Instagram, YouTube)
+      - Filter content by date range
+      - Preview video content in library
+      - Preview image content in library
+      - View captions and hashtags for each post
+      - Edit captions and hashtags directly
+      - Download content to local device
+      - Send content to phone for manual posting (AirDrop, email, etc.)
+      - View associated story for each post
+      - View performance metrics for posted content
+      - Duplicate post for regeneration
+      - Delete content from library
+      - Bulk actions for content management
+      - Search content by keyword or story name
+    </Content_Library_and_Management>
+
+    <Content_Approval_Workflow>
+      - Todo sidebar with time and title display
+      - Todo list ordered by scheduled time
+      - Click todo to view full details and resources
+      - Content review interface with video preview
+      - Approve button for content approval
+      - Reject button with reason input
+      - Blacklist story option from rejection flow
+      - Text edit capability for captions and hashtags
+      - Regenerate option with feedback prompt
+      - Batch approval queue view
+      - Approval history tracking
+      - Rejection reason storage for AI learning
+      - Scheduled posting time display
+      - Status indicators (pending, approved, posted, failed)
+    </Content_Approval_Workflow>
+
+    <Social_Media_Integration>
+      - TikTok API integration for posting
+      - TikTok sandbox app configuration
+      - TikTok video upload functionality
+      - TikTok caption and hashtag posting
+      - Instagram API integration (Phase 2)
+      - Instagram Reels posting (Phase 2)
+      - YouTube Shorts API integration (Phase 2)
+      - Content scheduling system
+      - Automatic posting at scheduled times
+      - Manual posting workflow with content export
+      - Post status tracking (scheduled, posted, failed)
+      - Error handling and retry for failed posts
+      - Rate limit compliance
+      - Platform-specific format optimization
+      - Trending audio integration for TikTok
+      - Post performance metrics retrieval
+      - Engagement tracking (likes, comments, shares, views)
+    </Social_Media_Integration>
+
+    <ASO_and_App_Store_Optimization>
+      - App Store Connect API integration
+      - Keyword ranking tracking for target keywords
+      - Keyword competitiveness analysis
+      - New keyword opportunity suggestions
+      - Keyword ranking history visualization
+      - App metadata retrieval (title, subtitle, description)
+      - Screenshot analysis and suggestions
+      - Icon A/B testing recommendations
+      - Description optimization suggestions
+      - Category ranking tracking
+      - Conversion rate tracking (views to downloads)
+      - Competitor keyword monitoring
+      - ASO score calculation
+      - Weekly ASO performance reports
+      - Automated A/B test setup (Phase 2)
+      - A/B test result analysis
+    </ASO_and_App_Store_Optimization>
+
+    <Paid_Ads_Management>
+      - Apple Search Ads API integration
+      - Campaign listing and status tracking
+      - Ad group performance monitoring
+      - Keyword-level spend tracking
+      - Daily spend aggregation
+      - Revenue attribution from app transactions
+      - ROI calculation per campaign
+      - ROI calculation per keyword
+      - Budget utilization percentage
+      - 70% budget warning alert
+      - 90% budget critical alert with automatic pause
+      - Monthly net revenue tracking
+      - Marketing budget vs actual spend tracking
+      - Campaign pause/resume functionality
+      - Bid adjustment suggestions
+      - Negative keyword management
+      - Campaign creation and editing (Phase 2)
+    </Paid_Ads_Management>
+
+    <Revenue_and_Financial_Tracking>
+      - App Store transactions API integration
+      - Revenue aggregation by day/week/month
+      - Net revenue calculation (after Apple's 15% fee)
+      - Refund tracking and deduction
+      - Subscription revenue tracking
+      - One-time purchase tracking
+      - MRR (Monthly Recurring Revenue) calculation
+      - Active subscriber count
+      - Churn rate calculation
+      - ARPU (Average Revenue Per User) calculation
+      - LTV (Lifetime Value) estimation
+      - Marketing cost tracking (10% estimated for cloud/API)
+      - Profit margin calculation
+      - Financial projections based on trends
+      - Revenue by acquisition channel
+      - Break-even analysis
+    </Revenue_and_Financial_Tracking>
+
+    <Todos_and_Task_Management>
+      - Todo sidebar display in main layout
+      - Todo items showing time and title
+      - Todos ordered by urgency/schedule time
+      - Click todo to expand details
+      - Todo details include associated resources (video, text, links)
+      - Manual todo creation
+      - AI-generated todo creation
+      - Todo completion checkbox
+      - Todo status tracking (pending, in_progress, completed)
+      - Todo snooze/reschedule functionality
+      - Todo deletion
+      - Todo categories (posting, configuration, review)
+      - Overdue todo highlighting
+      - Todo search functionality
+      - Todo history and archive
+    </Todos_and_Task_Management>
+
+    <Testing_and_Quality_Assurance>
+      - Unit tests for all data models
+      - Unit tests for API endpoints
+      - Unit tests for utility functions
+      - Integration tests for MongoDB operations
+      - Integration tests for external API calls
+      - Integration tests for AI chat workflows
+      - End-to-end tests for content approval flow
+      - End-to-end tests for dashboard loading
+      - Tests for error handling and retry logic
+      - Tests for budget alert system
+      - Tests for content moderation
+      - Tests for authentication (if added)
+      - Performance tests for data aggregation
+      - Load tests for concurrent operations
+      - Regression test suite
+      - Automated test running in CI/CD (future)
+      - Code coverage reporting
+    </Testing_and_Quality_Assurance>
+
+    <External_Integrations_and_APIs>
+      - MongoDB connection with marketing_* collections
+      - Read-only access to stories, users, appstore-notifications, appstore-transactions
+      - App Store Connect API client
+      - Apple Search Ads API client
+      - TikTok API client with sandbox configuration
+      - Google Analytics API integration
+      - Fal.ai API client for video generation
+      - RunPod API client for image generation (PixelWave/Flux)
+      - GLM4.7 API client with Anthropic compatibility
+      - Image moderation API integration (optional)
+      - Video storage on local filesystem
+      - S3 bucket configuration (future cloud migration)
+      - Webhook handling for App Store notifications
+      - API response caching where appropriate
+      - API rate limit handling
+    </External_Integrations_and_APIs>
+
+    <UI_UX_and_Design>
+      - Dark mode default design
+      - Blue/purple/red accent colors from blush brand
+      - Responsive sidebar navigation
+      - Clean, modern dashboard layout
+      - Data cards with key metrics
+      - Interactive charts with tooltips
+      - Loading states for async operations
+      - Error message displays
+      - Success notification toasts
+      - Modal dialogs for confirmations
+      - Form validation feedback
+      - Collapsible sidebar for more screen space
+      - Tab navigation for related content
+      - Breadcrumbs for navigation hierarchy
+      - Data tables with sorting and pagination
+      - Empty state displays
+      - 404 page for invalid routes
+      - Accessibility (keyboard navigation, screen reader support)
+    </UI_UX_and_Design>
+
+    <Background_Jobs_and_Automation>
+      - Scheduled content generation (daily batch)
+      - Scheduled post publishing (cron-based)
+      - Daily metrics aggregation and storage
+      - Weekly ASO performance analysis
+      - Budget threshold checking (hourly)
+      - Daily briefing generation
+      - Campaign review scheduling
+      - Data cleanup jobs (old temporary files)
+      - API health monitoring
+      - Retry failed posts with backoff
+      - Story database refresh for new content
+      - Revenue sync from App Store Connect
+      - Keyword ranking check (daily)
+      - Automated A/B test duration monitoring
+      - Log rotation and cleanup
+    </Background_Jobs_and_Automation>
+
+    <Data_Analytics_and_BI>
+      - Channel performance comparison
+      - Content engagement correlation analysis
+      - Best posting time identification
+      - High-performing story category identification
+      - Hashtag effectiveness tracking
+      - Video style performance analysis
+      - Cohort analysis for user retention
+      - Conversion attribution modeling
+      - Predictive analytics for growth forecasting
+      - Anomaly detection for performance issues
+      - A/B test statistical significance calculation
+      - ROI optimization recommendations
+      - Churn prediction
+      - Lifetime value modeling
+    </Data_Analytics_and_BI>
+
+    <Press_Releases_and_Content_Marketing>
+      - Blog post generation capability
+      - Medium article creation workflow
+      - Press release generation for product updates
+      - SEO-optimized content suggestions
+      - Content calendar for blog posts
+      - Website traffic tracking from GA
+      - Backlink monitoring (future)
+      - Content performance tracking
+      - Topic suggestions based on trends
+      - SEO keyword recommendations
+    </Press_Releases_and_Content_Marketing>
+
+    <Configuration_and_Settings>
+      - Settings page for API keys management
+      - App Store Connect credentials configuration
+      - Apple Search Ads credentials configuration
+      - TikTok API credentials configuration
+      - Google Analytics credentials configuration
+      - Fal.ai API key configuration
+      - RunPod API endpoint configuration
+      - GLM4.7 API key and endpoint configuration
+      - MongoDB connection string configuration
+      - Budget limits and thresholds configuration
+      - Posting schedule configuration
+      - Platform-specific settings
+      - Content generation preferences
+      - Notification preferences
+      - Data retention settings
+      - Export/import configuration
+    </Configuration_and_Settings>
+
+    <Error_Handling_and_Edge_Cases>
+      - API failure detection and retry with exponential backoff
+      - Rate limit detection and throttling adjustment
+      - Network timeout handling
+      - Invalid API response handling
+      - Content generation failure handling
+      - Post failure detection and alerting
+      - Budget overspend prevention
+      - Data validation on all inputs
+      - Graceful degradation when services unavailable
+      - User-friendly error messages
+      - Error logging and monitoring
+      - Circuit breaker pattern for failing APIs
+      - Fallback to manual posting when automation fails
+      - Database connection error handling
+      - File system error handling
+      - Malformed data handling from external APIs
+    </Error_Handling_and_Edge_Cases>
+
+    <Documentation_and_Onboarding>
+      - Setup wizard for first-time configuration
+      - README with project overview
+      - API documentation
+      - Environment setup instructions
+      - Troubleshooting guide
+      - Feature documentation
+      - Changelog tracking
+      - Architecture documentation
+      - Database schema documentation
+      - Deployment guide (for future cloud migration)
+    </Documentation_and_Onboarding>
+  </core_features>
+
+  <database_schema>
+    <tables>
+      <marketing_posts>
+        - _id (ObjectId)
+        - title (string)
+        - description (string)
+        - platform (enum: tiktok, instagram, youtube_shorts)
+        - status (enum: draft, ready, approved, scheduled, posted, failed, rejected)
+        - contentType (enum: video, image, carousel)
+        - videoPath (string, nullable)
+        - imagePath (string, nullable)
+        - caption (string)
+        - hashtags (array of strings)
+        - scheduledAt (Date)
+        - postedAt (Date, nullable)
+        - storyId (ObjectId, reference to stories._id)
+        - storyName (string)
+        - storyCategory (string)
+        - generatedAt (Date)
+        - approvedAt (Date, nullable)
+        - rejectedAt (Date, nullable)
+        - rejectionReason (string, nullable)
+        - performanceMetrics (object: {views, likes, comments, shares, engagementRate})
+        - createdAt (Date)
+        - updatedAt (Date)
+      </marketing_posts>
+
+      <marketing_strategy>
+        - _id (ObjectId)
+        - type (enum: decision, recommendation, analysis, pivot, review)
+        - title (string)
+        - content (string)
+        - reasoning (string)
+        - dataReferences (array of objects)
+        - status (enum: proposed, approved, rejected, implemented)
+        - expectedOutcome (string, nullable)
+        - actualOutcome (string, nullable)
+        - reviewDate (Date, nullable)
+        - createdAt (Date)
+        - updatedAt (Date)
+      </marketing_strategy>
+
+      <marketing_tasks>
+        - _id (ObjectId)
+        - title (string)
+        - description (string)
+        - category (enum: posting, configuration, review, development, analysis)
+        - priority (enum: low, medium, high, urgent)
+        - status (enum: pending, in_progress, completed, cancelled, snoozed)
+        - scheduledAt (Date)
+        - dueAt (Date, nullable)
+        - completedAt (Date, nullable)
+        - resources (array of objects: {type, url, description})
+        - estimatedTime (number in minutes, nullable)
+        - actualTime (number in minutes, nullable)
+        - createdBy (enum: user, ai)
+        - relatedStrategyId (ObjectId, nullable)
+        - createdAt (Date)
+        - updatedAt (Date)
+      </marketing_tasks>
+
+      <marketing_revenue>
+        - _id (ObjectId)
+        - date (Date)
+        - period (enum: daily, weekly, monthly)
+        - grossRevenue (number)
+        - appleFee (number, default 0.15 for 15%)
+        - netRevenue (number)
+        - refunds (number, default 0)
+        - subscriptionRevenue (number)
+        - oneTimePurchaseRevenue (number)
+        - activeSubscribers (number)
+        - newUsers (number)
+        - churnedSubscribers (number)
+        - cac (number, Customer Acquisition Cost)
+        - ltv (number, Lifetime Value)
+        - marketingSpend (number)
+        - profitMargin (number)
+        - calculatedAt (Date)
+        - createdAt (Date)
+      </marketing_revenue>
+
+      <marketing_ad_campaigns>
+        - _id (ObjectId)
+        - platform (enum: apple_search_ads, tiktok, instagram, facebook)
+        - campaignId (string, external platform ID)
+        - campaignName (string)
+        - status (enum: active, paused, completed, draft)
+        - budget (number, daily or total)
+        - budgetType (enum: daily, total)
+        - actualSpend (number)
+        - startDate (Date)
+        - endDate (Date, nullable)
+        - targeting (object)
+        - creatives (array of objects)
+        - impressions (number)
+        - clicks (number)
+        - conversions (number)
+        - cost (number)
+        - roi (number)
+        - autoPaused (boolean)
+        - pauseReason (string, nullable)
+        - createdAt (Date)
+        - updatedAt (Date)
+        - syncedAt (Date)
+      </marketing_ad_campaigns>
+
+      <marketing_aso_keywords>
+        - _id (ObjectId)
+        - keyword (string)
+        - ranking (number)
+        - volume (number, search volume)
+        - competition (enum: low, medium, high)
+        - difficulty (number, 1-100)
+        - trackedSince (Date)
+        - rankingHistory (array of objects: {date, ranking})
+        - opportunityScore (number)
+        - target (boolean)
+        - lastCheckedAt (Date)
+        - createdAt (Date)
+        - updatedAt (Date)
+      </marketing_aso_keywords>
+
+      <marketing_aso_experiments>
+        - _id (ObjectId)
+        - name (string)
+        - type (enum: icon, screenshots, subtitle, description, keywords)
+        - variantA (object, description and assets)
+        - variantB (object, description and assets)
+        - status (enum: draft, running, completed, cancelled)
+        - startDate (Date)
+        - endDate (Date, nullable)
+        - duration (number, in days)
+        - metric (enum: downloads, conversions, conversionRate)
+        - variantAConversions (number)
+        - variantBConversions (number)
+        - variantAViews (number)
+        - variantBViews (number)
+        - winner (enum: variantA, variantB, inconclusive, pending)
+        - significance (number, statistical significance)
+        - conclusion (string, nullable)
+        - createdAt (Date)
+        - updatedAt (Date)
+      </marketing_aso_experiments>
+
+      <story_blacklist>
+        - _id (ObjectId)
+        - storyId (ObjectId, reference to stories._id)
+        - storyName (string)
+        - reason (string)
+        - blacklistedAt (Date)
+        - blacklistedBy (enum: user, ai)
+        - category (string)
+        - spiciness (number)
+        - isActive (boolean, default true)
+      </story_blacklist>
+
+      <analytics_metrics_timeseries>
+        - _id (ObjectId)
+        - metric (string)
+        - value (number)
+        - dimensions (object, additional context)
+        - timestamp (Date)
+        - source (string)
+      </analytics_metrics_timeseries>
+    </tables>
+  </database_schema>
+
+  <api_endpoints_summary>
+    <Dashboard>
+      - GET /api/dashboard/tactical - Get tactical dashboard data (24h, 7d)
+      - GET /api/dashboard/strategic - Get strategic dashboard trends
+      - GET /api/dashboard/revenue - Get revenue trends
+      - GET /api/dashboard/performance/:channel - Get channel performance
+    </Dashboard>
+    <Content>
+      - POST /api/content/generate - Generate content from story
+      - GET /api/content/library - Get content library
+      - GET /api/content/:id - Get single content item
+      - PUT /api/content/:id - Update content (caption, hashtags)
+      - DELETE /api/content/:id - Delete content
+      - POST /api/content/:id/approve - Approve content for posting
+      - POST /api/content/:id/reject - Reject content with reason
+      - POST /api/content/:id/regenerate - Regenerate content with feedback
+      - POST /api/content/batch-generate - Generate batch of content
+    </Content>
+    <Social_Media>
+      - POST /api/social/tiktok/post - Post to TikTok
+      - POST /api/social/tiktok/schedule - Schedule TikTok post
+      - GET /api/social/tiktok/status/:id - Get post status
+      - POST /api/social/instagram/post - Post to Instagram (Phase 2)
+      - POST /api/social/youtube/post - Post to YouTube Shorts (Phase 2)
+    </Social_Media>
+    <ASO>
+      - GET /api/aso/keywords - Get tracked keywords
+      - POST /api/aso/keywords - Add keyword to track
+      - PUT /api/aso/keywords/:id - Update keyword
+      - DELETE /api/aso/keywords/:id - Remove keyword
+      - GET /api/aso/rankings - Get current rankings
+      - POST /api/aso/experiments - Create A/B test
+      - GET /api/aso/experiments - List experiments
+      - POST /api/aso/experiments/:id/complete - Complete experiment and declare winner
+    </ASO>
+    <Ads>
+      - GET /api/ads/campaigns - Get all campaigns
+      - GET /api/ads/campaigns/:id - Get campaign details
+      - POST /api/ads/campaigns - Create campaign (Phase 2)
+      - PUT /api/ads/campaigns/:id - Update campaign
+      - POST /api/ads/campaigns/:id/pause - Pause campaign
+      - POST /api/ads/campaigns/:id/resume - Resume campaign
+      - GET /api/ads/spend - Get current spend vs budget
+      - GET /api/ads/performance - Get ad performance metrics
+    </Ads>
+    <Revenue>
+      - GET /api/revenue/current - Get current MRR and metrics
+      - GET /api/revenue/history - Get revenue history
+      - GET /api/revenue/attribution - Get revenue by channel
+      - POST /api/revenue/sync - Sync revenue from App Store Connect
+    </Revenue>
+    <Chat>
+      - POST /api/chat/message - Send message to AI
+      - GET /api/chat/history - Get conversation history
+      - POST /api/chat/feedback - Provide feedback on AI suggestion
+      - POST /api/chat/approve - Approve AI proposal
+      - POST /api/chat/reject - Reject AI proposal with reason
+    </Chat>
+    <Todos>
+      - GET /api/todos - Get all todos
+      - POST /api/todos - Create new todo
+      - PUT /api/todos/:id - Update todo
+      - DELETE /api/todos/:id - Delete todo
+      - POST /api/todos/:id/complete - Mark todo as complete
+      - POST /api/todos/:id/snooze - Snooze todo
+    </Todos>
+    <Settings>
+      - GET /api/settings - Get all settings
+      - PUT /api/settings - Update settings
+      - POST /api/settings/api-keys - Set API key
+      - DELETE /api/settings/api-keys/:service - Remove API key
+      - POST /api/settings/test-connection - Test API connection
+    </Settings>
+  </api_endpoints_summary>
+
+  <ui_layout>
+    <main_structure>
+      Left sidebar navigation (collapsible) with menu items: Dashboard, Content Library, Todos, Chat, ASO, Ads, Settings
+      Main content area displays selected page
+      Top header with app title, budget utilization indicator, notifications
+      For pages with sub-navigation, use tabs
+    </main_structure>
+    <sidebar>
+      Always-visible todo list showing next 5-7 items with time and title
+      Click to expand todo details
+      "View all todos" link to full todos page
+    </sidebar>
+    <dashboard_layout>
+      Tactical view at top: last 24h key metrics cards
+      Strategic view below: trend charts over time
+      Channel performance comparison section
+      Budget utilization progress bar with alerts
+    </dashboard_layout>
+    <content_library_layout>
+      Filter bar at top (status, platform, date range)
+      Grid or list view of content cards
+      Each card shows thumbnail, title, status, scheduled time
+      Click card for details and actions
+    </content_library_layout>
+    <chat_layout>
+      Full-height chat window
+      Message bubbles (user right, AI left)
+      Input area at bottom with send button
+      Sidebar or collapsible section for active proposals/approvals
+    </chat_layout>
+  </ui_layout>
+
+  <design_system>
+    <color_palette>
+      Background: #1a1a2e (dark blue-black)
+      Surface: #16213e (slightly lighter dark blue)
+      Primary accent: #e94560 (red/pink blush brand color)
+      Secondary accent: #7b2cbf (purple)
+      Text: #eaeaea (off-white)
+      Text secondary: #a0a0a0 (gray)
+      Success: #00d26a (green)
+      Warning: #ffb020 (yellow/orange)
+      Error: #f8312f (red)
+      Border: #2d3561 (muted blue-purple)
+    </color_palette>
+    <typography>
+      Headings: Inter or system-ui font
+      Body: Inter or system-ui font
+      Monospace (for code/data): Fira Code or monospace
+    </typography>
+    <components>
+      Buttons: rounded corners, hover effects, active states
+      Cards: subtle border, shadow on hover
+      Inputs: dark background, light text, focus ring
+      Tables: striped rows, hover highlights
+      Charts: consistent colors with palette
+      Modals: backdrop blur, centered
+    </components>
+  </design_system>
+
+  <implementation_steps>
+    <step number="1">
+      <title>Foundation Setup</title>
+      <tasks>
+        - Initialize React + TypeScript project with Vite or Next.js
+        - Set up Node.js/Express backend structure
+        - Configure MongoDB connection and models
+        - Set up environment variable management
+        - Create base layout with sidebar navigation
+        - Implement dark mode styling with brand colors
+        - Set up Docker configuration for development
+        - Initialize Git repository
+      </tasks>
+    </step>
+    <step number="2">
+      <title>Core Database and API Integration</title>
+      <tasks>
+        - Create MongoDB models for all collections
+        - Implement App Store Connect API client
+        - Implement Apple Search Ads API client
+        - Implement TikTok API client
+        - Implement Google Analytics integration
+        - Create REST API endpoints for data access
+        - Set up error handling and retry logic
+        - Implement logging system
+      </tasks>
+    </step>
+    <step number="3">
+      <title>Dashboard Implementation</title>
+      <tasks>
+        - Build tactical dashboard with 24h/7d views
+        - Build strategic dashboard with trend charts
+        - Implement data aggregation APIs
+        - Create revenue tracking and MRR calculation
+        - Implement budget tracking and alerts
+        - Add channel performance visualization
+        - Create responsive layout
+      </tasks>
+    </step>
+    <step number="4">
+      <title>Todo System</title>
+      <tasks>
+        - Create todo data model and APIs
+        - Build sidebar todo display
+        - Implement full todos page
+        - Add todo creation, update, completion
+        - Implement todo categories and priorities
+        - Connect to AI for todo generation
+      </tasks>
+    </step>
+    <step number="5">
+      <title>AI Chat Integration</title>
+      <tasks>
+        - Integrate GLM4.7 API client
+        - Build chat UI interface
+        - Implement conversation persistence
+        - Connect AI to database for context
+        - Implement strategy storage
+        - Create action item generation from chat
+        - Add approval/rejection workflows
+      </tasks>
+    </step>
+    <step number="6">
+      <title>Content Generation Pipeline</title>
+      <tasks>
+        - Implement story selection logic
+        - Integrate Fal.ai for video generation
+        - Integrate RunPod for image generation
+        - Implement audio excerpt extraction
+        - Create caption and hashtag generation
+        - Build content moderation checks
+        - Implement story blacklist system
+        - Create batch generation workflow
+      </tasks>
+    </step>
+    <step number="7">
+      <title>Content Approval and Library</title>
+      <tasks>
+        - Build content library page
+        - Implement content review interface
+        - Add approve/reject workflows
+        - Implement caption and hashtag editing
+        - Add regeneration with feedback
+        - Create content export/download
+        - Implement status tracking
+      </tasks>
+    </step>
+    <step number="8">
+      <title>Social Media Integration</title>
+      <tasks>
+        - Implement TikTok posting API
+        - Create content scheduling system
+        - Implement post status tracking
+        - Add error handling and retry for posts
+        - Create performance metrics retrieval
+        - Build manual posting workflow
+      </tasks>
+    </step>
+    <step number="9">
+      <title>ASO Implementation</title>
+      <tasks>
+        - Implement keyword tracking
+        - Create keyword ranking checks
+        - Build keyword suggestions
+        - Implement ASO scoring
+        - Create performance reports
+        - Set up A/B test framework (basic)
+      </tasks>
+    </step>
+    <step number="10">
+      <title>Paid Ads Management</title>
+      <tasks>
+        - Implement Apple Search Ads integration
+        - Create campaign tracking
+        - Implement spend tracking
+        - Build ROI calculation
+        - Implement budget alerts (70%, 90%)
+        - Add automatic pause at limit
+        - Create performance reporting
+      </tasks>
+    </step>
+    <step number="11">
+      <title>Background Jobs and Automation</title>
+      <tasks>
+        - Set up node-cron for scheduling
+        - Implement daily content generation
+        - Implement scheduled posting
+        - Create metrics aggregation jobs
+        - Implement budget checking
+        - Add daily briefing generation
+        - Create data cleanup jobs
+      </tasks>
+    </step>
+    <step number="12">
+      <title>Settings and Configuration</title>
+      <tasks>
+        - Build settings page UI
+        - Implement API key management
+        - Add connection testing
+        - Create budget configuration
+        - Implement posting schedule settings
+        - Add notification preferences
+      </tasks>
+    </step>
+    <step number="13">
+      <title>Testing</title>
+      <tasks>
+        - Write unit tests for models
+        - Write unit tests for API endpoints
+        - Write integration tests for external APIs
+        - Create end-to-end tests for workflows
+        - Implement automated test running
+        - Add code coverage reporting
+      </tasks>
+    </step>
+    <step number="14">
+      <title>Documentation and Polish</title>
+      <tasks>
+        - Write README with setup instructions
+        - Create API documentation
+        - Document database schema
+        - Create troubleshooting guide
+        - Add onboarding/setup wizard
+        - Polish UI/UX
+        - Performance optimization
+      </tasks>
+    </step>
+    <step number="15">
+      <title>Phase 2 Expansion (Future)</title>
+      <tasks>
+        - Add Instagram Reels integration
+        - Add YouTube Shorts integration
+        - Implement automated ASO A/B testing
+        - Add press release/blog post generation
+        - Implement advanced analytics
+        - Create cloud migration to AWS
+        - Add S3 storage for media
+        - Implement Lambda for background jobs
+      </tasks>
+    </step>
+  </implementation_steps>
+
+  <success_criteria>
+    <functionality>
+      - All 330 features implemented and passing tests
+      - Content generation pipeline working end-to-end
+      - Social media posting automated (at least TikTok)
+      - ASO keyword tracking and analysis functional
+      - Paid ads budget controls working with auto-pause
+      - AI chat providing actionable recommendations
+      - Revenue tracking accurate with App Store Connect
+      - Dashboard displaying real-time and trend data
+      - Background jobs running reliably
+      - All external API integrations working with error handling
+    </functionality>
+    <user_experience>
+      - Fast loading dashboards (<3s)
+      - Intuitive navigation and UI
+      - Clear error messages and feedback
+      - Responsive design for different screen sizes
+      - Smooth content approval workflow
+      - Easy access to todos and resources
+      - Helpful AI suggestions with reasoning
+      - Minimal configuration required to start
+    </user_experience>
+    <technical_quality>
+      - 80%+ code coverage from automated tests
+      - No critical bugs in production
+      - Graceful error handling throughout
+      - Efficient database queries
+      - Proper logging for debugging
+      - Clean, maintainable code
+      - Type safety with TypeScript
+      - Secure API key storage
+    </technical_quality>
+    <design_polish>
+      - Consistent dark theme with brand colors
+      - Professional, modern interface
+      - Smooth animations and transitions
+      - Accessible (keyboard navigation, screen readers)
+      - Clear data visualization
+      - Responsive layout on all devices
+    </design_polish>
+    <business_metrics>
+      - MRR growth from $300-500 to $10,000/month in 6 months
+      - Positive ROI on paid marketing spend
+      - Increased organic App Store downloads
+      - Improved App Store keyword rankings
+      - Successful content strategy with viral posts
+      - Sustainable customer acquisition cost
+      - Growing active subscriber base
+    </business_metrics>
+  </success_criteria>
+</project_specification>
