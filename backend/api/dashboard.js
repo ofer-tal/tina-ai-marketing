@@ -229,6 +229,94 @@ router.get('/mrr-trend', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/user-growth
+ * Get user growth trend data over time for strategic dashboard
+ * Query params:
+ *   - range: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/user-growth', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+
+    // Validate range parameter
+    const validRanges = ['30d', '90d', '180d'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({
+        error: 'Invalid range. Must be one of: ' + validRanges.join(', ')
+      });
+    }
+
+    console.log(`Fetching user growth trend data for range: ${range}`);
+
+    // Calculate number of days
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // TODO: In production, fetch from MongoDB marketing_metrics collection
+    // For now, generate mock trend data simulating cumulative user growth
+    const data = [];
+    let cumulativeUsers = 850; // Starting user count
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      // Simulate user growth with increasing acquisition over time
+      // Base growth + acceleration factor + randomness
+      const baseGrowth = 15; // Average daily new users
+      const acceleration = (i / days) * 20; // Growth accelerates over time
+      const randomFactor = (Math.random() - 0.5) * 10; // Random variation
+      const newUsers = Math.max(0, Math.round(baseGrowth + acceleration + randomFactor));
+
+      cumulativeUsers += newUsers;
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        users: cumulativeUsers,
+        newUsers: newUsers
+      });
+    }
+
+    // Calculate summary metrics
+    const current = data[data.length - 1].users;
+    const previousIndex = Math.max(0, data.length - 8); // 7 days ago
+    const previous = data[previousIndex].users;
+    const change = current - previous;
+    const changePercent = ((change / previous) * 100).toFixed(1);
+
+    // Calculate average daily new users
+    const totalNewUsers = data.reduce((sum, day) => sum + day.newUsers, 0);
+    const avgDailyNewUsers = Math.round(totalNewUsers / days);
+
+    const trendData = {
+      range: range,
+      startDate: startDate.toISOString(),
+      endDate: new Date().toISOString(),
+      data: data,
+      summary: {
+        current: current,
+        previous: previous,
+        change: change,
+        changePercent: parseFloat(changePercent),
+        avgDailyNewUsers: avgDailyNewUsers,
+        trend: change >= 0 ? 'up' : 'down'
+      }
+    };
+
+    console.log(`User growth trend data fetched successfully for range: ${range}`);
+    res.json(trendData);
+
+  } catch (error) {
+    console.error('Error fetching user growth trend data:', error);
+    res.status(500).json({
+      error: 'Failed to fetch user growth trend data',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */

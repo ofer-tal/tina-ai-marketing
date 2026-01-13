@@ -236,7 +236,7 @@ function Settings() {
 
   const fetchSchema = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/settings/schema');
+      const response = await fetch('/api/settings/schema');
       const data = await response.json();
       if (data.success) {
         setSchema(data.schema);
@@ -249,7 +249,7 @@ function Settings() {
   const fetchSettings = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/settings');
+      const response = await fetch('/api/settings');
       const data = await response.json();
       if (data.success) {
         setSettings(data.settings);
@@ -278,7 +278,7 @@ function Settings() {
       // Update each setting
       const results = await Promise.all(
         Object.entries(updates).map(([key, value]) =>
-          fetch(`http://localhost:3001/api/settings/${key}`, {
+          fetch(`/api/settings/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ value })

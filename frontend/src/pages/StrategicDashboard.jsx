@@ -9,7 +9,9 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceLine
+  ReferenceLine,
+  Area,
+  AreaChart
 } from 'recharts';
 
 const DashboardContainer = styled.div`
@@ -123,11 +125,13 @@ const ErrorState = styled.div`
 function StrategicDashboard() {
   const [dateRange, setDateRange] = useState('30d');
   const [mrrData, setMrrData] = useState(null);
+  const [userGrowthData, setUserGrowthData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchMrrTrend();
+    fetchUserGrowth();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -151,6 +155,24 @@ function StrategicDashboard() {
       setMrrData(mockData);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchUserGrowth = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/user-growth?range=${dateRange}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setUserGrowthData(data);
+    } catch (err) {
+      console.error('Failed to fetch user growth data:', err);
+      // Set mock data for development
+      const mockData = generateMockUserGrowthData(dateRange);
+      setUserGrowthData(mockData);
     }
   };
 
@@ -194,6 +216,53 @@ function StrategicDashboard() {
     };
   };
 
+  const generateMockUserGrowthData = (range) => {
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const data = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    let cumulativeUsers = 850;
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      const baseGrowth = 15;
+      const acceleration = (i / days) * 20;
+      const randomFactor = (Math.random() - 0.5) * 10;
+      const newUsers = Math.max(0, Math.round(baseGrowth + acceleration + randomFactor));
+
+      cumulativeUsers += newUsers;
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        users: cumulativeUsers,
+        newUsers: newUsers
+      });
+    }
+
+    const current = data[data.length - 1].users;
+    const previousIndex = Math.max(0, data.length - 8);
+    const previous = data[previousIndex].users;
+    const change = current - previous;
+    const changePercent = ((change / previous) * 100).toFixed(1);
+    const totalNewUsers = data.reduce((sum, day) => sum + day.newUsers, 0);
+    const avgDailyNewUsers = Math.round(totalNewUsers / days);
+
+    return {
+      data,
+      summary: {
+        current: current,
+        previous: previous,
+        change: change,
+        changePercent: parseFloat(changePercent),
+        avgDailyNewUsers: avgDailyNewUsers,
+        trend: change >= 0 ? 'up' : 'down'
+      }
+    };
+  };
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -203,12 +272,16 @@ function StrategicDashboard() {
     }).format(value);
   };
 
+  const formatNumber = (value) => {
+    return new Intl.NumberFormat('en-US').format(value);
+  };
+
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const CustomTooltip = ({ active, payload, label }) => {
+  const CustomTooltip = ({ active, payload, label, type = 'currency' }) => {
     if (active && payload && payload.length) {
       return (
         <div style={{
@@ -223,7 +296,9 @@ function StrategicDashboard() {
           </p>
           {payload.map((entry, index) => (
             <p key={index} style={{ margin: '0.25rem 0 0 0', color: entry.color, fontSize: '0.9rem' }}>
-              {entry.name}: {formatCurrency(entry.value)}
+              {entry.name}: {entry.name === 'New Users' ? formatNumber(entry.value) :
+                            entry.dataKey === 'users' || entry.name === 'Cumulative Users' ? formatNumber(entry.value) :
+                            formatCurrency(entry.value)}
             </p>
           ))}
         </div>
@@ -351,6 +426,90 @@ function StrategicDashboard() {
               </LineChart>
             </ResponsiveContainer>
           </ChartContainer>
+
+          {/* User Growth Section */}
+          {userGrowthData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Total Users</MetricLabel>
+                  <MetricValue>{formatNumber(userGrowthData.summary.current)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Previous (7d ago)</MetricLabel>
+                  <MetricValue>{formatNumber(userGrowthData.summary.previous)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>New Users (7d)</MetricLabel>
+                  <MetricValue style={{
+                    color: userGrowthData.summary.trend === 'up' ? '#00d26a' : '#e94560'
+                  }}>
+                    {userGrowthData.summary.trend === 'up' ? '+' : ''}
+                    {formatNumber(userGrowthData.summary.change)}
+                  </MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Avg Daily New Users</MetricLabel>
+                  <MetricValue>{formatNumber(userGrowthData.summary.avgDailyNewUsers)}</MetricValue>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>User Growth Trend</ChartTitle>
+                <ResponsiveContainer width="100%" height={400}>
+                  <AreaChart
+                    data={userGrowthData.data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <defs>
+                      <linearGradient id="colorUsers" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#00d26a" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#00d26a" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2d3561" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatDate}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <YAxis
+                      tickFormatter={(value) => {
+                        if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+                        if (value >= 1000) return `${(value / 1000).toFixed(0)}K`;
+                        return value;
+                      }}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      wrapperStyle={{ color: '#a0a0a0' }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="users"
+                      stroke="#00d26a"
+                      strokeWidth={2}
+                      fill="url(#colorUsers)"
+                      dot={{ fill: '#00d26a', r: 3 }}
+                      activeDot={{ r: 6 }}
+                      name="Cumulative Users"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="newUsers"
+                      stroke="#7b2cbf"
+                      strokeWidth={2}
+                      dot={false}
+                      name="New Users"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </>
+          )}
         </>
       )}
     </DashboardContainer>
