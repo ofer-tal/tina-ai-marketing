@@ -7,6 +7,7 @@ import tiktokOptimizationService from '../services/tiktokOptimizationService.js'
 import instagramOptimizationService from '../services/instagramOptimizationService.js';
 import youtubeOptimizationService from '../services/youtubeOptimizationService.js';
 import contentBatchingService from '../services/contentBatchingService.js';
+import contentModerationService from '../services/contentModerationService.js';
 import MarketingPost from '../models/MarketingPost.js';
 
 const router = express.Router();
@@ -2035,6 +2036,111 @@ router.get('/posts', async (req, res) => {
 
   } catch (error) {
     logger.error('Get marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/moderate
+ * Run moderation check on content draft
+ */
+router.post('/moderate', async (req, res) => {
+  try {
+    const { caption, hashtags, hook, platform, story } = req.body;
+
+    if (!caption || !platform) {
+      return res.status(400).json({
+        success: false,
+        error: 'caption and platform are required'
+      });
+    }
+
+    logger.info('Content moderation requested', {
+      platform,
+      hasCaption: !!caption,
+      hasHashtags: hashtags?.length > 0,
+      hasHook: !!hook
+    });
+
+    // Run moderation check
+    const moderationResult = await contentModerationService.moderateContent({
+      caption,
+      hashtags: hashtags || [],
+      hook,
+      platform,
+      story
+    });
+
+    res.json({
+      success: true,
+      data: moderationResult
+    });
+
+  } catch (error) {
+    logger.error('Content moderation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/moderation/stats
+ * Get moderation statistics
+ */
+router.get('/moderation/stats', (req, res) => {
+  try {
+    const stats = contentModerationService.getStatistics();
+
+    logger.info('Moderation statistics requested');
+
+    res.json({
+      success: true,
+      data: stats
+    });
+
+  } catch (error) {
+    logger.error('Get moderation stats API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/content/moderation/history
+ * Clear moderation history
+ */
+router.delete('/moderation/history', (req, res) => {
+  try {
+    contentModerationService.clearHistory();
+
+    logger.info('Moderation history cleared');
+
+    res.json({
+      success: true,
+      message: 'Moderation history cleared'
+    });
+
+  } catch (error) {
+    logger.error('Clear moderation history API error', {
       error: error.message,
       stack: error.stack
     });
