@@ -1589,4 +1589,205 @@ router.get("/daily-briefing", async (req, res) => {
   }
 });
 
+// POST /api/chat/decision/implement - Mark a decision as implemented
+router.post("/decision/implement", async (req, res) => {
+  try {
+    const { decisionId, actualOutcome, notes } = req.body;
+
+    if (!decisionId) {
+      return res.status(400).json({
+        success: false,
+        error: "Decision ID is required"
+      });
+    }
+
+    const status = databaseService.getStatus();
+
+    if (!status.isConnected || status.readyState !== 1) {
+      return res.json({
+        success: true,
+        message: "Decision marked as implemented (not persisted - no database connection)",
+        decision: {
+          id: decisionId,
+          status: "implemented",
+          actualOutcome: actualOutcome || null,
+          implementationNotes: notes || null,
+          implementedAt: new Date().toISOString()
+        }
+      });
+    }
+
+    const mongoose = await import('mongoose');
+    const result = await mongoose.connection.collection("marketing_strategy").updateOne(
+      { _id: decisionId },
+      {
+        $set: {
+          status: "implemented",
+          actualOutcome: actualOutcome || null,
+          implementationNotes: notes || null,
+          implementedAt: new Date(),
+          updatedAt: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "Decision not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Decision marked as implemented successfully",
+      decision: {
+        id: decisionId,
+        status: "implemented",
+        actualOutcome: actualOutcome || null,
+        implementationNotes: notes || null,
+        implementedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error("Error implementing decision:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/chat/decisions - Get all strategic decisions with filtering
+router.get("/decisions", async (req, res) => {
+  try {
+    const { status, type, limit = 50 } = req.query;
+
+    const statusFilter = status ? { status: status } : {};
+    const typeFilter = type ? { type: type } : {};
+
+    // Filter for decision types only (excluding regular chat)
+    const filter = {
+      $or: [
+        { type: "decision" },
+        { type: "review" },
+        { type: { $in: ["pivot", "recommendation", "analysis"] } }
+      ],
+      ...statusFilter,
+      ...typeFilter
+    };
+
+    const statusDb = databaseService.getStatus();
+
+    if (!statusDb.isConnected || statusDb.readyState !== 1) {
+      // Return mock decisions for development
+      return res.json({
+        success: true,
+        decisions: [
+          {
+            id: "mock_decision_1",
+            type: "decision",
+            title: "Budget Change: $3000 → $3000 (Reallocated to Content)",
+            content: "Approved budget reallocation from paid ads to content production",
+            reasoning: "All paid campaigns have negative ROI. Organic content outperforms paid ads 3:1 on engagement.",
+            status: "implemented",
+            expectedOutcome: {
+              monthlySavings: 1960,
+              projectedReachIncrease: "50-70%",
+              estimatedNewUsers: "80-120/month",
+              newCAC: 16,
+              oldCAC: 400
+            },
+            actualOutcome: {
+              monthlySavings: 1890,
+              reachIncrease: "65%",
+              newUsers: 95,
+              cac: 18
+            },
+            implementationNotes: "Paused all campaigns on Jan 10. Reallocated budget to content tools.",
+            implementedAt: "2026-01-10T10:00:00.000Z",
+            createdAt: "2026-01-08T14:30:00.000Z",
+            updatedAt: "2026-01-10T10:00:00.000Z"
+          },
+          {
+            id: "mock_decision_2",
+            type: "pivot",
+            title: "Strategic Pivot: Paid-First to Content-First Growth",
+            content: "Recommended strategic pivot from paid advertising to organic content-first growth",
+            reasoning: "Paid campaigns have -60% average ROI with $400 CAC. Organic content generates +280% ROI with ~$15 CAC.",
+            status: "approved",
+            expectedOutcome: {
+              beforePivot: { monthlySpend: 3000, newUsers: 15, cac: 400 },
+              afterPivot: { monthlySpend: 1400, newUsers: "80-120", cac: 15 }
+            },
+            actualOutcome: null,
+            implementedAt: null,
+            createdAt: "2026-01-05T09:00:00.000Z",
+            updatedAt: "2026-01-08T14:30:00.000Z"
+          },
+          {
+            id: "mock_decision_3",
+            type: "review",
+            title: "Campaign Review - January 13, 2026",
+            content: "Regular scheduled campaign performance review",
+            reasoning: "Weekly campaign performance monitoring",
+            status: "completed",
+            dataReferences: {
+              type: "campaign_review",
+              summary: {
+                totalSpend: 2160,
+                avgROI: -61,
+                recommendations: [
+                  "Pause all campaigns",
+                  "Reallocate budget to content"
+                ]
+              }
+            },
+            expectedOutcome: "All negative ROI campaigns paused",
+            actualOutcome: "All campaigns paused successfully",
+            reviewDate: "2026-01-13T00:00:00.000Z",
+            createdAt: "2026-01-13T14:00:00.000Z",
+            updatedAt: "2026-01-13T14:00:00.000Z"
+          }
+        ],
+        message: "Mock data - no database connection"
+      });
+    }
+
+    const mongoose = await import('mongoose');
+    const decisions = await mongoose.connection
+      .collection("marketing_strategy")
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .toArray();
+
+    res.json({
+      success: true,
+      decisions: decisions.map(dec => ({
+        id: dec._id,
+        type: dec.type,
+        title: dec.title,
+        content: dec.content,
+        reasoning: dec.reasoning,
+        status: dec.status,
+        expectedOutcome: dec.expectedOutcome,
+        actualOutcome: dec.actualOutcome,
+        implementationNotes: dec.implementationNotes,
+        dataReferences: dec.dataReferences,
+        reviewDate: dec.reviewDate,
+        implementedAt: dec.implementedAt,
+        createdAt: dec.createdAt,
+        updatedAt: dec.updatedAt
+      }))
+    });
+  } catch (error) {
+    console.error("Error fetching decisions:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
