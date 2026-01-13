@@ -466,11 +466,266 @@ const PlatformMetricLabel = styled.div`
   margin-top: 0.1rem;
 `;
 
+// Budget Utilization Section Styles
+const BudgetSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const BudgetContainer = styled.div`
+  background: #16213e;
+  border: 1px solid ${props => {
+    if (props.$alertLevel === 'critical') return '#e94560';
+    if (props.$alertLevel === 'warning') return '#ffb020';
+    return '#2d3561';
+  }};
+  border-radius: 12px;
+  padding: 1.5rem;
+`;
+
+const BudgetHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+`;
+
+const BudgetTitle = styled.h2`
+  font-size: 1.25rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const AlertBadge = styled.div`
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: ${props => {
+    if (props.$level === 'critical') return '#e9456020';
+    if (props.$level === 'warning') return '#ffb02020';
+    return '#00d26a20';
+  }};
+  color: ${props => {
+    if (props.$level === 'critical') return '#e94560';
+    if (props.$level === 'warning') return '#ffb020';
+    return '#00d26a';
+  }};
+  border: 1px solid ${props => {
+    if (props.$level === 'critical') return '#e94560';
+    if (props.$level === 'warning') return '#ffb020';
+    return '#00d26a';
+  }};
+`;
+
+const BudgetProgressSection = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const BudgetLabels = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+`;
+
+const BudgetSpentLabel = styled.div`
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const BudgetRemainingLabel = styled.div`
+  color: ${props => {
+    if (props.$percent >= 90) return '#e94560';
+    if (props.$percent >= 70) return '#ffb020';
+    return '#a0a0a0';
+  }};
+  font-weight: 500;
+`;
+
+const ProgressBarContainer = styled.div`
+  width: 100%;
+  height: 32px;
+  background: #1a1a2e;
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid #2d3561;
+`;
+
+const ProgressBarFill = styled.div`
+  height: 100%;
+  background: ${props => {
+    if (props.$percent >= 90) return 'linear-gradient(90deg, #e94560 0%, #ff6b8a 100%)';
+    if (props.$percent >= 70) return 'linear-gradient(90deg, #ffb020 0%, #ffc840 100%)';
+    return 'linear-gradient(90deg, #00d26a 0%, #00f080 100%)';
+  }};
+  width: ${props => Math.min(props.$percent, 100)}%;
+  transition: width 0.5s ease;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 0.75rem;
+`;
+
+const ProgressPercent = styled.div`
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+`;
+
+const ThresholdMarkers = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  pointer-events: none;
+`;
+
+const ThresholdMarker = styled.div`
+  width: 2px;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.3);
+  position: absolute;
+  left: ${props => props.$percent}%;
+`;
+
+const ThresholdLabel = styled.div`
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: #a0a0a0;
+  white-space: nowrap;
+`;
+
+const BudgetMetrics = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const BudgetMetric = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const BudgetMetricLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const BudgetMetricValue = styled.div`
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const BudgetMetricHighlight = styled.span`
+  color: ${props => {
+    if (props.$color === 'green') return '#00d26a';
+    if (props.$color === 'yellow') return '#ffb020';
+    if (props.$color === 'red') return '#e94560';
+    return '#eaeaea';
+  }};
+`;
+
+const ChannelBreakdown = styled.div`
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #2d3561;
+`;
+
+const ChannelBreakdownTitle = styled.div`
+  font-size: 0.9rem;
+  color: #a0a0a0;
+  margin-bottom: 1rem;
+  font-weight: 600;
+`;
+
+const ChannelGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+`;
+
+const ChannelCard = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+`;
+
+const ChannelName = styled.div`
+  font-size: 0.85rem;
+  color: #eaeaea;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ChannelProgressBar = styled.div`
+  width: 100%;
+  height: 8px;
+  background: #16213e;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+`;
+
+const ChannelProgressFill = styled.div`
+  height: 100%;
+  background: ${props => {
+    if (props.$percent >= 90) return '#e94560';
+    if (props.$percent >= 70) return '#ffb020';
+    return '#00d26a';
+  }};
+  width: ${props => Math.min(props.$percent, 100)}%;
+  transition: width 0.3s ease;
+`;
+
+const ChannelStats = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+`;
+
+const ChannelSpent = styled.div`
+  color: #eaeaea;
+`;
+
+const ChannelRemaining = styled.div`
+  color: ${props => {
+    if (props.$percent >= 90) return '#e94560';
+    if (props.$percent >= 70) return '#ffb020';
+    return '#00d26a';
+  }};
+`;
+
 function Dashboard() {
   const [timePeriod, setTimePeriod] = useState('24h');
   const [metrics, setMetrics] = useState(null);
   const [postsPerformance, setPostsPerformance] = useState(null);
   const [engagementData, setEngagementData] = useState(null);
+  const [budgetData, setBudgetData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -490,6 +745,7 @@ function Dashboard() {
     fetchMetrics();
     fetchPostsPerformance();
     fetchEngagementMetrics();
+    fetchBudgetUtilization();
   }, [timePeriod]);
 
   const fetchMetrics = async () => {
@@ -557,6 +813,23 @@ function Dashboard() {
       console.error('Failed to fetch engagement metrics:', err);
       // Set mock data for development
       setEngagementData(null);
+    }
+  };
+
+  const fetchBudgetUtilization = async () => {
+    try {
+      const response = await fetch('/api/dashboard/budget-utilization');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setBudgetData(data);
+    } catch (err) {
+      console.error('Failed to fetch budget utilization:', err);
+      // Set mock data for development
+      setBudgetData(null);
     }
   };
 
@@ -681,6 +954,111 @@ function Dashboard() {
         {renderMetricCard('spend', 'Ad Spend', '📊', '$')}
         {renderMetricCard('posts', 'Content Posted', '📱')}
       </MetricsGrid>
+
+      {budgetData && (
+        <BudgetSection>
+          <BudgetContainer $alertLevel={budgetData.alert.level}>
+            <BudgetHeader>
+              <BudgetTitle>
+                💰 Budget Utilization
+              </BudgetTitle>
+              {budgetData.alert.message && (
+                <AlertBadge $level={budgetData.alert.level}>
+                  {budgetData.alert.level === 'critical' && '⚠️ '}
+                  {budgetData.alert.level === 'warning' && '⚡ '}
+                  {budgetData.alert.message}
+                </AlertBadge>
+              )}
+            </BudgetHeader>
+
+            <BudgetProgressSection>
+              <BudgetLabels>
+                <BudgetSpentLabel>
+                  {formatCurrency(budgetData.budget.spent)} of {formatCurrency(budgetData.budget.monthly)} spent
+                </BudgetSpentLabel>
+                <BudgetRemainingLabel $percent={budgetData.utilization.percent}>
+                  {formatCurrency(budgetData.budget.remaining)} remaining
+                </BudgetRemainingLabel>
+              </BudgetLabels>
+
+              <ProgressBarContainer>
+                <ProgressBarFill $percent={budgetData.utilization.percent}>
+                  {budgetData.utilization.percent >= 15 && (
+                    <ProgressPercent>{budgetData.utilization.percent}%</ProgressPercent>
+                  )}
+                </ProgressBarFill>
+                <ThresholdMarkers>
+                  <ThresholdMarker $percent="70">
+                    <ThresholdLabel>70%</ThresholdLabel>
+                  </ThresholdMarker>
+                  <ThresholdMarker $percent="90">
+                    <ThresholdLabel>90%</ThresholdLabel>
+                  </ThresholdMarker>
+                </ThresholdMarkers>
+              </ProgressBarContainer>
+            </BudgetProgressSection>
+
+            <BudgetMetrics>
+              <BudgetMetric>
+                <BudgetMetricLabel>Monthly Budget</BudgetMetricLabel>
+                <BudgetMetricValue>{formatCurrency(budgetData.budget.monthly)}</BudgetMetricValue>
+              </BudgetMetric>
+              <BudgetMetric>
+                <BudgetMetricLabel>Projected Spend</BudgetMetricLabel>
+                <BudgetMetricValue>
+                  {budgetData.budget.projected > budgetData.budget.monthly ? (
+                    <BudgetMetricHighlight $color="red">{formatCurrency(budgetData.budget.projected)}</BudgetMetricHighlight>
+                  ) : (
+                    <BudgetMetricHighlight $color="green">{formatCurrency(budgetData.budget.projected)}</BudgetMetricHighlight>
+                  )}
+                </BudgetMetricValue>
+              </BudgetMetric>
+              <BudgetMetric>
+                <BudgetMetricLabel>Daily Spend Rate</BudgetMetricLabel>
+                <BudgetMetricValue>{formatCurrency(budgetData.pacing.currentDailySpend)}/day</BudgetMetricValue>
+              </BudgetMetric>
+              <BudgetMetric>
+                <BudgetMetricLabel>Budget Health</BudgetMetricLabel>
+                <BudgetMetricValue>
+                  {budgetData.pacing.budgetHealth === 'on-track' ? (
+                    <BudgetMetricHighlight $color="green">On Track ✓</BudgetMetricHighlight>
+                  ) : (
+                    <BudgetMetricHighlight $color="yellow">Overspending</BudgetMetricHighlight>
+                  )}
+                </BudgetMetricValue>
+              </BudgetMetric>
+            </BudgetMetrics>
+
+            <ChannelBreakdown>
+              <ChannelBreakdownTitle>Spend by Channel</ChannelBreakdownTitle>
+              <ChannelGrid>
+                {Object.entries(budgetData.breakdown).map(([channelId, channelData]) => {
+                  const channelNames = {
+                    apple_search_ads: '🍎 Apple Search Ads',
+                    tiktok_ads: '🎵 TikTok Ads',
+                    instagram_ads: '📸 Instagram Ads'
+                  };
+
+                  return (
+                    <ChannelCard key={channelId}>
+                      <ChannelName>
+                        {channelNames[channelId] || channelId}
+                      </ChannelName>
+                      <ChannelProgressBar>
+                        <ChannelProgressFill $percent={channelData.percent} />
+                      </ChannelProgressBar>
+                      <ChannelStats>
+                        <ChannelSpent>{formatCurrency(channelData.spent)} spent</ChannelSpent>
+                        <ChannelRemaining>{formatCurrency(channelData.budget - channelData.spent)} left</ChannelRemaining>
+                      </ChannelStats>
+                    </ChannelCard>
+                  );
+                })}
+              </ChannelGrid>
+            </ChannelBreakdown>
+          </BudgetContainer>
+        </BudgetSection>
+      )}
 
       <DashboardHeader>
         <Title>App Store Keyword Rankings</Title>

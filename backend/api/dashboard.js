@@ -1249,4 +1249,130 @@ router.get('/conversion-funnel', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/dashboard/budget-utilization
+ * Get budget utilization data with alerts
+ * Shows current spend vs budget with threshold alerts (70%, 90%)
+ */
+router.get('/budget-utilization', async (req, res) => {
+  try {
+    // TODO: In production, fetch from marketing_budget settings
+    // For now, using mock data with configurable budget
+
+    // Budget configuration (would come from settings in production)
+    const monthlyBudget = 3000; // $3,000 monthly marketing budget
+
+    // Calculate current month spend (from beginning of month)
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    // TODO: In production, sum actual spend from marketing_ad_campaigns collection
+    // For now, using mock spend data
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = now.getDate();
+
+    // Mock spend: varies by day to simulate real usage
+    const baseDailySpend = 85; // Average daily spend
+    const spendVariation = Math.sin(currentDay * 0.5) * 20; // +/- $20 variation
+    const currentDailySpend = Math.round(baseDailySpend + spendVariation);
+
+    // Calculate total spend for month so far
+    const totalSpend = Math.round(currentDailySpend * currentDay * (1 + Math.random() * 0.1));
+
+    // Calculate utilization percentage
+    const utilizationPercent = (totalSpend / monthlyBudget) * 100;
+
+    // Calculate projected spend for end of month
+    const projectedSpend = Math.round(totalSpend * (daysInMonth / currentDay));
+
+    // Calculate remaining budget
+    const remainingBudget = monthlyBudget - totalSpend;
+
+    // Determine alert level
+    let alertLevel = 'normal'; // normal, warning, critical
+    let alertMessage = '';
+    let alertAction = '';
+
+    if (utilizationPercent >= 90) {
+      alertLevel = 'critical';
+      alertMessage = 'Critical: Budget nearly exhausted';
+      alertAction = 'Auto-pause recommended when budget reaches 100%';
+    } else if (utilizationPercent >= 70) {
+      alertLevel = 'warning';
+      alertMessage = 'Warning: 70% of budget used';
+      alertAction = 'Review campaign spend and consider adjustments';
+    }
+
+    // Calculate expected daily average for remainder of month
+    const remainingDays = daysInMonth - currentDay;
+    const requiredDailySpend = remainingBudget / remainingDays;
+
+    // Budget health status
+    const budgetHealth = utilizationPercent > (currentDay / daysInMonth) * 100 ? 'overspending' : 'on-track';
+
+    const budgetData = {
+      period: {
+        start: startOfMonth.toISOString(),
+        end: now.toISOString(),
+        currentDay: currentDay,
+        daysInMonth: daysInMonth,
+        remainingDays: remainingDays
+      },
+      budget: {
+        monthly: monthlyBudget,
+        spent: totalSpend,
+        remaining: remainingBudget,
+        projected: projectedSpend
+      },
+      utilization: {
+        percent: Math.round(utilizationPercent * 10) / 10, // Round to 1 decimal
+        amount: totalSpend,
+        ofTotal: monthlyBudget
+      },
+      thresholds: {
+        warning: 70, // percent
+        critical: 90, // percent
+        current: alertLevel
+      },
+      alert: {
+        level: alertLevel,
+        message: alertMessage || null,
+        action: alertAction || null
+      },
+      pacing: {
+        currentDailySpend: currentDailySpend,
+        requiredDailySpend: Math.round(requiredDailySpend * 100) / 100,
+        budgetHealth: budgetHealth
+      },
+      breakdown: {
+        // Mock breakdown by channel (would be aggregated from campaigns)
+        apple_search_ads: {
+          spent: Math.round(totalSpend * 0.42),
+          budget: Math.round(monthlyBudget * 0.50),
+          percent: Math.round((totalSpend * 0.42) / (monthlyBudget * 0.50) * 100)
+        },
+        tiktok_ads: {
+          spent: Math.round(totalSpend * 0.32),
+          budget: Math.round(monthlyBudget * 0.30),
+          percent: Math.round((totalSpend * 0.32) / (monthlyBudget * 0.30) * 100)
+        },
+        instagram_ads: {
+          spent: Math.round(totalSpend * 0.26),
+          budget: Math.round(monthlyBudget * 0.20),
+          percent: Math.round((totalSpend * 0.26) / (monthlyBudget * 0.20) * 100)
+        }
+      }
+    };
+
+    res.json(budgetData);
+
+  } catch (error) {
+    console.error('Error fetching budget utilization:', error);
+    res.status(500).json({
+      error: 'Failed to fetch budget utilization data',
+      message: error.message
+    });
+  }
+});
+
 export default router;

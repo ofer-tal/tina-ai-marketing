@@ -1,8 +1,79 @@
 # Blush Marketing - Development Progress
 
-## Session: 2025-01-13 (Latest)
+## Session: 2025-01-13 (Latest - Continued)
 
 ### Completed Features
+
+#### Feature #29: Conversion funnel visualization ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation Date**: 2025-01-13
+- **Files Created**:
+  - Screenshot: `.playwright-mcp/feature-29-conversion-funnel-with-details.png`
+  - Screenshot: `.playwright-mcp/feature-29-conversion-funnel-subscriptions-details.png`
+  - Screenshot: `.playwright-mcp/feature-29-conversion-funnel-90d.png`
+
+- **Files Modified**:
+  - `backend/api/dashboard.js`
+    - Added `/api/dashboard/conversion-funnel` endpoint
+    - Returns 7-stage funnel: impressions → product_page_views → downloads → installs → signups → trial_starts → subscriptions
+    - Each stage includes: count, conversionRate, dropoffCount, dropoffRate
+    - Detailed breakdown data for key stages (impressions, product_page_views, downloads, subscriptions)
+    - Supports 30d/90d/180d periods with proper scaling
+
+  - `frontend/src/pages/StrategicDashboard.jsx`
+    - Added conversion funnel state and fetch function
+    - Created interactive funnel visualization with styled components
+    - Funnel stages clickable to reveal detailed breakdowns
+    - Color-coded stages: green (≥70% conversion), yellow (40-70%), red (<40%)
+    - Visual funnel shape with width decreasing from 100% to 30%
+    - Summary metrics: Total Impressions, Conversions, Overall Rate, Biggest Dropoff
+    - Stage-specific details: Search/Browse/Referrals breakdown, Top Sources, Bounce Rate, Churn Rate, etc.
+    - Date range integration with automatic data scaling
+
+- **Funnel Stages**:
+  1. App Store Impressions (45,000 in 30d period) - Starting point
+  2. Product Page Views (18,500) - 41.1% conversion, 58.9% dropoff (biggest dropoff)
+  3. App Downloads (3,200) - 17.3% conversion, 82.7% dropoff
+  4. App Installs (2,900) - 90.6% conversion, 9.4% dropoff
+  5. Account Signups (2,100) - 72.4% conversion, 27.6% dropoff
+  6. Trial Activations (1,650) - 78.6% conversion, 21.4% dropoff
+  7. Paid Subscriptions (485) - 29.4% conversion, 70.6% dropoff
+
+- **Verification Results**:
+  - Step 1: ✅ Navigate to /dashboard/strategic - Page loads successfully
+  - Step 2: ✅ Find conversion funnel chart - "Conversion Funnel" heading visible
+  - Step 3: ✅ Verify funnel stages display with counts - All 7 stages showing correct counts
+  - Step 4: ✅ Check conversion rate between stages shown - All stages show conversion/dropoff rates
+  - Step 5: ✅ Test clicking stage shows detailed breakdown - Clicking reveals stage-specific metrics
+  - Additional: ✅ Summary metrics display correctly (45,000 impressions, 485 conversions, 1.08% overall)
+  - Additional: ✅ Detailed breakdowns work for Impressions (Search/Browse/Referrals), Product Page (Time/Bounce Rate), Subscriptions (Monthly/Annual plans)
+  - Additional: ✅ Date range selector works (30d/90d/180d with proper scaling)
+  - Additional: ✅ Color coding based on conversion rate (green for high, red for low)
+  - Additional: ✅ No console errors
+  - Additional: ✅ Funnel visual shape with decreasing width
+
+- **Technical Notes**:
+  - Overall conversion rate: 1.08% (485 subscriptions / 45,000 impressions)
+  - Biggest dropoff stage: Product Page Views (58.9% dropoff from impressions)
+  - Funnel stages expandable/collapsible on click
+  - Stage details include relevant metrics (e.g., bounce rate for product pages, plan breakdown for subscriptions)
+  - Data scales appropriately for different time periods (3x for 90d, 6x for 180d)
+
+### Overall Progress
+
+- **Total Features**: 338
+- **Completed**: 29/338 (8.6%)
+- **Current Focus**: Dashboard and Visualizations
+- **Session**: 2025-01-13 (Continued)
+
+### Git History
+
+```
+8a7eda7 Implement Feature #29: Conversion funnel visualization
+64f89ea Implement Feature #28: Engagement metrics display
+```
+
+### Previous Session Features
 
 #### Feature #26: Daily new users/downloads tracking ✅
 - **Status**: COMPLETED AND VERIFIED
