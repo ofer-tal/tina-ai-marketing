@@ -607,17 +607,19 @@ Generate a caption that feels authentic, engaging, and perfectly captures the ro
    */
   _addCTA(text, platform) {
     const ctas = {
-      tiktok: '\n\n🔗 Link in bio for more!\n\n#blushapp #romance #reading #booktok',
-      instagram: '\n\n📖 Link in bio for more romantic stories!\n\n#blushapp #romancebooks #bookstagram #readingcommunity',
-      youtube_shorts: '\n\n🔗 Subscribe for more! #blushapp #romance #shorts'
+      tiktok: '\n\n🔗 Get the Blush app - Link in bio!\n\nRead more romantic stories on Blush 💕\n\n#blushapp #romance #reading #booktok #blushstories',
+      instagram: '\n\n📖 Get the Blush app - Link in bio!\n\nDiscover thousands of romantic stories on Blush ✨\n\n#blushapp #romancebooks #bookstagram #readingcommunity #blushstories',
+      youtube_shorts: '\n\n🔗 Subscribe & download the Blush app!\n\nMore romantic stories await on Blush 💕\n\n#blushapp #romance #shorts #blushstories'
     };
 
     const cta = ctas[platform] || ctas.tiktok;
 
-    // Check if already has CTA
+    // Check if already has CTA (more comprehensive check)
     const hasCTA = text.toLowerCase().includes('link in bio') ||
                    text.toLowerCase().includes('subscribe') ||
-                   text.toLowerCase().includes('read more');
+                   text.toLowerCase().includes('read more') ||
+                   text.toLowerCase().includes('blush app') ||
+                   text.toLowerCase().includes('download blush');
 
     if (hasCTA) {
       return text;

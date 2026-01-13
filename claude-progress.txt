@@ -172,3 +172,90 @@ The video metadata utility provides:
 - Files modified: 2
 - Lines of code added: ~730
 - Dependencies added: 2 (fluent-ffmpeg, @ffprobe-installer/ffprobe)
+
+## Session: 2026-01-13 (Session 4 - Feature #66 COMPLETED ✅)
+
+**Feature Completed**: Feature #66 - Call to Action inclusion in content
+
+**Implementation Summary**:
+Verified and enhanced CTA (Call-to-Action) functionality in caption generation service.
+
+**Key Features**:
+- Platform-specific CTAs (TikTok, Instagram, YouTube Shorts)
+- App reference inclusion (#blushapp hashtag)
+- "Link in bio" CTAs for TikTok and Instagram
+- "Subscribe" CTA for YouTube Shorts
+- Proper CTA placement at end of captions
+- Duplicate CTA prevention
+
+**Testing Completed**:
+- ✅ Step 1: Generate content post - PASSED
+- ✅ Step 2: Verify caption includes CTA - PASSED
+- ✅ Step 3: Check CTA includes app link or handle - PASSED
+- ✅ Step 4: Test CTA placement in caption - PASSED
+- ✅ Step 5: Confirm CTA varies by post type - PASSED
+
+**Platform-Specific CTAs**:
+- TikTok: "🔗 Link in bio for more!" + #blushapp hashtag
+- Instagram: "📖 Link in bio for more romantic stories!" + #blushapp hashtag
+- YouTube Shorts: "🔗 Subscribe for more!" + #blushapp hashtag
+
+**Files Created**:
+- test_feature_66_cta.mjs (comprehensive CTA test suite)
+- verification/feature-66-cta-verification.md (detailed verification documentation)
+
+**Files Modified**:
+- backend/services/captionGenerationService.js - Enhanced _addCTA method with more comprehensive CTAs
+
+**Test Results**:
+- All 3 platforms tested: PASSED ✅
+- TikTok: 6/6 checks passed
+- Instagram: 6/6 checks passed
+- YouTube Shorts: 5/5 checks passed
+
+**Previous Session Accomplishments** (Session 3):
+- ✅ Feature #65: Brand watermark/logo overlay on videos
+- ✅ Feature #64: Vertical video format 9:16 aspect ratio
+- ✅ Feature #63: Content batching 1-2 days ahead
+- ✅ Features #51-62: Content generation pipeline components
+
+**Session Statistics**:
+- Features completed this session: 1
+- Total features completed: 66/338 (19.5%)
+- Files created: 2
+- Files modified: 1
+- Test coverage: 100% for CTA functionality
+
+**Next Session Priorities**:
+1. **Feature #67**: Content moderation check before generation
+2. **Feature #68**: Content regeneration with feedback incorporation
+3. **Feature #69**: Content library for storing all generated assets
+4. **Feature #70**: Content library page showing all generated posts
+5. **Feature #71**: Filter content by status (draft, ready, posted, rejected)
+
+**Technical Notes - CTA Implementation**:
+
+The CTA system provides:
+1. **Automatic CTA Generation**:
+   - CTAs added to all captions when includeCTA: true
+   - Platform-appropriate CTA text and hashtags
+   - Brand hashtag #blushapp included in all CTAs
+
+2. **Platform Variation**:
+   - TikTok: Short, punchy "Link in bio" CTA
+   - Instagram: More descriptive "Link in bio for more romantic stories"
+   - YouTube Shorts: Action-oriented "Subscribe" CTA
+
+3. **Quality Assurance**:
+   - Duplicate CTA detection (prevents adding twice)
+   - Case-insensitive pattern matching
+   - Proper placement at end of caption
+   - Separated by blank lines for readability
+
+4. **App References**:
+   - Brand hashtag: #blushapp
+   - App name mentions: "Blush"
+   - Action links: "Link in bio" (standard social media pattern)
+   - Platform-specific handles supported
+
+
