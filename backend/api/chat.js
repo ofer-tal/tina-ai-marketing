@@ -49,13 +49,143 @@ const mockHistoricalData = {
   ]
 };
 
+// Context window management for long conversations
+const MAX_CONTEXT_MESSAGES = 20; // Maximum messages to include in full context
+const SUMMARY_TRIGGER_MESSAGES = 30; // When to trigger summarization
+const SUMMARY_CUTOFF_MESSAGES = 10; // Keep last 10 messages after summarization
+
+// Store conversation summaries in memory (in production, these would be in database)
+const conversationSummaries = new Map();
+
+/**
+ * Manage conversation context window for long conversations
+ * - Summarizes older messages when conversation gets too long
+ * - Maintains key information while reducing token usage
+ * - Preserves recent messages in full
+ */
+function manageConversationContext(messages, conversationId) {
+  // Count total messages (excluding system prompt)
+  const messageCount = messages.filter(m => m.role !== 'system').length;
+
+  // If within limits, return as-is
+  if (messageCount <= MAX_CONTEXT_MESSAGES) {
+    return messages;
+  }
+
+  // Get or create summary for this conversation
+  let summary = conversationSummaries.get(conversationId);
+
+  // If we haven't summarized yet and hit the trigger point, create summary
+  if (!summary && messageCount >= SUMMARY_TRIGGER_MESSAGES) {
+    // Messages to summarize (exclude system prompt and most recent messages)
+    const messagesToSummarize = messages
+      .filter(m => m.role !== 'system')
+      .slice(0, messageCount - SUMMARY_CUTOFF_MESSAGES);
+
+    // Extract key information from older messages
+    const summaryPoints = extractSummaryPoints(messagesToSummarize);
+
+    summary = {
+      points: summaryPoints,
+      createdAt: new Date().toISOString(),
+      originalMessageCount: messagesToSummarize.length
+    };
+
+    conversationSummaries.set(conversationId, summary);
+    console.log(`Created summary for conversation ${conversationId} with ${summaryPoints.length} points`);
+  }
+
+  // Build new messages array with summary + recent messages
+  if (summary) {
+    const systemMessage = messages.find(m => m.role === 'system');
+    const recentMessages = messages
+      .filter(m => m.role !== 'system')
+      .slice(-SUMMARY_CUTOFF_MESSAGES);
+
+    const summaryMessage = {
+      role: 'system',
+      content: `**Previous Conversation Summary:**\n\n${summary.points.join('\n')}\n\nContinue the conversation with this context in mind.`
+    };
+
+    return [systemMessage, summaryMessage, ...recentMessages];
+  }
+
+  return messages;
+}
+
+/**
+ * Extract key summary points from conversation messages
+ */
+function extractSummaryPoints(messages) {
+  const points = [];
+  const userMessages = messages.filter(m => m.role === 'user');
+
+  // Extract topics discussed
+  const topics = new Set();
+  userMessages.forEach(msg => {
+    const content = msg.content.toLowerCase();
+    if (content.includes('revenue') || content.includes('mrr')) topics.add('Revenue/MRR discussion');
+    if (content.includes('content') || content.includes('post')) topics.add('Content strategy discussion');
+    if (content.includes('budget') || content.includes('ad') || content.includes('campaign')) topics.add('Budget/Ads discussion');
+    if (content.includes('keyword') || content.includes('aso') || content.includes('ranking')) topics.add('ASO/Keywords discussion');
+    if (content.includes('pivot') || content.includes('strategy')) topics.add('Strategic planning discussion');
+  });
+
+  // Extract key data points mentioned
+  const keyData = [];
+  userMessages.forEach(msg => {
+    const content = msg.content;
+    // Look for specific numbers and metrics
+    if (content.match(/\$\d+/)) {
+      const matches = content.match(/\$\d+(?:,\d{3})*(?:\.\d+)?/g);
+      if (matches) keyData.push(...matches);
+    }
+  });
+
+  // Build summary points
+  if (topics.size > 0) {
+    points.push(`**Topics Discussed:** ${Array.from(topics).join(', ')}`);
+  }
+
+  if (keyData.length > 0) {
+    const uniqueData = [...new Set(keyData)].slice(0, 5); // Limit to 5 key data points
+    points.push(`**Key Metrics:** ${uniqueData.join(', ')}`);
+  }
+
+  // Extract AI recommendations
+  const aiMessages = messages.filter(m => m.role === 'assistant');
+  if (aiMessages.length > 0) {
+    const lastAI = aiMessages[aiMessages.length - 1];
+    if (lastAI.content.includes('Recommendation')) {
+      const recMatch = lastAI.content.match(/Recommendations?:\s*([\s\S]*?)(?=\n\n|\nShould|\n\*\*Next)/i);
+      if (recMatch) {
+        const recommendations = recMatch[1].split('\n').filter(l => l.trim()).slice(0, 3);
+        if (recommendations.length > 0) {
+          points.push(`**Key Recommendations:**\n${recommendations.join('\n')}`);
+        }
+      }
+    }
+  }
+
+  // Add context about conversation length
+  points.push(`**Conversation History:** ${userMessages.length} user messages exchanged`);
+
+  return points;
+}
+
 // Mock GLM4.7 API integration for development
 // In production, this will call the actual GLM4.7 API
-async function callGLM4API(messages, conversationHistory = []) {
+async function callGLM4API(messages, conversationHistory = [], conversationId = null) {
+  // Apply context window management
+  let managedMessages = messages;
+  if (conversationId) {
+    managedMessages = manageConversationContext(messages, conversationId);
+  }
+
   // For development, return mock responses with historical data
   // In production, this would make an actual API call to GLM4.7
 
-  const lastUserMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
+  const lastUserMessage = managedMessages[managedMessages.length - 1]?.content?.toLowerCase() || "";
 
   // Analyze conversation context for multi-turn conversations
   const recentContext = messages.slice(-6); // Last 3 exchanges (system + user + assistant pattern)
@@ -1365,8 +1495,8 @@ Always base recommendations on actual data when available.`
       content: message
     });
 
-    // Get AI response with full conversation context
-    const aiResponse = await callGLM4API(messages, existingConversation?.messages || []);
+    // Get AI response with full conversation context (passes conversationId for context window management)
+    const aiResponse = await callGLM4API(messages, existingConversation?.messages || [], conversationId || null);
 
     // Save conversation to database if available, otherwise use mock storage
     let savedConversation = null;
@@ -1515,6 +1645,9 @@ Always base recommendations on actual data when available.`
       }
     }
 
+    // Check if a summary was created for this conversation
+    const summary = conversationId ? conversationSummaries.get(conversationId) : null;
+
     res.json({
       success: true,
       response: {
@@ -1524,6 +1657,15 @@ Always base recommendations on actual data when available.`
         proposal: aiResponse.proposal || null
       },
       conversationId: savedConversation?.id,
+      contextInfo: summary ? {
+        summaryCreated: true,
+        summarizedMessages: summary.originalMessageCount,
+        remainingMessages: SUMMARY_CUTOFF_MESSAGES,
+        summaryPoints: summary.points.length
+      } : {
+        summaryCreated: false,
+        messageCount: messages.filter(m => m.role !== 'system').length
+      },
       message: "Response generated successfully"
     });
   } catch (error) {
