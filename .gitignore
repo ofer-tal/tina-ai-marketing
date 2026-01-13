@@ -83,3 +83,6 @@ docker-compose.override.yml
 
 # Feature database (managed by MCP server)
 features.db
+
+# Claude Code temporary working directories
+tmpclaude-*-cwd
