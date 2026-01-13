@@ -982,19 +982,42 @@ router.get("/history", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (!status.isConnected || status.readyState !== 1) {
-      // Return empty history if no database connection
+      // Return mock history if no database connection (for development/demo)
       return res.json({
         success: true,
-        conversations: [],
-        message: "No database connection - using in-memory storage"
+        conversations: [
+          {
+            id: "mock_conv_1",
+            type: "chat",
+            title: "What is my current MRR?",
+            content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
+            reasoning: "Responding to: What is my current MRR?",
+            status: "completed",
+            messages: [
+              {
+                role: "user",
+                content: "What is my current MRR?",
+                timestamp: new Date(Date.now() - 300000).toISOString()
+              },
+              {
+                role: "assistant",
+                content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
+                timestamp: new Date(Date.now() - 290000).toISOString()
+              }
+            ],
+            createdAt: new Date(Date.now() - 300000).toISOString(),
+            updatedAt: new Date(Date.now() - 290000).toISOString()
+          }
+        ],
+        message: "Mock data - no database connection"
       });
     }
 
     const mongoose = await import('mongoose');
     const conversations = await mongoose.connection
       .collection("marketing_strategy")
-      .find({})
-      .sort({ createdAt: -1 })
+      .find({ type: "chat" })
+      .sort({ createdAt: 1 })
       .limit(100)
       .toArray();
 
@@ -1007,6 +1030,7 @@ router.get("/history", async (req, res) => {
         content: conv.content,
         reasoning: conv.reasoning,
         status: conv.status,
+        messages: conv.messages || [], // Include full messages array
         createdAt: conv.createdAt,
         updatedAt: conv.updatedAt
       }))
@@ -1096,13 +1120,26 @@ Always base recommendations on actual data when available.`
             ...campaignReview
           };
         } else {
-          // Regular chat message
+          // Regular chat message - store both user message and AI response
           const conversation = {
             type: "chat",
             title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
             content: aiResponse.content,
             reasoning: `Responding to: ${message}`,
             status: "completed",
+            // Store full conversation with both user and AI messages
+            messages: [
+              {
+                role: "user",
+                content: message,
+                timestamp: new Date()
+              },
+              {
+                role: "assistant",
+                content: aiResponse.content,
+                timestamp: aiResponse.timestamp || new Date()
+              }
+            ],
             createdAt: new Date(),
             updatedAt: new Date()
           };

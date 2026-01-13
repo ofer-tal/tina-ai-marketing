@@ -425,15 +425,29 @@ function Chat() {
 
       if (data.success && data.conversations.length > 0) {
         // Convert conversations to message format
-        const historyMessages = data.conversations
-          .slice()
-          .reverse()
-          .map(conv => ({
-            id: conv.id,
-            role: 'assistant',
-            content: conv.content,
-            timestamp: conv.createdAt
-          }));
+        const historyMessages = [];
+
+        data.conversations.forEach(conv => {
+          // If the conversation has a messages array, expand it
+          if (conv.messages && conv.messages.length > 0) {
+            conv.messages.forEach(msg => {
+              historyMessages.push({
+                id: `${conv.id}_${msg.role}_${msg.timestamp}`,
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp
+              });
+            });
+          } else {
+            // Fallback: use the content field directly (AI response only)
+            historyMessages.push({
+              id: conv.id,
+              role: 'assistant',
+              content: conv.content,
+              timestamp: conv.createdAt
+            });
+          }
+        });
 
         setMessages(historyMessages);
       } else {
