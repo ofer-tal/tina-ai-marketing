@@ -39,36 +39,103 @@ router.get('/metrics', async (req, res) => {
     }
 
     // TODO: In production, these would be fetched from MongoDB
-    // For now, returning mock data that represents the current period vs previous period
-    const metrics = {
-      period: period,
-      startTime: startTime.toISOString(),
-      endTime: now.toISOString(),
-      mrr: {
-        current: 425,
-        previous: 380,
-        change: 11.8,
-        trend: 'up'
-      },
-      users: {
-        current: 1247,
-        previous: 1102,
-        change: 13.2,
-        trend: 'up'
-      },
-      spend: {
-        current: 87,
-        previous: 92,
-        change: -5.4,
-        trend: 'down'
-      },
-      posts: {
-        current: 23,
-        previous: 18,
-        change: 27.8,
-        trend: 'up'
-      }
-    };
+    // For now, returning period-specific mock data that represents the current period vs previous period
+    let metrics;
+
+    if (period === '24h') {
+      // Last 24 hours metrics
+      metrics = {
+        period: period,
+        startTime: startTime.toISOString(),
+        endTime: now.toISOString(),
+        mrr: {
+          current: 425,
+          previous: 380,
+          change: 11.8,
+          trend: 'up'
+        },
+        users: {
+          current: 1247,
+          previous: 1102,
+          change: 13.2,
+          trend: 'up'
+        },
+        spend: {
+          current: 87,
+          previous: 92,
+          change: -5.4,
+          trend: 'down'
+        },
+        posts: {
+          current: 23,
+          previous: 18,
+          change: 27.8,
+          trend: 'up'
+        }
+      };
+    } else if (period === '7d') {
+      // Last 7 days metrics (weekly totals/averages)
+      metrics = {
+        period: period,
+        startTime: startTime.toISOString(),
+        endTime: now.toISOString(),
+        mrr: {
+          current: 2890,
+          previous: 2540,
+          change: 13.8,
+          trend: 'up'
+        },
+        users: {
+          current: 8542,
+          previous: 7234,
+          change: 18.1,
+          trend: 'up'
+        },
+        spend: {
+          current: 612,
+          previous: 645,
+          change: -5.1,
+          trend: 'down'
+        },
+        posts: {
+          current: 156,
+          previous: 128,
+          change: 21.9,
+          trend: 'up'
+        }
+      };
+    } else if (period === '30d') {
+      // Last 30 days metrics (monthly totals/averages)
+      metrics = {
+        period: period,
+        startTime: startTime.toISOString(),
+        endTime: now.toISOString(),
+        mrr: {
+          current: 12350,
+          previous: 10890,
+          change: 13.4,
+          trend: 'up'
+        },
+        users: {
+          current: 36847,
+          previous: 31256,
+          change: 17.9,
+          trend: 'up'
+        },
+        spend: {
+          current: 2450,
+          previous: 2680,
+          change: -8.6,
+          trend: 'down'
+        },
+        posts: {
+          current: 642,
+          previous: 545,
+          change: 17.8,
+          trend: 'up'
+        }
+      };
+    }
 
     console.log(`Dashboard metrics fetched successfully for period: ${period}`);
     res.json(metrics);
