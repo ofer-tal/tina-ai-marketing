@@ -82,6 +82,207 @@ We're growing at ~12% month-over-month, which is solid! At this rate, we'll reac
 Should I create a detailed growth acceleration plan?`,
       timestamp: new Date().toISOString()
     };
+  } else if (lastUserMessage.includes("content strategy") || lastUserMessage.includes("content themes") || lastUserMessage.includes("content plan") || (lastUserMessage.includes("content") && (lastUserMessage.includes("suggest") || lastUserMessage.includes("recommend")))) {
+    const posts = mockHistoricalData.posts;
+
+    // Analyze content performance by category
+    const categoryStats = {};
+    posts.forEach(p => {
+      if (!categoryStats[p.category]) {
+        categoryStats[p.category] = { count: 0, views: 0, engagement: 0, spiciness: [] };
+      }
+      categoryStats[p.category].count++;
+      categoryStats[p.category].views += p.views;
+      categoryStats[p.category].engagement += p.engagementRate;
+      categoryStats[p.category].spiciness.push(p.spiciness);
+    });
+
+    const categoryRankings = Object.entries(categoryStats)
+      .map(([cat, stats]) => ({
+        category: cat,
+        ...stats,
+        avgEngagement: stats.engagement / stats.count,
+        avgViews: stats.views / stats.count,
+        avgSpiciness: stats.spiciness.reduce((a, b) => a + b, 0) / stats.spiciness.length
+      }))
+      .sort((a, b) => b.avgEngagement - a.avgEngagement);
+
+    const top3Categories = categoryRankings.slice(0, 3);
+    const bestCategory = categoryRankings[0];
+
+    // Analyze posting patterns
+    const postsByPlatform = {};
+    posts.forEach(p => {
+      if (!postsByPlatform[p.platform]) {
+        postsByPlatform[p.platform] = { count: 0, views: 0, engagement: 0 };
+      }
+      postsByPlatform[p.platform].count++;
+      postsByPlatform[p.platform].views += p.views;
+      postsByPlatform[p.platform].engagement += p.engagementRate;
+    });
+
+    // Optimal posting times analysis
+    const postingHours = posts.map(p => new Date(p.postedAt).getHours());
+    const avgHour = postingHours.reduce((a, b) => a + b, 0) / postingHours.length;
+
+    // Spiciness analysis
+    const spicinessStats = { 1: [], 2: [], 3: [] };
+    posts.forEach(p => {
+      if (spicinessStats[p.spiciness]) {
+        spicinessStats[p.spiciness].push(p.engagementRate);
+      }
+    });
+    const avgEngagementBySpiciness = {};
+    Object.entries(spicinessStats).forEach(([level, rates]) => {
+      avgEngagementBySpiciness[level] = rates.length ? (rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1) : 0;
+    });
+
+    return {
+      role: "assistant",
+      content: `**📱 Content Strategy Recommendations**
+
+Based on analysis of your last 10 posts, here's a comprehensive content strategy:
+
+---
+
+**🎯 Top Content Themes (Ranked by Performance):**
+
+**1. ${bestCategory.category}** ⭐ BEST PERFORMER
+- Avg Engagement: **${bestCategory.avgEngagement.toFixed(1)}%**
+- Avg Views: **${Math.round(bestCategory.avgViews).toLocaleString()}**
+- Avg Spiciness: Level ${bestCategory.avgSpiciness.toFixed(1)}
+- Recommendation: **Double down on this category** - create 40-50% of content here
+
+${top3Categories.slice(1).map((cat, i) => `**${i + 2}. ${cat.category}**
+- Avg Engagement: ${cat.avgEngagement.toFixed(1)}%
+- Avg Views: ${Math.round(cat.avgViews).toLocaleString()}
+- Avg Spiciness: Level ${cat.avgSpiciness.toFixed(1)}
+- Opportunity: Solid performer, maintain current volume`).join('\n\n')}
+
+---
+
+**📊 Content Mix Recommendations:**
+
+**Primary Content (60% of posts):**
+- ${bestCategory.category} stories - Your highest engagement category
+- Focus on relatable characters and emotional hooks
+- Target spiciness level 1-2 for broader appeal
+
+**Secondary Content (30% of posts):**
+- ${top3Categories[1]?.category || 'Forbidden Romance'} - Strong performer
+- ${top3Categories[2]?.category || 'Secret Baby'} - Reliable engagement
+- Use for testing new formats and hooks
+
+**Experimental Content (10% of posts):**
+- New categories to expand reach
+- Different spiciness levels to test audience response
+- Trending formats in the romance fiction space
+
+---
+
+**⏰ Posting Frequency & Schedule:**
+
+**Current Frequency:** ~1 post/day
+**Recommended Frequency:** **3-4 posts/day**
+
+**Optimal Posting Times:**
+- **Early Morning:** 7-9 AM EST (commute time)
+- **Lunch Break:** 12-2 PM EST
+- **Prime Time:** 6-9 PM EST (highest engagement window)
+- **Late Night:** 10-11 PM EST (bedtime scrolling)
+
+**Weekly Content Calendar (Example):**
+- **Monday**: 3 posts (8 AM, 1 PM, 7 PM)
+- **Tuesday**: 4 posts (8 AM, 12 PM, 6 PM, 9 PM)
+- **Wednesday**: 3 posts (9 AM, 2 PM, 8 PM)
+- **Thursday**: 4 posts (7 AM, 1 PM, 6 PM, 10 PM)
+- **Friday**: 4 posts (8 AM, 12 PM, 7 PM, 9 PM)
+- **Saturday**: 3 posts (10 AM, 3 PM, 8 PM)
+- **Sunday**: 3 posts (9 AM, 2 PM, 7 PM)
+- **Total: 24 posts/week (vs current 7 posts/week)**
+
+---
+
+**📏 Video Format Specifications:**
+
+**Length:**
+- **Sweet spot**: 15-30 seconds (highest completion rates)
+- **Short**: 7-15 seconds for hooks/teasers
+- **Long**: 30-60 seconds for story compilations
+
+**Style:**
+- Vertical format (9:16 aspect ratio)
+- Text overlay for first 3 seconds (hook)
+- Captions for accessibility
+- Brand watermark in corner
+- Strong CTA at end ("Link in bio", "Read more in app")
+
+---
+
+**🌶️ Spiciness Level Strategy:**
+
+**Level 1 (Sweet Romance):** **BEST PERFORMING** (${avgEngagementBySpiciness[1]}% avg engagement)
+- Use for **60%** of content
+- Broader audience appeal
+- Higher shareability
+
+**Level 2 (Spicy Romance):** Strong performer (${avgEngagementBySpiciness[2]}% avg engagement)
+- Use for **30%** of content
+- Good balance of appeal and engagement
+- Targets core audience
+
+**Level 3 (Very Spicy):** Lower engagement (${avgEngagementBySpiciness[3]}% avg engagement)
+- Use for **10%** of content
+- Niche audience
+- Lower completion rates
+
+---
+
+**📈 Platform Strategy:**
+
+${Object.entries(postsByPlatform).map(([platform, stats]) => {
+  const avgEng = (stats.engagement / stats.count).toFixed(1);
+  const avgViews = Math.round(stats.views / stats.count).toLocaleString();
+  const rec = platform === 'tiktok' ? '🎯 Primary platform - 60% of posts' :
+              platform === 'instagram' ? '✅ High engagement - 25% of posts' :
+              '📺 Test platform - 15% of posts';
+  return `**${platform.charAt(0).toUpperCase() + platform.slice(1)}:**
+- Avg Engagement: ${avgEng}%
+- Avg Views: ${avgViews}
+- Strategy: ${rec}`;
+}).join('\n\n')}
+
+---
+
+**💡 Content Hooks That Work:**
+
+1. **"Chapter 1" teasers** - "You won't believe what happens next..."
+2. **Character reveals** - "Professor X is about to change everything..."
+3. **Emotional moments** - "The moment she realized she was in love..."
+4. **Cliffhangers** - "He leaned in and whispered..."
+5. **Relatable scenarios** - "When your hot roommate does THIS..."
+
+---
+
+**🎯 Expected Results (30 Days):**
+
+By following this strategy:
+- **Posts/week**: 7 → 24 (**+240% more content**)
+- **Projected monthly views**: 315K → 800K-1M (**+150-220%**)
+- **Projected engagement**: 4.0% → 4.5-5.0% (**better targeting**)
+- **Estimated new users**: 80-120/month from organic content
+
+---
+
+**✅ Next Steps:**
+
+1. Create content calendar for this week?
+2. Generate story selection for next 7 days?
+3. Set up automated posting schedule?
+
+What would you like to tackle first?`,
+      timestamp: new Date().toISOString()
+    };
   } else if (lastUserMessage.includes("content") || lastUserMessage.includes("post")) {
     const posts = mockHistoricalData.posts;
     const topPosts = posts.slice(0, 5);
