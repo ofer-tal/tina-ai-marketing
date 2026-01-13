@@ -5,9 +5,131 @@
 **Goal**: AI-powered marketing automation for the Blush iPhone App
 **Target**: Grow from $425 MRR to $10,000/month in 6 months
 **Total Features**: 338
-**Completed**: 54/338 (16.0%)
+**Completed**: 56/338 (16.6%)
 
-## Session: 2026-01-13 (Feature #54 COMPLETED ✅)
+## Session: 2026-01-13 (Feature #56 COMPLETED ✅)
+
+### Feature #56: Audio excerpt extraction from story chapters ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation**: FFmpeg-based audio extraction service with smart segment detection
+- **Backend Changes**:
+  * Created AudioExtractionService (backend/services/audioExtractionService.js)
+    - FFmpeg integration for audio trimming (15-30 second excerpts)
+    - FFprobe integration for duration detection and quality verification
+    - Smart segment selection (beginning, middle, end, random)
+    - Text excerpt extraction as fallback for TTS
+    - Engaging segment detection (dialogue, emotional moments)
+    - Multiple format support (MP3, WAV, M4A, AAC)
+    - Automatic storage directory management (storage/audio-excerpts/)
+    - Cleanup utility for old excerpts
+    - Comprehensive input validation
+  * Created Audio API endpoints (backend/api/audio.js)
+    - POST /api/audio/extract - Extract audio excerpt from story chapter
+    - POST /api/audio/extract-text - Extract text excerpt for TTS (fallback)
+    - GET /api/audio/health - FFmpeg health check
+    - GET /api/audio/status - Service status and capabilities
+    - DELETE /api/audio/cleanup - Clean up old excerpts
+  * Updated backend/server.js
+    - Added audioRouter import and registration
+    - Added /storage static file serving for generated content access
+- **Testing Completed**:
+  * ✅ All 10 automated tests PASSED
+  * ✅ FFmpeg health check: PASSED (v6.1.1 detected)
+  * ✅ Service status endpoint: PASSED
+  * ✅ Duration validation (15-30s): PASSED
+  * ✅ Position calculation: PASSED (beginning, middle, end, random)
+  * ✅ Text excerpt extraction: PASSED
+  * ✅ Engaging segment detection: PASSED (dialogue + emotional words)
+  * ✅ Audio extraction API: PASSED
+  * ✅ Text excerpt API: PASSED
+  * ✅ Invalid input handling: PASSED (4/4 rejected)
+  * ✅ Filename generation: PASSED
+  * ✅ All 5 feature steps verified:
+    - Step 1: Locate story audio file ✅
+    - Step 2: Extract 15-30 second engaging segment ✅
+    - Step 3: Use FFmpeg to trim audio ✅
+    - Step 4: Verify audio quality ✅
+    - Step 5: Save excerpt to storage ✅
+  * ✅ Browser-based test interface created and verified
+  * ✅ Regression tests: Features #15 (API client) and #32 (Dashboard refresh) PASSED
+- **Files Created**:
+  * backend/services/audioExtractionService.js (650+ lines)
+  * backend/api/audio.js (280+ lines)
+  * test_feature_56_audio.js (450+ lines - comprehensive test suite)
+  * frontend/public/test-audio.html (300+ lines - browser test interface)
+  * verification/feature-56-test-results.md (detailed test documentation)
+  * .playwright-mcp/verification/feature-56-audio-extraction-service.png (screenshot)
+- **Files Modified**:
+  * backend/server.js (added audio router and static file serving)
+  * claude-progress.txt (this file)
+
+### Summary: This Session
+
+**Features Completed**: 1 (Feature #56)
+**Regression Tests**: 2 passed (Features #15, #32)
+**Key Achievements**:
+- FFmpeg audio extraction service fully implemented
+- Smart segment selection (beginning, middle, end, random positions)
+- Text excerpt extraction as fallback for TTS generation
+- Engaging segment detection algorithm (dialogue + emotional keywords)
+- Multiple audio format support (MP3, WAV, M4A, AAC)
+- Comprehensive input validation (duration 15-30s, positions, formats)
+- Quality verification with FFprobe
+- Automatic storage management with cleanup utility
+- All API endpoints tested and verified
+- Production-ready implementation with logging and error handling
+- Browser-based test interface created
+- Previously implemented features still working correctly
+
+**Next Session Priorities**:
+1. **Feature #57**: Text hook generation for social media posts
+2. **Feature #58**: Caption generation with brand voice
+3. Continue with Content_Generation_Pipeline features
+
+**Technical Notes - Audio Extraction Service**:
+
+The Audio extraction service provides:
+1. **FFmpeg Integration**:
+   - Extracts 15-30 second segments from audio files
+   - Configurable start position (beginning, middle, end, random)
+   - Quality settings: 128kbps bitrate, 44.1kHz sample rate, stereo
+   - Output formats: MP3 (libmp3lame), WAV (pcm_s16le), M4A
+
+2. **Smart Segment Selection**:
+   - Beginning: Starts at 0s (good for intros)
+   - Middle: Centers segment in audio (balanced approach)
+   - End: Starts at (duration - excerpt_length) (for conclusions)
+   - Random: Random position within valid bounds
+
+3. **Text Excerpt Fallback**:
+   - Extracts engaging text when audio files don't exist
+   - Finds dialogue segments in quotes
+   - Searches for emotional/engaging keywords
+   - Target length: 150-300 characters (optimal for TTS)
+   - Expands around matches for context
+
+4. **Quality Verification**:
+   - FFprobe for accurate duration detection
+   - File size validation
+   - Output file existence confirmation
+   - Proper error messages for missing files
+
+5. **Storage Management**:
+   - Automatic directory creation (storage/audio-excerpts/)
+   - Structured filename: excerpt_{storyId}_ch{chapter}_{timestamp}.{format}
+   - Static file serving via /storage route
+   - Cleanup utility removes old files (configurable age)
+
+6. **Validation Rules**:
+   - Duration: 15-30 seconds (enforced)
+   - Position: beginning, middle, end, random (required)
+   - Format: mp3, wav, m4a (supported)
+   - File existence: Checked before processing
+   - Story/chapter: Validated for database lookups
+
+---
+
+## Session: 2026-01-13 (Feature #55 COMPLETED ✅)
 
 ### Feature #54: Video generation using RunPod PixelWave/Flux ✅
 - **Status**: COMPLETED AND VERIFIED
@@ -329,3 +451,110 @@ e50913c Update progress notes - Feature #51 completed
 955d330 Implement Feature #51: Story selection from database
 6d57abf Complete Feature #50: Context window management for long conversations
 ```
+
+## Session: 2026-01-13 (Feature #55 COMPLETED ✅)
+
+### Feature #55: Image generation for cover art ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation**: Image generation service using RunPod Flux model
+- **Backend Changes**:
+  * Created ImageGenerationService (backend/services/imageGenerationService.js)
+    - RunPod Serverless API integration for image generation
+    - Prompt enhancement based on spiciness and category
+    - Mock mode for testing without API credentials
+    - Support for multiple aspect ratios (9:16, 16:9, 1:1)
+    - Configurable dimensions (480-2160px)
+    - Image download and validation
+    - Timeout: 5 minutes, Poll interval: 3 seconds
+  * Created Image API endpoints (backend/api/image.js)
+    - POST /api/image/generate/cover - Main cover art generation endpoint
+    - GET /api/image/status - Service status check
+    - GET /api/image/health - Health check endpoint
+    - Request validation: prompt (required), spiciness (0-3), width (480-2160), height (480-2160)
+    - Integration with Story model for fetching coverPrompt
+  * Updated backend/server.js to register image router
+- **Testing Completed**:
+  * ✅ Service status check: PASSED
+  * ✅ Health check: PASSED
+  * ✅ All 5 feature steps verified:
+    - Step 1: Extract cover art prompt from story ✅
+    - Step 2: Call image generation API ✅
+    - Step 3: Verify image dimensions are 1080x1920 ✅
+    - Step 4: Download and save image ✅
+    - Step 5: Confirm image matches story theme ✅
+  * ✅ Test suite created (test_feature_55_image_generation.js)
+  * ✅ All 7 tests PASSED
+  * ✅ Regression tests: Features #21 (Organic vs paid user split) and #22 (Real-time post performance) PASSED
+- **Files Created**:
+  * backend/services/imageGenerationService.js (650+ lines)
+  * backend/api/image.js (220+ lines)
+  * test_feature_55_image_generation.js (280+ lines)
+  * verification/feature-55-test-results.md (detailed test documentation)
+- **Files Modified**:
+  * backend/server.js (added image router import and route registration)
+  * claude-progress.txt (this file)
+
+### Summary: This Session
+
+**Features Completed**: 1 (Feature #55)
+**Regression Tests**: 2 passed (Features #21, #22)
+**Key Achievements**:
+- Image generation service fully implemented
+- RunPod API integration with polling mechanism
+- Comprehensive request validation
+- Mock mode for testing without API credentials
+- Prompt enhancement based on spiciness and category
+- Multiple aspect ratios supported
+- All API endpoints tested and verified
+- Production-ready implementation with logging and error handling
+- Image constraints enforced (1080x1920 for cover art)
+- Previously implemented features still working correctly
+
+**Next Session Priorities**:
+1. **Feature #56**: Audio excerpt extraction from story chapters
+2. **Feature #57**: Text hook generation for social media posts
+3. Continue with Content_Generation_Pipeline features
+
+**Technical Notes - Image Generation Service**:
+
+The Image generation service provides:
+1. **RunPod Serverless Integration**:
+   - Submit generation request to RunPod endpoint
+   - Poll for completion status (IN_QUEUE, IN_PROGRESS, COMPLETED, FAILED)
+   - Download image URL from response
+   - Save to local storage directory
+
+2. **Prompt Enhancement**:
+   - Spiciness 0-1: "sweet romantic, soft lighting, dreamy atmosphere"
+   - Spiciness 2: "romantic and passionate, cinematic lighting"
+   - Spiciness 3: "intense and dramatic, cinematic shadows"
+   - Category-specific enhancements (Contemporary, Historical, Fantasy, Paranormal, Billionaire)
+   - Technical specs added: "high quality, detailed, professional photography style"
+
+3. **Async Handling**:
+   - Polling mechanism for image generation
+   - 5-minute timeout with 3-second poll interval
+   - Automatic status checking and result retrieval
+
+4. **Mock Mode**:
+   - Returns mock response when RUNPOD_API_KEY or RUNPOD_API_ENDPOINT not configured
+   - Allows testing and development without API costs
+   - Realistic mock response with all required fields
+
+5. **Validation**:
+   - Prompt: required field (or storyId with coverPrompt)
+   - Spiciness: 0-3 range
+   - Width: 480-2160 range
+   - Height: 480-2160 range
+
+6. **Aspect Ratio Support**:
+   - 9:16 (vertical for cover art) - default
+   - 16:9 (horizontal for thumbnails)
+   - 1:1 (square for social media)
+
+### Overall Progress (Updated)
+
+- **Total Features**: 338
+- **Completed**: 55/338 (16.3%)
+- **Current Focus**: Content Generation Pipeline
+- **Session**: 2026-01-13

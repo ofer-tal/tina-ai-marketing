@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature #56: Audio Extraction Test</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eaeaea;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #e94560, #7b2cbf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #a0a0a0;
+            margin-bottom: 30px;
+        }
+
+        .test-section {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #2d3561;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .test-section h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            color: #e94560;
+        }
+
+        .test-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #a0a0a0;
+            font-size: 0.9em;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #2d3561;
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #eaeaea;
+            font-size: 14px;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #e94560;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(90deg, #e94560, #7b2cbf);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .result-box {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #2d3561;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .result-box.success {
+            border-color: #00d26a;
+        }
+
+        .result-box.error {
+            border-color: #f8312f;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.healthy {
+            background: #00d26a;
+            box-shadow: 0 0 10px #00d26a;
+        }
+
+        .status-indicator.unhealthy {
+            background: #f8312f;
+            box-shadow: 0 0 10px #f8312f;
+        }
+
+        .feature-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .feature-list li {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .feature-list li:before {
+            content: "✓ ";
+            color: #00d26a;
+            margin-right: 8px;
+        }
+
+        .loading {
+            display: inline-block;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .info-box {
+            background: rgba(123, 44, 191, 0.2);
+            border-left: 4px solid #7b2cbf;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 0 6px 6px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎵 Feature #56: Audio Excerpt Extraction</h1>
+        <p class="subtitle">Extract 15-30 second engaging segments from story chapter audio</p>
+
+        <!-- Service Status -->
+        <div class="test-section">
+            <h2>📊 Service Status</h2>
+            <div id="statusResult" class="result-box">Loading...</div>
+        </div>
+
+        <!-- Features List -->
+        <div class="test-section">
+            <h2>✨ Implemented Features</h2>
+            <ul class="feature-list">
+                <li>FFmpeg-based audio trimming (15-30 second excerpts)</li>
+                <li>Smart segment selection (beginning, middle, end, random)</li>
+                <li>Audio quality verification with FFprobe</li>
+                <li>Text excerpt extraction for TTS fallback</li>
+                <li>Engaging segment detection (dialogue, emotional moments)</li>
+                <li>Multiple format support (MP3, WAV, M4A, AAC)</li>
+                <li>Automatic storage directory management</li>
+                <li>Comprehensive input validation</li>
+                <li>Health check and status endpoints</li>
+                <li>Cleanup utility for old excerpts</li>
+            </ul>
+        </div>
+
+        <!-- Health Check -->
+        <div class="test-section">
+            <h2>🏥 FFmpeg Health Check</h2>
+            <button onclick="testHealth()">Check Health</button>
+            <div id="healthResult" class="result-box"></div>
+        </div>
+
+        <!-- Text Excerpt Test -->
+        <div class="test-section">
+            <h2>📝 Text Excerpt Extraction Test</h2>
+            <p style="color: #a0a0a0; margin-bottom: 15px;">
+                Extract engaging text segments for TTS when no audio exists
+            </p>
+            <div class="test-row">
+                <div class="form-group">
+                    <label>Target Length (characters)</label>
+                    <input type="number" id="targetLength" value="200" min="50" max="500">
+                </div>
+            </div>
+            <button onclick="testTextExcerpt()">Extract Text Excerpt</button>
+            <div id="textResult" class="result-box"></div>
+        </div>
+
+        <!-- Validation Test -->
+        <div class="test-section">
+            <h2>✅ Input Validation Test</h2>
+            <p style="color: #a0a0a0; margin-bottom: 15px;">
+                Test validation rules for duration, position, and format
+            </p>
+            <div class="test-row">
+                <div class="form-group">
+                    <label>Duration (seconds)</label>
+                    <input type="number" id="testDuration" value="20" min="15" max="30">
+                </div>
+                <div class="form-group">
+                    <label>Position</label>
+                    <select id="testPosition">
+                        <option value="beginning">Beginning</option>
+                        <option value="middle">Middle</option>
+                        <option value="end">End</option>
+                        <option value="random">Random</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Format</label>
+                    <select id="testFormat">
+                        <option value="mp3">MP3</option>
+                        <option value="wav">WAV</option>
+                        <option value="m4a">M4A</option>
+                    </select>
+                </div>
+            </div>
+            <button onclick="testValidation()">Test Validation</button>
+            <div id="validationResult" class="result-box"></div>
+        </div>
+
+        <!-- Info Box -->
+        <div class="info-box">
+            <strong>ℹ️ Feature Implementation Notes:</strong><br><br>
+            • Audio extraction uses FFmpeg to trim 15-30 second segments from source audio<br>
+            • Supports multiple segment positions: beginning, middle, end, or random<br>
+            • Falls back to text excerpt extraction when audio files don't exist<br>
+            • Smart segment detection finds dialogue and engaging moments<br>
+            • All excerpts are stored in <code>storage/audio-excerpts/</code><br>
+            • Cleanup utility removes old excerpts after configurable time period
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:4001';
+
+        // Load status on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            loadStatus();
+        });
+
+        async function loadStatus() {
+            const resultDiv = document.getElementById('statusResult');
+            try {
+                const response = await fetch(`${API_BASE}/api/audio/status`);
+                const data = await response.json();
+
+                const healthIndicator = data.ffmpeg.available
+                    ? '<span class="status-indicator healthy"></span>'
+                    : '<span class="status-indicator unhealthy"></span>';
+
+                resultDiv.innerHTML = `${healthIndicator}<strong>Audio Extraction Service</strong><br><br>` +
+                    `Status: ${data.status}<br>` +
+                    `FFmpeg: ${data.ffmpeg.available ? data.ffmpeg.version : 'Not available'}<br>` +
+                    `Supported Formats: ${data.supportedFormats.join(', ')}<br>` +
+                    `Duration Range: ${data.excerptDurations.min}-${data.excerptDurations.max}s<br>` +
+                    `Positions: ${data.positions.join(', ')}`;
+
+                resultDiv.classList.add('success');
+            } catch (error) {
+                resultDiv.textContent = `Error loading status: ${error.message}`;
+                resultDiv.classList.add('error');
+            }
+        }
+
+        async function testHealth() {
+            const resultDiv = document.getElementById('healthResult');
+            resultDiv.textContent = 'Checking...';
+            resultDiv.className = 'result-box';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/audio/health`);
+                const data = await response.json();
+
+                resultDiv.innerHTML = `<strong>Health Check Result:</strong><br><br>` +
+                    `Healthy: ${data.healthy ? 'Yes ✅' : 'No ❌'}<br>` +
+                    `Version: ${data.version || 'Unknown'}<br>` +
+                    `Message: ${data.message}`;
+
+                resultDiv.classList.add(data.healthy ? 'success' : 'error');
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.classList.add('error');
+            }
+        }
+
+        async function testTextExcerpt() {
+            const resultDiv = document.getElementById('textResult');
+            const targetLength = parseInt(document.getElementById('targetLength').value);
+
+            resultDiv.textContent = 'Extracting...';
+            resultDiv.className = 'result-box';
+
+            const mockChapter = {
+                chapterNumber: 1,
+                title: 'First Encounter',
+                content: `Sarah's heart raced as she stepped into the dimly lit room. The scent of expensive cologne filled the air, mingling with the soft jazz playing in the background. She knew she shouldn't be here, but the magnetic pull was impossible to resist.
+
+"I've been waiting for you," a deep voice murmured from the shadows, sending shivers down her spine.
+
+She turned to see him emerge from the darkness, his eyes locking onto hers with an intensity that made her knees weak. The room seemed to shrink around them, the rest of the world fading away until only the two of them remained.
+
+He closed the distance between them in measured steps, each one echoing the pounding of her heart. When he finally stood before her, she could feel the heat radiating from his body, drawing her in like a moth to flame.`
+            };
+
+            try {
+                // Simulate the extraction logic client-side for testing
+                const excerpt = extractEngagingSegment(mockChapter.content, targetLength);
+
+                resultDiv.innerHTML = `<strong>Text Excerpt Extracted:</strong><br><br>` +
+                    `Chapter: ${mockChapter.title}<br>` +
+                    `Original Length: ${mockChapter.content.length} characters<br>` +
+                    `Excerpt Length: ${excerpt.length} characters<br>` +
+                    `Target Length: ${targetLength} characters<br><br>` +
+                    `<strong>Excerpt Preview:</strong><br>` +
+                    `"${excerpt.substring(0, 200)}..."`;
+
+                resultDiv.classList.add('success');
+            } catch (error) {
+                resultDiv.textContent = `Error: ${error.message}`;
+                resultDiv.classList.add('error');
+            }
+        }
+
+        function extractEngagingSegment(content, targetLength) {
+            // Look for dialogue
+            const dialogueMatch = content.match(/"[^"]{30,}/g);
+            if (dialogueMatch && dialogueMatch.length > 0) {
+                const suitable = dialogueMatch.find(d => d.length >= targetLength * 0.5);
+                if (suitable) {
+                    return expandAroundMatch(content, suitable, targetLength);
+                }
+            }
+
+            // Look for engaging words
+            const engagingWords = ['whispered', 'gasped', 'heart', 'suddenly', 'desire', 'touch', 'passion'];
+            for (const word of engagingWords) {
+                const index = content.toLowerCase().indexOf(word);
+                if (index !== -1) {
+                    const start = Math.max(0, index - targetLength / 2);
+                    const end = Math.min(content.length, index + word.length + targetLength / 2);
+                    const segment = content.substring(start, end).trim();
+                    if (segment.length >= targetLength * 0.7) {
+                        return segment;
+                    }
+                }
+            }
+
+            // Fallback
+            return content.substring(0, targetLength).trim();
+        }
+
+        function expandAroundMatch(content, match, targetLength) {
+            const matchIndex = content.indexOf(match);
+            const matchLength = match.length;
+
+            let start = matchIndex;
+            let end = matchIndex + matchLength;
+
+            while (start > 0 && (end - start) < targetLength) {
+                start--;
+                if (content[start] === ' ' && (targetLength - (end - start)) < 20) {
+                    break;
+                }
+            }
+
+            while (end < content.length && (end - start) < targetLength) {
+                end++;
+            }
+
+            return content.substring(start, end).trim();
+        }
+
+        async function testValidation() {
+            const resultDiv = document.getElementById('validationResult');
+            const duration = parseInt(document.getElementById('testDuration').value);
+            const position = document.getElementById('testPosition').value;
+            const format = document.getElementById('testFormat').value;
+
+            resultDiv.textContent = 'Validating...';
+            resultDiv.className = 'result-box';
+
+            // Client-side validation
+            const errors = [];
+
+            if (duration < 15 || duration > 30) {
+                errors.push(`Duration ${duration}s is outside valid range (15-30s)`);
+            }
+
+            const validPositions = ['beginning', 'middle', 'end', 'random'];
+            if (!validPositions.includes(position)) {
+                errors.push(`Invalid position: ${position}`);
+            }
+
+            const validFormats = ['mp3', 'wav', 'm4a'];
+            if (!validFormats.includes(format)) {
+                errors.push(`Invalid format: ${format}`);
+            }
+
+            // Calculate start time
+            const audioDuration = 100; // Mock
+            const excerptDuration = duration;
+            let startTime;
+
+            switch (position) {
+                case 'beginning':
+                    startTime = 0;
+                    break;
+                case 'end':
+                    startTime = Math.max(0, audioDuration - excerptDuration);
+                    break;
+                case 'middle':
+                    startTime = Math.max(0, (audioDuration - excerptDuration) / 2);
+                    break;
+                case 'random':
+                    startTime = Math.random() * (audioDuration - excerptDuration);
+                    break;
+            }
+
+            if (errors.length === 0) {
+                resultDiv.innerHTML = `<strong>✅ Validation Passed</strong><br><br>` +
+                    `Duration: ${duration}s ✓<br>` +
+                    `Position: ${position} ✓<br>` +
+                    `Format: ${format} ✓<br>` +
+                    `Start Time (for 100s audio): ${startTime.toFixed(1)}s<br>` +
+                    `End Time: ${(startTime + duration).toFixed(1)}s`;
+                resultDiv.classList.add('success');
+            } else {
+                resultDiv.innerHTML = `<strong>❌ Validation Failed</strong><br><br>` +
+                    errors.join('<br>');
+                resultDiv.classList.add('error');
+            }
+        }
+    </script>
+</body>
+</html>

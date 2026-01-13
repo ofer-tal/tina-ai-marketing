@@ -15,6 +15,7 @@ import todosRouter from "./api/todos.js";
 import contentRouter from "./api/content.js";
 import videoRouter from "./api/video.js";
 import imageRouter from "./api/image.js";
+import audioRouter from "./api/audio.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -146,12 +147,15 @@ app.get("/api/database/test", async (req, res) => {
 // Settings API routes
 app.use("/api/settings", settingsRouter);
 app.use("/api/storage", storageRouter);
+// Serve storage directory statically for generated content access
+app.use("/storage", express.static(path.join(__dirname, "../storage")));
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/todos", todosRouter);
 app.use("/api/content", contentRouter);
 app.use("/api/video", videoRouter);
 app.use("/api/image", imageRouter);
+app.use("/api/audio", audioRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
