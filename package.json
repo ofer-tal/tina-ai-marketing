@@ -30,6 +30,7 @@
     "helmet": "^7.1.0",
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
+    "multer": "^2.0.2",
     "node-cron": "^3.0.3",
     "react": "^18.2.0",
     "react-chartjs-2": "^5.2.0",

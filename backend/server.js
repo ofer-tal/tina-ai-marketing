@@ -8,6 +8,8 @@ import { fileURLToPath } from "url";
 import databaseService from "./services/database.js";
 import configService, { configSchema } from "./services/config.js";
 import settingsRouter from "./api/settings.js";
+import storageRouter from "./api/storage.js";
+import storageService from "./services/storage.js";
 
 dotenv.config();
 
@@ -77,6 +79,7 @@ app.get("/api/database/test", async (req, res) => {
 
 // Settings API routes
 app.use("/api/settings", settingsRouter);
+app.use("/api/storage", storageRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
