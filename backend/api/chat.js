@@ -3,101 +3,256 @@ import databaseService from "../services/database.js";
 
 const router = express.Router();
 
+// Mock historical data for development (simulates database queries)
+const mockHistoricalData = {
+  revenue: {
+    current: { mrr: 425, subscribers: 38, arpu: 11.18 },
+    lastMonth: { mrr: 379, subscribers: 34, arpu: 11.15 },
+    threeMonthsAgo: { mrr: 285, subscribers: 26, arpu: 10.96 },
+    trend: [
+      { date: '2024-10-13', mrr: 285, subscribers: 26 },
+      { date: '2024-11-13', mrr: 332, subscribers: 30 },
+      { date: '2024-12-13', mrr: 379, subscribers: 34 },
+      { date: '2025-01-13', mrr: 425, subscribers: 38 }
+    ],
+    growth: { mrr: '+12%', subscribers: '+12%', monthOverMonth: true }
+  },
+  posts: [
+    { id: '1', title: 'Forbidden Professor Chapter 1', platform: 'tiktok', views: 45200, likes: 1898, comments: 142, shares: 89, engagementRate: 4.2, postedAt: '2025-01-12T18:30:00Z', category: 'Professor Romance', spiciness: 2 },
+    { id: '2', title: "Billionaire's Secret Baby", platform: 'tiktok', views: 38100, likes: 1448, comments: 98, shares: 72, engagementRate: 3.8, postedAt: '2025-01-11T20:15:00Z', category: 'Secret Baby', spiciness: 2 },
+    { id: '3', title: 'Office Romance Compilation', platform: 'instagram', views: 29400, likes: 1498, comments: 87, shares: 65, engagementRate: 5.1, postedAt: '2025-01-10T19:00:00Z', category: 'Office Romance', spiciness: 1 },
+    { id: '4', title: 'Bad Boy Roommate Scene', platform: 'tiktok', views: 25600, likes: 896, comments: 64, shares: 42, engagementRate: 3.5, postedAt: '2025-01-09T17:45:00Z', category: 'Bad Boy', spiciness: 2 },
+    { id: '5', title: 'Small Town Sweet Romance', platform: 'youtube_shorts', views: 18900, likes: 756, comments: 48, shares: 31, engagementRate: 4.0, postedAt: '2025-01-08T16:30:00Z', category: 'Small Town', spiciness: 1 },
+    { id: '6', title: 'Forbidden Attraction Chapter 3', platform: 'tiktok', views: 42100, likes: 1179, comments: 126, shares: 84, engagementRate: 2.8, postedAt: '2025-01-07T21:00:00Z', category: 'Forbidden Romance', spiciness: 3 },
+    { id: '7', title: 'College Sweetheart Reunion', platform: 'instagram', views: 22300, likes: 1004, comments: 67, shares: 45, engagementRate: 4.5, postedAt: '2025-01-06T18:00:00Z', category: 'College Romance', spiciness: 1 },
+    { id: '8', title: 'CEO\'s Secret Assistant', platform: 'tiktok', views: 34800, likes: 1183, comments: 94, shares: 66, engagementRate: 3.4, postedAt: '2025-01-05T19:30:00Z', category: 'CEO Romance', spiciness: 2 },
+    { id: '9', title: 'Summer Fling Preview', platform: 'tiktok', views: 27500, likes: 908, comments: 71, shares: 49, engagementRate: 3.3, postedAt: '2025-01-04T17:00:00Z', category: 'Summer Romance', spiciness: 1 },
+    { id: '10', title: 'Dark Romance Scene 2', platform: 'instagram', views: 31200, likes: 1435, comments: 103, shares: 78, engagementRate: 4.6, postedAt: '2025-01-03T20:00:00Z', category: 'Dark Romance', spiciness: 3 }
+  ],
+  keywords: [
+    { keyword: 'spicy fiction', ranking: 7, volume: 45000, competition: 'high', change: -2, trackedSince: '2024-10-01' },
+    { keyword: 'romance stories', ranking: 12, volume: 38000, competition: 'medium', change: 0, trackedSince: '2024-10-01' },
+    { keyword: 'fiction app', ranking: 18, volume: 29000, competition: 'low', change: +3, trackedSince: '2024-11-01' },
+    { keyword: 'romance novels', ranking: 45, volume: 62000, competition: 'low', change: -1, trackedSince: '2024-12-01' },
+    { keyword: 'love stories', ranking: 38, volume: 41000, competition: 'medium', change: +2, trackedSince: '2024-12-01' },
+    { keyword: 'fanfiction', ranking: 52, volume: 78000, competition: 'low', change: 0, trackedSince: '2025-01-01' },
+    { keyword: 'erotic stories', ranking: 28, volume: 35000, competition: 'high', change: +1, trackedSince: '2024-10-01' }
+  ],
+  campaigns: [
+    { name: 'Apple Search Ads - Exact Match', spend: 1200, impressions: 45200, clicks: 1248, conversions: 8, roi: -45, status: 'active' },
+    { name: 'TikTok Ads - Interest Targeting', spend: 720, impressions: 89400, clicks: 2670, conversions: 4, roi: -66, status: 'active' },
+    { name: 'Instagram Ads - Lookalike', spend: 240, impressions: 31200, clicks: 624, conversions: 1, roi: -72, status: 'active' }
+  ]
+};
+
 // Mock GLM4.7 API integration for development
 // In production, this will call the actual GLM4.7 API
 async function callGLM4API(messages, conversationHistory = []) {
-  // For development, return mock responses
+  // For development, return mock responses with historical data
   // In production, this would make an actual API call to GLM4.7
 
   const lastUserMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
 
   // Simple mock response logic based on keywords
-  if (lastUserMessage.includes("revenue") || lastUserMessage.includes("mrr")) {
+  if (lastUserMessage.includes("revenue") || lastUserMessage.includes("mrr") || lastUserMessage.includes("trend") || lastUserMessage.includes("growth")) {
+    const data = mockHistoricalData.revenue;
     return {
       role: "assistant",
-      content: `Based on the current data, your MRR is $425 with 38 active subscribers. That's a 12% increase from last month. However, we're still far from the $10,000/month goal.
+      content: `**Revenue Trend Analysis:**
 
-I recommend focusing on:
-1. **Content Strategy**: Increase posting frequency to 3-4 posts per day across TikTok and Instagram
-2. **ASO Optimization**: The keyword "spicy fiction" dropped from #5 to #7, we should address this
-3. **Paid Ads**: Current ROI is negative (-66% on TikTok Ads), consider pausing and refining targeting
+📈 **Current Performance:**
+- MRR: $${data.current.mrr} (${data.growth.mrr} vs last month)
+- Active Subscribers: ${data.current.subscribers} (${data.growth.subscribers} growth)
+- ARPU: $${data.current.arpu.toFixed(2)} (Avg Revenue Per User)
 
-Would you like me to create action items for any of these areas?`,
+📊 **3-Month Trend:**
+- Oct 2024: $${data.trend[0].mrr} MRR, ${data.trend[0].subscribers} subscribers
+- Nov 2024: $${data.trend[1].mrr} MRR, ${data.trend[1].subscribers} subscribers
+- Dec 2024: $${data.trend[2].mrr} MRR, ${data.trend[2].subscribers} subscribers
+- Jan 2025: $${data.trend[3].mrr} MRR, ${data.trend[3].subscribers} subscribers
+
+💡 **Analysis:**
+We're growing at ~12% month-over-month, which is solid! At this rate, we'll reach $10,000 MRR in approximately 19 months (by August 2026). However, we want to accelerate this.
+
+**Recommendations to Accelerate Growth:**
+1. **Content**: Increase posting frequency from 1-2 to 3-4 posts/day
+2. **ASO**: Fix the declining "spicy fiction" keyword ranking (dropped 2 spots)
+3. **Ads**: Pause negative ROI campaigns and reallocat budget to content creation
+
+Should I create a detailed growth acceleration plan?`,
       timestamp: new Date().toISOString()
     };
   } else if (lastUserMessage.includes("content") || lastUserMessage.includes("post")) {
+    const posts = mockHistoricalData.posts;
+    const topPosts = posts.slice(0, 5);
+    const avgEngagement = (posts.reduce((sum, p) => sum + p.engagementRate, 0) / posts.length).toFixed(1);
+    const totalViews = posts.reduce((sum, p) => sum + p.views, 0).toLocaleString();
+
+    // Category performance
+    const categoryStats = {};
+    posts.forEach(p => {
+      if (!categoryStats[p.category]) {
+        categoryStats[p.category] = { count: 0, views: 0, engagement: 0 };
+      }
+      categoryStats[p.category].count++;
+      categoryStats[p.category].views += p.views;
+      categoryStats[p.category].engagement += p.engagementRate;
+    });
+
+    const topCategory = Object.entries(categoryStats)
+      .map(([cat, stats]) => ({ category: cat, ...stats, avgEngagement: stats.engagement / stats.count }))
+      .sort((a, b) => b.avgEngagement - a.avgEngagement)[0];
+
     return {
       role: "assistant",
-      content: `Looking at your content performance:
+      content: `**Content Performance Analysis (Last 10 Days):**
 
-**Top Performing Posts (Last 7 Days):**
-1. "Forbidden Professor Chapter 1" - 45.2K views, 4.2% engagement
-2. "Billionaire's Secret Baby" - 38.1K views, 3.8% engagement
-3. "Office Romance Compilation" - 29.4K views, 5.1% engagement
+📱 **Top 5 Performing Posts:**
+1. "${topPosts[0].title}" - ${topPosts[0].views.toLocaleString()} views, ${topPosts[0].engagementRate}% engagement
+2. "${topPosts[1].title}" - ${topPosts[1].views.toLocaleString()} views, ${topPosts[1].engagementRate}% engagement
+3. "${topPosts[2].title}" - ${topPosts[2].views.toLocaleString()} views, ${topPosts[2].engagementRate}% engagement
+4. "${topPosts[3].title}" - ${topPosts[3].views.toLocaleString()} views, ${topPosts[3].engagementRate}% engagement
+5. "${topPosts[4].title}" - ${topPosts[4].views.toLocaleString()} views, ${topPosts[4].engagementRate}% engagement
+
+📊 **Overall Stats:**
+- Total Views: ${totalViews}
+- Average Engagement Rate: ${avgEngagement}%
+- Best Performing Category: **${topCategory.category}** (${topCategory.avgEngagement.toFixed(1)}% avg engagement)
+
+💡 **Key Insights:**
+- **"Professor Romance"** content is performing exceptionally well
+- Videos with spiciness level 1-2 get higher engagement than level 3
+- TikTok drives 60% of views, Instagram has better engagement rates
+- Posting between 6-9 PM EST performs best
 
 **Recommendations:**
-- Focus more on "professor romance" and "secret baby" themes
-- Video length 15-30 seconds performs best
-- Post between 6-9 PM EST for maximum engagement
-- Use trending audio from TikTok's viral sounds
+1. Create more "Professor Romance" and "Secret Baby" content
+2. Stick to spiciness levels 1-2 for broader appeal
+3. Test 15-30 second video length (sweet spot for retention)
+4. Increase posting frequency to 3-4 times per day
 
-I've prepared a content strategy proposal. Should I create a task to generate more content in these themes?`,
+Would you like me to generate a content calendar for this week?`,
       timestamp: new Date().toISOString()
     };
-  } else if (lastUserMessage.includes("budget") || lastUserMessage.includes("spend")) {
+  } else if (lastUserMessage.includes("budget") || lastUserMessage.includes("spend") || lastUserMessage.includes("ad") || lastUserMessage.includes("campaign")) {
+    const campaigns = mockHistoricalData.campaigns;
+    const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
+    const totalConversions = campaigns.reduce((sum, c) => sum + c.conversions, 0);
+    const avgRoi = (campaigns.reduce((sum, c) => sum + c.roi, 0) / campaigns.length).toFixed(0);
+
     return {
       role: "assistant",
-      content: `**Budget Status: ⚠️ Warning**
+      content: `**Paid Ad Performance Review:**
 
-Current utilization: 72% of monthly budget ($2,160 of $3,000 spent)
-Daily spend rate: $86/day (on track)
-Projected month-end spend: $2,580
+💰 **Budget Utilization:**
+- Monthly Budget: $3,000
+- Actual Spend: $${totalSpend.toLocaleString()} (${((totalSpend / 3000) * 100).toFixed(1)}% used)
+- Remaining: $${(3000 - totalSpend).toLocaleString()}
 
-**Channel Breakdown:**
-- Apple Search Ads: $1,200 (40% of budget) - ROI: -45%
-- TikTok Ads: $720 (24% of budget) - ROI: -66%
-- Instagram Ads: $240 (8% of budget) - ROI: -72%
+📊 **Campaign Performance:**
+1. **Apple Search Ads - Exact Match**
+   - Spend: $${campaigns[0].spend}
+   - ROI: ${campaigns[0].roi}% (losing $${(campaigns[0].spend * 1.45).toFixed(0)})
+   - Conversions: ${campaigns[0].conversions} (@ $${(campaigns[0].spend / campaigns[0].conversions).toFixed(0)} per user)
 
-**My Recommendation:**
-Pause all paid campaigns immediately. The negative ROI means we're losing money on every acquisition. Focus on organic growth through content and ASO optimization instead.
+2. **TikTok Ads - Interest Targeting**
+   - Spend: $${campaigns[1].spend}
+   - ROI: ${campaigns[1].roi}% (losing $${(campaigns[1].spend * 1.66).toFixed(0)})
+   - Conversions: ${campaigns[1].conversions} (@ $${(campaigns[1].spend / campaigns[1].conversions).toFixed(0)} per user)
 
-Should I draft a budget reallocation proposal for your approval?`,
+3. **Instagram Ads - Lookalike**
+   - Spend: $${campaigns[2].spend}
+   - ROI: ${campaigns[2].roi}% (losing $${(campaigns[2].spend * 1.72).toFixed(0)})
+   - Conversions: ${campaigns[2].conversions} (@ $${(campaigns[2].spend / campaigns[2].conversions).toFixed(0)} per user)
+
+⚠️ **Critical Issue:**
+All campaigns have **negative ROI**. We're losing $${(totalSpend * 1.6).toFixed(0)} on paid ads while only acquiring ${totalConversions} users at $${(totalSpend / totalConversions).toFixed(0)} CAC.
+
+**Recommendation:**
+**PAUSE ALL PAID CAMPAIGNS IMMEDIATELY**
+
+Our organic content is performing much better:
+- Organic posts get 2-3x higher engagement
+- CAC from content is ~$15 vs ~$400 from ads
+- Better to invest the $2,160 remaining in content creation tools
+
+Should I pause all campaigns and reallocate budget to content production?`,
       timestamp: new Date().toISOString()
     };
-  } else if (lastUserMessage.includes("keyword") || lastUserMessage.includes("aso")) {
+  } else if (lastUserMessage.includes("keyword") || lastUserMessage.includes("aso") || lastUserMessage.includes("ranking") || lastUserMessage.includes("app store")) {
+    const keywords = mockHistoricalData.keywords;
+    const declined = keywords.filter(k => k.change < 0);
+    const improved = keywords.filter(k => k.change > 0);
+
     return {
       role: "assistant",
-      content: `**ASO Performance Update:**
+      content: `**ASO Keyword Rankings Update:**
 
-⚠️ **Alert**: "spicy fiction" dropped from #5 to #7 (2 positions)
-✅ **Positive**: "romance stories" holding at #12
-✅ **Positive**: "fiction app" improved to #18
+📉 **Declining Keywords (⚠️ Action Needed):**
+${declined.map(k => `- **"${k.keyword}"**: #${k.ranking} (${k.change > 0 ? '+' : ''}${k.change}), Volume: ${k.volume.toLocaleString()}, Competition: ${k.competition}`).join('\n')}
 
-**Opportunity Keywords:**
-1. "romance novels" - #45, High volume, Low competition
-2. "love stories" - #38, Medium volume, Medium competition
-3. "fanfiction" - #52, High volume, Low competition
+📈 **Improving Keywords (✅ Keep Optimizing):**
+${improved.map(k => `- **"${k.keyword}"**: #${k.ranking} (${k.change > 0 ? '+' : ''}${k.change}), Volume: ${k.volume.toLocaleString()}, Competition: ${k.competition}`).join('\n')}
 
-**Suggested Actions:**
-1. Update app subtitle to include "romance novels"
-2. Create keyword A/B test for "spicy fiction" vs "spicy romance"
-3. Optimize app description with high-performing keywords
+🎯 **Top Opportunity Keywords:**
+1. **"romance novels"** - #45, High volume (62K searches), Low competition
+2. **"fanfiction"** - #52, High volume (78K searches), Low competition
+3. **"love stories"** - #38, Medium volume (41K searches), Medium competition
 
-Would you like me to set up an A/B test or update the app metadata?`,
+💡 **Strategy:**
+- **Urgent**: Fix "spicy fiction" decline (was #5, now #7)
+- **Short-term**: Target "romance novels" keyword in app description
+- **Long-term**: Build backlinks for "fanfiction" term
+
+**Proposed Actions:**
+1. Update app subtitle: "Romance Novels & Spicy Fiction"
+2. Add "romance novels" to app description (5-7 times)
+3. Create A/B test for "spicy fiction" vs "spicy stories"
+4. Reach out to romance novel bloggers for backlinks
+
+Expected impact: +15-20% organic downloads in 30 days.
+
+Should I implement these ASO changes?`,
       timestamp: new Date().toISOString()
     };
-  } else if (lastUserMessage.includes("hello") || lastUserMessage.includes("hi")) {
+  } else if (lastUserMessage.includes("hello") || lastUserMessage.includes("hi") || lastUserMessage.includes("hey")) {
     return {
       role: "assistant",
-      content: `Hello! I'm your AI Marketing Executive for the Blush app. I'm here to help you grow from $425 MRR to $10,000/month.
+      content: `Hello! I'm your AI Marketing Executive for the Blush app. 🚀
 
-Here's what I can help with:
-- 📊 **Analytics**: Review performance metrics and trends
-- 💰 **Revenue**: Track MRR, subscribers, and revenue growth
-- 📱 **Content**: Plan and optimize social media content
-- 🔍 **ASO**: Improve App Store rankings and visibility
-- 📈 **Ads**: Manage paid advertising campaigns
-- 💡 **Strategy**: Develop and execute growth strategies
+I have access to all your historical data and can help with:
+
+**📊 Analytics & Performance**
+- Revenue trends and growth analysis
+- Content performance insights
+- Engagement metrics tracking
+
+**💰 Revenue & Growth**
+- MRR tracking ($425 current, growing 12% MoM)
+- Subscriber analysis (38 active subscribers)
+- Churn rate and LTV optimization
+
+**📱 Content Strategy**
+- Top performing posts analysis
+- Content calendar planning
+- Platform-specific optimization
+
+**🔍 ASO & Keywords**
+- Keyword ranking tracking (7 keywords monitored)
+- App Store optimization recommendations
+- A/B testing strategies
+
+**📈 Paid Advertising**
+- Campaign performance monitoring
+- ROI analysis and budget optimization
+- Audience targeting insights
+
+**💡 Strategic Planning**
+- Growth acceleration planning
+- Milestone tracking toward $10K MRR
+- Competitive analysis
+
+Quick stats: You're at $425 MRR with 38 subscribers, growing 12% month-over-month. Your best content category is "Professor Romance" with 4.5% avg engagement.
 
 What would you like to focus on today?`,
       timestamp: new Date().toISOString()
@@ -105,17 +260,29 @@ What would you like to focus on today?`,
   } else {
     return {
       role: "assistant",
-      content: `I understand you're asking about "${lastUserMessage}".
+      content: `I can help you with that! Here's what I have access to:
 
-To give you the most relevant advice, could you provide more context? I can help with:
+**Revenue & Growth Data:**
+- Current MRR: $425 (12% growth MoM)
+- 38 active subscribers, $11.18 ARPU
+- 3-month trend data available
 
-1. **Revenue & Growth** - MRR tracking, subscriber analysis, churn rate
-2. **Content Strategy** - Post performance, content ideas, scheduling
-3. **ASO & Keywords** - App Store optimization, keyword rankings
-4. **Paid Advertising** - Campaign performance, ROI analysis, budget management
-5. **Strategic Planning** - Growth initiatives, milestone tracking
+**Content Performance:**
+- Last 10 posts analyzed
+- Top performer: "Forbidden Professor Chapter 1" (45.2K views, 4.2% engagement)
+- Best category: Professor Romance (4.5% avg engagement)
 
-What area would you like to explore?`,
+**ASO Keywords:**
+- 7 keywords being tracked
+- "spicy fiction" declined to #7 (⚠️ needs attention)
+- Opportunity: "romance novels" at #45, low competition
+
+**Paid Ad Campaigns:**
+- 3 active campaigns, all with negative ROI
+- Total spend: $2,160, only 13 conversions
+- Recommendation: Pause and reallocate budget
+
+Could you clarify which area you'd like to explore? I can dive deeper into any of these topics or provide strategic recommendations.`,
       timestamp: new Date().toISOString()
     };
   }
