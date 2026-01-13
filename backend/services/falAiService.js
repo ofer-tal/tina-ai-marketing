@@ -1,4 +1,5 @@
 import winston from 'winston';
+import videoMetadataUtil from '../utils/videoMetadata.js';
 
 // Create logger for Fal.ai service
 const logger = winston.createLogger({
@@ -147,7 +148,7 @@ class FalAiService {
         },
         body: JSON.stringify({
           prompt: enhancedPrompt,
-          image_size: 'portrait_896_1152', // 9:16 aspect ratio
+          image_size: 'portrait_1080_1920', // 9:16 aspect ratio, 1080x1920 resolution
           num_inference_steps: 4,
           num_images: 1,
           enable_safety_checker: true
@@ -331,32 +332,57 @@ class FalAiService {
 
       await fs.writeFile(filePath, videoBuffer);
 
-      // Get file stats
-      const stats = await fs.stat(filePath);
+      logger.info('Video downloaded, validating metadata', { filePath });
 
-      // Validate constraints
-      const validation = {
+      // Extract and validate video metadata using ffprobe
+      const metadata = await videoMetadataUtil.getMetadata(filePath);
+
+      // Validate against constraints
+      const validation = await videoMetadataUtil.validate(filePath, {
+        width: 1080,
+        height: 1920,
+        aspectRatio: aspectRatio,
+        minDuration: Math.max(3, duration - 5),
+        maxDuration: Math.min(60, duration + 5),
+        minFps: 10,
+        maxFps: 60
+      });
+
+      const result = {
         path: filePath,
         filename: filename,
         url: `/api/videos/${filename}`,
-        fileSize: stats.size,
-        fileSizeMB: (stats.size / (1024 * 1024)).toFixed(2),
-        createdAt: new Date().toISOString()
+        fileSize: metadata.size,
+        fileSizeMB: (metadata.size / (1024 * 1024)).toFixed(2),
+        duration: metadata.duration,
+        aspectRatio: metadata.aspectRatio,
+        width: metadata.width,
+        height: metadata.height,
+        fps: metadata.fps,
+        codec: metadata.codec,
+        createdAt: new Date().toISOString(),
+        validation: {
+          passed: validation.valid,
+          checks: validation.checks,
+          report: videoMetadataUtil.getValidationReport(validation)
+        }
       };
 
-      // TODO: Add actual video metadata extraction using ffprobe
-      // For now, we'll assume constraints are met
-      validation.duration = duration;
-      validation.aspectRatio = aspectRatio;
-      validation.constraints = {
-        aspectRatioMet: true,
-        durationMet: true,
-        maxDurationMet: duration <= 60
-      };
+      // Log validation report
+      if (validation.valid) {
+        logger.info('✅ Video validation passed', {
+          width: metadata.width,
+          height: metadata.height,
+          aspectRatio: metadata.aspectRatio,
+          duration: metadata.duration
+        });
+      } else {
+        logger.warn('⚠️ Video validation issues detected', {
+          report: result.validation.report
+        });
+      }
 
-      logger.info('Video downloaded and validated', validation);
-
-      return validation;
+      return result;
 
     } catch (error) {
       logger.error('Video download/validation failed', {
@@ -414,6 +440,9 @@ class FalAiService {
   _getMockVideoResponse(options) {
     logger.info('Returning mock video response for testing');
 
+    const aspectRatio = options.aspectRatio || '9:16';
+    const duration = options.duration || 15;
+
     return {
       success: true,
       video: {
@@ -422,9 +451,25 @@ class FalAiService {
         url: '/api/videos/mock_video.mp4',
         fileSize: 1024000,
         fileSizeMB: '1.00',
-        duration: options.duration || 15,
-        aspectRatio: options.aspectRatio || '9:16',
+        duration: duration,
+        aspectRatio: aspectRatio,
+        width: 1080,
+        height: 1920,
+        fps: 24,
+        codec: 'h264',
         createdAt: new Date().toISOString(),
+        validation: {
+          passed: true,
+          checks: {
+            width: { required: 1080, actual: 1080, passed: true },
+            height: { required: 1920, actual: 1920, passed: true },
+            aspectRatio: { required: '9:16', actual: '9:16', passed: true },
+            duration: { min: 3, max: 60, actual: duration, passed: true },
+            fps: { min: 10, max: 60, actual: 24, passed: true },
+            letterboxing: { hasLetterboxing: false, passed: true }
+          },
+          report: '✅ Mock video validation passed!\n\n  Resolution: 1080x1920\n  Aspect Ratio: 9:16\n  Duration: 15.00s\n  FPS: 24.00'
+        },
         mock: true
       },
       steps: [
@@ -484,7 +529,7 @@ class FalAiService {
         },
         body: JSON.stringify({
           prompt: 'health check',
-          image_size: 'portrait_896_1152',
+          image_size: 'portrait_1080_1920',
           num_inference_steps: 1,
           num_images: 1,
           enable_safety_checker: true
