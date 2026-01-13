@@ -2,7 +2,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import logger from './logger.js';
+import { getLogger } from '../utils/logger.js';
+
+const logger = getLogger('storage', 'storage-service');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

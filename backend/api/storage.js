@@ -1,7 +1,9 @@
 import express from 'express';
 import multer from 'multer';
 import storageService from '../services/storage.js';
-import logger from '../services/logger.js';
+import { getLogger } from '../utils/logger.js';
+
+const logger = getLogger('api', 'storage');
 
 const router = express.Router();
 
