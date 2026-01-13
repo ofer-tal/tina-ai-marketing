@@ -1209,4 +1209,134 @@ router.post("/reject", async (req, res) => {
   }
 });
 
+// GET /api/chat/daily-briefing - Generate daily briefing
+router.get("/daily-briefing", async (req, res) => {
+  try {
+    const data = mockHistoricalData;
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // Calculate yesterday's metrics
+    const yesterdayPosts = data.posts.filter(p => {
+      const postDate = new Date(p.postedAt);
+      return postDate.toDateString() === yesterday.toDateString();
+    });
+
+    const yesterdayViews = yesterdayPosts.reduce((sum, p) => sum + p.views, 0);
+    const yesterdayEngagement = yesterdayPosts.length > 0
+      ? (yesterdayPosts.reduce((sum, p) => sum + p.engagementRate, 0) / yesterdayPosts.length).toFixed(1)
+      : 0;
+
+    // Find alerts needing attention
+    const alerts = [];
+
+    // Budget alerts
+    const totalSpend = data.campaigns.reduce((sum, c) => sum + c.spend, 0);
+    const budgetUtilization = (totalSpend / 3000) * 100;
+    if (budgetUtilization > 90) {
+      alerts.push({
+        type: 'critical',
+        title: '⚠️ Budget Critical',
+        message: `Paid ads budget at ${budgetUtilization.toFixed(0)}% utilization. All campaigns have negative ROI.`
+      });
+    } else if (budgetUtilization > 70) {
+      alerts.push({
+        type: 'warning',
+        title: '📊 Budget Alert',
+        message: `Paid ads budget at ${budgetUtilization.toFixed(0)}% utilization. Consider pausing negative ROI campaigns.`
+      });
+    }
+
+    // Declining keywords
+    const decliningKeywords = data.keywords.filter(k => k.change < 0);
+    if (decliningKeywords.length > 0) {
+      alerts.push({
+        type: 'warning',
+        title: '📉 ASO Keywords Declining',
+        message: `${decliningKeywords.length} keyword(s) dropping: ${decliningKeywords.map(k => `"${k.keyword}"`).join(', ')}`
+      });
+    }
+
+    // Today's priorities based on day of week
+    const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
+    const dailyPriorities = [];
+
+    if (dayOfWeek === 1) { // Monday
+      dailyPriorities.push({
+        title: 'Content Creation',
+        description: 'Create 3-4 Office Romance posts for this week',
+        priority: 'high'
+      });
+      dailyPriorities.push({
+        title: 'ASO Review',
+        description: 'Check and update keyword rankings',
+        priority: 'medium'
+      });
+    } else if (dayOfWeek === 2 || dayOfWeek === 4) { // Tuesday or Thursday
+      dailyPriorities.push({
+        title: 'Content Creation',
+        description: 'Create 4 posts across different categories',
+        priority: 'high'
+      });
+      dailyPriorities.push({
+        title: 'Performance Review',
+        description: 'Review yesterday\'s post performance',
+        priority: 'low'
+      });
+    } else { // Other days
+      dailyPriorities.push({
+        title: 'Content Creation',
+        description: 'Create 3 posts for today',
+        priority: 'high'
+      });
+    }
+
+    // Weekly summary for Monday
+    let weeklySummary = null;
+    if (dayOfWeek === 1) {
+      const lastWeekTotalViews = data.posts.reduce((sum, p) => sum + p.views, 0);
+      const avgEngagement = (data.posts.reduce((sum, p) => sum + p.engagementRate, 0) / data.posts.length).toFixed(1);
+
+      weeklySummary = {
+        totalViews: lastWeekTotalViews,
+        avgEngagement: avgEngagement,
+        topCategory: Object.entries(
+          data.posts.reduce((acc, p) => {
+            acc[p.category] = (acc[p.category] || 0) + p.views;
+            return acc;
+          }, {})
+        ).sort((a, b) => b[1] - a[1])[0]
+      };
+    }
+
+    res.json({
+      success: true,
+      briefing: {
+        date: now.toISOString(),
+        dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek],
+        yesterday: {
+          posts: yesterdayPosts.length,
+          views: yesterdayViews,
+          avgEngagement: yesterdayEngagement
+        },
+        todayMetrics: {
+          mrr: data.revenue.current.mrr,
+          subscribers: data.revenue.current.subscribers,
+          budgetUtilization: budgetUtilization.toFixed(0)
+        },
+        alerts: alerts,
+        priorities: dailyPriorities,
+        weeklySummary: weeklySummary
+      }
+    });
+  } catch (error) {
+    console.error("Error generating daily briefing:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

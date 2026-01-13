@@ -436,10 +436,90 @@ function Chat() {
           }));
 
         setMessages(historyMessages);
+      } else {
+        // No history - load daily briefing
+        loadDailyBriefing();
       }
     } catch (error) {
       console.error('Error loading chat history:', error);
       setIsConnected(false);
+      // On error, try to load daily briefing
+      loadDailyBriefing();
+    }
+  };
+
+  const loadDailyBriefing = async () => {
+    try {
+      const response = await fetch('http://localhost:4001/api/chat/daily-briefing');
+      const data = await response.json();
+
+      if (data.success && data.briefing) {
+        const b = data.briefing;
+        let briefingContent = `**☀️ Good Morning! ${b.dayOfWeek} Daily Briefing**
+
+---
+
+**📊 Yesterday's Performance:**
+- Posts: ${b.yesterday.posts}
+- Views: ${b.yesterday.views.toLocaleString()}
+- Avg Engagement: ${b.yesterday.avgEngagement}%
+
+---
+
+**💰 Today's Metrics:**
+- MRR: $${b.todayMetrics.mrr}
+- Subscribers: ${b.todayMetrics.subscribers}
+- Budget Utilization: ${b.todayMetrics.budgetUtilization}%
+
+---
+
+**🎯 Today's Priorities:**
+${b.priorities.map(p => `- **${p.title}** (${p.priority}): ${p.description}`).join('\n')}`;
+
+        if (b.alerts && b.alerts.length > 0) {
+          briefingContent += `
+
+---
+
+**⚠️ Alerts Needing Attention:**
+${b.alerts.map(a => `- **${a.title}**: ${a.message}`).join('\n')}`;
+        }
+
+        if (b.weeklySummary) {
+          briefingContent += `
+
+---
+
+**📈 Weekly Summary (Last Week):**
+- Total Views: ${b.weeklySummary.totalViews.toLocaleString()}
+- Avg Engagement: ${b.weeklySummary.avgEngagement}%
+- Top Category: ${b.weeklySummary.topCategory[0]} (${b.weeklySummary.topCategory[1].toLocaleString()} views)`;
+        }
+
+        briefingContent += `
+
+---
+
+What would you like to focus on today?`;
+
+        const briefingMessage = {
+          id: 'daily-briefing',
+          role: 'assistant',
+          content: briefingContent,
+          timestamp: b.date
+        };
+
+        setMessages([briefingMessage]);
+      }
+    } catch (error) {
+      console.error('Error loading daily briefing:', error);
+      // Fallback to welcome message if briefing fails
+      setMessages([{
+        id: 'welcome',
+        role: 'assistant',
+        content: `Good morning! I'm your AI Marketing Executive. I'm here to help you grow the Blush app. What would you like to work on today?`,
+        timestamp: new Date().toISOString()
+      }]);
     }
   };
 
