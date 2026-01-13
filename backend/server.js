@@ -7,6 +7,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import databaseService from "./services/database.js";
 import configService, { configSchema } from "./services/config.js";
+import settingsRouter from "./api/settings.js";
 
 dotenv.config();
 
@@ -73,6 +74,9 @@ app.get("/api/database/test", async (req, res) => {
     res.status(500).json({ status: "error", message: "Database test failed", error: error.message });
   }
 });
+
+// Settings API routes
+app.use("/api/settings", settingsRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {

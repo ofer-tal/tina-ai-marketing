@@ -1,5 +1,7 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import styled from 'styled-components';
+import Settings from './pages/Settings';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -14,8 +16,14 @@ const AppContainer = styled.div`
 
 const Header = styled.header`
   padding: 2rem;
-  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-bottom: 1px solid #2d3561;
+`;
+
+const HeaderLeft = styled.div`
+  text-align: center;
 `;
 
 const Title = styled.h1`
@@ -31,6 +39,33 @@ const Subtitle = styled.p`
   color: #a0a0a0;
   font-size: 1.1rem;
   margin: 0;
+`;
+
+const Nav = styled.nav`
+  display: flex;
+  gap: 1rem;
+`;
+
+const NavLink = styled(Link)`
+  padding: 0.75rem 1.5rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+    border-color: #e94560;
+    transform: translateY(-2px);
+  }
+
+  &.active {
+    background: #e94560;
+    border-color: #e94560;
+  }
 `;
 
 const Content = styled.main`
@@ -81,38 +116,55 @@ const StatusItem = styled.li`
   }
 `;
 
+function HomePage() {
+  return (
+    <WelcomeCard>
+      <CardTitle>Welcome to Blush Marketing</CardTitle>
+      <CardText>
+        This AI-powered marketing operations center proactively manages social media content,
+        ASO optimization, paid ad campaigns, and strategic decision-making to grow the
+        Blush app from $300-500/month MRR to $10,000/month.
+      </CardText>
+
+      <CardText>
+        The system is currently being initialized. Check back soon for:
+      </CardText>
+
+      <StatusList>
+        <StatusItem>Tactical dashboard with real-time metrics</StatusItem>
+        <StatusItem>AI-powered strategy recommendations</StatusItem>
+        <StatusItem>Automated content generation and posting</StatusItem>
+        <StatusItem>ASO keyword tracking and optimization</StatusItem>
+        <StatusItem>Paid ads management with budget controls</StatusItem>
+        <StatusItem>Revenue tracking and analytics</StatusItem>
+      </StatusList>
+    </WelcomeCard>
+  );
+}
+
 function App() {
   return (
-    <AppContainer>
-      <Header>
-        <Title>Blush Marketing Operations Center</Title>
-        <Subtitle>AI-Powered Marketing Automation for the Blush iPhone App</Subtitle>
-      </Header>
+    <Router>
+      <AppContainer>
+        <Header>
+          <HeaderLeft>
+            <Title>Blush Marketing Operations Center</Title>
+            <Subtitle>AI-Powered Marketing Automation for the Blush iPhone App</Subtitle>
+          </HeaderLeft>
+          <Nav>
+            <NavLink to="/">Home</NavLink>
+            <NavLink to="/settings">Settings</NavLink>
+          </Nav>
+        </Header>
 
-      <Content>
-        <WelcomeCard>
-          <CardTitle>Welcome to Blush Marketing</CardTitle>
-          <CardText>
-            This AI-powered marketing operations center proactively manages social media content,
-            ASO optimization, paid ad campaigns, and strategic decision-making to grow the
-            Blush app from $300-500/month MRR to $10,000/month.
-          </CardText>
-
-          <CardText>
-            The system is currently being initialized. Check back soon for:
-          </CardText>
-
-          <StatusList>
-            <StatusItem>Tactical dashboard with real-time metrics</StatusItem>
-            <StatusItem>AI-powered strategy recommendations</StatusItem>
-            <StatusItem>Automated content generation and posting</StatusItem>
-            <StatusItem>ASO keyword tracking and optimization</StatusItem>
-            <StatusItem>Paid ads management with budget controls</StatusItem>
-            <StatusItem>Revenue tracking and analytics</StatusItem>
-          </StatusList>
-        </WelcomeCard>
-      </Content>
-    </AppContainer>
+        <Content>
+          <Routes>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </Content>
+      </AppContainer>
+    </Router>
   );
 }
 

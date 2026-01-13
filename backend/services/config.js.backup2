@@ -510,20 +510,6 @@ class ConfigService {
   }
 
   /**
-   * Get the configuration schema
-   */
-  getSchema() {
-    return configSchema;
-  }
-
-  /**
-   * Check if a key exists in the schema
-   */
-  has(key) {
-    return key in configSchema;
-  }
-
-  /**
    * Print configuration report to console
    */
   printReport() {
