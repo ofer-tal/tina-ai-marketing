@@ -102,6 +102,33 @@ const marketingPostSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  feedback: {
+    type: String,
+    trim: true
+  },
+  hook: {
+    type: String,
+    trim: true
+  },
+
+  // Regeneration tracking
+  regenerationCount: {
+    type: Number,
+    default: 0
+  },
+  regenerationHistory: [{
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    feedback: String,
+    previousCaption: String,
+    previousHashtags: [String],
+    previousHook: String
+  }],
+  lastRegeneratedAt: {
+    type: Date
+  },
 
   // Performance metrics (populated after posting)
   performanceMetrics: {
@@ -172,10 +199,40 @@ marketingPostSchema.methods.markAsApproved = function() {
 };
 
 // Method to mark as rejected
-marketingPostSchema.methods.markAsRejected = function(reason) {
+marketingPostSchema.methods.markAsRejected = function(reason, feedback = null) {
   this.status = 'rejected';
   this.rejectedAt = new Date();
   this.rejectionReason = reason;
+  if (feedback) {
+    this.feedback = feedback;
+  }
+  return this.save();
+};
+
+// Method to regenerate content with feedback
+marketingPostSchema.methods.regenerateWithFeedback = function(feedback) {
+  // Store previous values in history
+  this.regenerationHistory = this.regenerationHistory || [];
+  this.regenerationHistory.push({
+    timestamp: new Date(),
+    feedback: feedback,
+    previousCaption: this.caption,
+    previousHashtags: this.hashtags,
+    previousHook: this.hook
+  });
+
+  // Update regeneration tracking
+  this.regenerationCount = (this.regenerationCount || 0) + 1;
+  this.lastRegeneratedAt = new Date();
+
+  // Reset status to draft for new generation
+  this.status = 'draft';
+  this.feedback = feedback;
+
+  // Clear rejection fields
+  this.rejectedAt = undefined;
+  this.rejectionReason = undefined;
+
   return this.save();
 };
 

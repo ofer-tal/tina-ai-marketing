@@ -120,7 +120,8 @@ class HashtagGenerationService {
       platform = 'tiktok', // tiktok, instagram, youtube
       includeTrending = true,
       includeBroad = true,
-      includeBrand = true
+      includeBrand = true,
+      feedback = null // User feedback for regeneration
     } = options;
 
     logger.info('Generating hashtags', {
@@ -128,7 +129,8 @@ class HashtagGenerationService {
       category,
       spiciness,
       tagCount: tags.length,
-      platform
+      platform,
+      hasFeedback: !!feedback
     });
 
     try {
@@ -139,9 +141,34 @@ class HashtagGenerationService {
       const trendingTags = includeTrending ? this.getTrendingHashtags(platform) : [];
 
       // Step 3: Generate mix of niche and broad hashtags
-      const nicheTags = this.getNicheHashtags(category, spiciness, storyKeywords);
+      let nicheTags = this.getNicheHashtags(category, spiciness, storyKeywords);
       const broadTags = includeBroad ? this.getBroadHashtags(platform) : [];
       const brandTags = includeBrand ? this.brandHashtags : [];
+
+      // If feedback is provided, adjust hashtags
+      if (feedback) {
+        const feedbackLower = feedback.toLowerCase();
+
+        if (feedbackLower.includes('more popular') || feedbackLower.includes('trending')) {
+          // Add more trending hashtags
+          trendingTags.push('#fyp', '#viral', '#trending', '#foryou');
+        }
+
+        if (feedbackLower.includes('romance') || feedbackLower.includes('love')) {
+          // Add more romance-focused hashtags
+          nicheTags.push('#romancereads', '#booklover', '#romancebooks', '#love-story', '#romancecommunity');
+        }
+
+        if (feedbackLower.includes('spicy') || feedbackLower.includes('hot')) {
+          // Add spicier hashtags
+          nicheTags.push('#spicyromance', '#hotreads', '#romancebooks', '#booktok', '#spicybooks');
+        }
+
+        if (feedbackLower.includes('cta') || feedbackLower.includes('download')) {
+          // Ensure download/CTA hashtags are prominent
+          brandTags.push('#downloadnow', '#gettheapp', '#appstore');
+        }
+      }
 
       // Step 4: Combine and optimize
       const allHashtags = [

@@ -58,7 +58,8 @@ class HookGenerationService {
     const {
       count = 5,
       hookType = null,
-      includeEmojis = true
+      includeEmojis = true,
+      feedback = null // User feedback for regeneration
     } = options;
 
     logger.info('Generating text hooks', {
@@ -67,12 +68,27 @@ class HookGenerationService {
       spiciness: story.spiciness,
       category: story.category,
       count,
-      hookType
+      hookType,
+      hasFeedback: !!feedback
     });
 
     try {
       // Step 1: Analyze story content
       const analysis = this._analyzeStoryContent(story);
+
+      // If feedback is provided, adjust analysis
+      if (feedback) {
+        const feedbackLower = feedback.toLowerCase();
+
+        if (feedbackLower.includes('sexier') || feedbackLower.includes('more passion')) {
+          analysis.tone.push('passionate', 'intense', 'steamy');
+          analysis.themes.push('desire', 'chemistry', 'tension');
+        } else if (feedbackLower.includes('funny') || feedbackLower.includes('humor')) {
+          analysis.tone.push('humorous', 'lighthearted', 'witty');
+        } else if (feedbackLower.includes('dramatic') || feedbackLower.includes('intense')) {
+          analysis.tone.push('dramatic', 'intense', 'emotional');
+        }
+      }
 
       // Step 2: Generate hook variations
       const hooks = this._generateHookVariations(analysis, count, hookType, includeEmojis);

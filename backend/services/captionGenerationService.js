@@ -58,7 +58,9 @@ class CaptionGenerationService {
       maxLength = 2200, // Instagram max is 2200, TikTok is 150
       includeCTA = true,
       includeEmojis = true,
-      hookStyle = 'engaging' // engaging, teaser, question, statement
+      hookStyle = 'engaging', // engaging, teaser, question, statement
+      feedback = null, // User feedback for regeneration
+      hook = null // Pre-generated hook to include
     } = options;
 
     logger.info('Caption generation requested', {
@@ -68,7 +70,9 @@ class CaptionGenerationService {
       spiciness: story.spiciness,
       platform,
       maxLength,
-      hookStyle
+      hookStyle,
+      hasFeedback: !!feedback,
+      hasHook: !!hook
     });
 
     try {
@@ -86,9 +90,17 @@ class CaptionGenerationService {
       let caption;
 
       if (this.isMockMode) {
-        caption = await this._generateMockCaption(story, analysis, platform, options);
+        caption = await this._generateMockCaption(story, analysis, platform, {
+          ...options,
+          feedback,
+          hook
+        });
       } else {
-        caption = await this._generateAICaption(story, analysis, platform, options);
+        caption = await this._generateAICaption(story, analysis, platform, {
+          ...options,
+          feedback,
+          hook
+        });
       }
 
       // Step 3: Verify tone is empowering and sex-positive
@@ -282,26 +294,61 @@ class CaptionGenerationService {
     const { title, category, spiciness } = story;
     const { tone, emojiSuggestions, suggestedHooks } = analysis;
     const strictMode = options.strictMode || false;
+    const feedback = options.feedback || null;
+    const customHook = options.hook || null;
 
-    // Select a random hook
-    const hook = suggestedHooks[Math.floor(Math.random() * suggestedHooks.length)];
+    // Use custom hook if provided, otherwise select random
+    const hook = customHook || suggestedHooks[Math.floor(Math.random() * suggestedHooks.length)];
 
     // Build caption based on tone and spiciness
     let captionBody;
 
-    if (spiciness <= 1) {
-      captionBody = `This sweet ${category.toLowerCase()} story absolutely made my day! 🌸 The way the characters' love story unfolds is so heartwarming and tender. Perfect for when you need a wholesome romance that'll leave you smiling. 💕`;
-    } else if (spiciness === 2) {
-      if (strictMode) {
-        captionBody = `This ${category.toLowerCase()} story has the perfect amount of spice! 🔥 The chemistry between the characters is absolutely electric. It's romantic, empowering, and honestly - why is it so hot in here? 😏💋 Sex-positive romance at its finest! ✨`;
+    // If feedback is provided, adjust the caption accordingly
+    if (feedback) {
+      const feedbackLower = feedback.toLowerCase();
+
+      // Feedback-driven caption generation
+      if (feedbackLower.includes('sexier') || feedbackLower.includes('more passion') || feedbackLower.includes('hotter')) {
+        // Increase sexiness/passion
+        if (spiciness <= 1) {
+          captionBody = `This ${category.toLowerCase()} story has a hidden passionate side! 🔥 The chemistry is absolutely electric and the way they look at each other? Unforgettable. It's sweet but with just the right amount of spice to keep you wanting more. 💋✨`;
+        } else if (spiciness === 2) {
+          captionBody = `The tension in this ${category.toLowerCase()} story is OFF THE CHAINS 🔥❤️‍🔥 The chemistry is absolutely explosive and I am LIVING for every steamy moment. The passion, the desire, the heat - it's all there and it's INTENSE. Why is it so hot in here?! 😏💋`;
+        } else {
+          captionBody = `Some desires are too powerful to resist... ❤️‍🔥 This ${category.toLowerCase()} story brings the INTENSE heat in the best way possible. The attraction is magnetic, the tension is palpable, and the passion? Absolutely unforgettable. 🔥🌶️ Prepare to blush!`;
+        }
+      } else if (feedbackLower.includes('cta') || feedbackLower.includes('call to action') || feedbackLower.includes('download')) {
+        // Focus on CTA
+        if (spiciness <= 1) {
+          captionBody = `This sweet ${category.toLowerCase()} story absolutely made my day! 🌸 The love story is so heartwarming and tender. You NEED to read this! 💕\n\n📖 Download the Blush app now for more romantic stories like this! #blushapp`;
+        } else if (spiciness === 2) {
+          captionBody = `The tension in this ${category.toLowerCase()} story is UNREAL 🔥 The chemistry is off the charts! If you love passionate romance, this is for you! 💋\n\n🔗 Link in bio to get the Blush app and read the full story! #blushapp`;
+        } else {
+          captionBody = `Some attractions are too powerful to ignore... ❤️‍🔥 This story brings the heat! 🔥\n\n📱 Get the Blush app now to experience this intense romance! #blushapp`;
+        }
+      } else if (feedbackLower.includes('funny') || feedbackLower.includes('humor') || feedbackLower.includes('entertaining')) {
+        // Add humor/entertainment value
+        captionBody = `This ${category.toLowerCase()} story had me absolutely OBSESSED 😂✨ The chemistry is hilarious AND hot - how is that even possible?! I couldn't stop reading and you won't either. The drama! The romance! The HEAT! 🔥💋`;
       } else {
-        captionBody = `The tension in this ${category.toLowerCase()} story is UNREAL 🔥 The chemistry is off the charts and I am living for every moment. If you love passionate romance with the perfect amount of heat, this is for you! 💋`;
+        // Generic feedback incorporation - make it more engaging
+        captionBody = `This ${category.toLowerCase()} story is EVERYTHING! ✨ The chemistry, the romance, the passion - it's all absolutely perfect. I honestly couldn't put it down and you won't be able to either. 🔥💕`;
       }
     } else {
-      if (strictMode) {
-        captionBody = `This intense ${category.toLowerCase()} story had me hooked from the start ❤️‍🔥 The way the attraction builds is absolutely magnetic. It's empowering, romantic, and the tension? Chef's kiss 🌶️✨ Mature audiences who know what they want will LOVE this!`;
+      // Standard caption generation without feedback
+      if (spiciness <= 1) {
+        captionBody = `This sweet ${category.toLowerCase()} story absolutely made my day! 🌸 The way the characters' love story unfolds is so heartwarming and tender. Perfect for when you need a wholesome romance that'll leave you smiling. 💕`;
+      } else if (spiciness === 2) {
+        if (strictMode) {
+          captionBody = `This ${category.toLowerCase()} story has the perfect amount of spice! 🔥 The chemistry between the characters is absolutely electric. It's romantic, empowering, and honestly - why is it so hot in here? 😏💋 Sex-positive romance at its finest! ✨`;
+        } else {
+          captionBody = `The tension in this ${category.toLowerCase()} story is UNREAL 🔥 The chemistry is off the charts and I am living for every moment. If you love passionate romance with the perfect amount of heat, this is for you! 💋`;
+        }
       } else {
-        captionBody = `Some attractions are too powerful to ignore... ❤️‍🔥 This ${category.toLowerCase()} story brings the heat in the best way possible. The desire, the tension, the intensity - it's all there. 🔥`;
+        if (strictMode) {
+          captionBody = `This intense ${category.toLowerCase()} story had me hooked from the start ❤️‍🔥 The way the attraction builds is absolutely magnetic. It's empowering, romantic, and the tension? Chef's kiss 🌶️✨ Mature audiences who know what they want will LOVE this!`;
+        } else {
+          captionBody = `Some attractions are too powerful to ignore... ❤️‍🔥 This ${category.toLowerCase()} story brings the heat in the best way possible. The desire, the tension, the intensity - it's all there. 🔥`;
+        }
       }
     }
 

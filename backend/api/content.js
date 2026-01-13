@@ -3,6 +3,7 @@ import winston from 'winston';
 import contentGenerationJob from '../jobs/contentGeneration.js';
 import captionGenerationService from '../services/captionGenerationService.js';
 import hashtagGenerationService from '../services/hashtagGenerationService.js';
+import hookGenerationService from '../services/hookGenerationService.js';
 import tiktokOptimizationService from '../services/tiktokOptimizationService.js';
 import instagramOptimizationService from '../services/instagramOptimizationService.js';
 import youtubeOptimizationService from '../services/youtubeOptimizationService.js';
@@ -2141,6 +2142,192 @@ router.delete('/moderation/history', (req, res) => {
 
   } catch (error) {
     logger.error('Clear moderation history API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/:id/regenerate
+ * Regenerate content with user feedback
+ */
+router.post('/:id/regenerate', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { feedback } = req.body;
+
+    if (!feedback) {
+      return res.status(400).json({
+        success: false,
+        error: 'feedback is required'
+      });
+    }
+
+    logger.info('Content regeneration requested', {
+      contentId: id,
+      feedback: feedback.substring(0, 100)
+    });
+
+    // Find the content
+    const content = await MarketingPost.findById(id);
+
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        error: 'Content not found'
+      });
+    }
+
+    // Store original values for comparison
+    const originalCaption = content.caption;
+    const originalHashtags = content.hashtags;
+    const originalHook = content.hook;
+
+    // Update content with regeneration tracking
+    await content.regenerateWithFeedback(feedback);
+
+    // Generate new content based on feedback
+    const story = {
+      _id: content.storyId,
+      title: content.storyName,
+      category: content.storyCategory,
+      spiciness: content.storySpiciness
+    };
+
+    // Generate new hook with feedback consideration
+    let newHook = originalHook;
+    try {
+      const hookResult = await hookGenerationService.generateHooks(story, {
+        count: 1,
+        feedback: feedback
+      });
+      newHook = hookResult.hooks && hookResult.hooks.length > 0
+        ? hookResult.hooks[0].text
+        : originalHook;
+      logger.info('New hook generated', { hook: newHook.substring(0, 50) });
+    } catch (error) {
+      logger.warn('Hook generation failed, using original', { error: error.message });
+    }
+
+    // Generate new caption with feedback
+    let newCaption;
+    try {
+      const captionResult = await captionGenerationService.generateCaption(
+        story,
+        content.platform,
+        {
+          includeCTA: true,
+          includeHook: true,
+          hook: newHook,
+          feedback: feedback
+        }
+      );
+      newCaption = captionResult.caption;
+      logger.info('New caption generated', { captionLength: newCaption.length });
+    } catch (error) {
+      logger.warn('Caption generation failed', { error: error.message });
+      newCaption = originalCaption;
+    }
+
+    // Generate new hashtags with feedback consideration
+    let newHashtags;
+    try {
+      const hashtagResult = await hashtagGenerationService.generateHashtags(story, {
+        platform: content.platform,
+        feedback: feedback
+      });
+      newHashtags = hashtagResult.hashtags;
+      logger.info('New hashtags generated', { count: newHashtags.length });
+    } catch (error) {
+      logger.warn('Hashtag generation failed, using original', { error: error.message });
+      newHashtags = originalHashtags;
+    }
+
+    // Update content with regenerated values
+    content.caption = newCaption;
+    content.hashtags = newHashtags;
+    content.hook = newHook;
+    content.status = 'draft'; // Reset to draft for review
+    content.generatedAt = new Date(); // Update generation timestamp
+
+    await content.save();
+
+    logger.info('Content regenerated successfully', {
+      contentId: id,
+      regenerationCount: content.regenerationCount,
+      captionChanged: newCaption !== originalCaption,
+      hashtagsChanged: JSON.stringify(newHashtags) !== JSON.stringify(originalHashtags)
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: content._id,
+        caption: newCaption,
+        hashtags: newHashtags,
+        hook: newHook,
+        regenerationCount: content.regenerationCount,
+        status: content.status,
+        changes: {
+          captionChanged: newCaption !== originalCaption,
+          hashtagsChanged: JSON.stringify(newHashtags) !== JSON.stringify(originalHashtags),
+          hookChanged: newHook !== originalHook
+        },
+        previous: {
+          caption: originalCaption,
+          hashtags: originalHashtags,
+          hook: originalHook
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Content regeneration API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/:id/regeneration-history
+ * Get regeneration history for content
+ */
+router.get('/:id/regeneration-history', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const content = await MarketingPost.findById(id);
+
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        error: 'Content not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        regenerationCount: content.regenerationCount || 0,
+        lastRegeneratedAt: content.lastRegeneratedAt,
+        history: content.regenerationHistory || []
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get regeneration history API error', {
       error: error.message,
       stack: error.stack
     });
