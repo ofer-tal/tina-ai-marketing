@@ -604,6 +604,134 @@ router.get('/posts/performance', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/revenue-spend-trend
+ * Get revenue vs marketing spend trend over time
+ * Query params:
+ *   - range: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/revenue-spend-trend', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+
+    // Validate range parameter
+    const validRanges = ['30d', '90d', '180d'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({
+        error: 'Invalid range. Must be one of: ' + validRanges.join(', ')
+      });
+    }
+
+    console.log(`Fetching revenue vs spend trend for range: ${range}`);
+
+    // Calculate date range
+    const days = parseInt(range.replace('d', ''));
+    const endDate = new Date();
+    const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+
+    // Generate mock data - revenue and spend over time
+    const data = [];
+    const totalRevenue = 0;
+    const totalSpend = 0;
+
+    // Starting values
+    let dailyRevenue = 15; // ~$450/month initially
+    let dailySpend = 45; // High initial spend
+    let cumulativeRevenue = 4000; // Starting MRR base
+    let cumulativeSpend = 0;
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+
+      // Simulate revenue growth with momentum
+      const revenueGrowth = 0.5 + (Math.random() * 1.5); // $0.50-$2.00 growth per day
+      dailyRevenue += revenueGrowth;
+
+      // Simulate spend optimization (decreasing then stabilizing)
+      if (i < days * 0.3) {
+        // Initial optimization phase
+        dailySpend -= 0.3 + (Math.random() * 0.5);
+      } else {
+        // Stabilization with slight variations
+        dailySpend += (Math.random() - 0.5) * 2;
+      }
+
+      // Ensure minimum spend
+      dailySpend = Math.max(dailySpend, 15);
+
+      // Add daily variation
+      const revenueVariation = (Math.random() - 0.5) * 3;
+      const spendVariation = (Math.random() - 0.5) * 5;
+
+      dailyRevenue = Math.max(dailyRevenue + revenueVariation, 10);
+      dailySpend = Math.max(dailySpend + spendVariation, 10);
+
+      // Calculate monthly values (multiply by ~30)
+      const monthlyRevenue = Math.round(dailyRevenue * 30);
+      const monthlySpend = Math.round(dailySpend * 30);
+
+      cumulativeSpend += dailySpend;
+
+      data.push({
+        date: date.toISOString().split('T')[0], // YYYY-MM-DD
+        revenue: Math.round(monthlyRevenue),
+        spend: Math.round(monthlySpend),
+        profit: Math.round(monthlyRevenue - monthlySpend),
+        cumulativeRevenue: Math.round(cumulativeRevenue + (dailyRevenue * 30 * i / days)),
+        cumulativeSpend: Math.round(cumulativeSpend)
+      });
+    }
+
+    // Calculate summary
+    const latest = data[data.length - 1];
+    const previous = data[Math.floor(data.length / 2)];
+    const revenueChange = ((latest.revenue - previous.revenue) / previous.revenue * 100).toFixed(1);
+    const spendChange = ((latest.spend - previous.spend) / previous.spend * 100).toFixed(1);
+    const profitMargin = ((latest.profit / latest.revenue) * 100).toFixed(1);
+
+    const totalRevenueSum = data.reduce((sum, d) => sum + d.revenue, 0);
+    const totalSpendSum = data.reduce((sum, d) => sum + d.spend, 0);
+    const avgProfitMargin = ((totalRevenueSum - totalSpendSum) / totalRevenueSum * 100).toFixed(1);
+
+    res.json({
+      range: range,
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      data: data,
+      summary: {
+        current: {
+          revenue: latest.revenue,
+          spend: latest.spend,
+          profit: latest.profit,
+          profitMargin: parseFloat(profitMargin)
+        },
+        previous: {
+          revenue: previous.revenue,
+          spend: previous.spend,
+          profit: previous.profit
+        },
+        change: {
+          revenue: parseFloat(revenueChange),
+          spend: parseFloat(spendChange)
+        },
+        averages: {
+          revenue: Math.round(totalRevenueSum / data.length),
+          spend: Math.round(totalSpendSum / data.length),
+          profitMargin: parseFloat(avgProfitMargin)
+        },
+        totalProfit: totalRevenueSum - totalSpendSum
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching revenue vs spend trend:', error);
+    res.status(500).json({
+      error: 'Failed to fetch revenue vs spend trend',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */

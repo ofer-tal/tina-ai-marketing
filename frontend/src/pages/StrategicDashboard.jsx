@@ -109,7 +109,15 @@ const MetricLabel = styled.div`
 const MetricValue = styled.div`
   font-size: 1.5rem;
   font-weight: bold;
-  color: #eaeaea;
+  color: ${props => props.$positive ? '#00d26a' : props.$positive === false ? '#e94560' : '#eaeaea'};
+`;
+
+const MetricChange = styled.div`
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: ${props => props.$positive ? '#00d26a' : props.$negative ? '#e94560' : '#a0a0a0'};
 `;
 
 const LoadingState = styled.div`
@@ -133,6 +141,7 @@ function StrategicDashboard() {
   const [userGrowthData, setUserGrowthData] = useState(null);
   const [cacData, setCacData] = useState(null);
   const [acquisitionData, setAcquisitionData] = useState(null);
+  const [revenueSpendData, setRevenueSpendData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -141,6 +150,7 @@ function StrategicDashboard() {
     fetchUserGrowth();
     fetchCacTrend();
     fetchAcquisitionSplit();
+    fetchRevenueSpendTrend();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -219,6 +229,105 @@ function StrategicDashboard() {
       const mockData = generateMockAcquisitionData(dateRange);
       setAcquisitionData(mockData);
     }
+  };
+
+  const fetchRevenueSpendTrend = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/revenue-spend-trend?range=${dateRange}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setRevenueSpendData(data);
+    } catch (err) {
+      console.error('Failed to fetch revenue vs spend trend:', err);
+      // Set mock data for development
+      const mockData = generateMockRevenueSpendData(dateRange);
+      setRevenueSpendData(mockData);
+    }
+  };
+
+  const generateMockRevenueSpendData = (range) => {
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const data = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    let dailyRevenue = 15; // ~$450/month initially
+    let dailySpend = 45; // High initial spend
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      // Simulate revenue growth
+      const revenueGrowth = 0.5 + (Math.random() * 1.5);
+      dailyRevenue += revenueGrowth;
+
+      // Simulate spend optimization
+      if (i < days * 0.3) {
+        dailySpend -= 0.3 + (Math.random() * 0.5);
+      } else {
+        dailySpend += (Math.random() - 0.5) * 2;
+      }
+
+      dailySpend = Math.max(dailySpend, 15);
+
+      const revenueVariation = (Math.random() - 0.5) * 3;
+      const spendVariation = (Math.random() - 0.5) * 5;
+
+      dailyRevenue = Math.max(dailyRevenue + revenueVariation, 10);
+      dailySpend = Math.max(dailySpend + spendVariation, 10);
+
+      const monthlyRevenue = Math.round(dailyRevenue * 30);
+      const monthlySpend = Math.round(dailySpend * 30);
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        revenue: monthlyRevenue,
+        spend: monthlySpend,
+        profit: monthlyRevenue - monthlySpend
+      });
+    }
+
+    const latest = data[data.length - 1];
+    const previous = data[Math.floor(data.length / 2)];
+    const revenueChange = ((latest.revenue - previous.revenue) / previous.revenue * 100).toFixed(1);
+    const spendChange = ((latest.spend - previous.spend) / previous.spend * 100).toFixed(1);
+    const profitMargin = ((latest.profit / latest.revenue) * 100).toFixed(1);
+
+    const totalRevenue = data.reduce((sum, d) => sum + d.revenue, 0);
+    const totalSpend = data.reduce((sum, d) => sum + d.spend, 0);
+    const avgProfitMargin = ((totalRevenue - totalSpend) / totalRevenue * 100).toFixed(1);
+
+    return {
+      data,
+      summary: {
+        current: {
+          revenue: latest.revenue,
+          spend: latest.spend,
+          profit: latest.profit,
+          profitMargin: parseFloat(profitMargin)
+        },
+        previous: {
+          revenue: previous.revenue,
+          spend: previous.spend,
+          profit: previous.profit
+        },
+        change: {
+          revenue: parseFloat(revenueChange),
+          spend: parseFloat(spendChange)
+        },
+        averages: {
+          revenue: Math.round(totalRevenue / data.length),
+          spend: Math.round(totalSpend / data.length),
+          profitMargin: parseFloat(avgProfitMargin)
+        },
+        totalProfit: totalRevenue - totalSpend
+      }
+    };
   };
 
   const generateMockMrrData = (range) => {
@@ -820,6 +929,105 @@ function StrategicDashboard() {
                   </BarChart>
                 </ResponsiveContainer>
               </ChartContainer>
+
+          {/* Revenue vs Spend Section */}
+          {revenueSpendData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Monthly Revenue</MetricLabel>
+                  <MetricValue>{formatCurrency(revenueSpendData.summary.current.revenue)}</MetricValue>
+                  <MetricChange $positive={revenueSpendData.summary.change.revenue >= 0}>
+                    {revenueSpendData.summary.change.revenue >= 0 ? '↑' : '↓'} {Math.abs(revenueSpendData.summary.change.revenue)}%
+                  </MetricChange>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Marketing Spend</MetricLabel>
+                  <MetricValue>{formatCurrency(revenueSpendData.summary.current.spend)}</MetricValue>
+                  <MetricChange $positive={revenueSpendData.summary.change.spend <= 0}>
+                    {revenueSpendData.summary.change.spend <= 0 ? '↓' : '↑'} {Math.abs(revenueSpendData.summary.change.spend)}%
+                  </MetricChange>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Monthly Profit</MetricLabel>
+                  <MetricValue $positive={revenueSpendData.summary.current.profit >= 0}>
+                    {formatCurrency(revenueSpendData.summary.current.profit)}
+                  </MetricValue>
+                  <MetricChange $positive={revenueSpendData.summary.current.profit >= 0}>
+                    {revenueSpendData.summary.current.profit >= 0 ? '✓' : '✗'} {revenueSpendData.summary.current.profitMargin}%
+                  </MetricChange>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Avg Profit Margin</MetricLabel>
+                  <MetricValue $positive={revenueSpendData.summary.averages.profitMargin >= 0}>
+                    {revenueSpendData.summary.averages.profitMargin}%
+                  </MetricValue>
+                  <MetricChange>
+                    {formatCurrency(revenueSpendData.summary.averages.revenue)} / {formatCurrency(revenueSpendData.summary.averages.spend)}
+                  </MetricChange>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>Revenue vs Marketing Spend</ChartTitle>
+                <ResponsiveContainer width="100%" height={400}>
+                  <LineChart
+                    data={revenueSpendData.data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2d3561" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatDate}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <YAxis
+                      yAxisId="left"
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                      tickFormatter={formatCurrency}
+                    />
+                    <YAxis
+                      yAxisId="right"
+                      orientation="right"
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                      tickFormatter={formatCurrency}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      wrapperStyle={{ color: '#a0a0a0' }}
+                    />
+                    <Line
+                      yAxisId="left"
+                      type="monotone"
+                      dataKey="revenue"
+                      name="Revenue"
+                      stroke="#00d26a"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <Line
+                      yAxisId="right"
+                      type="monotone"
+                      dataKey="spend"
+                      name="Marketing Spend"
+                      stroke="#e94560"
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                    <ReferenceLine
+                      yAxisId="left"
+                      y={0}
+                      stroke="#2d3561"
+                      strokeWidth={1}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </>
+          )}
             </>
           )}
         </>
