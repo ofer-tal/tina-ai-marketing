@@ -215,6 +215,87 @@ Expected impact: +15-20% organic downloads in 30 days.
 Should I implement these ASO changes?`,
       timestamp: new Date().toISOString()
     };
+  } else if (lastUserMessage.includes("strategy") || lastUserMessage.includes("recommendation") || lastUserMessage.includes("recommend") || lastUserMessage.includes("plan") || lastUserMessage.includes("advice")) {
+    // Strategy recommendations based on performance data
+    const data = mockHistoricalData;
+    const topPost = data.posts.sort((a, b) => b.engagementRate - a.engagementRate)[0];
+    const worstCampaign = data.campaigns.sort((a, b) => a.roi - b.roi)[0];
+    const decliningKeywords = data.keywords.filter(k => k.change < 0);
+
+    return {
+      role: "assistant",
+      content: `**🎯 Strategic Recommendations for Growth Acceleration**
+
+Based on my analysis of your performance data, here are my top strategic recommendations:
+
+**📈 PRIORITY 1: Content Strategy (High Impact)**
+- **Focus on Professor Romance content** - Your top performer "${topPost.title}" has ${topPost.engagementRate}% engagement
+- **Increase posting frequency** from 1-2 to 3-4 posts/day
+- **Stick to spiciness levels 1-2** for broader appeal (level 3 gets 30% less engagement)
+- **Test video lengths**: 15-30 seconds is the sweet spot
+- **Optimal posting time**: 6-9 PM EST
+
+*Expected Impact: +50-70% more organic reach within 30 days*
+
+**💰 PRIORITY 2: Budget Reallocation (Immediate Action)**
+- **PAUSE ${worstCampaign.name}** - Currently losing ${Math.abs(worstCampaign.roi)}% ROI
+- **Redirection**: Reallocate the $${(3000 - data.campaigns.reduce((sum, c) => sum + c.spend, 0)).toLocaleString()} remaining budget to:
+  - Video editing tools (CapCut Pro, etc.)
+  - Stock footage for content creation
+  - Influencer partnerships for content promotion
+
+*Expected Impact: Save $2,400/month in losses, reinvest in high-ROI content*
+
+**🔍 PRIORITY 3: ASO Optimization (Quick Wins)**
+- **Fix declining keywords**: ${decliningKeywords.map(k => `"${k.keyword}"`).join(', ')}
+- **Update app subtitle** to: "Romance Novels & Spicy Fiction"
+- **Add "romance novels"** to app description (5-7 times naturally)
+- **Target opportunity keyword**: "romance novels" at #45 with 62K volume and low competition
+
+*Expected Impact: +15-20% organic downloads in 30 days*
+
+**📊 PRIORITY 4: Analytics & Optimization**
+- **Track engagement rate by category** to double down on winners
+- **A/B test video hooks** (first 3 seconds are critical)
+- **Monitor competitor strategies** in the romance fiction space
+- **Set up conversion tracking** from content to app installs
+
+---
+
+**🚀 30-Day Action Plan:**
+
+**Week 1:**
+- Pause all negative ROI campaigns
+- Update ASO metadata (subtitle, description)
+- Create 10 new Professor Romance story posts
+
+**Week 2:**
+- Test 3-4 posts per day frequency
+- A/B test video hooks (20-30 seconds vs 15-20 seconds)
+- Identify top 3 performing content categories
+
+**Week 3:**
+- Double down on top performing category
+- Reach out to 5-10 romance fiction influencers for collaboration
+- Create content calendar for next month
+
+**Week 4:**
+- Analyze results and optimize
+- Scale what works, kill what doesn't
+- Prepare month 2 strategy
+
+**Projected Results:**
+- MRR: $425 → $650-750 (+53-76%)
+- Organic downloads: +40-60%
+- Engagement rate: +20-30%
+
+Would you like me to:
+1. **Create detailed content calendar** for this week?
+2. **Generate ASO keyword list** for optimization?
+3. **Set up action items** for each priority?
+4. **Dive deeper** into any specific recommendation?`,
+      timestamp: new Date().toISOString()
+    };
   } else if (lastUserMessage.includes("hello") || lastUserMessage.includes("hi") || lastUserMessage.includes("hey")) {
     return {
       role: "assistant",
