@@ -453,11 +453,56 @@ class FalAiService {
    */
   getStatus() {
     return {
+      service: 'fal-ai',
       configured: this.isConfigured(),
       baseUrl: this.baseUrl,
       timeout: this.timeout,
       pollInterval: this.pollInterval
     };
+  }
+
+  /**
+   * Health check
+   *
+   * @returns {Promise<object>} Health check result
+   */
+  async healthCheck() {
+    if (!this.apiKey) {
+      return {
+        healthy: false,
+        reason: 'API key not configured'
+      };
+    }
+
+    try {
+      // Try to reach the Fal.ai API (simple health check)
+      const response = await fetch(`${this.baseUrl}/flux-schnell`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Key ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          prompt: 'health check',
+          image_size: 'portrait_896_1152',
+          num_inference_steps: 1,
+          num_images: 1,
+          enable_safety_checker: true
+        }),
+        signal: AbortSignal.timeout(10000) // 10 second timeout
+      });
+
+      // If we get a response (even error), the service is reachable
+      return {
+        healthy: response.ok || response.status === 401 || response.status === 400,
+        status: response.status
+      };
+    } catch (error) {
+      return {
+        healthy: false,
+        reason: error.message
+      };
+    }
   }
 }
 
