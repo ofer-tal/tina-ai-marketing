@@ -1,4 +1,6 @@
-import express from "express";
+import fs from "fs";
+
+const content = `import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -107,3 +109,7 @@ process.on("SIGINT", async () => {
 startServer();
 
 export default app;
+`;
+
+fs.writeFileSync("backend/server.js", content);
+console.log("File updated successfully");
