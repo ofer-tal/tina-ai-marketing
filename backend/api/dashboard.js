@@ -54,6 +54,12 @@ router.get('/metrics', async (req, res) => {
           change: 11.8,
           trend: 'up'
         },
+        subscribers: {
+          current: 892,
+          previous: 854,
+          change: 4.5,
+          trend: 'up'
+        },
         users: {
           current: 1247,
           previous: 1102,
@@ -85,6 +91,12 @@ router.get('/metrics', async (req, res) => {
           change: 13.8,
           trend: 'up'
         },
+        subscribers: {
+          current: 3245,
+          previous: 2987,
+          change: 8.6,
+          trend: 'up'
+        },
         users: {
           current: 8542,
           previous: 7234,
@@ -114,6 +126,12 @@ router.get('/metrics', async (req, res) => {
           current: 12350,
           previous: 10890,
           change: 13.4,
+          trend: 'up'
+        },
+        subscribers: {
+          current: 12456,
+          previous: 11234,
+          change: 10.9,
           trend: 'up'
         },
         users: {

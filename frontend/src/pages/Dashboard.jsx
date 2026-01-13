@@ -61,11 +61,12 @@ const MetricCard = styled.div`
   border-radius: 12px;
   padding: 1.5rem;
   transition: all 0.3s;
+  cursor: ${props => props.$clickable ? 'pointer' : 'default'};
 
   &:hover {
     border-color: #e94560;
     box-shadow: 0 4px 20px rgba(233, 69, 96, 0.1);
-    transform: translateY(-2px);
+    transform: ${props => props.$clickable ? 'translateY(-2px)' : 'none'};
   }
 `;
 
@@ -343,7 +344,7 @@ function Dashboard() {
     return 'low';
   };
 
-  const renderMetricCard = (key, label, icon, prefix = '', suffix = '') => {
+  const renderMetricCard = (key, label, icon, prefix = '', suffix = '', onClick = null) => {
     if (!metrics || !metrics[key]) return null;
 
     const metric = metrics[key];
@@ -351,7 +352,11 @@ function Dashboard() {
     const isNegative = metric.change < 0;
 
     return (
-      <MetricCard key={key}>
+      <MetricCard
+        key={key}
+        $clickable={!!onClick}
+        onClick={onClick}
+      >
         <MetricLabel>
           <MetricIcon>{icon}</MetricIcon>
           {label}
@@ -412,7 +417,8 @@ function Dashboard() {
       )}
 
       <MetricsGrid>
-        {renderMetricCard('mrr', 'Monthly Recurring Revenue', '💰', '$')}
+        {renderMetricCard('mrr', 'Monthly Recurring Revenue', '💰', '$', '', () => window.location.href = '/dashboard/strategic')}
+        {renderMetricCard('subscribers', 'Active Subscribers', '💎', '', '', () => window.location.href = '/dashboard/subscribers')}
         {renderMetricCard('users', 'Active Users', '👥')}
         {renderMetricCard('spend', 'Ad Spend', '📊', '$')}
         {renderMetricCard('posts', 'Content Posted', '📱')}

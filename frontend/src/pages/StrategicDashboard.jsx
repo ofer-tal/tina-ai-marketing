@@ -753,6 +753,15 @@ function StrategicDashboard() {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const calculateRollingAverage = (data, currentDate) => {
+    const currentIndex = data.findIndex(d => d.date === currentDate);
+    if (currentIndex < 6) return null; // Need at least 7 days for rolling average
+
+    const window = data.slice(currentIndex - 6, currentIndex + 1);
+    const avg = window.reduce((sum, d) => sum + d.newUsers, 0) / window.length;
+    return Math.round(avg);
+  };
+
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -768,12 +777,16 @@ function StrategicDashboard() {
           </p>
           {payload.map((entry, index) => {
             let value = entry.value;
-            if (entry.name === 'New Users' || entry.dataKey === 'users' || entry.name === 'Cumulative Users') {
+            if (entry.name === 'New Users' || entry.dataKey === 'users' || entry.name === 'Cumulative Users' ||
+                entry.name === 'Daily New Users' || entry.name === '7-Day Rolling Average' ||
+                entry.dataKey === 'newUsers' || entry.dataKey === 'rollingAvg') {
               value = formatNumber(entry.value);
-            } else if (entry.name === 'CAC' || entry.name === 'Marketing Spend') {
+            } else if (entry.name === 'CAC' || entry.name === 'Marketing Spend' || entry.name.includes('Spend')) {
+              value = formatCurrency(entry.value);
+            } else if (entry.name.includes('Revenue')) {
               value = formatCurrency(entry.value);
             } else {
-              value = formatCurrency(entry.value);
+              value = entry.value;
             }
             return (
               <p key={index} style={{ margin: '0.25rem 0 0 0', color: entry.color, fontSize: '0.9rem' }}>
@@ -986,6 +999,50 @@ function StrategicDashboard() {
                       name="New Users"
                     />
                   </AreaChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+
+              {/* Daily New Users Bar Chart */}
+              <ChartContainer>
+                <ChartTitle>Daily New Users / Downloads</ChartTitle>
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart
+                    data={userGrowthData.data.map(d => ({
+                      ...d,
+                      rollingAvg: calculateRollingAverage(userGrowthData.data, d.date)
+                    }))}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2d3561" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatDate}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <YAxis
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      wrapperStyle={{ color: '#a0a0a0' }}
+                    />
+                    <Bar
+                      dataKey="newUsers"
+                      fill="#00d26a"
+                      radius={[4, 4, 0, 0]}
+                      name="Daily New Users"
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="rollingAvg"
+                      stroke="#7b2cbf"
+                      strokeWidth={3}
+                      dot={false}
+                      name="7-Day Rolling Average"
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </ChartContainer>
             </>
