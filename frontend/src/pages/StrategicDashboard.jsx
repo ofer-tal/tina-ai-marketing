@@ -11,7 +11,12 @@ import {
   ResponsiveContainer,
   ReferenceLine,
   Area,
-  AreaChart
+  AreaChart,
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar
 } from 'recharts';
 
 const DashboardContainer = styled.div`
@@ -127,6 +132,7 @@ function StrategicDashboard() {
   const [mrrData, setMrrData] = useState(null);
   const [userGrowthData, setUserGrowthData] = useState(null);
   const [cacData, setCacData] = useState(null);
+  const [acquisitionData, setAcquisitionData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -134,6 +140,7 @@ function StrategicDashboard() {
     fetchMrrTrend();
     fetchUserGrowth();
     fetchCacTrend();
+    fetchAcquisitionSplit();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -193,6 +200,24 @@ function StrategicDashboard() {
       // Set mock data for development
       const mockData = generateMockCacData(dateRange);
       setCacData(mockData);
+    }
+  };
+
+  const fetchAcquisitionSplit = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/acquisition-split?range=${dateRange}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setAcquisitionData(data);
+    } catch (err) {
+      console.error('Failed to fetch acquisition split data:', err);
+      // Set mock data for development
+      const mockData = generateMockAcquisitionData(dateRange);
+      setAcquisitionData(mockData);
     }
   };
 
@@ -332,6 +357,62 @@ function StrategicDashboard() {
         totalSpend: parseFloat(totalSpend.toFixed(2)),
         totalNewUsers: totalNewUsers,
         trend: change <= 0 ? 'down' : 'up'
+      }
+    };
+  };
+
+  const generateMockAcquisitionData = (range) => {
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const data = [];
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    let organicRatio = 0.35; // Starting with 35% organic
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      // Organic ratio improves over time (from 35% to 55%)
+      const progress = i / days;
+      organicRatio = 0.35 + (0.20 * progress);
+      organicRatio += (Math.random() - 0.5) * 0.05;
+      organicRatio = Math.min(0.80, Math.max(0.20, organicRatio));
+
+      const baseUsers = 20 + (progress * 30);
+      const dailyNewUsers = Math.round(baseUsers + (Math.random() - 0.5) * 10);
+      const organicUsers = Math.round(dailyNewUsers * organicRatio);
+      const paidUsers = dailyNewUsers - organicUsers;
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        totalUsers: dailyNewUsers,
+        organicUsers: organicUsers,
+        paidUsers: paidUsers,
+        organicPercent: parseFloat((organicRatio * 100).toFixed(1)),
+        paidPercent: parseFloat(((1 - organicRatio) * 100).toFixed(1))
+      });
+    }
+
+    const totalUsers = data.reduce((sum, day) => sum + day.totalUsers, 0);
+    const totalOrganic = data.reduce((sum, day) => sum + day.organicUsers, 0);
+    const totalPaid = data.reduce((sum, day) => sum + day.paidUsers, 0);
+    const avgOrganicPercent = parseFloat(((totalOrganic / totalUsers) * 100).toFixed(1));
+    const avgPaidPercent = parseFloat(((totalPaid / totalUsers) * 100).toFixed(1));
+
+    return {
+      data,
+      summary: {
+        totalUsers: totalUsers,
+        organicUsers: totalOrganic,
+        paidUsers: totalPaid,
+        organicPercent: avgOrganicPercent,
+        paidPercent: avgPaidPercent,
+        previous: {
+          organicPercent: parseFloat((avgOrganicPercent - 5).toFixed(1)),
+          paidPercent: parseFloat((avgPaidPercent + 5).toFixed(1))
+        },
+        trend: 'up'
       }
     };
   };
@@ -665,6 +746,78 @@ function StrategicDashboard() {
                       name="CAC"
                     />
                   </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            </>
+          )}
+
+          {acquisitionData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Organic Users</MetricLabel>
+                  <MetricValue style={{ color: '#00d26a' }}>
+                    {formatNumber(acquisitionData.summary.organicUsers)}
+                  </MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Paid Users</MetricLabel>
+                  <MetricValue style={{ color: '#7b2cbf' }}>
+                    {formatNumber(acquisitionData.summary.paidUsers)}
+                  </MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Organic %</MetricLabel>
+                  <MetricValue style={{
+                    color: acquisitionData.summary.trend === 'up' ? '#00d26a' : '#e94560'
+                  }}>
+                    {acquisitionData.summary.trend === 'up' ? '↑' : '↓'}
+                    {acquisitionData.summary.organicPercent}%
+                  </MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Previous (7d ago)</MetricLabel>
+                  <MetricValue>
+                    {acquisitionData.summary.previous.organicPercent}% / {acquisitionData.summary.previous.paidPercent}%
+                  </MetricValue>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>Organic vs Paid User Acquisition</ChartTitle>
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart
+                    data={acquisitionData.data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#2d3561" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatDate}
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <YAxis
+                      stroke="#a0a0a0"
+                      style={{ fontSize: '0.85rem' }}
+                    />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Legend
+                      wrapperStyle={{ color: '#a0a0a0' }}
+                    />
+                    <Bar
+                      dataKey="organicUsers"
+                      name="Organic Users"
+                      fill="#00d26a"
+                      stackId="acquisition"
+                    />
+                    <Bar
+                      dataKey="paidUsers"
+                      name="Paid Users"
+                      fill="#7b2cbf"
+                      stackId="acquisition"
+                    />
+                  </BarChart>
                 </ResponsiveContainer>
               </ChartContainer>
             </>

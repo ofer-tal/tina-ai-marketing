@@ -415,6 +415,112 @@ router.get('/cac-trend', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/acquisition-split
+ * Get organic vs paid user acquisition split for strategic dashboard
+ * Query params:
+ *   - range: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/acquisition-split', async (req, res) => {
+  try {
+    const { range = '30d' } = req.query;
+
+    // Validate range parameter
+    const validRanges = ['30d', '90d', '180d'];
+    if (!validRanges.includes(range)) {
+      return res.status(400).json({
+        error: 'Invalid range. Must be one of: ' + validRanges.join(', ')
+      });
+    }
+
+    console.log(`Fetching acquisition split data for range: ${range}`);
+
+    // Calculate number of days
+    const days = range === '30d' ? 30 : range === '90d' ? 90 : 180;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // TODO: In production, fetch from MongoDB marketing_metrics collection
+    // For now, generate mock data showing organic vs paid split
+    // Organic: App Store searches, word-of-mouth, social media organic
+    // Paid: Apple Search Ads, TikTok ads, Instagram ads
+
+    // Simulate improving organic ratio over time (as brand awareness grows)
+    const data = [];
+    let organicRatio = 0.35; // Starting with 35% organic, 65% paid
+
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+
+      // Organic ratio improves over time (from 35% to 55%)
+      const progress = i / days;
+      organicRatio = 0.35 + (0.20 * progress); // 35% -> 55%
+
+      // Add some random variation
+      organicRatio += (Math.random() - 0.5) * 0.05;
+      organicRatio = Math.min(0.80, Math.max(0.20, organicRatio)); // Keep between 20-80%
+
+      // Daily new users (growing over time)
+      const baseUsers = 20 + (progress * 30); // 20 -> 50 users/day
+      const dailyNewUsers = Math.round(baseUsers + (Math.random() - 0.5) * 10);
+
+      const organicUsers = Math.round(dailyNewUsers * organicRatio);
+      const paidUsers = dailyNewUsers - organicUsers;
+
+      data.push({
+        date: date.toISOString().split('T')[0],
+        totalUsers: dailyNewUsers,
+        organicUsers: organicUsers,
+        paidUsers: paidUsers,
+        organicPercent: parseFloat((organicRatio * 100).toFixed(1)),
+        paidPercent: parseFloat(((1 - organicRatio) * 100).toFixed(1))
+      });
+    }
+
+    // Calculate summary metrics
+    const totalUsers = data.reduce((sum, day) => sum + day.totalUsers, 0);
+    const totalOrganic = data.reduce((sum, day) => sum + day.organicUsers, 0);
+    const totalPaid = data.reduce((sum, day) => sum + day.paidUsers, 0);
+    const avgOrganicPercent = parseFloat(((totalOrganic / totalUsers) * 100).toFixed(1));
+    const avgPaidPercent = parseFloat(((totalPaid / totalUsers) * 100).toFixed(1));
+
+    // Calculate previous period (same range, ending days ago)
+    const previousTotalUsers = totalUsers * 0.75; // Previous period had 25% fewer users
+    const previousOrganic = avgOrganicPercent - 5; // Previous period had 5% less organic
+    const previousPaid = 100 - previousOrganic;
+
+    const splitData = {
+      range: range,
+      startDate: startDate.toISOString(),
+      endDate: new Date().toISOString(),
+      data: data,
+      summary: {
+        totalUsers: totalUsers,
+        organicUsers: totalOrganic,
+        paidUsers: totalPaid,
+        organicPercent: avgOrganicPercent,
+        paidPercent: avgPaidPercent,
+        previous: {
+          organicPercent: parseFloat(previousOrganic.toFixed(1)),
+          paidPercent: parseFloat(previousPaid.toFixed(1))
+        },
+        trend: avgOrganicPercent > previousOrganic ? 'up' : 'down' // Up is good for organic
+      }
+    };
+
+    console.log(`Acquisition split data fetched successfully for range: ${range}`);
+    res.json(splitData);
+
+  } catch (error) {
+    console.error('Error fetching acquisition split data:', error);
+    res.status(500).json({
+      error: 'Failed to fetch acquisition split data',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */
