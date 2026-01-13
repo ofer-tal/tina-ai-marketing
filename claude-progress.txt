@@ -1,4 +1,62 @@
-## Session: 2026-01-13 (Session 3 - Feature #64 COMPLETED ✅)
+## Session: 2026-01-13 (Session 3 - Feature #65 COMPLETED ✅)
+
+**Feature Completed**: Feature #65 - Brand watermark/logo overlay on videos
+
+**Implementation Summary**:
+Implemented comprehensive brand watermark overlay system using FFmpeg for all generated videos.
+
+**Key Features**:
+- Video watermark utility using FFmpeg fluent-ffmpeg
+- Image watermark support (blush-icon.svg)
+- Text watermark fallback (if image not available)
+- Configurable position, opacity, and size
+- Automatic watermark verification
+- Graceful degradation if watermark fails
+
+**Testing Completed**:
+- ✅ Step 1: Generate video content - PASSED
+- ✅ Step 2: Overlay brand watermark on video - PASSED
+- ✅ Step 3: Verify watermark positioned correctly (bottom right) - PASSED
+- ✅ Step 4: Check watermark opacity (subtle but visible) - PASSED
+- ✅ Step 5: Confirm watermark lasts entire video - PASSED
+
+**Watermark Specifications**:
+- Position: Bottom-right corner (20px padding from edges)
+- Opacity: 60% (subtle but visible)
+- Size: 10% of video width (aspect ratio preserved)
+- Duration: Entire video (FFmpeg overlay default)
+- Asset: frontend/public/blush-icon.svg (brand gradient colors)
+
+**Files Created**:
+- backend/utils/videoWatermark.js (450+ lines) - Watermark overlay utility
+- test_feature_65_watermark.mjs (comprehensive test suite)
+
+**Files Modified**:
+- backend/services/falAiService.js - Added watermark step to pipeline
+
+**API Changes**:
+- Video generation now includes 4 steps:
+  - Step 1: Image generation
+  - Step 2: Video generation
+  - Step 3: Download and validation
+  - Step 4: Brand watermark (NEW)
+- Video metadata now includes:
+  - watermarked: boolean
+  - watermark.type: 'image' | 'text' | 'none'
+  - watermark.position: 'bottom-right'
+  - watermark.opacity: 0.6
+  - watermark.verified: boolean
+
+**Regression Testing Notes**:
+- Discovered pre-existing bugs during verification:
+  - /api/schema endpoint returns 404 (frontend expects it to exist)
+  - Multiple 500 errors from dashboard endpoints (MongoDB connection issues)
+  - These are pre-existing issues, not introduced by this feature
+
+### Overall Progress (Updated)
+- **Total Features**: 338
+- **Completed**: 65/338 (19.2%)
+- **Current Focus**: Content Generation Pipeline
 
 **Feature Completed**: Feature #64 - Vertical video format 9:16 aspect ratio
 
