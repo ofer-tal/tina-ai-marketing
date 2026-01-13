@@ -5,6 +5,7 @@ import captionGenerationService from '../services/captionGenerationService.js';
 import hashtagGenerationService from '../services/hashtagGenerationService.js';
 import tiktokOptimizationService from '../services/tiktokOptimizationService.js';
 import instagramOptimizationService from '../services/instagramOptimizationService.js';
+import youtubeOptimizationService from '../services/youtubeOptimizationService.js';
 
 const router = express.Router();
 
@@ -1228,6 +1229,296 @@ router.get('/instagram/health', (req, res) => {
 
   } catch (error) {
     logger.error('Instagram health check error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// YouTube Shorts Optimization Endpoints
+// ========================================
+
+/**
+ * GET /api/content/youtube/trending-audio
+ * Get trending YouTube audio tracks for Shorts
+ */
+router.get('/youtube/trending-audio', (req, res) => {
+  try {
+    const { limit = 5, category = 'all' } = req.query;
+
+    logger.info('YouTube Shorts trending audio requested', { limit, category });
+
+    const result = youtubeOptimizationService.getTrendingAudio({
+      limit: parseInt(limit),
+      category
+    });
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube trending audio error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/youtube/validate-video
+ * Validate video format for YouTube Shorts specs
+ */
+router.post('/youtube/validate-video', (req, res) => {
+  try {
+    const video = req.body;
+
+    logger.info('YouTube video validation requested', {
+      duration: video.duration,
+      resolution: video.resolution
+    });
+
+    const result = youtubeOptimizationService.validateVideoFormat(video);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube video validation error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/youtube/optimize-title
+ * Optimize title for YouTube Shorts
+ */
+router.post('/youtube/optimize-title', (req, res) => {
+  try {
+    const { title, story, spiciness } = req.body;
+
+    logger.info('YouTube title optimization requested', {
+      titleLength: title?.length,
+      story: story?.title,
+      spiciness
+    });
+
+    const result = youtubeOptimizationService.optimizeTitle({
+      title,
+      story,
+      spiciness
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube title optimization error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/youtube/optimize-description
+ * Optimize description for YouTube Shorts
+ */
+router.post('/youtube/optimize-description', (req, res) => {
+  try {
+    const { description, story, spiciness } = req.body;
+
+    logger.info('YouTube description optimization requested', {
+      descriptionLength: description?.length,
+      story: story?.title,
+      spiciness
+    });
+
+    const result = youtubeOptimizationService.optimizeDescription({
+      description,
+      story,
+      spiciness
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube description optimization error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/youtube/hashtags
+ * Generate YouTube Shorts hashtags
+ */
+router.get('/youtube/hashtags', (req, res) => {
+  try {
+    const { category, spiciness = 1, limit = 5 } = req.query;
+
+    logger.info('YouTube hashtag generation requested', {
+      category,
+      spiciness,
+      limit
+    });
+
+    const result = youtubeOptimizationService.getYoutubeHashtags({
+      category,
+      spiciness: parseInt(spiciness),
+      limit: parseInt(limit)
+    });
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube hashtag generation error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/youtube/verify-aspect-ratio
+ * Verify aspect ratio for YouTube Shorts
+ */
+router.post('/youtube/verify-aspect-ratio', (req, res) => {
+  try {
+    const video = req.body;
+
+    logger.info('YouTube aspect ratio verification requested', {
+      width: video.width,
+      height: video.height,
+      aspectRatio: video.aspectRatio
+    });
+
+    const result = youtubeOptimizationService.verifyAspectRatio(video);
+
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube aspect ratio verification error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/youtube/optimize
+ * Comprehensive YouTube Shorts optimization
+ * Combines all optimization steps
+ */
+router.post('/youtube/optimize', (req, res) => {
+  try {
+    const content = req.body;
+
+    logger.info('YouTube comprehensive optimization requested', {
+      story: content.story?.title,
+      spiciness: content.spiciness
+    });
+
+    const result = youtubeOptimizationService.optimizeForYoutube(content);
+
+    res.json({
+      success: result.success,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('YouTube comprehensive optimization error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/youtube/health
+ * Health check for YouTube optimization service
+ */
+router.get('/youtube/health', (req, res) => {
+  try {
+    const health = youtubeOptimizationService.healthCheck();
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('YouTube health check error', {
       error: error.message
     });
 
