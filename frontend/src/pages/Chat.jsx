@@ -622,6 +622,7 @@ function Chat() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
   const searchTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -774,7 +775,10 @@ What would you like to focus on today?`;
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ message: userMessage.content })
+        body: JSON.stringify({
+          message: userMessage.content,
+          conversationId: currentConversationId
+        })
       });
 
       const data = await response.json();
@@ -789,6 +793,11 @@ What would you like to focus on today?`;
         };
 
         setMessages(prev => [...prev, aiMessage]);
+
+        // Store conversation ID for multi-turn conversations
+        if (data.conversationId && !currentConversationId) {
+          setCurrentConversationId(data.conversationId);
+        }
 
         // Store proposal if present
         if (data.response.proposal) {
@@ -828,6 +837,7 @@ What would you like to focus on today?`;
         method: 'DELETE'
       });
       setMessages([]);
+      setCurrentConversationId(null); // Reset conversation ID
     } catch (error) {
       console.error('Error clearing history:', error);
     }

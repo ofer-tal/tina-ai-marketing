@@ -3,6 +3,10 @@ import databaseService from "../services/database.js";
 
 const router = express.Router();
 
+// In-memory conversation storage for mock/development mode
+const mockConversations = new Map();
+let mockConversationIdCounter = 1;
+
 // Mock historical data for development (simulates database queries)
 const mockHistoricalData = {
   revenue: {
@@ -52,6 +56,101 @@ async function callGLM4API(messages, conversationHistory = []) {
   // In production, this would make an actual API call to GLM4.7
 
   const lastUserMessage = messages[messages.length - 1]?.content?.toLowerCase() || "";
+
+  // Analyze conversation context for multi-turn conversations
+  const recentContext = messages.slice(-6); // Last 3 exchanges (system + user + assistant pattern)
+  const conversationTopics = recentContext
+    .filter(m => m.role === "user")
+    .map(m => m.content.toLowerCase());
+
+  // Detect if user is following up on a previous topic
+  const hasFollowUpWords = /\b(and|what about|but|also|more|tell me|how about|so)\b/i.test(lastUserMessage);
+  const isAskingAboutRevenue = conversationTopics.some(t => t.includes("revenue") || t.includes("mrr") || t.includes("income") || t.includes("money") || t.includes("earnings"));
+  const isAskingAboutContent = conversationTopics.some(t => t.includes("content") || t.includes("post") || t.includes("tiktok") || t.includes("social"));
+  const isAskingAboutAds = conversationTopics.some(t => t.includes("ad") || t.includes("campaign") || t.includes("spend"));
+  const isAskingAboutASO = conversationTopics.some(t => t.includes("keyword") || t.includes("aso") || t.includes("ranking") || t.includes("app store"));
+
+  // Handle context-aware follow-up questions FIRST (before keyword matching)
+  if (hasFollowUpWords && isAskingAboutRevenue) {
+    const data = mockHistoricalData.revenue;
+
+    // Check if asking about specific time period
+    if (lastUserMessage.includes("last week") || lastUserMessage.includes("week")) {
+      return {
+        role: "assistant",
+        content: `**Last Week's Revenue Performance:**
+
+📊 **Week of Jan 6-12, 2025:**
+- Daily Average: **$13.50/day**
+- Weekly Total: **$94.50**
+- vs Prior Week: **+8% growth**
+
+**Key Drivers:**
+- Strong post performance on "Forbidden Professor" (45.2K views)
+- 3 new subscribers from organic TikTok traffic
+- Low refund rate: 1.2%
+
+**Breakdown by Source:**
+- Organic App Store: $68 (72%)
+- TikTok conversions: $18 (19%)
+- Other sources: $8.50 (9%)
+
+**Observation:** Last week showed good momentum with organic growth outperforming paid ads. Want me to analyze which posts drove the most conversions?`,
+        timestamp: new Date().toISOString()
+      };
+    }
+
+    // Generic revenue follow-up
+    return {
+      role: "assistant",
+      content: `**Regarding your revenue question:**
+
+Building on our revenue discussion:
+
+📈 **Current Trajectory:**
+- We're at **$425 MRR** with **38 subscribers**
+- Growth rate: **+12% month-over-month**
+- ARPU: **$11.18**
+
+**What this tells us:**
+The foundation is solid. Our subscribers are engaged (good ARPU), and we're growing consistently.
+
+**Focus Areas for Next Month:**
+1. **Scale what works:** More content in top-performing categories (Professor Romance, Forbidden Romance)
+2. **Fix leaks:** Address the declining "spicy fiction" keyword ranking
+3. **Optimize spend:** Pause negative ROI ad campaigns, redirect to content production
+
+**Quick Question:** Would you like me to create a specific action plan for any of these areas?`,
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  if (hasFollowUpWords && isAskingAboutContent) {
+    const posts = mockHistoricalData.posts;
+
+    return {
+      role: "assistant",
+      content: `**Following up on content strategy:**
+
+📱 **Content Performance Deep Dive:**
+
+**Top 3 Posts This Week:**
+1. "Forbidden Professor Chapter 1" - **45.2K views, 4.2% engagement** ⭐
+2. "Billionaire's Secret Baby" - **38.1K views, 3.8% engagement**
+3. "Forbidden Attraction Chapter 3" - **42.1K views, 2.8% engagement**
+
+**Pattern I'm Seeing:**
+- **Forbidden Romance** content consistently performs best
+- **Spiciness Level 2** hits the sweet spot (sexy but not too explicit)
+- **Chapter-based series** drive engagement (users want more)
+
+**Recommendation:**
+Create a "Forbidden Professor" series with 5-7 chapters. Post one every 2 days to build anticipation.
+
+**Next Step:** Should I generate a content calendar for this series?`,
+      timestamp: new Date().toISOString()
+    };
+  }
 
   // Simple mock response logic based on keywords
   if (lastUserMessage.includes("revenue") || lastUserMessage.includes("mrr") || lastUserMessage.includes("trend") || lastUserMessage.includes("growth")) {
@@ -1208,7 +1307,7 @@ router.post("/message", async (req, res) => {
     }
 
     // Build messages array for AI
-    const messages = [
+    let messages = [
       {
         role: "system",
         content: `You are an AI Marketing Executive for the Blush iPhone app - a romantic/spicy AI story generator. Your goal is to help grow the app from $300-500/month MRR to $10,000/month in 6 months.
@@ -1225,25 +1324,57 @@ Your role:
 - Create action items when appropriate
 - Ask for approval before making significant changes
 - Be concise but thorough
+- Maintain context across multiple conversation turns
 
 Always base recommendations on actual data when available.`
-      },
-      {
-        role: "user",
-        content: message
       }
     ];
 
-    // Get AI response
-    const aiResponse = await callGLM4API(messages);
-
-    // Save conversation to database if available
+    // Load conversation history if conversationId is provided
+    let existingConversation = null;
     const status = databaseService.getStatus();
+
+    if (conversationId) {
+      if (status.isConnected && status.readyState === 1) {
+        // Database mode: load from MongoDB
+        try {
+          const mongoose = await import('mongoose');
+          const collection = mongoose.connection.collection("marketing_strategy");
+          existingConversation = await collection.findOne({ _id: new mongoose.Types.ObjectId(conversationId) });
+
+          // Add previous messages to context for multi-turn conversation
+          if (existingConversation && existingConversation.messages && existingConversation.messages.length > 0) {
+            messages = messages.concat(existingConversation.messages);
+          }
+        } catch (dbError) {
+          console.error("Error loading conversation history:", dbError);
+          // Continue without history
+        }
+      } else {
+        // Mock mode: load from in-memory storage
+        existingConversation = mockConversations.get(conversationId);
+        if (existingConversation && existingConversation.messages) {
+          messages = messages.concat(existingConversation.messages);
+        }
+      }
+    }
+
+    // Add current user message
+    messages.push({
+      role: "user",
+      content: message
+    });
+
+    // Get AI response with full conversation context
+    const aiResponse = await callGLM4API(messages, existingConversation?.messages || []);
+
+    // Save conversation to database if available, otherwise use mock storage
     let savedConversation = null;
 
     if (status.isConnected && status.readyState === 1) {
       try {
         const mongoose = await import('mongoose');
+        const collection = mongoose.connection.collection("marketing_strategy");
 
         // Check if this is a campaign review
         if (aiResponse.campaignReview) {
@@ -1264,13 +1395,47 @@ Always base recommendations on actual data when available.`
             updatedAt: new Date()
           };
 
-          const result = await mongoose.connection.collection("marketing_strategy").insertOne(campaignReview);
+          const result = await collection.insertOne(campaignReview);
           savedConversation = {
             id: result.insertedId,
             ...campaignReview
           };
+        } else if (existingConversation) {
+          // Update existing conversation with new messages
+          const newMessages = [
+            {
+              role: "user",
+              content: message,
+              timestamp: new Date()
+            },
+            {
+              role: "assistant",
+              content: aiResponse.content,
+              timestamp: aiResponse.timestamp || new Date()
+            }
+          ];
+
+          await collection.updateOne(
+            { _id: new mongoose.Types.ObjectId(conversationId) },
+            {
+              $push: { messages: { $each: newMessages } },
+              $set: {
+                content: aiResponse.content,
+                reasoning: `Continuing conversation. Latest: ${message}`,
+                updatedAt: new Date()
+              }
+            }
+          );
+
+          savedConversation = {
+            id: conversationId,
+            ...existingConversation,
+            messages: [...(existingConversation.messages || []), ...newMessages],
+            content: aiResponse.content,
+            updatedAt: new Date()
+          };
         } else {
-          // Regular chat message - store both user message and AI response
+          // Create new conversation
           const conversation = {
             type: "chat",
             title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
@@ -1294,7 +1459,7 @@ Always base recommendations on actual data when available.`
             updatedAt: new Date()
           };
 
-          const result = await mongoose.connection.collection("marketing_strategy").insertOne(conversation);
+          const result = await collection.insertOne(conversation);
           savedConversation = {
             id: result.insertedId,
             ...conversation
@@ -1303,6 +1468,50 @@ Always base recommendations on actual data when available.`
       } catch (dbError) {
         console.error("Error saving conversation to database:", dbError);
         // Continue without saving
+      }
+    } else {
+      // Mock mode: Use in-memory storage for development/testing
+      const newMessages = [
+        {
+          role: "user",
+          content: message,
+          timestamp: new Date()
+        },
+        {
+          role: "assistant",
+          content: aiResponse.content,
+          timestamp: aiResponse.timestamp || new Date()
+        }
+      ];
+
+      if (existingConversation) {
+        // Update existing mock conversation
+        existingConversation.messages.push(...newMessages);
+        existingConversation.content = aiResponse.content;
+        existingConversation.updatedAt = new Date();
+        savedConversation = {
+          id: conversationId,
+          ...existingConversation
+        };
+      } else {
+        // Create new mock conversation
+        const newConversationId = `mock_conv_${mockConversationIdCounter++}`;
+        const newConversation = {
+          _id: newConversationId,
+          type: "chat",
+          title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
+          content: aiResponse.content,
+          reasoning: `Responding to: ${message}`,
+          status: "completed",
+          messages: newMessages,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+        mockConversations.set(newConversationId, newConversation);
+        savedConversation = {
+          id: newConversationId,
+          ...newConversation
+        };
       }
     }
 
