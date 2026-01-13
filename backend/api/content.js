@@ -1,6 +1,7 @@
 import express from 'express';
 import winston from 'winston';
 import contentGenerationJob from '../jobs/contentGeneration.js';
+import captionGenerationService from '../services/captionGenerationService.js';
 
 const router = express.Router();
 
@@ -291,6 +292,189 @@ router.get('/hashtags', (req, res) => {
     logger.error('Generate hashtags API error', {
       error: error.message,
       stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/caption/generate
+ * Generate a caption for a story with brand voice
+ */
+router.post('/caption/generate', async (req, res) => {
+  try {
+    const { story, platform, options } = req.body;
+
+    // Validate required fields
+    if (!story) {
+      return res.status(400).json({
+        success: false,
+        error: 'story object is required'
+      });
+    }
+
+    if (!story.title) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.title is required'
+      });
+    }
+
+    if (!story.category) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.category is required'
+      });
+    }
+
+    if (story.spiciness === undefined || story.spiciness === null) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.spiciness is required (0-3)'
+      });
+    }
+
+    // Validate spiciness range
+    if (story.spiciness < 0 || story.spiciness > 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.spiciness must be between 0 and 3'
+      });
+    }
+
+    // Validate platform
+    const validPlatforms = ['tiktok', 'instagram', 'youtube_shorts'];
+    const selectedPlatform = platform || 'tiktok';
+
+    if (!validPlatforms.includes(selectedPlatform)) {
+      return res.status(400).json({
+        success: false,
+        error: `platform must be one of: ${validPlatforms.join(', ')}`
+      });
+    }
+
+    logger.info('Caption generation requested', {
+      storyTitle: story.title,
+      category: story.category,
+      spiciness: story.spiciness,
+      platform: selectedPlatform
+    });
+
+    // Generate caption
+    const result = await captionGenerationService.generateCaption(
+      story,
+      selectedPlatform,
+      options || {}
+    );
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Caption generation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/caption/batch
+ * Generate multiple captions for batch processing
+ */
+router.post('/caption/batch', async (req, res) => {
+  try {
+    const { stories, platform, options } = req.body;
+
+    // Validate required fields
+    if (!stories || !Array.isArray(stories)) {
+      return res.status(400).json({
+        success: false,
+        error: 'stories array is required'
+      });
+    }
+
+    if (stories.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'stories array cannot be empty'
+      });
+    }
+
+    if (stories.length > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'Maximum 10 stories per batch request'
+      });
+    }
+
+    const selectedPlatform = platform || 'tiktok';
+
+    logger.info('Batch caption generation requested', {
+      storyCount: stories.length,
+      platform: selectedPlatform
+    });
+
+    // Generate captions in parallel
+    const promises = stories.map(story =>
+      captionGenerationService.generateCaption(story, selectedPlatform, options || {})
+    );
+
+    const results = await Promise.all(promises);
+
+    res.json({
+      success: true,
+      data: {
+        captions: results,
+        count: results.length
+      }
+    });
+
+  } catch (error) {
+    logger.error('Batch caption generation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/caption/health
+ * Check caption generation service health
+ */
+router.get('/caption/health', (req, res) => {
+  try {
+    const health = {
+      service: 'caption-generation',
+      status: 'ok',
+      mockMode: captionGenerationService.isMockMode,
+      timestamp: new Date().toISOString()
+    };
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('Caption health check error', {
+      error: error.message
     });
 
     res.status(500).json({
