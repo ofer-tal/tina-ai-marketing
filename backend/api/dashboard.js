@@ -1375,4 +1375,181 @@ router.get('/budget-utilization', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/dashboard/alerts
+ * Get alert notifications for important events
+ */
+router.get('/alerts', async (req, res) => {
+  try {
+    console.log('Fetching dashboard alerts');
+
+    const now = new Date();
+    const alerts = [];
+
+    // TODO: In production, these would be fetched from MongoDB
+    // For now, returning mock alerts that represent different alert types
+
+    // Budget alert (critical - 90%+ utilization)
+    // Check if budget utilization endpoint returns critical level
+    alerts.push({
+      id: 'alert-budget-critical-001',
+      type: 'budget',
+      severity: 'critical', // critical, warning, info
+      title: 'Budget Nearly Exhausted',
+      message: 'Marketing budget has reached 92% utilization. Review spend immediately.',
+      details: {
+        currentUtilization: 92,
+        monthlyBudget: 3000,
+        spent: 2760,
+        remaining: 240,
+        projectedSpend: 3050,
+        projectedOver: 50
+      },
+      action: {
+        label: 'Review Budget',
+        link: '/dashboard#budget'
+      },
+      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+      dismissible: true,
+      category: 'paid_ads'
+    });
+
+    // Failed post alert
+    alerts.push({
+      id: 'alert-post-failed-001',
+      type: 'post_failure',
+      severity: 'warning',
+      title: 'TikTok Post Failed',
+      message: 'Scheduled post "Spicy Romance Story Excerpt #1042" failed to publish.',
+      details: {
+        postId: '1042',
+        platform: 'tiktok',
+        scheduledAt: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
+        errorMessage: 'Authentication token expired. Please re-authorize TikTok account.',
+        retryCount: 2,
+        maxRetries: 3
+      },
+      action: {
+        label: 'View Post',
+        link: '/content/post/1042'
+      },
+      timestamp: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
+      dismissible: true,
+      category: 'content'
+    });
+
+    // Keyword ranking drop alert
+    alerts.push({
+      id: 'alert-keyword-drop-001',
+      type: 'keyword_ranking',
+      severity: 'warning',
+      title: 'Keyword Ranking Dropped',
+      message: 'Keyword "spicy fiction" dropped from #5 to #7 in App Store search.',
+      details: {
+        keyword: 'spicy fiction',
+        previousRanking: 5,
+        currentRanking: 7,
+        change: -2,
+        volume: 48000,
+        competition: 'medium',
+        checkedAt: new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString()
+      },
+      action: {
+        label: 'View ASO',
+        link: '/dashboard/strategic#aso'
+      },
+      timestamp: new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+      dismissible: true,
+      category: 'aso'
+    });
+
+    // Campaign performance alert
+    alerts.push({
+      id: 'alert-campaign-roi-001',
+      type: 'campaign_performance',
+      severity: 'warning',
+      title: 'Low ROI on TikTok Ads',
+      message: 'TikTok Ads campaign "Summer Romance" has negative ROI (-45%). Consider pausing.',
+      details: {
+        campaignId: 'tiktok-summer-romance-001',
+        campaignName: 'Summer Romance',
+        platform: 'tiktok',
+        roi: -45,
+        spend: 450,
+        revenue: 247,
+        roiTarget: 20
+      },
+      action: {
+        label: 'Review Campaign',
+        link: '/ads/tiktok-summer-romance-001'
+      },
+      timestamp: new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+      dismissible: true,
+      category: 'paid_ads'
+    });
+
+    // Content approval reminder
+    alerts.push({
+      id: 'alert-content-approval-001',
+      type: 'content_approval',
+      severity: 'info',
+      title: '3 Posts Awaiting Approval',
+      message: 'You have 3 posts scheduled for today that need approval.',
+      details: {
+        pendingCount: 3,
+        scheduledToday: 3,
+        firstScheduledAt: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
+        postIds: ['1045', '1046', '1047']
+      },
+      action: {
+        label: 'Review Posts',
+        link: '/content?status=pending'
+      },
+      timestamp: new Date(now.getTime() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+      dismissible: true,
+      category: 'content'
+    });
+
+    // Revenue milestone alert
+    alerts.push({
+      id: 'alert-milestone-001',
+      type: 'milestone',
+      severity: 'info',
+      title: 'MRR Milestone Reached!',
+      message: 'Congratulations! MRR has reached $425, exceeding $400 target.',
+      details: {
+        milestone: 400,
+        current: 425,
+        percentage: 106.25,
+        metric: 'MRR'
+      },
+      action: {
+        label: 'View Analytics',
+        link: '/dashboard/strategic'
+      },
+      timestamp: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+      dismissible: true,
+      category: 'revenue'
+    });
+
+    res.json({
+      alerts: alerts,
+      summary: {
+        total: alerts.length,
+        critical: alerts.filter(a => a.severity === 'critical').length,
+        warning: alerts.filter(a => a.severity === 'warning').length,
+        info: alerts.filter(a => a.severity === 'info').length
+      },
+      timestamp: now.toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching alerts:', error);
+    res.status(500).json({
+      error: 'Failed to fetch alerts',
+      message: error.message
+    });
+  }
+});
+
 export default router;

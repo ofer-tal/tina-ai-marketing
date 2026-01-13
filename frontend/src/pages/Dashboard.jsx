@@ -720,12 +720,215 @@ const ChannelRemaining = styled.div`
   }};
 `;
 
+// Alert Notification Components
+const AlertsSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const AlertsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const AlertsTitle = styled.h2`
+  font-size: 1.25rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const AlertCount = styled.span`
+  background: #2d3561;
+  color: #eaeaea;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+`;
+
+const DismissAllButton = styled.button`
+  background: transparent;
+  border: 1px solid #2d3561;
+  color: #a0a0a0;
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2d3561;
+    color: #eaeaea;
+  }
+`;
+
+const AlertsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const AlertCard = styled.div`
+  background: ${props => {
+    if (props.$severity === 'critical') return 'rgba(233, 69, 96, 0.1)';
+    if (props.$severity === 'warning') return 'rgba(255, 176, 32, 0.1)';
+    return 'rgba(123, 44, 191, 0.1)';
+  }};
+  border: 1px solid ${props => {
+    if (props.$severity === 'critical') return '#e94560';
+    if (props.$severity === 'warning') return '#ffb020';
+    return '#7b2cbf';
+  }};
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  transition: all 0.3s;
+  cursor: pointer;
+
+  &:hover {
+    border-color: ${props => {
+      if (props.$severity === 'critical') return '#ff6b8a';
+      if (props.$severity === 'warning') return '#ffc947';
+      return '#9d4cff';
+    }};
+    box-shadow: 0 4px 12px ${props => {
+      if (props.$severity === 'critical') return 'rgba(233, 69, 96, 0.2)';
+      if (props.$severity === 'warning') return 'rgba(255, 176, 32, 0.2)';
+      return 'rgba(123, 44, 191, 0.2)';
+    }};
+  }
+`;
+
+const AlertIcon = styled.div`
+  font-size: 1.5rem;
+  flex-shrink: 0;
+`;
+
+const AlertContent = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const AlertHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+  gap: 1rem;
+`;
+
+const AlertTitle = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const AlertSeverityBadge = styled.span`
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  background: ${props => {
+    if (props.$severity === 'critical') return '#e94560';
+    if (props.$severity === 'warning') return '#ffb020';
+    return '#7b2cbf';
+  }};
+  color: white;
+`;
+
+const AlertTime = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  white-space: nowrap;
+`;
+
+const AlertMessage = styled.div`
+  color: #eaeaea;
+  font-size: 0.9rem;
+  line-height: 1.4;
+  margin-bottom: 0.5rem;
+`;
+
+const AlertDetails = styled.div`
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+  display: ${props => props.$expanded ? 'block' : 'none'};
+`;
+
+const AlertActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+`;
+
+const AlertActionButton = styled.button`
+  background: ${props => {
+    if (props.$severity === 'critical') return '#e94560';
+    if (props.$severity === 'warning') return '#ffb020';
+    return '#7b2cbf';
+  }};
+  border: none;
+  color: white;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+  }
+`;
+
+const AlertDismissButton = styled.button`
+  background: transparent;
+  border: 1px solid #2d3561;
+  color: #a0a0a0;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2d3561;
+    color: #eaeaea;
+  }
+`;
+
+const NoAlerts = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #a0a0a0;
+  font-size: 0.9rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+`;
+
 function Dashboard() {
   const [timePeriod, setTimePeriod] = useState('24h');
   const [metrics, setMetrics] = useState(null);
   const [postsPerformance, setPostsPerformance] = useState(null);
   const [engagementData, setEngagementData] = useState(null);
   const [budgetData, setBudgetData] = useState(null);
+  const [alerts, setAlerts] = useState([]);
+  const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -746,6 +949,7 @@ function Dashboard() {
     fetchPostsPerformance();
     fetchEngagementMetrics();
     fetchBudgetUtilization();
+    fetchAlerts();
   }, [timePeriod]);
 
   const fetchMetrics = async () => {
@@ -831,6 +1035,75 @@ function Dashboard() {
       // Set mock data for development
       setBudgetData(null);
     }
+  };
+
+  const fetchAlerts = async () => {
+    try {
+      const response = await fetch('/api/dashboard/alerts');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setAlerts(data.alerts || []);
+    } catch (err) {
+      console.error('Failed to fetch alerts:', err);
+      // Set empty array on error
+      setAlerts([]);
+    }
+  };
+
+  const dismissAlert = (alertId) => {
+    setDismissedAlerts(prev => new Set([...prev, alertId]));
+  };
+
+  const dismissAllAlerts = () => {
+    const allAlertIds = alerts.map(alert => alert.id);
+    setDismissedAlerts(prev => new Set([...prev, ...allAlertIds]));
+  };
+
+  const getAlertIcon = (type, severity) => {
+    // Return emoji based on alert type
+    switch (type) {
+      case 'budget': return '💰';
+      case 'post_failure': return '⚠️';
+      case 'keyword_ranking': return '📉';
+      case 'campaign_performance': return '📊';
+      case 'content_approval': return '✅';
+      case 'milestone': return '🎉';
+      default: return severity === 'critical' ? '🚨' : '🔔';
+    }
+  };
+
+  const formatAlertDetails = (alert) => {
+    const details = alert.details;
+    if (!details) return '';
+
+    let detailText = '';
+    switch (alert.type) {
+      case 'budget':
+        detailText = `Budget: $${details.currentUtilization}% utilized ($${details.spent} of $${details.monthlyBudget} spent). Remaining: $${details.remaining}. Projected: $${details.projectedSpend} (${details.projectedOver > 0 ? 'over by $' + details.projectedOver : 'on track'})`;
+        break;
+      case 'post_failure':
+        detailText = `Error: ${details.errorMessage}. Retry ${details.retryCount}/${details.maxRetries}. Scheduled: ${new Date(details.scheduledAt).toLocaleString()}`;
+        break;
+      case 'keyword_ranking':
+        detailText = `Keyword: "${details.keyword}" | Previous: #${details.previousRanking} → Current: #${details.currentRanking} (${details.change > 0 ? '+' : ''}${details.change}) | Volume: ${details.volume.toLocaleString()} | Competition: ${details.competition}`;
+        break;
+      case 'campaign_performance':
+        detailText = `Campaign: "${details.campaignName}" | ROI: ${details.roi}% (target: ${details.roiTarget}%) | Spend: $${details.spend} | Revenue: $${details.revenue}`;
+        break;
+      case 'content_approval':
+        detailText = `${details.pendingCount} posts pending approval. First scheduled: ${new Date(details.firstScheduledAt).toLocaleString()}`;
+        break;
+      case 'milestone':
+        detailText = `${details.metric}: $${details.current} (target: $${details.milestone}) - ${details.percentage.toFixed(1)}% achieved!`;
+        break;
+      default:
+        detailText = JSON.stringify(details, null, 2);
+    }
+    return detailText;
   };
 
   const formatCurrency = (value) => {
@@ -946,6 +1219,88 @@ function Dashboard() {
           {error}
         </ErrorState>
       )}
+
+      {/* Alert Notifications Section */}
+      <AlertsSection>
+        <AlertsHeader>
+          <AlertsTitle>
+            🔔 Alert Notifications
+            {alerts.filter(a => !dismissedAlerts.has(a.id)).length > 0 && (
+              <AlertCount>{alerts.filter(a => !dismissedAlerts.has(a.id)).length}</AlertCount>
+            )}
+          </AlertsTitle>
+          {alerts.filter(a => !dismissedAlerts.has(a.id)).length > 0 && (
+            <DismissAllButton onClick={dismissAllAlerts}>
+              Dismiss All
+            </DismissAllButton>
+          )}
+        </AlertsHeader>
+
+        {alerts.filter(alert => !dismissedAlerts.has(alert.id)).length === 0 ? (
+          <NoAlerts>
+            ✅ No active alerts. All systems operating normally.
+          </NoAlerts>
+        ) : (
+          <AlertsList>
+            {alerts
+              .filter(alert => !dismissedAlerts.has(alert.id))
+              .sort((a, b) => {
+                // Sort by severity: critical first, then warning, then info
+                const severityOrder = { critical: 0, warning: 1, info: 2 };
+                return severityOrder[a.severity] - severityOrder[b.severity];
+              })
+              .map((alert) => (
+                <AlertCard
+                  key={alert.id}
+                  $severity={alert.severity}
+                  onClick={() => {
+                    if (alert.action?.link) {
+                      window.location.href = alert.action.link;
+                    }
+                  }}
+                >
+                  <AlertIcon>{getAlertIcon(alert.type, alert.severity)}</AlertIcon>
+                  <AlertContent>
+                    <AlertHeader>
+                      <AlertTitle>
+                        {alert.title}
+                        <AlertSeverityBadge $severity={alert.severity}>
+                          {alert.severity}
+                        </AlertSeverityBadge>
+                      </AlertTitle>
+                      <AlertTime>{getTimeAgo(alert.timestamp)}</AlertTime>
+                    </AlertHeader>
+                    <AlertMessage>{alert.message}</AlertMessage>
+                    <AlertDetails $expanded={true}>
+                      {formatAlertDetails(alert)}
+                    </AlertDetails>
+                    <AlertActions>
+                      {alert.action && (
+                        <AlertActionButton
+                          $severity={alert.severity}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.location.href = alert.action.link;
+                          }}
+                        >
+                          {alert.action.label}
+                        </AlertActionButton>
+                      )}
+                      <AlertDismissButton
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          dismissAlert(alert.id);
+                        }}
+                      >
+                        Dismiss
+                      </AlertDismissButton>
+                    </AlertActions>
+                  </AlertContent>
+                </AlertCard>
+              ))}
+          </AlertsList>
+        )}
+      </AlertsSection>
 
       <MetricsGrid>
         {renderMetricCard('mrr', 'Monthly Recurring Revenue', '💰', '$', '', () => window.location.href = '/dashboard/strategic')}
