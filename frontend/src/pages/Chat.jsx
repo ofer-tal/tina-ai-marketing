@@ -311,6 +311,92 @@ const TodoCreatedBadge = styled.div`
   gap: 0.4rem;
 `;
 
+const ProposalCard = styled.div`
+  background: rgba(233, 69, 96, 0.1);
+  border: 2px solid #e94560;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.75rem;
+`;
+
+const ProposalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #e94560;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+`;
+
+const ProposalStatus = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: ${props => {
+    switch(props.$status) {
+      case 'approved': return 'rgba(0, 210, 106, 0.2)';
+      case 'rejected': return 'rgba(248, 49, 47, 0.2)';
+      default: return 'rgba(255, 176, 32, 0.2)';
+    }
+  }};
+  color: ${props => {
+    switch(props.$status) {
+      case 'approved': return '#00d26a';
+      case 'rejected': return '#f8312f';
+      default: return '#ffb020';
+    }
+  }};
+`;
+
+const ProposalActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+`;
+
+const ProposalButton = styled.button`
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  ${props => props.$variant === 'approve' ? `
+    background: linear-gradient(135deg, #00d26a 0%, #00a854 100%);
+    color: white;
+
+    &:hover:not(:disabled) {
+      box-shadow: 0 3px 8px rgba(0, 210, 106, 0.3);
+      transform: translateY(-1px);
+    }
+  ` : `
+    background: rgba(248, 49, 47, 0.1);
+    border: 1px solid #f8312f;
+    color: #f8312f;
+
+    &:hover:not(:disabled) {
+      background: rgba(248, 49, 47, 0.2);
+    }
+  `}
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+`;
+
 function Chat() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -318,6 +404,8 @@ function Chat() {
   const [isConnected, setIsConnected] = useState(true);
   const [todosCreated, setTodosCreated] = useState(new Set());
   const [creatingTodo, setCreatingTodo] = useState(null);
+  const [proposals, setProposals] = useState({});
+  const [processingProposal, setProcessingProposal] = useState(null);
   const messagesEndRef = useRef(null);
 
   // Scroll to bottom when messages change
@@ -385,10 +473,19 @@ function Chat() {
           id: data.conversationId || Date.now() + 1,
           role: 'assistant',
           content: data.response.content,
-          timestamp: data.response.timestamp
+          timestamp: data.response.timestamp,
+          proposal: data.response.proposal || null
         };
 
         setMessages(prev => [...prev, aiMessage]);
+
+        // Store proposal if present
+        if (data.response.proposal) {
+          setProposals(prev => ({
+            ...prev,
+            [aiMessage.id]: data.response.proposal
+          }));
+        }
       } else {
         throw new Error(data.error || 'Failed to get response');
       }
@@ -491,6 +588,92 @@ function Chat() {
     }
   };
 
+  const handleApproveProposal = async (messageId) => {
+    const proposal = proposals[messageId];
+    if (!proposal || processingProposal === messageId) return;
+
+    setProcessingProposal(messageId);
+
+    try {
+      const response = await fetch('http://localhost:4001/api/chat/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          proposalId: messageId,
+          proposal: proposal
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setProposals(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            status: 'approved',
+            approvedAt: new Date().toISOString()
+          }
+        }));
+      } else {
+        throw new Error(data.error || 'Failed to approve proposal');
+      }
+    } catch (error) {
+      console.error('Error approving proposal:', error);
+      alert('Failed to approve proposal: ' + error.message);
+    } finally {
+      setProcessingProposal(null);
+    }
+  };
+
+  const handleRejectProposal = async (messageId) => {
+    const proposal = proposals[messageId];
+    if (!proposal || processingProposal === messageId) return;
+
+    const reason = prompt('Please provide a reason for rejecting this proposal:');
+
+    if (!reason) return;
+
+    setProcessingProposal(messageId);
+
+    try {
+      const response = await fetch('http://localhost:4001/api/chat/reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          proposalId: messageId,
+          proposal: proposal,
+          reason: reason
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setProposals(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            status: 'rejected',
+            rejectedAt: new Date().toISOString(),
+            rejectionReason: reason
+          }
+        }));
+      } else {
+        throw new Error(data.error || 'Failed to reject proposal');
+      }
+    } catch (error) {
+      console.error('Error rejecting proposal:', error);
+      alert('Failed to reject proposal: ' + error.message);
+    } finally {
+      setProcessingProposal(null);
+    }
+  };
+
   const formatMessage = (content) => {
     // Convert markdown-like syntax to HTML
     let formatted = content;
@@ -572,19 +755,60 @@ function Chat() {
                 <MessageTime>{formatTime(msg.timestamp)}</MessageTime>
                 {msg.role === 'assistant' && (
                   <>
-                    {todosCreated.has(msg.id) ? (
-                      <TodoCreatedBadge>
-                        <span>✓</span>
-                        Todo Created
-                      </TodoCreatedBadge>
+                    {proposals[msg.id] ? (
+                      <ProposalCard>
+                        <ProposalHeader>
+                          <span>💼</span>
+                          Budget Change Proposal
+                          <ProposalStatus $status={proposals[msg.id].status || 'awaiting_approval'}>
+                            {proposals[msg.id].status === 'approved' ? '✓ Approved' :
+                             proposals[msg.id].status === 'rejected' ? '✗ Rejected' :
+                             '⏳ Awaiting Approval'}
+                          </ProposalStatus>
+                        </ProposalHeader>
+                        {proposals[msg.id].status !== 'approved' && proposals[msg.id].status !== 'rejected' && (
+                          <ProposalActions>
+                            <ProposalButton
+                              $variant="approve"
+                              onClick={() => handleApproveProposal(msg.id)}
+                              disabled={processingProposal === msg.id}
+                            >
+                              <span>✓</span>
+                              {processingProposal === msg.id ? 'Processing...' : 'Approve'}
+                            </ProposalButton>
+                            <ProposalButton
+                              $variant="reject"
+                              onClick={() => handleRejectProposal(msg.id)}
+                              disabled={processingProposal === msg.id}
+                            >
+                              <span>✗</span>
+                              {processingProposal === msg.id ? 'Processing...' : 'Reject'}
+                            </ProposalButton>
+                          </ProposalActions>
+                        )}
+                        {proposals[msg.id].status === 'rejected' && proposals[msg.id].rejectionReason && (
+                          <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#a0a0a0' }}>
+                            Reason: {proposals[msg.id].rejectionReason}
+                          </div>
+                        )}
+                      </ProposalCard>
                     ) : (
-                      <CreateTodoButton
-                        onClick={() => handleCreateTodo(msg)}
-                        disabled={creatingTodo === msg.id}
-                      >
-                        <span>+</span>
-                        {creatingTodo === msg.id ? 'Creating...' : 'Create Todo'}
-                      </CreateTodoButton>
+                      <>
+                        {todosCreated.has(msg.id) ? (
+                          <TodoCreatedBadge>
+                            <span>✓</span>
+                            Todo Created
+                          </TodoCreatedBadge>
+                        ) : (
+                          <CreateTodoButton
+                            onClick={() => handleCreateTodo(msg)}
+                            disabled={creatingTodo === msg.id}
+                          >
+                            <span>+</span>
+                            {creatingTodo === msg.id ? 'Creating...' : 'Create Todo'}
+                          </CreateTodoButton>
+                        )}
+                      </>
                     )}
                   </>
                 )}

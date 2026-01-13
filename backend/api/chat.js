@@ -140,6 +140,83 @@ Would you like me to generate a content calendar for this week?`,
     const totalConversions = campaigns.reduce((sum, c) => sum + c.conversions, 0);
     const avgRoi = (campaigns.reduce((sum, c) => sum + c.roi, 0) / campaigns.length).toFixed(0);
 
+    // Check if user wants to propose budget changes
+    if (lastUserMessage.includes("proposal") || lastUserMessage.includes("propose") || lastUserMessage.includes("change") || lastUserMessage.includes("reallocat") || lastUserMessage.includes("increase") || lastUserMessage.includes("reduce")) {
+      // Return budget proposal response
+      return {
+        role: "assistant",
+        content: `**💰 Budget Change Proposal**
+
+**Current Budget Allocation:**
+- Total Monthly Budget: $3,000
+- Apple Search Ads: $1,000 (33%)
+- TikTok Ads: $1,000 (33%)
+- Instagram Ads: $1,000 (34%)
+
+**Proposed Changes:**
+- **PAUSE Apple Search Ads** → Save $1,000/month (ROI: -45%)
+- **PAUSE TikTok Ads** → Save $720/month (ROI: -66%)
+- **PAUSE Instagram Ads** → Save $240/month (ROI: -72%)
+- **Total Savings: $1,960/month**
+
+**Recommended Reallocation:**
+- **Video Editing Tools (CapCut Pro, etc.)**: $500/month
+- **Stock Footage Subscription**: $200/month
+- **Influencer Partnerships**: $800/month
+- **Content Production Budget**: $460/month
+
+**Expected Impact:**
+- Monthly savings: $1,960
+- Projected additional organic reach: +50-70%
+- Estimated new users from content: 80-120/month
+- Cost per user (content): ~$16 vs $400 from ads
+
+**Reasoning:**
+All paid campaigns have negative ROI. Organic content outperforms paid ads 3:1 on engagement. Reallocating budget to content creation will yield higher returns at lower CAC.
+
+⚠️ **This proposal requires your approval to implement.**
+
+Would you like me to:
+1. **Approve** this budget change?
+2. **Modify** the allocation?
+3. **Cancel** this proposal?`,
+        timestamp: new Date().toISOString(),
+        proposal: {
+          type: "budget_change",
+          current: {
+            total: 3000,
+            allocations: [
+              { channel: "Apple Search Ads", budget: 1000 },
+              { channel: "TikTok Ads", budget: 1000 },
+              { channel: "Instagram Ads", budget: 1000 }
+            ]
+          },
+          proposed: {
+            total: 3000,
+            allocations: [
+              { channel: "Video Editing Tools", budget: 500 },
+              { channel: "Stock Footage", budget: 200 },
+              { channel: "Influencer Partnerships", budget: 800 },
+              { channel: "Content Production", budget: 460 },
+              { channel: "Apple Search Ads", budget: 0 },
+              { channel: "TikTok Ads", budget: 0 },
+              { channel: "Instagram Ads", budget: 0 }
+            ]
+          },
+          reasoning: "All paid campaigns have negative ROI. Organic content outperforms paid ads 3:1 on engagement. Reallocating budget to content creation will yield higher returns.",
+          expectedImpact: {
+            monthlySavings: 1960,
+            projectedReachIncrease: "50-70%",
+            estimatedNewUsers: "80-120/month",
+            newCAC: 16,
+            oldCAC: 400
+          },
+          status: "awaiting_approval"
+        }
+      };
+    }
+
+    // Regular budget analysis response
     return {
       role: "assistant",
       content: `**Paid Ad Performance Review:**
@@ -489,7 +566,8 @@ Always base recommendations on actual data when available.`
       response: {
         role: aiResponse.role,
         content: aiResponse.content,
-        timestamp: aiResponse.timestamp
+        timestamp: aiResponse.timestamp,
+        proposal: aiResponse.proposal || null
       },
       conversationId: savedConversation?.id,
       message: "Response generated successfully"
@@ -655,6 +733,130 @@ router.post("/create-todo", async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating todo from chat:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/chat/approve - Approve a proposal
+router.post("/approve", async (req, res) => {
+  try {
+    const { proposalId, conversationId, proposal } = req.body;
+
+    if (!proposal) {
+      return res.status(400).json({
+        success: false,
+        error: "Proposal is required"
+      });
+    }
+
+    const status = databaseService.getStatus();
+
+    // Save approved proposal to database
+    if (status.isConnected && status.readyState === 1) {
+      try {
+        const mongoose = await import('mongoose');
+        const approvedProposal = {
+          type: "decision",
+          title: `Budget Change: ${proposal.current.total} → ${proposal.proposed.total}`,
+          content: `Approved budget reallocation from paid ads to content production`,
+          reasoning: proposal.reasoning,
+          dataReferences: [{
+            type: "budget_change",
+            current: proposal.current,
+            proposed: proposal.proposed,
+            expectedImpact: proposal.expectedImpact
+          }],
+          status: "approved",
+          expectedOutcome: proposal.expectedImpact,
+          actualOutcome: null,
+          reviewDate: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        await mongoose.connection.collection("marketing_strategy").insertOne(approvedProposal);
+      } catch (dbError) {
+        console.error("Error saving approved proposal to database:", dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Proposal approved successfully",
+      proposal: {
+        ...proposal,
+        status: "approved",
+        approvedAt: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error("Error approving proposal:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/chat/reject - Reject a proposal
+router.post("/reject", async (req, res) => {
+  try {
+    const { proposalId, conversationId, proposal, reason } = req.body;
+
+    if (!proposal) {
+      return res.status(400).json({
+        success: false,
+        error: "Proposal is required"
+      });
+    }
+
+    const status = databaseService.getStatus();
+
+    // Save rejected proposal to database
+    if (status.isConnected && status.readyState === 1) {
+      try {
+        const mongoose = await import('mongoose');
+        const rejectedProposal = {
+          type: "decision",
+          title: `Budget Change Rejected`,
+          content: `Rejected budget reallocation. Reason: ${reason || "No reason provided"}`,
+          reasoning: proposal.reasoning,
+          dataReferences: [{
+            type: "budget_change",
+            current: proposal.current,
+            proposed: proposal.proposed,
+            expectedImpact: proposal.expectedImpact,
+            rejectionReason: reason
+          }],
+          status: "rejected",
+          expectedOutcome: proposal.expectedImpact,
+          actualOutcome: "Proposal rejected by user",
+          reviewDate: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        };
+
+        await mongoose.connection.collection("marketing_strategy").insertOne(rejectedProposal);
+      } catch (dbError) {
+        console.error("Error saving rejected proposal to database:", dbError);
+      }
+    }
+
+    res.json({
+      success: true,
+      message: "Proposal rejected successfully",
+      proposal: {
+        ...proposal,
+        status: "rejected",
+        rejectedAt: new Date().toISOString(),
+        rejectionReason: reason
+      }
+    });
+  } catch (error) {
+    console.error("Error rejecting proposal:", error);
     res.status(500).json({
       success: false,
       error: error.message
