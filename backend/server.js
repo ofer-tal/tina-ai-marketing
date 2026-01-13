@@ -46,22 +46,82 @@ app.use(morgan("combined"));
 app.get("/api/health", async (req, res) => {
   try {
     const dbStatus = databaseService.getStatus();
+
+    // Check external API configuration status
+    const externalApis = {
+      appStoreConnect: {
+        configured: !!(process.env.APP_STORE_CONNECT_KEY_ID &&
+                       process.env.APP_STORE_CONNECT_ISSUER_ID &&
+                       process.env.APP_STORE_CONNECT_PRIVATE_KEY_PATH),
+        keyIdConfigured: !!process.env.APP_STORE_CONNECT_KEY_ID,
+      },
+      appleSearchAds: {
+        configured: !!(process.env.APPLE_SEARCH_ADS_CLIENT_ID &&
+                       process.env.APPLE_SEARCH_ADS_CLIENT_SECRET &&
+                       process.env.APPLE_SEARCH_ADS_ORGANIZATION_ID),
+        clientIdConfigured: !!process.env.APPLE_SEARCH_ADS_CLIENT_ID,
+      },
+      tiktok: {
+        configured: !!(process.env.TIKTOK_APP_KEY &&
+                       process.env.TIKTOK_APP_SECRET),
+        appKeyConfigured: !!process.env.TIKTOK_APP_KEY,
+      },
+      googleAnalytics: {
+        configured: !!process.env.GA_VIEW_ID,
+        viewIdConfigured: !!process.env.GA_VIEW_ID,
+      },
+      ai: {
+        falAi: !!process.env.FAL_AI_API_KEY,
+        runpod: !!process.env.RUNPOD_API_KEY,
+        glm47: !!process.env.GLM47_API_KEY,
+        configured: !!(process.env.FAL_AI_API_KEY ||
+                      process.env.RUNPOD_API_KEY ||
+                      process.env.GLM47_API_KEY),
+      }
+    };
+
+    // Calculate overall external API status
+    const externalApiStatus = {
+      total: 6,
+      configured: Object.values(externalApis).filter(api => api.configured).length,
+      apis: externalApis
+    };
+
     res.json({
       status: "ok",
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
+      uptimeHuman: formatUptime(process.uptime()),
       environment: process.env.NODE_ENV || "development",
+      version: "1.0.0",
       database: {
         connected: dbStatus.isConnected,
         readyState: dbStatus.readyState,
         name: dbStatus.name,
         host: dbStatus.host
-      }
+      },
+      externalApis: externalApiStatus
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: error.message });
   }
 });
+
+// Helper function to format uptime
+function formatUptime(seconds) {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = Math.floor(seconds % 60);
+
+  const parts = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (secs > 0 || parts.length === 0) parts.push(`${secs}s`);
+
+  return parts.join(' ');
+}
 
 app.get("/api/database/test", async (req, res) => {
   try {
