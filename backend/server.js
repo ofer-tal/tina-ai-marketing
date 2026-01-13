@@ -203,9 +203,11 @@ app.use((req, res) => {
   res.status(404).json({ error: { message: "Route not found", status: 404 } });
 });
 
+let server = null;
+
 async function startServer() {
-  // Start Express server first
-  app.listen(PORT, () => {
+  // Start Express server and save reference
+  server = app.listen(PORT, () => {
     console.log("Blush Marketing Operations Center API Server running on port " + PORT);
   });
 
@@ -225,14 +227,77 @@ async function startServer() {
   }
 }
 
-process.on("SIGTERM", async () => {
-  await databaseService.disconnect();
-  process.exit(0);
+// Graceful shutdown handler
+const gracefulShutdown = async (signal) => {
+  console.log(`\n${signal} received. Starting graceful shutdown...`);
+
+  const shutdownTimeout = 30000; // 30 seconds max
+  const startTime = Date.now();
+
+  try {
+    // Step 1: Stop accepting new requests
+    console.log('  [1/5] Stopping new requests...');
+    if (server) {
+      await new Promise((resolve) => {
+        server.close(() => {
+          console.log('  ✓ Server stopped accepting new connections');
+          resolve();
+        });
+      });
+    }
+
+    // Step 2: Wait for in-flight requests (give them time to complete)
+    console.log('  [2/5] Waiting for in-flight requests...');
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log('  ✓ In-flight requests completed');
+
+    // Step 3: Close database connections
+    console.log('  [3/5] Closing database connections...');
+    await databaseService.disconnect();
+    console.log('  ✓ Database disconnected');
+
+    // Step 4: Cleanup resources (storage temp files, etc.)
+    console.log('  [4/5] Running cleanup tasks...');
+    try {
+      // Cleanup any temp files if needed
+      await storageService.cleanupTemp();
+      console.log('  ✓ Cleanup tasks completed');
+    } catch (error) {
+      console.warn('  ⚠ Some cleanup tasks failed:', error.message);
+    }
+
+    // Step 5: Exit
+    const duration = Date.now() - startTime;
+    console.log(`  [5/5] Shutdown complete in ${duration}ms`);
+    console.log('Goodbye! 👋');
+
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
+
+  // Force exit after timeout
+  setTimeout(() => {
+    console.error(`Shutdown timeout (${shutdownTimeout}ms). Forcing exit.`);
+    process.exit(1);
+  }, shutdownTimeout);
+};
+
+// Listen for shutdown signals
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+// Handle uncaught exceptions
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  gracefulShutdown("uncaughtException");
 });
 
-process.on("SIGINT", async () => {
-  await databaseService.disconnect();
-  process.exit(0);
+// Handle unhandled promise rejections
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  gracefulShutdown("unhandledRejection");
 });
 
 startServer();
