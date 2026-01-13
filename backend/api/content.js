@@ -2,6 +2,7 @@ import express from 'express';
 import winston from 'winston';
 import contentGenerationJob from '../jobs/contentGeneration.js';
 import captionGenerationService from '../services/captionGenerationService.js';
+import hashtagGenerationService from '../services/hashtagGenerationService.js';
 
 const router = express.Router();
 
@@ -290,6 +291,173 @@ router.get('/hashtags', (req, res) => {
 
   } catch (error) {
     logger.error('Generate hashtags API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/hashtags/generate
+ * Generate comprehensive hashtags based on story metadata
+ */
+router.post('/hashtags/generate', (req, res) => {
+  try {
+    const { story, options } = req.body;
+
+    // Validate required fields
+    if (!story) {
+      return res.status(400).json({
+        success: false,
+        error: 'story object is required'
+      });
+    }
+
+    if (!story.title) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.title is required'
+      });
+    }
+
+    if (story.spiciness === undefined || story.spiciness === null) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.spiciness is required (0-3)'
+      });
+    }
+
+    // Validate spiciness range
+    if (story.spiciness < 0 || story.spiciness > 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'story.spiciness must be between 0 and 3'
+      });
+    }
+
+    logger.info('Advanced hashtag generation requested', {
+      storyTitle: story.title,
+      category: story.category,
+      spiciness: story.spiciness,
+      options: options || {}
+    });
+
+    // Generate hashtags
+    const result = hashtagGenerationService.generateHashtags(story, options);
+
+    // Validate hashtags
+    const validation = hashtagGenerationService.validateHashtags(result.hashtags);
+
+    res.json({
+      success: true,
+      data: {
+        ...result,
+        validation
+      }
+    });
+
+  } catch (error) {
+    logger.error('Advanced hashtag generation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/hashtags/batch
+ * Generate hashtags for multiple stories at once
+ */
+router.post('/hashtags/batch', (req, res) => {
+  try {
+    const { stories, options } = req.body;
+
+    // Validate required fields
+    if (!stories || !Array.isArray(stories)) {
+      return res.status(400).json({
+        success: false,
+        error: 'stories array is required'
+      });
+    }
+
+    if (stories.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'stories array cannot be empty'
+      });
+    }
+
+    if (stories.length > 10) {
+      return res.status(400).json({
+        success: false,
+        error: 'maximum 10 stories per batch request'
+      });
+    }
+
+    logger.info('Batch hashtag generation requested', {
+      storyCount: stories.length,
+      options: options || {}
+    });
+
+    // Generate hashtags for each story
+    const results = stories.map(story => {
+      const result = hashtagGenerationService.generateHashtags(story, options);
+      const validation = hashtagGenerationService.validateHashtags(result.hashtags);
+
+      return {
+        storyTitle: story.title,
+        storyCategory: story.category,
+        ...result,
+        validation
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        count: results.length,
+        results
+      }
+    });
+
+  } catch (error) {
+    logger.error('Batch hashtag generation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/hashtags/health
+ * Health check for hashtag generation service
+ */
+router.get('/hashtags/health', (req, res) => {
+  try {
+    const health = hashtagGenerationService.healthCheck();
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('Hashtag health check API error', {
       error: error.message,
       stack: error.stack
     });
