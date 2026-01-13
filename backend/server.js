@@ -9,6 +9,7 @@ import databaseService from "./services/database.js";
 import configService, { configSchema } from "./services/config.js";
 import settingsRouter from "./api/settings.js";
 import storageRouter from "./api/storage.js";
+import dashboardRouter from "./api/dashboard.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -140,6 +141,7 @@ app.get("/api/database/test", async (req, res) => {
 // Settings API routes
 app.use("/api/settings", settingsRouter);
 app.use("/api/storage", storageRouter);
+app.use("/api/dashboard", dashboardRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
