@@ -521,6 +521,89 @@ router.get('/acquisition-split', async (req, res) => {
 });
 
 /**
+ * GET /api/dashboard/posts/performance
+ * Get real-time performance metrics for recent social media posts
+ * Query params:
+ *   - limit: number of posts to return (default: 10)
+ */
+router.get('/posts/performance', async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    console.log(`Fetching post performance metrics for ${limit} recent posts`);
+
+    // TODO: In production, fetch from MongoDB marketing_posts collection
+    // For now, generate mock data for recent posts with real-time metrics
+    const posts = [];
+    const platforms = ['tiktok', 'instagram', 'youtube_shorts'];
+    const statuses = ['posted', 'posted', 'posted', 'posted', 'posted']; // All posted for performance
+
+    for (let i = 0; i < limit; i++) {
+      const platform = platforms[Math.floor(Math.random() * platforms.length)];
+      const hoursAgo = i * 2 + Math.floor(Math.random() * 3); // 0-20 hours ago
+
+      // Simulate engagement metrics
+      const views = Math.floor(Math.random() * 50000) + 1000; // 1K - 50K views
+      const likes = Math.floor(views * (0.05 + Math.random() * 0.1)); // 5-15% like rate
+      const comments = Math.floor(likes * (0.01 + Math.random() * 0.03)); // 1-4% comment rate
+      const shares = Math.floor(likes * (0.02 + Math.random() * 0.05)); // 2-7% share rate
+
+      // Calculate engagement rate
+      const engagementRate = ((likes + comments + shares) / views * 100).toFixed(2);
+
+      posts.push({
+        id: `post_${Date.now()}_${i}`,
+        title: `Spicy Romance Story Excerpt #${1000 + i}`,
+        platform: platform,
+        status: statuses[i % statuses.length],
+        thumbnail: `/thumbnails/post_${i}.jpg`,
+        postedAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString(),
+        performanceMetrics: {
+          views: views,
+          likes: likes,
+          comments: comments,
+          shares: shares,
+          engagementRate: parseFloat(engagementRate)
+        }
+      });
+    }
+
+    // Calculate aggregate stats
+    const totalViews = posts.reduce((sum, post) => sum + post.performanceMetrics.views, 0);
+    const totalLikes = posts.reduce((sum, post) => sum + post.performanceMetrics.likes, 0);
+    const totalComments = posts.reduce((sum, post) => sum + post.performanceMetrics.comments, 0);
+    const totalShares = posts.reduce((sum, post) => sum + post.performanceMetrics.shares, 0);
+    const avgEngagementRate = (posts.reduce((sum, post) => sum + post.performanceMetrics.engagementRate, 0) / posts.length).toFixed(2);
+
+    const performanceData = {
+      posts: posts,
+      summary: {
+        totalPosts: posts.length,
+        totalViews: totalViews,
+        totalLikes: totalLikes,
+        totalComments: totalComments,
+        totalShares: totalShares,
+        avgEngagementRate: parseFloat(avgEngagementRate),
+        topPerformingPost: posts.reduce((best, post) =>
+          post.performanceMetrics.engagementRate > best.performanceMetrics.engagementRate ? post : best
+        )
+      },
+      lastUpdated: new Date().toISOString()
+    };
+
+    console.log(`Post performance data fetched successfully for ${limit} posts`);
+    res.json(performanceData);
+
+  } catch (error) {
+    console.error('Error fetching post performance data:', error);
+    res.status(500).json({
+      error: 'Failed to fetch post performance data',
+      message: error.message
+    });
+  }
+});
+
+/**
  * GET /api/dashboard/summary
  * Get overall summary metrics
  */

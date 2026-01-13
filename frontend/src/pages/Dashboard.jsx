@@ -112,14 +112,142 @@ const ErrorState = styled.div`
   margin-bottom: 1rem;
 `;
 
+const PostsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const PostCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1rem;
+  transition: all 0.3s;
+
+  &:hover {
+    border-color: #e94560;
+    box-shadow: 0 4px 20px rgba(233, 69, 96, 0.1);
+    transform: translateY(-2px);
+  }
+`;
+
+const PostTitle = styled.div`
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const PostMeta = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-size: 0.8rem;
+  color: #a0a0a0;
+`;
+
+const PlatformBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: ${props => {
+    switch (props.$platform) {
+      case 'tiktok': return '#000000';
+      case 'instagram': return '#E4405F';
+      case 'youtube_shorts': return '#FF0000';
+      default: return '#2d3561';
+    }
+  }};
+  color: white;
+`;
+
+const PostedTime = styled.span`
+  color: #a0a0a0;
+  font-size: 0.75rem;
+`;
+
+const PostMetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+`;
+
+const MetricItem = styled.div`
+  text-align: center;
+`;
+
+const PostMetricValue = styled.div`
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: ${props => props.$color || '#eaeaea'};
+`;
+
+const PostMetricLabel = styled.div`
+  font-size: 0.65rem;
+  color: #a0a0a0;
+  margin-top: 0.1rem;
+`;
+
+const EngagementRate = styled.div`
+  background: ${props => props.$high ? '#00d26a20' : props.$medium ? '#ffb02020' : '#2d3561'};
+  border: 1px solid ${props => props.$high ? '#00d26a' : props.$medium ? '#ffb020' : '#2d3561'};
+  border-radius: 6px;
+  padding: 0.5rem;
+  text-align: center;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: ${props => props.$high ? '#00d26a' : props.$medium ? '#ffb020' : '#eaeaea'};
+`;
+
+const LastUpdated = styled.div`
+  text-align: right;
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-top: 1rem;
+`;
+
+const RefreshButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+  margin-left: 1rem;
+
+  &:hover {
+    background: #ff6b8a;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 function Dashboard() {
   const [timePeriod, setTimePeriod] = useState('24h');
   const [metrics, setMetrics] = useState(null);
+  const [postsPerformance, setPostsPerformance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     fetchMetrics();
+    fetchPostsPerformance();
   }, [timePeriod]);
 
   const fetchMetrics = async () => {
@@ -150,6 +278,29 @@ function Dashboard() {
     }
   };
 
+  const fetchPostsPerformance = async () => {
+    try {
+      const response = await fetch('/api/dashboard/posts/performance?limit=10');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setPostsPerformance(data);
+    } catch (err) {
+      console.error('Failed to fetch posts performance:', err);
+      // Set mock data for development
+      setPostsPerformance(null);
+    }
+  };
+
+  const refreshPostsPerformance = async () => {
+    setRefreshing(true);
+    await fetchPostsPerformance();
+    setRefreshing(false);
+  };
+
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -161,6 +312,35 @@ function Dashboard() {
 
   const formatNumber = (value) => {
     return new Intl.NumberFormat('en-US').format(value);
+  };
+
+  const formatCompactNumber = (value) => {
+    if (value >= 1000000) {
+      return (value / 1000000).toFixed(1) + 'M';
+    } else if (value >= 1000) {
+      return (value / 1000).toFixed(1) + 'K';
+    }
+    return value.toString();
+  };
+
+  const getTimeAgo = (dateString) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return `${diffDays}d ago`;
+  };
+
+  const getEngagementLevel = (rate) => {
+    if (rate >= 12) return 'high';
+    if (rate >= 8) return 'medium';
+    return 'low';
   };
 
   const renderMetricCard = (key, label, icon, prefix = '', suffix = '') => {
@@ -239,18 +419,67 @@ function Dashboard() {
       </MetricsGrid>
 
       <DashboardHeader>
-        <Title>Recent Activity</Title>
+        <Title>Recent Post Performance</Title>
+        <RefreshButton onClick={refreshPostsPerformance} disabled={refreshing}>
+          {refreshing ? '🔄 Refreshing...' : '🔄 Refresh'}
+        </RefreshButton>
       </DashboardHeader>
 
-      <MetricCard>
-        <MetricLabel>
-          <MetricIcon>📋</MetricIcon>
-          Activity Log
-        </MetricLabel>
-        <div style={{ color: '#a0a0a0', marginTop: '1rem' }}>
-          No recent activity to display. The system is tracking metrics and will show activity here once operations begin.
-        </div>
-      </MetricCard>
+      {postsPerformance && postsPerformance.posts.length > 0 ? (
+        <>
+          <PostsGrid>
+            {postsPerformance.posts.map((post) => (
+              <PostCard key={post.id}>
+                <PostTitle>{post.title}</PostTitle>
+                <PostMeta>
+                  <PlatformBadge $platform={post.platform}>
+                    {post.platform === 'youtube_shorts' ? 'YouTube' : post.platform}
+                  </PlatformBadge>
+                  <PostedTime>{getTimeAgo(post.postedAt)}</PostedTime>
+                </PostMeta>
+                <PostMetricsGrid>
+                  <MetricItem>
+                    <PostMetricValue $color="#7b2cbf">{formatCompactNumber(post.performanceMetrics.views)}</PostMetricValue>
+                    <PostMetricLabel>Views</PostMetricLabel>
+                  </MetricItem>
+                  <MetricItem>
+                    <PostMetricValue $color="#e94560">{formatCompactNumber(post.performanceMetrics.likes)}</PostMetricValue>
+                    <PostMetricLabel>Likes</PostMetricLabel>
+                  </MetricItem>
+                  <MetricItem>
+                    <PostMetricValue $color="#00d26a">{formatCompactNumber(post.performanceMetrics.comments)}</PostMetricValue>
+                    <PostMetricLabel>Comments</PostMetricLabel>
+                  </MetricItem>
+                  <MetricItem>
+                    <PostMetricValue $color="#ffb020">{formatCompactNumber(post.performanceMetrics.shares)}</PostMetricValue>
+                    <PostMetricLabel>Shares</PostMetricLabel>
+                  </MetricItem>
+                </PostMetricsGrid>
+                <EngagementRate
+                  $high={getEngagementLevel(post.performanceMetrics.engagementRate) === 'high'}
+                  $medium={getEngagementLevel(post.performanceMetrics.engagementRate) === 'medium'}
+                >
+                  {post.performanceMetrics.engagementRate}% Engagement
+                </EngagementRate>
+              </PostCard>
+            ))}
+          </PostsGrid>
+          <LastUpdated>
+            Last updated: {new Date(postsPerformance.lastUpdated).toLocaleTimeString()} |
+            Avg engagement: {postsPerformance.summary.avgEngagementRate}%
+          </LastUpdated>
+        </>
+      ) : (
+        <MetricCard>
+          <MetricLabel>
+            <MetricIcon>📱</MetricIcon>
+            Post Performance
+          </MetricLabel>
+          <div style={{ color: '#a0a0a0', marginTop: '1rem' }}>
+            No posts performance data available. Posts will appear here once content is published.
+          </div>
+        </MetricCard>
+      )}
     </DashboardContainer>
   );
 }
