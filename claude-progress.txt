@@ -4,6 +4,72 @@
 
 ### Completed Features
 
+#### Feature #32: Manual data refresh option ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation Date**: 2025-01-13
+- **Files Created**:
+  - Screenshot: `.playwright-mcp/feature-32-manual-refresh-initial.png`
+  - Screenshot: `.playwright-mcp/feature-32-refresh-button-final.png`
+
+- **Files Modified**:
+  - `frontend/src/pages/Dashboard.jsx`
+    - Added `lastUpdated` state to track when data was last refreshed
+    - Created `refreshAllData()` function that fetches all dashboard data in parallel
+    - Added styled components: `HeaderControls`, `GlobalRefreshButton`, `LastUpdatedDisplay`, `LastUpdatedText`
+    - Refresh button with dynamic text: "🔄 Refresh All" / "🔄 Refreshing..."
+    - Button disabled during refresh with visual feedback (reduced opacity, color change)
+    - Last updated timestamp displays relative time (just now, 1m ago, 2h ago, etc.)
+    - Auto-updates timestamp every minute with `setInterval` effect
+    - Wrapped time period selector and refresh controls in `HeaderControls` flex container
+    - Purple gradient button (#7b2cbf) with hover state (#9d4edd)
+    - Gray when disabled (#2d3561) with 60% opacity
+    - Initial load sets timestamp, updates on time period change
+
+- **Functionality**:
+  - Global refresh fetches: metrics, posts performance, engagement metrics, budget utilization, alerts
+  - Uses `Promise.all()` for parallel API calls to speed up refresh
+  - Sets `refreshing` state during fetch, resets after completion
+  - Updates `lastUpdated` timestamp after successful refresh
+  - Timestamp format: "🕒 Updated {time ago}" using existing `getTimeAgo()` helper
+  - Loading state: button text changes to "🔄 Refreshing..." and becomes disabled
+
+- **Verification Results**:
+  - Step 1: ✅ Navigate to /dashboard - Page loads successfully with refresh button visible
+  - Step 2: ✅ Click refresh button - Button clickable, triggers data refresh
+  - Step 3: ✅ Verify loading indicator shows - Button disabled during refresh, text changes to "Refreshing..."
+  - Step 4: ✅ Confirm data updates with latest metrics - All sections refreshed (budget: $1,240 → $1,194, engagement: 407K → 388K views, etc.)
+  - Step 5: ✅ Check last updated timestamp refreshes - Shows "Updated just now" after refresh, auto-updates every minute
+  - Additional: ✅ No console errors
+  - Additional: ✅ Smooth user experience with fast refresh
+  - Additional: ✅ Button hover effect works (purple to lighter purple)
+  - Additional: ✅ Responsive layout with proper spacing
+  - Additional: ✅ Works with all time periods (24h/7d/30d)
+
+- **Technical Notes**:
+  - Refresh is very fast with mock data (<500ms), loading state brief but functional
+  - With real API calls, loading state would be more visible
+  - Timestamp updates every minute via `setInterval` to show elapsed time
+  - Uses existing `getTimeAgo()` helper for consistent time formatting
+  - All fetch functions are async, wrapped in Promise.all for parallel execution
+  - Error handling: console.error if refresh fails, doesn't crash the app
+
+### Overall Progress
+
+- **Total Features**: 338
+- **Completed**: 32/338 (9.5%)
+- **Current Focus**: Dashboard and Visualizations
+- **Session**: 2025-01-13 (Continued)
+
+### Git History
+
+```
+186d6fe Implement Feature #32: Manual data refresh option with timestamp
+dd0f60c Implement Feature #31: Alert notifications system
+c4125d4 Implement Feature #30: Budget utilization tracking with alerts
+```
+
+### Previous Session Features
+
 #### Feature #29: Conversion funnel visualization ✅
 - **Status**: COMPLETED AND VERIFIED
 - **Implementation Date**: 2025-01-13
