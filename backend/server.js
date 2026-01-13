@@ -14,6 +14,7 @@ import chatRouter from "./api/chat.js";
 import todosRouter from "./api/todos.js";
 import contentRouter from "./api/content.js";
 import videoRouter from "./api/video.js";
+import imageRouter from "./api/image.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -150,6 +151,7 @@ app.use("/api/chat", chatRouter);
 app.use("/api/todos", todosRouter);
 app.use("/api/content", contentRouter);
 app.use("/api/video", videoRouter);
+app.use("/api/image", imageRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
