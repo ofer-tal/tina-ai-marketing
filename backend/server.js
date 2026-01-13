@@ -13,6 +13,7 @@ import dashboardRouter from "./api/dashboard.js";
 import chatRouter from "./api/chat.js";
 import todosRouter from "./api/todos.js";
 import contentRouter from "./api/content.js";
+import videoRouter from "./api/video.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -148,6 +149,7 @@ app.use("/api/dashboard", dashboardRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/todos", todosRouter);
 app.use("/api/content", contentRouter);
+app.use("/api/video", videoRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
