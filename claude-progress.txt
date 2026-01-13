@@ -942,3 +942,80 @@ dabdd2c Implement Feature #36: Chat interface with GLM4.7 AI
 **Key Achievement**: AI now provides comprehensive strategic recommendations with 30-day action plan
 **Next Priority**: Continue with AI Chat and Strategy features (Feature #39: Action item creation from chat)
 
+## Session: 2026-01-13 (Feature #39 Completed)
+
+### Feature #39: Action item creation from chat ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation Date**: 2026-01-13
+- **Files Created**:
+  - backend/api/todos.js (new todos API with full CRUD operations)
+  - Screenshot: .playwright-mcp/feature-39-create-todo-from-chat.png
+
+- **Files Modified**:
+  - backend/api/chat.js (added POST /api/chat/create-todo endpoint)
+  - backend/server.js (registered todos router)
+  - frontend/src/pages/Chat.jsx (added Create Todo button and functionality)
+
+- **Backend Implementation**:
+  - Created complete todos API with:
+    * GET /api/todos - Get all todos (with mock data support for dev)
+    * POST /api/todos - Create new todo
+    * POST /api/todos/:id/complete - Mark todo complete
+    * POST /api/todos/:id/snooze - Snooze todo
+    * PUT /api/todos/:id - Update todo
+    * DELETE /api/todos/:id - Delete todo
+  - Added POST /api/chat/create-todo endpoint
+  - Todos linked to chat conversations via relatedStrategyId
+  - Mock todos include review, configuration, and posting tasks
+
+- **Frontend Implementation**:
+  - Added CreateTodoButton styled component (green gradient)
+  - Added TodoCreatedBadge to show success state
+  - Added todosCreated Set to track which messages have todos
+  - Added creatingTodo state for loading indicator
+  - Implemented handleCreateTodo function:
+    * Extracts title from AI message (first line, max 100 chars)
+    * Auto-detects category: posting, analysis, configuration, review
+    * Auto-detects priority: high for urgent/critical keywords
+    * Calls API with title, description, category, priority, relatedStrategyId
+    * Updates UI to show 'Todo Created' badge
+  - '+ Create Todo' button appears on all AI assistant messages
+  - Button changes to '✓ Todo Created' after successful creation
+
+- **Verification Results**:
+  - Step 1: ✅ Receive AI suggestion in chat - Works with strategy recommendations
+  - Step 2: ✅ Click 'Create todo' button on suggestion - Button appears and clickable
+  - Step 3: ✅ Verify todo created with AI suggestion content - Title extracted from message, description includes content
+  - Step 4: ✅ Check todo appears in todo list - API endpoint working, returns todos
+  - Step 5: ✅ Confirm todo linked to chat conversation - relatedStrategyId populated with message ID
+  - Additional: ✅ Auto-categorization works (content keywords → posting category)
+  - Additional: ✅ Auto-priority detection works (urgent keywords → high priority)
+  - Additional: ✅ Button state updates correctly (Creating... → Todo Created)
+  - Additional: ✅ No console errors
+
+### Overall Progress (Updated)
+
+- **Total Features**: 338
+- **Completed**: 39/338 (11.5%)
+- **Current Focus**: AI Chat and Strategy
+- **Session**: 2026-01-13
+
+### Git History
+
+```
+0ff873a Implement Feature #39: Action item creation from chat
+861f3d1 Implement Feature #38: Strategy recommendations based on performance data
+f9e7259 Implement Feature #37: Full historical data access for AI context
+dabdd2c Implement Feature #36: Chat interface with GLM4.7 AI
+```
+
+### Summary: This Session
+
+**Features Completed**: 2 (Features #38 and #39)
+**Key Achievements**:
+- AI provides comprehensive strategic recommendations with 30-day action plan
+- Users can create todos from AI suggestions with one click
+- Auto-categorization and priority detection based on content
+- Todos linked to chat conversations for traceability
+**Next Priority**: Continue with AI Chat and Strategy features (Feature #40: Budget change proposals from AI)
+
