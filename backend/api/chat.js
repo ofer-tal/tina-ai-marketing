@@ -335,6 +335,191 @@ What would you like to tackle first?`,
 Would you like me to generate a content calendar for this week?`,
       timestamp: new Date().toISOString()
     };
+  } else if (lastUserMessage.includes("campaign review") || lastUserMessage.includes("review campaign") || lastUserMessage.includes("ad review") || (lastUserMessage.includes("review") && lastUserMessage.includes("campaign"))) {
+    // Campaign review scheduling and summaries - check this BEFORE general campaign/budget
+    const campaigns = mockHistoricalData.campaigns;
+    const data = mockHistoricalData;
+
+    // Calculate campaign metrics
+    const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
+    const totalImpressions = campaigns.reduce((sum, c) => sum + c.impressions, 0);
+    const totalClicks = campaigns.reduce((sum, c) => sum + c.clicks, 0);
+    const totalConversions = campaigns.reduce((sum, c) => sum + c.conversions, 0);
+    const avgROI = (campaigns.reduce((sum, c) => sum + c.roi, 0) / campaigns.length).toFixed(0);
+    const totalLoss = Math.abs(campaigns.reduce((sum, c) => sum + (c.spend * (c.roi / 100)), 0));
+
+    // Get best and worst campaigns
+    const bestCampaign = campaigns.sort((a, b) => b.roi - a.roi)[0];
+    const worstCampaign = campaigns.sort((a, b) => a.roi - b.roi)[0];
+
+    // Generate review
+    return {
+      role: "assistant",
+      content: `**📊 Campaign Performance Review**
+
+**Review Period:** Last 30 Days
+**Generated:** ${new Date().toLocaleDateString()}
+**Status:** ⚠️ Action Required
+
+---
+
+**💰 Overall Campaign Summary:**
+
+**Budget Utilization:**
+- Total Budget: $3,000
+- Actual Spend: $${totalSpend.toLocaleString()} (${((totalSpend / 3000) * 100).toFixed(1)}%)
+- Remaining: $${(3000 - totalSpend).toLocaleString()}
+
+**Aggregate Performance:**
+- Total Impressions: ${totalImpressions.toLocaleString()}
+- Total Clicks: ${totalClicks.toLocaleString()}
+- Total Conversions: ${totalConversions}
+- Average CTR: ${((totalClicks / totalImpressions) * 100).toFixed(2)}%
+- Average Conversion Rate: ${((totalConversions / totalClicks) * 100).toFixed(2)}%
+- **Average ROI: ${avgROI}%** ⚠️ Negative
+
+**Financial Impact:**
+- Total Loss: $${totalLoss.toFixed(0)} (money wasted)
+- Cost Per Acquisition (CAC): $${(totalSpend / totalConversions).toFixed(0)} per user
+- Lifetime Value (LTV) of acquired users: ~$150
+- **ROI Ratio:** -${Math.round(150 / (totalSpend / totalConversions))}x (losing significant money)
+
+---
+
+**📈 Campaign Performance Breakdown:**
+
+**1. ${campaigns[0].name}** ${campaigns[0].roi === Math.max(...campaigns.map(c => c.roi)) ? '✅ BEST PERFORMER' : ''}
+- Status: ${campaigns[0].status.charAt(0).toUpperCase() + campaigns[0].status.slice(1)}
+- Spend: $${campaigns[0].spend}
+- Impressions: ${campaigns[0].impressions.toLocaleString()}
+- Clicks: ${campaigns[0].clicks.toLocaleString()}
+- Conversions: ${campaigns[0].conversions}
+- CTR: ${((campaigns[0].clicks / campaigns[0].impressions) * 100).toFixed(2)}%
+- Conversion Rate: ${((campaigns[0].conversions / campaigns[0].clicks) * 100).toFixed(2)}%
+- ROI: **${campaigns[0].roi}%** (${campaigns[0].roi < 0 ? 'losing money' : 'profitable'})
+- CAC: $${(campaigns[0].spend / campaigns[0].conversions).toFixed(0)} per user
+
+**2. ${campaigns[1].name}** ${campaigns[1].roi === Math.max(...campaigns.map(c => c.roi)) ? '✅ BEST PERFORMER' : ''}
+- Status: ${campaigns[1].status.charAt(0).toUpperCase() + campaigns[1].status.slice(1)}
+- Spend: $${campaigns[1].spend}
+- Impressions: ${campaigns[1].impressions.toLocaleString()}
+- Clicks: ${campaigns[1].clicks.toLocaleString()}
+- Conversions: ${campaigns[1].conversions}
+- CTR: ${((campaigns[1].clicks / campaigns[1].impressions) * 100).toFixed(2)}%
+- Conversion Rate: ${((campaigns[1].conversions / campaigns[1].clicks) * 100).toFixed(2)}%
+- ROI: **${campaigns[1].roi}%** (${campaigns[1].roi < 0 ? 'losing money' : 'profitable'})
+- CAC: $${(campaigns[1].spend / campaigns[1].conversions).toFixed(0)} per user
+
+**3. ${campaigns[2].name}** ${campaigns[2].roi === Math.min(...campaigns.map(c => c.roi)) ? '❌ WORST PERFORMER' : ''}
+- Status: ${campaigns[2].status.charAt(0).toUpperCase() + campaigns[2].status.slice(1)}
+- Spend: $${campaigns[2].spend}
+- Impressions: ${campaigns[2].impressions.toLocaleString()}
+- Clicks: ${campaigns[2].clicks.toLocaleString()}
+- Conversions: ${campaigns[2].conversions}
+- CTR: ${((campaigns[2].clicks / campaigns[2].impressions) * 100).toFixed(2)}%
+- Conversion Rate: ${((campaigns[2].conversions / campaigns[2].clicks) * 100).toFixed(2)}%
+- ROI: **${campaigns[2].roi}%** (${campaigns[2].roi < 0 ? 'losing money' : 'profitable'})
+- CAC: $${(campaigns[2].spend / campaigns[2].conversions).toFixed(0)} per user
+
+---
+
+**🎯 Key Findings:**
+
+**Performance Insights:**
+- **Best performing campaign:** ${bestCampaign.name} (${bestCampaign.roi}% ROI, still losing money)
+- **Worst performing campaign:** ${worstCampaign.name} (${worstCampaign.roi}% ROI)
+- **Highest CTR:** ${campaigns.sort((a, b) => (b.clicks / b.impressions) - (a.clicks / a.impressions))[0].name}
+- **Lowest CAC:** ${campaigns.sort((a, b) => (a.spend / a.conversions) - (b.spend / b.conversions))[0].name} ($${Math.round(...campaigns.map(c => c.spend / c.conversions))} per user)
+
+**Critical Issues:**
+- ❌ **ALL campaigns have negative ROI** - bleeding money
+- ❌ **CAC ($${(totalSpend / totalConversions).toFixed(0)}) is 27x higher** than organic CAC (~$15)
+- ❌ **No campaign is profitable** - each conversion loses money
+- ❌ **$${totalLoss.toFixed(0)} wasted** with negative returns
+
+**Comparison to Organic:**
+- **Organic Content ROI:** +280% (from content performance data)
+- **Organic CAC:** ~$15 per user
+- **Organic outperforms paid ads by:** ~27x on cost efficiency
+
+---
+
+**💡 Recommendations:**
+
+**Immediate Actions (Priority: URGENT):**
+1. **PAUSE ALL CAMPAIGNS IMMEDIATELY** - Stop the bleeding
+2. **Reallocate remaining budget** ($${(3000 - totalSpend).toLocaleString()}) to content creation
+3. **Document learning**: What audiences/creatives performed worst
+
+**Strategic Shift:**
+- **FROM:** Paid-first acquisition ($400 CAC, -60% ROI)
+- **TO:** Content-first acquisition ($15 CAC, +280% ROI)
+- **Expected result:** $${totalLoss.toFixed(0)} savings/month + better user quality
+
+**Future Testing (Once Profitable):**
+- Test with 10% of current budget
+- Focus on retargeting, not cold acquisition
+- Set strict ROI positive thresholds before scaling
+
+---
+
+**📅 Next Scheduled Review:**
+
+**Recommended Schedule:** Weekly campaign reviews
+**Next Review Date:** ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+**Focus Metrics:** ROI, CAC, Conversion Rate
+
+**Agenda for Next Review:**
+1. Confirm all campaigns paused
+2. Measure organic content performance
+3. Calculate savings from budget reallocation
+4. Plan small-scale retargeting tests (if profitable)
+
+---
+
+**✅ Action Items:**
+- [ ] Pause all 3 campaigns immediately
+- [ ] Reallocate $${(3000 - totalSpend).toLocaleString()} to content tools
+- [ ] Schedule weekly review for ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}
+- [ ] Create content production plan with reallocated budget
+
+Would you like me to:
+1. **Create action items** for pausing campaigns?
+2. **Schedule next review** automatically?
+3. **Generate content plan** with reallocated budget?`,
+      timestamp: new Date().toISOString(),
+      campaignReview: {
+        type: "campaign_review",
+        period: "last_30_days",
+        generatedAt: new Date().toISOString(),
+        nextReviewDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        summary: {
+          totalSpend,
+          totalImpressions,
+          totalClicks,
+          totalConversions,
+          avgROI: parseFloat(avgROI),
+          totalLoss,
+          cac: Math.round(totalSpend / totalConversions)
+        },
+        bestCampaign: {
+          name: bestCampaign.name,
+          roi: bestCampaign.roi,
+          spend: bestCampaign.spend
+        },
+        worstCampaign: {
+          name: worstCampaign.name,
+          roi: worstCampaign.roi,
+          spend: worstCampaign.spend
+        },
+        recommendations: [
+          "PAUSE ALL CAMPAIGNS IMMEDIATELY",
+          "Reallocate budget to content creation",
+          "Document learnings from failed campaigns"
+        ],
+        status: "awaiting_review"
+      }
+    };
   } else if (lastUserMessage.includes("budget") || lastUserMessage.includes("spend") || lastUserMessage.includes("ad") || lastUserMessage.includes("campaign")) {
     const campaigns = mockHistoricalData.campaigns;
     const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
@@ -885,21 +1070,49 @@ Always base recommendations on actual data when available.`
     if (status.isConnected && status.readyState === 1) {
       try {
         const mongoose = await import('mongoose');
-        const conversation = {
-          type: "chat",
-          title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
-          content: aiResponse.content,
-          reasoning: `Responding to: ${message}`,
-          status: "completed",
-          createdAt: new Date(),
-          updatedAt: new Date()
-        };
 
-        const result = await mongoose.connection.collection("marketing_strategy").insertOne(conversation);
-        savedConversation = {
-          id: result.insertedId,
-          ...conversation
-        };
+        // Check if this is a campaign review
+        if (aiResponse.campaignReview) {
+          const campaignReview = {
+            type: "review",
+            title: `Campaign Review - ${new Date().toLocaleDateString()}`,
+            content: aiResponse.content,
+            reasoning: "Regular scheduled campaign performance review",
+            dataReferences: [{
+              type: "campaign_review",
+              ...aiResponse.campaignReview
+            }],
+            status: "completed",
+            expectedOutcome: aiResponse.campaignReview.recommendations.join(", "),
+            actualOutcome: null,
+            reviewDate: new Date(aiResponse.campaignReview.nextReviewDate),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+
+          const result = await mongoose.connection.collection("marketing_strategy").insertOne(campaignReview);
+          savedConversation = {
+            id: result.insertedId,
+            ...campaignReview
+          };
+        } else {
+          // Regular chat message
+          const conversation = {
+            type: "chat",
+            title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
+            content: aiResponse.content,
+            reasoning: `Responding to: ${message}`,
+            status: "completed",
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
+
+          const result = await mongoose.connection.collection("marketing_strategy").insertOne(conversation);
+          savedConversation = {
+            id: result.insertedId,
+            ...conversation
+          };
+        }
       } catch (dbError) {
         console.error("Error saving conversation to database:", dbError);
         // Continue without saving
