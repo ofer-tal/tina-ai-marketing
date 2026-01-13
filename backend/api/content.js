@@ -3,6 +3,7 @@ import winston from 'winston';
 import contentGenerationJob from '../jobs/contentGeneration.js';
 import captionGenerationService from '../services/captionGenerationService.js';
 import hashtagGenerationService from '../services/hashtagGenerationService.js';
+import tiktokOptimizationService from '../services/tiktokOptimizationService.js';
 
 const router = express.Router();
 
@@ -642,6 +643,308 @@ router.get('/caption/health', (req, res) => {
 
   } catch (error) {
     logger.error('Caption health check error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/tiktok/trending-audio
+ * Get trending audio tracks for TikTok
+ */
+router.get('/tiktok/trending-audio', (req, res) => {
+  try {
+    const { limit, category } = req.query;
+
+    logger.info('Trending audio requested', { limit, category });
+
+    const result = tiktokOptimizationService.getTrendingAudio({
+      limit: limit ? parseInt(limit, 10) : undefined,
+      category
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Trending audio API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/tiktok/validate-video
+ * Validate video format for TikTok specs
+ */
+router.post('/tiktok/validate-video', (req, res) => {
+  try {
+    const { video } = req.body;
+
+    if (!video) {
+      return res.status(400).json({
+        success: false,
+        error: 'video object is required'
+      });
+    }
+
+    logger.info('Video validation requested', {
+      duration: video.duration,
+      resolution: video.resolution,
+      format: video.format
+    });
+
+    const result = tiktokOptimizationService.validateVideoFormat(video);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Video validation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/tiktok/optimize-caption
+ * Optimize caption for TikTok audience
+ */
+router.post('/tiktok/optimize-caption', (req, res) => {
+  try {
+    const { caption, story, spiciness } = req.body;
+
+    if (!caption) {
+      return res.status(400).json({
+        success: false,
+        error: 'caption is required'
+      });
+    }
+
+    if (spiciness === undefined || spiciness === null) {
+      return res.status(400).json({
+        success: false,
+        error: 'spiciness is required (0-3)'
+      });
+    }
+
+    if (spiciness < 0 || spiciness > 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'spiciness must be between 0 and 3'
+      });
+    }
+
+    logger.info('Caption optimization requested', {
+      captionLength: caption.length,
+      story: story?.title,
+      spiciness
+    });
+
+    const result = tiktokOptimizationService.optimizeCaption({
+      caption,
+      story,
+      spiciness
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Caption optimization API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/tiktok/hashtags
+ * Get TikTok-specific hashtags
+ */
+router.get('/tiktok/hashtags', (req, res) => {
+  try {
+    const { count, category, spiciness } = req.query;
+
+    if (spiciness === undefined || spiciness === null) {
+      return res.status(400).json({
+        success: false,
+        error: 'spiciness is required (0-3)'
+      });
+    }
+
+    const spicinessNum = parseInt(spiciness, 10);
+
+    if (spicinessNum < 0 || spicinessNum > 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'spiciness must be between 0 and 3'
+      });
+    }
+
+    logger.info('TikTok hashtags requested', {
+      count,
+      category,
+      spiciness: spicinessNum
+    });
+
+    const result = tiktokOptimizationService.getTiktokHashtags({
+      count: count ? parseInt(count, 10) : undefined,
+      category: category || 'romance',
+      spiciness: spicinessNum
+    });
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('TikTok hashtags API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/tiktok/verify-aspect-ratio
+ * Verify vertical 9:16 aspect ratio
+ */
+router.post('/tiktok/verify-aspect-ratio', (req, res) => {
+  try {
+    const { video } = req.body;
+
+    if (!video) {
+      return res.status(400).json({
+        success: false,
+        error: 'video object is required with width/height or aspectRatio'
+      });
+    }
+
+    if (!video.width && !video.height && !video.aspectRatio) {
+      return res.status(400).json({
+        success: false,
+        error: 'Must provide either width/height or aspectRatio'
+      });
+    }
+
+    logger.info('Aspect ratio verification requested', {
+      width: video.width,
+      height: video.height,
+      aspectRatio: video.aspectRatio
+    });
+
+    const result = tiktokOptimizationService.verifyAspectRatio(video);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Aspect ratio verification API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/tiktok/optimize
+ * Comprehensive TikTok content optimization
+ * Combines all optimization steps
+ */
+router.post('/tiktok/optimize', (req, res) => {
+  try {
+    const { content } = req.body;
+
+    if (!content) {
+      return res.status(400).json({
+        success: false,
+        error: 'content object is required'
+      });
+    }
+
+    logger.info('Comprehensive TikTok optimization requested', {
+      hasCaption: !!content.caption,
+      hasVideo: !!content.video,
+      hasStory: !!content.story
+    });
+
+    const result = tiktokOptimizationService.optimizeForTikTok(content);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('TikTok optimization API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/tiktok/health
+ * Health check for TikTok optimization service
+ */
+router.get('/tiktok/health', (req, res) => {
+  try {
+    const health = tiktokOptimizationService.healthCheck();
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('TikTok health check error', {
       error: error.message
     });
 
