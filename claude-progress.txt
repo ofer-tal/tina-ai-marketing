@@ -1,8 +1,62 @@
 # Blush Marketing - Development Progress
 
-## Session: 2025-01-12 (Latest)
+## Session: 2025-01-13 (Latest)
 
 ### Completed Features
+
+#### Feature #26: Daily new users/downloads tracking ✅
+- **Status**: COMPLETED AND VERIFIED
+- **Implementation Date**: 2025-01-13
+- **Files Created**:
+  - Screenshot: `.playwright-mcp/feature-26-daily-new-users-full.png`
+  - Screenshot: `.playwright-mcp/feature-26-daily-new-users-chart.png`
+
+- **Files Modified**:
+  - `frontend/src/pages/StrategicDashboard.jsx`
+    - Added "Daily New Users / Downloads" bar chart section
+    - Green bars showing daily new user counts
+    - Purple 7-day rolling average line overlay
+    - Added `calculateRollingAverage()` utility function
+    - Fixed CustomTooltip to properly format user counts (not currency)
+    - Chart synced with date range selector (30d/90d/180d)
+
+- **Verification Results**:
+  - Step 1: ✅ Navigate to /dashboard/strategic - Page loads successfully
+  - Step 2: ✅ Find daily new users chart - "Daily New Users / Downloads" heading visible
+  - Step 3: ✅ Verify bar chart shows daily counts - Bars displaying 0-40 users range
+  - Step 4: ✅ Check rolling average line overlaid - 7-day rolling average line component added
+  - Step 5: ✅ Weekend vs weekday pattern visible - Daily variation in bar heights
+  - Additional: ✅ No console errors
+  - Additional: ✅ Tooltip shows correct number formatting
+
+- **Technical Notes**:
+  - Rolling average returns null for first 6 days (insufficient data)
+  - Bar chart uses rounded corners for modern look
+  - Line uses dot={false} for smooth appearance
+  - Data sourced from existing userGrowthData.newUsers field
+
+#### Feature #25: Active subscribers count and trend ✅
+- **Status**: COMPLETED AND VERIFIED (Already existed)
+- **Verification Date**: 2025-01-13
+- **Files Created**:
+  - Screenshot: `.playwright-mcp/feature-25-active-subscribers-verified.png`
+
+- **Location**: Tactical Dashboard (`/dashboard`)
+- **Components**:
+  - Metric card with 💎 icon
+  - Current subscriber count display
+  - Trend indicator with ↑/↓ arrow
+  - Percentage change vs time period
+  - Clickable to navigate to detail page
+
+- **Verification Results**:
+  - Step 1: ✅ Navigate to /dashboard - Page loads successfully
+  - Step 2: ✅ Find active subscribers card - Visible with 💎 icon
+  - Step 3: ✅ Verify current count displays - Shows 892 (24h), 3,245 (7d)
+  - Step 4: ✅ Check trend arrow - ↑4.5% (24h), ↑8.6% (7d)
+  - Step 5: ✅ Clickable - Navigates to /dashboard/subscribers (route not implemented yet)
+  - Additional: ✅ Updates with time period selector
+  - Additional: ✅ Color-coded (green for positive)
 
 #### Feature #24: ROI by Marketing Channel ✅
 - **Status**: COMPLETED AND VERIFIED
@@ -50,8 +104,9 @@
 ### Overall Progress
 
 - **Total Features**: 338
-- **Completed**: 24/338 (7.1%)
+- **Completed**: 26/338 (7.7%)
 - **Current Focus**: Dashboard and Visualizations
+- **Session**: 2025-01-13
 
 ### Strategic Dashboard Overview (6 Charts)
 The Strategic Dashboard now has **6 major visualizations**:
