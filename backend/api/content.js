@@ -6,6 +6,8 @@ import hashtagGenerationService from '../services/hashtagGenerationService.js';
 import tiktokOptimizationService from '../services/tiktokOptimizationService.js';
 import instagramOptimizationService from '../services/instagramOptimizationService.js';
 import youtubeOptimizationService from '../services/youtubeOptimizationService.js';
+import contentBatchingService from '../services/contentBatchingService.js';
+import MarketingPost from '../models/MarketingPost.js';
 
 const router = express.Router();
 
@@ -1520,6 +1522,521 @@ router.get('/youtube/health', (req, res) => {
   } catch (error) {
     logger.error('YouTube health check error', {
       error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// Content Batching Endpoints
+// ========================================
+
+/**
+ * POST /api/content/batch/generate
+ * Generate a batch of content posts (3-5 posts, 1-2 days ahead)
+ */
+router.post('/batch/generate', async (req, res) => {
+  try {
+    const { batchSize, daysAhead, platforms } = req.body;
+
+    logger.info('Batch generation requested', {
+      batchSize,
+      daysAhead,
+      platforms
+    });
+
+    const result = await contentBatchingService.generateBatch({
+      batchSize,
+      daysAhead,
+      platforms
+    });
+
+    if (!result.success) {
+      return res.status(503).json(result);
+    }
+
+    res.json(result);
+
+  } catch (error) {
+    logger.error('Batch generation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/batch/upcoming
+ * Get upcoming scheduled posts
+ */
+router.get('/batch/upcoming', async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+
+    logger.info('Fetching upcoming posts', { days });
+
+    const posts = await contentBatchingService.getUpcomingPosts(parseInt(days));
+
+    res.json({
+      success: true,
+      data: {
+        count: posts.length,
+        days: parseInt(days),
+        posts: posts.map(post => ({
+          id: post._id,
+          title: post.title,
+          platform: post.platform,
+          status: post.status,
+          scheduledAt: post.scheduledAt,
+          storyName: post.storyName,
+          storyCategory: post.storyCategory,
+          storySpiciness: post.storySpiciness,
+          caption: post.caption,
+          hashtags: post.hashtags
+        }))
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get upcoming posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/batch/range
+ * Get posts scheduled within a date range
+ */
+router.get('/batch/range', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate are required (ISO 8601 format)'
+      });
+    }
+
+    logger.info('Fetching posts in range', { startDate, endDate });
+
+    const posts = await contentBatchingService.getScheduledInRange(
+      new Date(startDate),
+      new Date(endDate)
+    );
+
+    res.json({
+      success: true,
+      data: {
+        count: posts.length,
+        startDate,
+        endDate,
+        posts: posts.map(post => ({
+          id: post._id,
+          title: post.title,
+          platform: post.platform,
+          status: post.status,
+          scheduledAt: post.scheduledAt,
+          storyName: post.storyName,
+          storyCategory: post.storyCategory,
+          storySpiciness: post.storySpiciness
+        }))
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get posts in range API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/batch/status
+ * Get batch generation service status
+ */
+router.get('/batch/status', (req, res) => {
+  try {
+    const status = contentBatchingService.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+
+  } catch (error) {
+    logger.error('Get batch status API error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/batch/health
+ * Health check for batching service
+ */
+router.get('/batch/health', (req, res) => {
+  try {
+    const health = contentBatchingService.healthCheck();
+
+    res.json({
+      success: true,
+      data: health
+    });
+
+  } catch (error) {
+    logger.error('Batch health check error', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ========================================
+// Marketing Post Management Endpoints
+// ========================================
+
+/**
+ * GET /api/content/posts/:id
+ * Get a single marketing post by ID
+ */
+router.get('/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    logger.info('Fetching marketing post', { id });
+
+    const post = await MarketingPost.findById(id)
+      .populate('storyId', 'title coverPath spiciness category tags');
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: post
+    });
+
+  } catch (error) {
+    logger.error('Get marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * PUT /api/content/posts/:id
+ * Update a marketing post (caption, hashtags, etc.)
+ */
+router.put('/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    logger.info('Updating marketing post', { id, updates });
+
+    const post = await MarketingPost.findByIdAndUpdate(
+      id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: post
+    });
+
+  } catch (error) {
+    logger.error('Update marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * DELETE /api/content/posts/:id
+ * Delete a marketing post
+ */
+router.delete('/posts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    logger.info('Deleting marketing post', { id });
+
+    const post = await MarketingPost.findByIdAndDelete(id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Marketing post deleted successfully',
+      data: { id }
+    });
+
+  } catch (error) {
+    logger.error('Delete marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/:id/approve
+ * Approve a marketing post for posting
+ */
+router.post('/posts/:id/approve', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    logger.info('Approving marketing post', { id });
+
+    const post = await MarketingPost.findById(id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    await post.markAsApproved();
+
+    res.json({
+      success: true,
+      data: post
+    });
+
+  } catch (error) {
+    logger.error('Approve marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/:id/reject
+ * Reject a marketing post with reason
+ */
+router.post('/posts/:id/reject', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason) {
+      return res.status(400).json({
+        success: false,
+        error: 'Rejection reason is required'
+      });
+    }
+
+    logger.info('Rejecting marketing post', { id, reason });
+
+    const post = await MarketingPost.findById(id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    await post.markAsRejected(reason);
+
+    res.json({
+      success: true,
+      data: post
+    });
+
+  } catch (error) {
+    logger.error('Reject marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/:id/schedule
+ * Schedule a marketing post for a specific date
+ */
+router.post('/posts/:id/schedule', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { scheduledAt } = req.body;
+
+    if (!scheduledAt) {
+      return res.status(400).json({
+        success: false,
+        error: 'scheduledAt is required (ISO 8601 format)'
+      });
+    }
+
+    logger.info('Scheduling marketing post', { id, scheduledAt });
+
+    const post = await MarketingPost.findById(id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    await post.scheduleFor(new Date(scheduledAt));
+
+    res.json({
+      success: true,
+      data: post
+    });
+
+  } catch (error) {
+    logger.error('Schedule marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/posts
+ * Get marketing posts with filters
+ */
+router.get('/posts', async (req, res) => {
+  try {
+    const {
+      platform,
+      status,
+      startDate,
+      endDate,
+      limit = 50,
+      skip = 0
+    } = req.query;
+
+    logger.info('Fetching marketing posts with filters', {
+      platform,
+      status,
+      startDate,
+      endDate,
+      limit,
+      skip
+    });
+
+    // Build query
+    const query = {};
+    if (platform) query.platform = platform;
+    if (status) query.status = status;
+    if (startDate || endDate) {
+      query.scheduledAt = {};
+      if (startDate) query.scheduledAt.$gte = new Date(startDate);
+      if (endDate) query.scheduledAt.$lte = new Date(endDate);
+    }
+
+    const posts = await MarketingPost.find(query)
+      .populate('storyId', 'title coverPath spiciness category')
+      .sort({ scheduledAt: -1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(skip));
+
+    const total = await MarketingPost.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: {
+        posts,
+        pagination: {
+          total,
+          limit: parseInt(limit),
+          skip: parseInt(skip),
+          hasMore: total > parseInt(skip) + parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get marketing posts API error', {
+      error: error.message,
+      stack: error.stack
     });
 
     res.status(500).json({
