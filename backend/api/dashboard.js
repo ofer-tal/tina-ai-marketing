@@ -1080,4 +1080,173 @@ router.get('/summary', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/dashboard/conversion-funnel
+ * Get conversion funnel data from impression to subscription
+ * Query params:
+ *   - period: '30d', '90d', '180d' (default: '30d')
+ */
+router.get('/conversion-funnel', async (req, res) => {
+  try {
+    const { period = '30d' } = req.query;
+
+    // Validate period parameter
+    const validPeriods = ['30d', '90d', '180d'];
+    if (!validPeriods.includes(period)) {
+      return res.status(400).json({
+        error: 'Invalid period. Must be one of: ' + validPeriods.join(', ')
+      });
+    }
+
+    console.log(`Fetching conversion funnel for period: ${period}`);
+
+    // Calculate time range based on period
+    const now = new Date();
+    let startTime;
+    let days;
+
+    switch (period) {
+      case '30d':
+        startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        days = 30;
+        break;
+      case '90d':
+        startTime = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        days = 90;
+        break;
+      case '180d':
+        startTime = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000);
+        days = 180;
+        break;
+    }
+
+    // TODO: In production, fetch from MongoDB aggregations
+    // Mock conversion funnel data representing the user journey
+    const funnelData = {
+      period: period,
+      startTime: startTime.toISOString(),
+      endTime: now.toISOString(),
+      days: days,
+
+      stages: [
+        {
+          id: 'impressions',
+          name: 'App Store Impressions',
+          description: 'Times app appeared in search or browse',
+          count: period === '30d' ? 45000 : period === '90d' ? 135000 : 270000,
+          conversionRate: null, // First stage has no prior conversion
+          dropoffCount: null,
+          dropoffRate: null
+        },
+        {
+          id: 'product_page_views',
+          name: 'Product Page Views',
+          description: 'Users who viewed the app product page',
+          count: period === '30d' ? 18500 : period === '90d' ? 55500 : 111000,
+          conversionRate: 41.1, // 18500 / 45000
+          dropoffCount: period === '30d' ? 26500 : period === '90d' ? 79500 : 159000,
+          dropoffRate: 58.9 // 26500 / 45000
+        },
+        {
+          id: 'downloads',
+          name: 'App Downloads',
+          description: 'Users who downloaded the app',
+          count: period === '30d' ? 3200 : period === '90d' ? 9600 : 19200,
+          conversionRate: 17.3, // 3200 / 18500
+          dropoffCount: period === '30d' ? 15300 : period === '90d' ? 45900 : 91800,
+          dropoffRate: 82.7 // 15300 / 18500
+        },
+        {
+          id: 'installs',
+          name: 'App Installs',
+          description: 'Users who completed installation',
+          count: period === '30d' ? 2900 : period === '90d' ? 8700 : 17400,
+          conversionRate: 90.6, // 2900 / 3200
+          dropoffCount: period === '30d' ? 300 : period === '90d' ? 900 : 1800,
+          dropoffRate: 9.4 // 300 / 3200
+        },
+        {
+          id: 'signups',
+          name: 'Account Signups',
+          description: 'Users who created an account',
+          count: period === '30d' ? 2100 : period === '90d' ? 6300 : 12600,
+          conversionRate: 72.4, // 2100 / 2900
+          dropoffCount: period === '30d' ? 800 : period === '90d' ? 2400 : 4800,
+          dropoffRate: 27.6 // 800 / 2900
+        },
+        {
+          id: 'trial_starts',
+          name: 'Trial Activations',
+          description: 'Users who started free trial',
+          count: period === '30d' ? 1650 : period === '90d' ? 4950 : 9900,
+          conversionRate: 78.6, // 1650 / 2100
+          dropoffCount: period === '30d' ? 450 : period === '90d' ? 1350 : 2700,
+          dropoffRate: 21.4 // 450 / 2100
+        },
+        {
+          id: 'subscriptions',
+          name: 'Paid Subscriptions',
+          description: 'Users who converted to paid subscription',
+          count: period === '30d' ? 485 : period === '90d' ? 1455 : 2910,
+          conversionRate: 29.4, // 485 / 1650
+          dropoffCount: period === '30d' ? 1165 : period === '90d' ? 3495 : 6990,
+          dropoffRate: 70.6 // 1165 / 1650
+        }
+      ],
+
+      // Overall funnel metrics
+      summary: {
+        totalImpressions: period === '30d' ? 45000 : period === '90d' ? 135000 : 270000,
+        totalConversions: period === '30d' ? 485 : period === '90d' ? 1455 : 2910,
+        overallConversionRate: period === '30d' ? 1.08 : period === '90d' ? 1.08 : 1.08, // 485 / 45000
+        avgConversionRatePerStage: 54.9,
+        biggestDropoffStage: 'product_page_views',
+        biggestDropoffRate: 58.9
+      },
+
+      // Stage details for drill-down
+      stageDetails: {
+        impressions: {
+          breakdown: {
+            search: period === '30d' ? 28000 : period === '90d' ? 84000 : 168000,
+            browse: period === '30d' ? 12000 : period === '90d' ? 36000 : 72000,
+            referrals: period === '30d' ? 5000 : period === '90d' ? 15000 : 30000
+          },
+          topSources: [
+            { source: 'Keyword: romantic stories', count: period === '30d' ? 8500 : period === '90d' ? 25500 : 51000 },
+            { source: 'Keyword: spicy fiction', count: period === '30d' ? 6200 : period === '90d' ? 18600 : 37200 },
+            { source: 'Keyword: romance novels', count: period === '30d' ? 5100 : period === '90d' ? 15300 : 30600 }
+          ]
+        },
+        product_page_views: {
+          avgTimeOnPage: 42, // seconds
+          bounceRate: 58.9,
+          returnVisitors: period === '30d' ? 3200 : period === '90d' ? 9600 : 19200
+        },
+        downloads: {
+          abortedDownloads: period === '30d' ? 300 : period === '90d' ? 900 : 1800,
+          retryRate: 9.4
+        },
+        subscriptions: {
+          byPlan: {
+            monthly: period === '30d' ? 320 : period === '90d' ? 960 : 1920,
+            annual: period === '30d' ? 165 : period === '90d' ? 495 : 990
+          },
+          avgTimeToSubscribe: 4.2, // days
+          churnRate: 8.3
+        }
+      }
+    };
+
+    res.json(funnelData);
+
+  } catch (error) {
+    console.error('Error fetching conversion funnel:', error);
+    res.status(500).json({
+      error: 'Failed to fetch conversion funnel data',
+      message: error.message
+    });
+  }
+});
+
 export default router;

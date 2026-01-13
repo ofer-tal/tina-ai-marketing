@@ -218,6 +218,155 @@ const ROIMainLabel = styled.div`
   font-size: 0.85rem;
 `;
 
+// Conversion Funnel Components
+const FunnelContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const FunnelStage = styled.div`
+  background: ${props => props.$active ? '#1a1a2e' : '#16213e'};
+  border: 1px solid ${props => props.$active ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+
+  &:hover {
+    border-color: ${props => props.$color || '#e94560'};
+    box-shadow: 0 4px 20px ${props => props.$color ? props.$color + '20' : 'rgba(233, 69, 96, 0.2)'};
+    transform: translateX(4px);
+  }
+
+  &:before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: ${props => props.$width}%;
+    background: ${props => props.$color || '#e94560'};
+    border-radius: 0 4px 4px 0;
+  }
+`;
+
+const FunnelStageHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  padding-left: 0.75rem;
+`;
+
+const FunnelStageName = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const FunnelStageTitle = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 1rem;
+`;
+
+const FunnelStageDescription = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+`;
+
+const FunnelStageMetrics = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const FunnelStageCount = styled.div`
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: ${props => props.$color || '#e94560'};
+`;
+
+const FunnelStageConversion = styled.div`
+  text-align: right;
+`;
+
+const FunnelConversionRate = styled.div`
+  font-weight: 600;
+  color: ${props => props.$positive ? '#00d26a' : props.$positive === false ? '#e94560' : '#a0a0a0'};
+  font-size: 0.9rem;
+`;
+
+const FunnelDropoffInfo = styled.div`
+  font-size: 0.75rem;
+  color: #f8312f;
+`;
+
+const FunnelDetailsPanel = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+  display: ${props => props.$visible ? 'block' : 'none'};
+`;
+
+const FunnelDetailsTitle = styled.h4`
+  margin: 0 0 1rem 0;
+  color: #eaeaea;
+  font-size: 1rem;
+`;
+
+const FunnelDetailsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+`;
+
+const FunnelDetailItem = styled.div`
+  background: #16213e;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #2d3561;
+`;
+
+const FunnelDetailLabel = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const FunnelDetailValue = styled.div`
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const FunnelLegend = styled.div`
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: #a0a0a0;
+`;
+
+const FunnelLegendItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const FunnelLegendColor = styled.div`
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  background: ${props => props.$color};
+`;
+
 function StrategicDashboard() {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState('30d');
@@ -227,6 +376,8 @@ function StrategicDashboard() {
   const [acquisitionData, setAcquisitionData] = useState(null);
   const [revenueSpendData, setRevenueSpendData] = useState(null);
   const [roiData, setRoiData] = useState(null);
+  const [funnelData, setFunnelData] = useState(null);
+  const [selectedFunnelStage, setSelectedFunnelStage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -237,6 +388,7 @@ function StrategicDashboard() {
     fetchAcquisitionSplit();
     fetchRevenueSpendTrend();
     fetchRoiByChannel();
+    fetchConversionFunnel();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -454,6 +606,136 @@ function StrategicDashboard() {
         overallROI: overallROI === 'N/A' ? null : parseFloat(overallROI),
         bestChannel: channelData[0].name,
         worstChannel: channelData[channelData.length - 1].name
+      }
+    };
+  };
+
+  const fetchConversionFunnel = async () => {
+    try {
+      const response = await fetch(`/api/dashboard/conversion-funnel?period=${dateRange}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setFunnelData(data);
+    } catch (err) {
+      console.error('Failed to fetch conversion funnel data:', err);
+      // Set mock data for development
+      const mockData = generateMockFunnelData(dateRange);
+      setFunnelData(mockData);
+    }
+  };
+
+  const generateMockFunnelData = (range) => {
+    const multiplier = range === '30d' ? 1 : range === '90d' ? 3 : 6;
+
+    return {
+      period: range,
+      stages: [
+        {
+          id: 'impressions',
+          name: 'App Store Impressions',
+          description: 'Times app appeared in search or browse',
+          count: 45000 * multiplier,
+          conversionRate: null,
+          dropoffCount: null,
+          dropoffRate: null
+        },
+        {
+          id: 'product_page_views',
+          name: 'Product Page Views',
+          description: 'Users who viewed the app product page',
+          count: 18500 * multiplier,
+          conversionRate: 41.1,
+          dropoffCount: 26500 * multiplier,
+          dropoffRate: 58.9
+        },
+        {
+          id: 'downloads',
+          name: 'App Downloads',
+          description: 'Users who downloaded the app',
+          count: 3200 * multiplier,
+          conversionRate: 17.3,
+          dropoffCount: 15300 * multiplier,
+          dropoffRate: 82.7
+        },
+        {
+          id: 'installs',
+          name: 'App Installs',
+          description: 'Users who completed installation',
+          count: 2900 * multiplier,
+          conversionRate: 90.6,
+          dropoffCount: 300 * multiplier,
+          dropoffRate: 9.4
+        },
+        {
+          id: 'signups',
+          name: 'Account Signups',
+          description: 'Users who created an account',
+          count: 2100 * multiplier,
+          conversionRate: 72.4,
+          dropoffCount: 800 * multiplier,
+          dropoffRate: 27.6
+        },
+        {
+          id: 'trial_starts',
+          name: 'Trial Activations',
+          description: 'Users who started free trial',
+          count: 1650 * multiplier,
+          conversionRate: 78.6,
+          dropoffCount: 450 * multiplier,
+          dropoffRate: 21.4
+        },
+        {
+          id: 'subscriptions',
+          name: 'Paid Subscriptions',
+          description: 'Users who converted to paid subscription',
+          count: 485 * multiplier,
+          conversionRate: 29.4,
+          dropoffCount: 1165 * multiplier,
+          dropoffRate: 70.6
+        }
+      ],
+      summary: {
+        totalImpressions: 45000 * multiplier,
+        totalConversions: 485 * multiplier,
+        overallConversionRate: 1.08,
+        avgConversionRatePerStage: 54.9,
+        biggestDropoffStage: 'product_page_views',
+        biggestDropoffRate: 58.9
+      },
+      stageDetails: {
+        impressions: {
+          breakdown: {
+            search: 28000 * multiplier,
+            browse: 12000 * multiplier,
+            referrals: 5000 * multiplier
+          },
+          topSources: [
+            { source: 'Keyword: romantic stories', count: 8500 * multiplier },
+            { source: 'Keyword: spicy fiction', count: 6200 * multiplier },
+            { source: 'Keyword: romance novels', count: 5100 * multiplier }
+          ]
+        },
+        product_page_views: {
+          avgTimeOnPage: 42,
+          bounceRate: 58.9,
+          returnVisitors: 3200 * multiplier
+        },
+        downloads: {
+          abortedDownloads: 300 * multiplier,
+          retryRate: 9.4
+        },
+        subscriptions: {
+          byPlan: {
+            monthly: 320 * multiplier,
+            annual: 165 * multiplier
+          },
+          avgTimeToSubscribe: 4.2,
+          churnRate: 8.3
+        }
       }
     };
   };
@@ -1390,6 +1672,187 @@ function StrategicDashboard() {
                     </ROIChannelCard>
                   ))}
                 </ROIChannelGrid>
+              </ChartContainer>
+            </>
+          )}
+
+          {/* Conversion Funnel Section */}
+          {funnelData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Total Impressions</MetricLabel>
+                  <MetricValue>{formatNumber(funnelData.summary.totalImpressions)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Total Conversions</MetricLabel>
+                  <MetricValue>{formatNumber(funnelData.summary.totalConversions)}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Overall Conversion Rate</MetricLabel>
+                  <MetricValue>{funnelData.summary.overallConversionRate}%</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Biggest Dropoff</MetricLabel>
+                  <MetricValue style={{ color: '#f8312f' }}>
+                    {funnelData.stages.find(s => s.id === funnelData.summary.biggestDropoffStage)?.name}
+                  </MetricValue>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>Conversion Funnel</ChartTitle>
+
+                <FunnelLegend>
+                  <FunnelLegendItem>
+                    <FunnelLegendColor $color="#e94560" />
+                    <span>Conversion Rate (Green = Good, Red = Poor)</span>
+                  </FunnelLegendItem>
+                  <FunnelLegendItem>
+                    <FunnelLegendColor $color="#f8312f" />
+                    <span>Dropoff Rate</span>
+                  </FunnelLegendItem>
+                </FunnelLegend>
+
+                <FunnelContainer>
+                  {funnelData.stages.map((stage, index) => {
+                    // Calculate width percentage based on position in funnel
+                    const maxWidth = 100;
+                    const minWidth = 30;
+                    const width = maxWidth - ((maxWidth - minWidth) / (funnelData.stages.length - 1)) * index;
+
+                    // Generate color based on conversion rate
+                    const getColor = () => {
+                      if (!stage.conversionRate) return '#e94560';
+                      if (stage.conversionRate >= 70) return '#00d26a';
+                      if (stage.conversionRate >= 40) return '#ffb020';
+                      return '#e94560';
+                    };
+
+                    const color = getColor();
+
+                    return (
+                      <FunnelStage
+                        key={stage.id}
+                        $active={selectedFunnelStage === stage.id}
+                        $width={width}
+                        $color={color}
+                        onClick={() => setSelectedFunnelStage(selectedFunnelStage === stage.id ? null : stage.id)}
+                      >
+                        <FunnelStageHeader>
+                          <FunnelStageName>
+                            <FunnelStageTitle>{stage.name}</FunnelStageTitle>
+                            <FunnelStageDescription>{stage.description}</FunnelStageDescription>
+                          </FunnelStageName>
+                          <FunnelStageMetrics>
+                            <FunnelStageCount $color={color}>
+                              {formatNumber(stage.count)}
+                            </FunnelStageCount>
+                            <FunnelStageConversion>
+                              {stage.conversionRate !== null && (
+                                <>
+                                  <FunnelConversionRate $positive={stage.conversionRate >= 50}>
+                                    {stage.conversionRate}% conversion
+                                  </FunnelConversionRate>
+                                  {stage.dropoffRate > 0 && (
+                                    <FunnelDropoffInfo>
+                                      -{stage.dropoffRate}% dropoff
+                                    </FunnelDropoffInfo>
+                                  )}
+                                </>
+                              )}
+                              {stage.conversionRate === null && (
+                                <FunnelConversionRate>Starting point</FunnelConversionRate>
+                              )}
+                            </FunnelStageConversion>
+                          </FunnelStageMetrics>
+                        </FunnelStageHeader>
+
+                        {selectedFunnelStage === stage.id && funnelData.stageDetails[stage.id] && (
+                          <FunnelDetailsPanel $visible={true}>
+                            <FunnelDetailsTitle>Detailed Breakdown</FunnelDetailsTitle>
+                            <FunnelDetailsGrid>
+                              {stage.id === 'impressions' && funnelData.stageDetails.impressions && (
+                                <>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Search</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.impressions.breakdown.search)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Browse</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.impressions.breakdown.browse)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Referrals</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.impressions.breakdown.referrals)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  {funnelData.stageDetails.impressions.topSources && (
+                                    <FunnelDetailItem style={{ gridColumn: '1 / -1' }}>
+                                      <FunnelDetailLabel>Top Sources</FunnelDetailLabel>
+                                      {funnelData.stageDetails.impressions.topSources.map((source, idx) => (
+                                        <FunnelDetailValue key={idx} style={{ fontSize: '0.9rem', marginBottom: '0.25rem' }}>
+                                          {source.source}: {formatNumber(source.count)}
+                                        </FunnelDetailValue>
+                                      ))}
+                                    </FunnelDetailItem>
+                                  )}
+                                </>
+                              )}
+                              {stage.id === 'product_page_views' && funnelData.stageDetails.product_page_views && (
+                                <>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Avg Time on Page</FunnelDetailLabel>
+                                    <FunnelDetailValue>{funnelData.stageDetails.product_page_views.avgTimeOnPage}s</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Bounce Rate</FunnelDetailLabel>
+                                    <FunnelDetailValue style={{ color: '#f8312f' }}>{funnelData.stageDetails.product_page_views.bounceRate}%</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Return Visitors</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.product_page_views.returnVisitors)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                </>
+                              )}
+                              {stage.id === 'downloads' && funnelData.stageDetails.downloads && (
+                                <>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Aborted Downloads</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.downloads.abortedDownloads)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Retry Rate</FunnelDetailLabel>
+                                    <FunnelDetailValue>{funnelData.stageDetails.downloads.retryRate}%</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                </>
+                              )}
+                              {stage.id === 'subscriptions' && funnelData.stageDetails.subscriptions && (
+                                <>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Monthly Plans</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.subscriptions.byPlan.monthly)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Annual Plans</FunnelDetailLabel>
+                                    <FunnelDetailValue>{formatNumber(funnelData.stageDetails.subscriptions.byPlan.annual)}</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Avg Time to Subscribe</FunnelDetailLabel>
+                                    <FunnelDetailValue>{funnelData.stageDetails.subscriptions.avgTimeToSubscribe} days</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                  <FunnelDetailItem>
+                                    <FunnelDetailLabel>Churn Rate</FunnelDetailLabel>
+                                    <FunnelDetailValue style={{ color: '#f8312f' }}>{funnelData.stageDetails.subscriptions.churnRate}%</FunnelDetailValue>
+                                  </FunnelDetailItem>
+                                </>
+                              )}
+                            </FunnelDetailsGrid>
+                          </FunnelDetailsPanel>
+                        )}
+                      </FunnelStage>
+                    );
+                  })}
+                </FunnelContainer>
               </ChartContainer>
             </>
           )}
