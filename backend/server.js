@@ -16,6 +16,7 @@ import contentRouter from "./api/content.js";
 import videoRouter from "./api/video.js";
 import imageRouter from "./api/image.js";
 import audioRouter from "./api/audio.js";
+import hooksRouter from "./api/hooks.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -156,6 +157,7 @@ app.use("/api/content", contentRouter);
 app.use("/api/video", videoRouter);
 app.use("/api/image", imageRouter);
 app.use("/api/audio", audioRouter);
+app.use("/api/hooks", hooksRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
