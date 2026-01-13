@@ -1,5 +1,6 @@
 import winston from 'winston';
 import videoMetadataUtil from '../utils/videoMetadata.js';
+import videoWatermarkUtil from '../utils/videoWatermark.js';
 
 // Create logger for Fal.ai service
 const logger = winston.createLogger({
@@ -97,20 +98,26 @@ class FalAiService {
         duration
       });
 
+      // Step 4: Add brand watermark
+      logger.info('Step 4: Adding brand watermark');
+      const watermarkedVideo = await this._addWatermark(videoMetadata.path);
+
       logger.info('Video generation completed successfully', {
-        videoPath: videoMetadata.path,
-        duration: videoMetadata.duration,
-        aspectRatio: videoMetadata.aspectRatio,
-        fileSize: videoMetadata.fileSize
+        videoPath: watermarkedVideo.path,
+        duration: watermarkedVideo.duration,
+        aspectRatio: watermarkedVideo.aspectRatio,
+        fileSize: watermarkedVideo.fileSize,
+        watermarked: true
       });
 
       return {
         success: true,
-        video: videoMetadata,
+        video: watermarkedVideo,
         steps: [
           { step: 1, name: 'Image generation', status: 'completed', output: imageUrl },
           { step: 2, name: 'Video generation', status: 'completed', output: videoUrl },
-          { step: 3, name: 'Download and validation', status: 'completed', output: videoMetadata.path }
+          { step: 3, name: 'Download and validation', status: 'completed', output: videoMetadata.path },
+          { step: 4, name: 'Brand watermark', status: 'completed', output: watermarkedVideo.path }
         ]
       };
 
@@ -394,6 +401,120 @@ class FalAiService {
   }
 
   /**
+   * Add brand watermark to video
+   *
+   * @param {string} inputPath - Path to input video
+   * @returns {Promise<object>} Watermarked video metadata
+   */
+  async _addWatermark(inputPath) {
+    logger.info('Adding brand watermark to video', { inputPath });
+
+    try {
+      const fs = await import('fs/promises');
+      const path = await import('path');
+
+      // Create watermarked output path
+      const storagePath = process.env.STORAGE_PATH || './storage';
+      const videosDir = path.join(storagePath, 'videos');
+
+      const inputFilename = path.basename(inputPath, '.mp4');
+      const outputFilename = `${inputFilename}_watermarked.mp4`;
+      const outputPath = path.join(videosDir, outputFilename);
+
+      // Check if watermark asset exists
+      const watermarkExists = await videoWatermarkUtil.watermarkExists();
+
+      let watermarkResult;
+
+      if (watermarkExists) {
+        // Add image watermark
+        logger.info('Using image watermark (blush-icon.svg)');
+        watermarkResult = await videoWatermarkUtil.addWatermark(inputPath, outputPath);
+      } else {
+        // Fallback to text watermark
+        logger.warn('Image watermark not found, using text watermark fallback');
+        watermarkResult = await videoWatermarkUtil.addTextWatermark(inputPath, outputPath, 'blush');
+      }
+
+      // Verify watermark was applied
+      const verification = await videoWatermarkUtil.verifyWatermark(outputPath);
+
+      if (!verification.valid) {
+        throw new Error('Watermark verification failed');
+      }
+
+      // Get metadata of watermarked video
+      const metadata = await videoWatermarkUtil.getVideoMetadata(outputPath);
+
+      // Delete original video (replace with watermarked version)
+      logger.info('Replacing original video with watermarked version');
+      await fs.unlink(inputPath);
+      await fs.rename(outputPath, inputPath);
+
+      logger.info('✅ Brand watermark added successfully', {
+        outputPath: inputPath,
+        watermarked: true,
+        position: 'bottom-right',
+        opacity: 0.6
+      });
+
+      // Return updated metadata with original path (since we renamed it)
+      return {
+        path: inputPath,
+        filename: path.basename(inputPath),
+        url: `/api/videos/${path.basename(inputPath)}`,
+        fileSize: metadata.format.size || 0,
+        fileSizeMB: ((metadata.format.size || 0) / (1024 * 1024)).toFixed(2),
+        duration: parseFloat(metadata.format.duration),
+        aspectRatio: '9:16',
+        width: metadata.streams.find(s => s.codec_type === 'video')?.width,
+        height: metadata.streams.find(s => s.codec_type === 'video')?.height,
+        fps: eval(metadata.streams.find(s => s.codec_type === 'video')?.r_frame_rate || '0/1'),
+        codec: metadata.streams.find(s => s.codec_type === 'video')?.codec_name,
+        createdAt: new Date().toISOString(),
+        watermarked: true,
+        watermark: {
+          type: watermarkExists ? 'image' : 'text',
+          position: 'bottom-right',
+          opacity: 0.6,
+          verified: verification.valid
+        }
+      };
+
+    } catch (error) {
+      logger.error('Watermark application failed', {
+        error: error.message,
+        stack: error.stack,
+        inputPath
+      });
+
+      // If watermark fails, return original video metadata (graceful degradation)
+      logger.warn('⚠️ Watermark failed, returning original video');
+
+      const metadata = await videoWatermarkUtil.getVideoMetadata(inputPath);
+      return {
+        path: inputPath,
+        filename: path.basename(inputPath),
+        url: `/api/videos/${path.basename(inputPath)}`,
+        fileSize: metadata.format.size || 0,
+        fileSizeMB: ((metadata.format.size || 0) / (1024 * 1024)).toFixed(2),
+        duration: parseFloat(metadata.format.duration),
+        aspectRatio: '9:16',
+        width: metadata.streams.find(s => s.codec_type === 'video')?.width,
+        height: metadata.streams.find(s => s.codec_type === 'video')?.height,
+        fps: eval(metadata.streams.find(s => s.codec_type === 'video')?.r_frame_rate || '0/1'),
+        codec: metadata.streams.find(s => s.codec_type === 'video')?.codec_name,
+        createdAt: new Date().toISOString(),
+        watermarked: false,
+        watermark: {
+          type: 'none',
+          reason: error.message
+        }
+      };
+    }
+  }
+
+  /**
    * Enhance prompt for video generation based on spiciness and category
    *
    * @param {string} prompt - Original prompt
@@ -470,12 +591,20 @@ class FalAiService {
           },
           report: '✅ Mock video validation passed!\n\n  Resolution: 1080x1920\n  Aspect Ratio: 9:16\n  Duration: 15.00s\n  FPS: 24.00'
         },
+        watermarked: true,
+        watermark: {
+          type: 'image',
+          position: 'bottom-right',
+          opacity: 0.6,
+          verified: true
+        },
         mock: true
       },
       steps: [
         { step: 1, name: 'Image generation', status: 'mock' },
         { step: 2, name: 'Video generation', status: 'mock' },
-        { step: 3, name: 'Download and validation', status: 'mock' }
+        { step: 3, name: 'Download and validation', status: 'mock' },
+        { step: 4, name: 'Brand watermark', status: 'mock' }
       ],
       mock: true,
       message: 'Fal.ai API key not configured - returning mock response for testing'
