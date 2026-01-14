@@ -549,6 +549,157 @@ const NoHistoryMessage = styled.div`
   font-style: italic;
 `;
 
+
+
+// Scheduled Time Display Components
+const ScheduledTimeSection = styled.div`
+  background: linear-gradient(135deg, #1a1a3e 0%, #16213e 100%);
+  border: 2px solid #7b2cbf;
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
+const ScheduledTimeInfo = styled.div`
+  flex: 1;
+  min-width: 200px;
+`;
+
+const ScheduledTimeHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+`;
+
+const ScheduledTimeDisplay = styled.div`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #eaeaea;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const CountdownTimer = styled.div`
+  font-size: 1.1rem;
+  color: #00d26a;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const TimezoneDisplay = styled.div`
+  font-size: 0.8rem;
+  color: #6c757d;
+  margin-top: 0.25rem;
+`;
+
+const RescheduleButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: #7b2cbf;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #9d4edd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(123, 44, 191, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+
+const DateTimePickerContainer = styled.div`
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+  display: ${props => props.$visible ? 'block' : 'none'};
+`;
+
+const DateTimePickerRow = styled.div`
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex-wrap: wrap;
+`;
+
+const DateTimeInput = styled.input`
+  flex: 1;
+  min-width: 200px;
+  padding: 0.6rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+
+  &:focus {
+    outline: none;
+    border-color: #7b2cbf;
+    box-shadow: 0 0 0 3px rgba(123, 44, 191, 0.1);
+  }
+`;
+
+const ConfirmRescheduleButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: #00d26a;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #00b35d;
+  }
+`;
+
+const CancelRescheduleButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: #ff6b6b;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff5252;
+  }
+`;
+
 const VideoContainer = styled.div`
   display: flex;
   justify-content: center;
@@ -1237,6 +1388,9 @@ function ContentLibrary() {
   const [editedCaption, setEditedCaption] = useState('');
   const [editedHashtags, setEditedHashtags] = useState([]);
   const [newHashtag, setNewHashtag] = useState('');
+  const [rescheduleMode, setRescheduleMode] = useState(false);
+  const [newScheduledTime, setNewScheduledTime] = useState('');
+  const [countdown, setCountdown] = useState('');
 
   useEffect(() => {
     fetchPosts();
@@ -1513,7 +1667,116 @@ function ContentLibrary() {
     return labels[action] || 'Updated';
   };
 
-  const handleVideoPreview = (post) => {
+  const formatScheduledTime = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = date - now;
+
+    if (diffMs < 0) {
+      return {
+        formatted: date.toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true
+        }),
+        countdown: 'Past due',
+        isPast: true
+      };
+    }
+
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+
+    let countdownText = '';
+    if (diffDays > 0) {
+      countdownText = diffDays + 'd ' + diffHours + 'h ' + diffMinutes + 'm';
+    } else if (diffHours > 0) {
+      countdownText = diffHours + 'h ' + diffMinutes + 'm';
+    } else if (diffMinutes > 0) {
+      countdownText = diffMinutes + ' minutes';
+    } else {
+      countdownText = 'Less than 1 minute';
+    }
+
+    return {
+      formatted: date.toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      }),
+      countdown: countdownText,
+      isPast: false
+    };
+  };
+
+  const getTimezone = () => {
+    const date = new Date();
+    const abbreviation = date.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ')[2];
+    return abbreviation || 'Local Time';
+  };
+
+  const handleStartReschedule = () => {
+    setRescheduleMode(true);
+    const defaultTime = selectedVideo.scheduledAt || new Date(Date.now() + 3600000).toISOString();
+    setNewScheduledTime(new Date(defaultTime).toISOString().slice(0, 16));
+  };
+
+  const handleCancelReschedule = () => {
+    setRescheduleMode(false);
+    setNewScheduledTime('');
+  };
+
+  const handleConfirmReschedule = async () => {
+    if (!newScheduledTime) return;
+
+    try {
+      const response = await fetch('http://localhost:3003/api/content/' + selectedVideo._id + '/schedule', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt: new Date(newScheduledTime).toISOString() })
+      });
+
+      if (response.ok) {
+        setSelectedVideo({ ...selectedVideo, scheduledAt: new Date(newScheduledTime).toISOString() });
+        fetchPosts();
+        setRescheduleMode(false);
+        setNewScheduledTime('');
+        alert('Scheduled time updated!');
+      } else {
+        const error = await response.json();
+        alert('Failed to update: ' + (error.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setSelectedVideo({ ...selectedVideo, scheduledAt: new Date(newScheduledTime).toISOString() });
+      setRescheduleMode(false);
+      setNewScheduledTime('');
+      alert('Updated locally');
+    }
+  };
+
+  useEffect(() => {
+    if (!selectedVideo || !selectedVideo.scheduledAt) return;
+
+    const updateCountdown = () => {
+      const timeInfo = formatScheduledTime(selectedVideo.scheduledAt);
+      setCountdown(timeInfo.countdown);
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 60000);
+
+    return () => clearInterval(interval);
+  }, [selectedVideo]);
+
+    const handleVideoPreview = (post) => {
     if (post.contentType === 'video' && post.videoPath) {
       setSelectedVideo(post);
     } else if (post.contentType === 'image' && post.imagePath) {
@@ -1990,6 +2253,53 @@ function ContentLibrary() {
                 )}
                 <ModalInfo>
                   <ModalTitle>{selectedVideo.title}</ModalTitle>
+
+                  {/* Scheduled Time Section */}
+                  {selectedVideo.scheduledAt && (
+                    <ScheduledTimeSection>
+                      <ScheduledTimeInfo>
+                        <ScheduledTimeHeader>
+                          📅 Scheduled Posting Time
+                        </ScheduledTimeHeader>
+                        <ScheduledTimeDisplay>
+                          🕐 {formatScheduledTime(selectedVideo.scheduledAt).formatted}
+                        </ScheduledTimeDisplay>
+                        {countdown && (
+                          <CountdownTimer>
+                            ⏱️ Posting in {countdown}
+                          </CountdownTimer>
+                        )}
+                        <TimezoneDisplay>
+                          🌍 {getTimezone()}
+                        </TimezoneDisplay>
+                      </ScheduledTimeInfo>
+                      {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && (
+                        <RescheduleButton onClick={handleStartReschedule} disabled={rescheduleMode}>
+                          📅 Reschedule
+                        </RescheduleButton>
+                      )}
+                    </ScheduledTimeSection>
+                  )}
+
+                  {rescheduleMode && (
+                    <DateTimePickerContainer $visible={rescheduleMode}>
+                      <DateTimePickerRow>
+                        <label style={{ color: '#eaeaea', fontWeight: '600' }}>New Date & Time:</label>
+                        <DateTimeInput
+                          type="datetime-local"
+                          value={newScheduledTime}
+                          onChange={(e) => setNewScheduledTime(e.target.value)}
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                        <ConfirmRescheduleButton onClick={handleConfirmReschedule}>
+                          ✅ Confirm
+                        </ConfirmRescheduleButton>
+                        <CancelRescheduleButton onClick={handleCancelReschedule}>
+                          ✖ Cancel
+                        </CancelRescheduleButton>
+                      </DateTimePickerRow>
+                    </DateTimePickerContainer>
+                  )}
 
                   {/* Edit Mode UI */}
                   {editMode ? (
