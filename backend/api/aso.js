@@ -607,4 +607,72 @@ router.get('/competitors/history/:appId/:keyword', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/aso/score
+ * Get current ASO score
+ */
+router.get('/score', async (req, res) => {
+  try {
+    const asoScoreService = (await import('../services/asoScoreService.js')).default;
+    const score = await asoScoreService.getASOScore();
+
+    res.json({
+      success: true,
+      data: score
+    });
+  } catch (error) {
+    console.error('Error fetching ASO score:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/score/calculate
+ * Recalculate ASO score
+ */
+router.post('/score/calculate', async (req, res) => {
+  try {
+    const asoScoreService = (await import('../services/asoScoreService.js')).default;
+    const score = await asoScoreService.calculateASOScore();
+
+    res.json({
+      success: true,
+      data: score,
+      message: 'ASO score calculated successfully'
+    });
+  } catch (error) {
+    console.error('Error calculating ASO score:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/score/history
+ * Get ASO score history
+ */
+router.get('/score/history', async (req, res) => {
+  try {
+    const asoScoreService = (await import('../services/asoScoreService.js')).default;
+    const days = parseInt(req.query.days) || 30;
+    const history = await asoScoreService.getASOScoreHistory(days);
+
+    res.json({
+      success: true,
+      data: history
+    });
+  } catch (error) {
+    console.error('Error fetching ASO score history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

@@ -1961,6 +1961,373 @@ const RefreshButton = styled.button`
   }
 `;
 
+// ASO Score Styled Components
+const ASOScoreContainer = styled(ChartContainer)`
+  margin-top: 2rem;
+`;
+
+const ASOScoreHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const ASOScoreTitle = styled.h3`
+  font-size: 1.25rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ASOScoreRefreshButton = styled.button`
+  background: #7b2cbf;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #9d4edd;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const ASOScoreMain = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+  border-radius: 12px;
+  border: 2px solid ${props => {
+    const score = props.score || 0;
+    if (score >= 90) return '#00d26a';
+    if (score >= 80) return '#00b4d8';
+    if (score >= 70) return '#ffc107';
+    if (score >= 60) return '#ff6b6b';
+    return '#f8312f';
+  }};
+`;
+
+const ASOScoreCircle = styled.div`
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: ${props => {
+    const score = props.score || 0;
+    if (score >= 90) return 'linear-gradient(135deg, #00d26a 0%, #00a86b 100%)';
+    if (score >= 80) return 'linear-gradient(135deg, #00b4d8 0%, #0096c7 100%)';
+    if (score >= 70) return 'linear-gradient(135deg, #ffc107 0%, #ff9800 100%)';
+    if (score >= 60) return 'linear-gradient(135deg, #ff6b6b 0%, #ff5252 100%)';
+    return 'linear-gradient(135deg, #f8312f 0%, #d32f2f 100%)';
+  }};
+  box-shadow: 0 8px 32px ${props => {
+    const score = props.score || 0;
+    if (score >= 90) return 'rgba(0, 210, 106, 0.3)';
+    if (score >= 80) return 'rgba(0, 180, 216, 0.3)';
+    if (score >= 70) return 'rgba(255, 193, 7, 0.3)';
+    if (score >= 60) return 'rgba(255, 107, 107, 0.3)';
+    return 'rgba(248, 49, 47, 0.3)';
+  }};
+  position: relative;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: inherit;
+    filter: blur(8px);
+    opacity: 0.5;
+    z-index: -1;
+  }
+`;
+
+const ASOScoreValue = styled.div`
+  font-size: 3.5rem;
+  font-weight: bold;
+  color: white;
+  line-height: 1;
+`;
+
+const ASOScoreGrade = styled.div`
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: white;
+  margin-top: 0.25rem;
+`;
+
+const ASOScoreLabel = styled.div`
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.8);
+  margin-top: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+`;
+
+const ASOScoreDetails = styled.div`
+  flex: 1;
+`;
+
+const ASOScoreOverallLabel = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+`;
+
+const ASOScoreOverallValue = styled.div`
+  font-size: 2rem;
+  font-weight: bold;
+  color: #eaeaea;
+  margin-bottom: 0.5rem;
+`;
+
+const ASOScoreDescription = styled.div`
+  font-size: 1rem;
+  color: #b0b0b0;
+  line-height: 1.5;
+`;
+
+const ASOScoreComponentsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const ASOScoreComponentCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #7b2cbf;
+    transform: translateY(-2px);
+  }
+`;
+
+const ASOScoreComponentHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const ASOScoreComponentName = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const ASOScoreComponentValue = styled.div`
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: ${props => {
+    const score = props.score || 0;
+    if (score >= 80) return '#00d26a';
+    if (score >= 70) return '#00b4d8';
+    if (score >= 60) return '#ffc107';
+    return '#f8312f';
+  }};
+`;
+
+const ASOScoreComponentBar = styled.div`
+  height: 8px;
+  background: #1a1a2e;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+`;
+
+const ASOScoreComponentFill = styled.div`
+  height: 100%;
+  background: ${props => {
+    const score = props.score || 0;
+    if (score >= 80) return 'linear-gradient(90deg, #00d26a 0%, #00ff88 100%)';
+    if (score >= 70) return 'linear-gradient(90deg, #00b4d8 0%, #00d4ff 100%)';
+    if (score >= 60) return 'linear-gradient(90deg, #ffc107 0%, #ffca28 100%)';
+    return 'linear-gradient(90deg, #f8312f 0%, #ff5252 100%)';
+  }};
+  border-radius: 4px;
+  transition: width 0.5s ease;
+  width: ${props => props.score}%;
+`;
+
+const ASOScoreComponentFactors = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const ASOScoreFactor = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+`;
+
+const ASOScoreFactorName = styled.div`
+  color: #b0b0b0;
+`;
+
+const ASOScoreFactorScore = styled.div`
+  color: ${props => {
+    const score = props.score || 0;
+    if (score >= 80) return '#00d26a';
+    if (score >= 70) return '#00b4d8';
+    if (score >= 60) return '#ffc107';
+    return '#f8312f';
+  }};
+  font-weight: 600;
+`;
+
+const ASOScoreRecommendations = styled.div`
+  margin-top: 2rem;
+`;
+
+const ASOScoreRecommendationsTitle = styled.h4`
+  font-size: 1.125rem;
+  color: #eaeaea;
+  margin-bottom: 1rem;
+`;
+
+const ASOScoreRecommendationCard = styled.div`
+  background: ${props => {
+    if (props.priority === 'high') return 'rgba(248, 49, 47, 0.1)';
+    if (props.priority === 'medium') return 'rgba(255, 176, 32, 0.1)';
+    return '#16213e';
+  }};
+  border: 1px solid ${props => {
+    if (props.priority === 'high') return '#f8312f';
+    if (props.priority === 'medium') return '#ffb020';
+    return '#2d3561';
+  }};
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 1rem;
+  align-items: start;
+`;
+
+const ASOScoreRecommendationBadge = styled.div`
+  background: ${props => {
+    if (props.priority === 'high') return '#f8312f';
+    if (props.priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  white-space: nowrap;
+`;
+
+const ASOScoreRecommendationContent = styled.div`
+  flex: 1;
+`;
+
+const ASOScoreRecommendationTitle = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const ASOScoreRecommendationDescription = styled.div`
+  font-size: 0.875rem;
+  color: #b0b0b0;
+  line-height: 1.4;
+`;
+
+const ASOScoreRecommendationImpact = styled.div`
+  font-size: 0.75rem;
+  color: ${props => {
+    const impact = props.impact || 0;
+    if (impact >= 20) return '#00d26a';
+    if (impact >= 10) return '#00b4d8';
+    return '#ffc107';
+  }};
+  margin-top: 0.5rem;
+  font-weight: 600;
+`;
+
+const ASOScoreComparison = styled.div`
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #16213e;
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const ASOScoreComparisonTitle = styled.h4`
+  font-size: 1.125rem;
+  color: #eaeaea;
+  margin-bottom: 1rem;
+`;
+
+const ASOScoreComparisonList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const ASOScoreComparisonItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #1a1a2e;
+  border-radius: 6px;
+`;
+
+const ASOScoreComparisonCompetitor = styled.div`
+  font-size: 1rem;
+  color: #eaeaea;
+`;
+
+const ASOScoreComparisonScores = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const ASOScoreComparisonCompetitorScore = styled.div`
+  font-size: 1.125rem;
+  font-weight: bold;
+  color: #b0b0b0;
+`;
+
+const ASOScoreComparisonDifference = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: ${props => {
+    const diff = props.difference || 0;
+    if (diff > 0) return '#00d26a';
+    if (diff < 0) return '#f8312f';
+    return '#ffc107';
+  }};
+`;
+
 // Competitor Keyword Monitoring Styled Components
 const CompetitorMonitoringContainer = styled(ChartContainer)`
   margin-top: 2rem;
@@ -2272,6 +2639,7 @@ function StrategicDashboard() {
   const [descriptionOptimization, setDescriptionOptimization] = useState(null);
   const [categoryRanking, setCategoryRanking] = useState(null);
   const [competitorMonitoring, setCompetitorMonitoring] = useState(null);
+  const [asoScore, setAsoscore] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -2292,6 +2660,7 @@ function StrategicDashboard() {
     fetchDescriptionOptimization();
     fetchCategoryRanking();
     fetchCompetitorMonitoring();
+    fetchASOScore();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -3011,6 +3380,88 @@ function StrategicDashboard() {
             mediumOpportunityGaps: 5,
             averageGap: -10.2,
             lastChecked: new Date().toISOString()
+          }
+        ]
+      });
+    }
+  };
+
+  const fetchASOScore = async () => {
+    try {
+      const response = await fetch('http://localhost:3003/api/aso/score');
+      const result = await response.json();
+
+      if (result.success) {
+        setAsoscore(result.data);
+      }
+    } catch (error) {
+      console.error('Error fetching ASO score:', error);
+      // Set mock data on error
+      setAsoscore({
+        overallScore: 73,
+        keywordScore: 68,
+        metadataScore: 75,
+        visualScore: 78,
+        ratingsScore: 84,
+        conversionScore: 70,
+        factors: {
+          keywordRanking: { score: 65, weight: 0.10, description: 'Average ranking of target keywords' },
+          keywordCoverage: { score: 72, weight: 0.08, description: 'Percentage of tracked keywords ranking in top 50' },
+          keywordRelevance: { score: 70, weight: 0.07, description: 'Relevance of keywords to app category' },
+          keywordDensity: { score: 65, weight: 0.05, description: 'Keyword usage in title, subtitle, description' },
+          titleOptimization: { score: 75, weight: 0.10, description: 'Title length, keyword inclusion, clarity' },
+          subtitleOptimization: { score: 72, weight: 0.08, description: 'Subtitle length, keyword inclusion' },
+          descriptionQuality: { score: 78, weight: 0.07, description: 'Description length, readability, keyword usage' },
+          iconQuality: { score: 75, weight: 0.10, description: 'Icon clarity, branding, emotional appeal' },
+          screenshotQuality: { score: 80, weight: 0.06, description: 'Screenshot quality, captions, appeal' },
+          visualConsistency: { score: 78, weight: 0.04, description: 'Consistent branding across visuals' },
+          averageRating: { score: 84, weight: 0.08, description: 'App store average rating' },
+          ratingCount: { score: 60, weight: 0.04, description: 'Number of ratings' },
+          reviewSentiment: { score: 78, weight: 0.03, description: 'Positive review sentiment' },
+          conversionRate: { score: 70, weight: 0.06, description: 'Product page to download conversion rate' },
+          categoryRanking: { score: 98, weight: 0.04, description: 'Ranking in primary category' }
+        },
+        recommendations: [
+          {
+            category: 'keyword',
+            priority: 'high',
+            title: 'Improve keyword rankings',
+            description: 'Current average ranking is low. Focus on optimizing app metadata and building organic installs for better rankings.',
+            expectedImpact: 35,
+            implemented: false
+          },
+          {
+            category: 'ratings',
+            priority: 'high',
+            title: 'Increase review count',
+            description: 'Low number of ratings. Implement review prompts and improve user engagement to get more ratings.',
+            expectedImpact: 40,
+            implemented: false
+          },
+          {
+            category: 'conversion',
+            priority: 'medium',
+            title: 'Improve conversion rate',
+            description: 'Current conversion rate is low. Optimize product page visuals, description, and screenshots to improve conversions.',
+            expectedImpact: 30,
+            implemented: false
+          }
+        ],
+        competitorComparison: [
+          {
+            competitorAppName: 'Episode',
+            competitorScore: 78,
+            scoreDifference: -5
+          },
+          {
+            competitorAppName: 'Chapters',
+            competitorScore: 75,
+            scoreDifference: -2
+          },
+          {
+            competitorAppName: 'Choices',
+            competitorScore: 72,
+            scoreDifference: 1
           }
         ]
       });
@@ -4955,6 +5406,224 @@ function StrategicDashboard() {
             </CategoryRankingContainer>
           )}
 
+
+          {/* ASO Score Section */}
+          {asoScore && (
+            <ASOScoreContainer>
+              <ASOScoreHeader>
+                <ASOScoreTitle>
+                  📊 ASO Score
+                </ASOScoreTitle>
+                <ASOScoreRefreshButton onClick={() => {
+                  fetch('http://localhost:3003/api/aso/score/calculate', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(result => {
+                      if (result.success) {
+                        setAsoscore(result.data);
+                      }
+                    });
+                }}>
+                  🔄 Recalculate
+                </ASOScoreRefreshButton>
+              </ASOScoreHeader>
+
+              {/* Main Score Display */}
+              <ASOScoreMain score={asoScore.overallScore}>
+                <ASOScoreCircle score={asoScore.overallScore}>
+                  <ASOScoreValue>{asoScore.overallScore}</ASOScoreValue>
+                  <ASOScoreGrade>
+                    {asoScore.overallScore >= 90 ? 'A' :
+                     asoScore.overallScore >= 80 ? 'B' :
+                     asoScore.overallScore >= 70 ? 'C' :
+                     asoScore.overallScore >= 60 ? 'D' : 'F'}
+                  </ASOScoreGrade>
+                  <ASOScoreLabel>
+                    {asoScore.overallScore >= 90 ? 'Excellent' :
+                     asoScore.overallScore >= 80 ? 'Good' :
+                     asoScore.overallScore >= 70 ? 'Fair' :
+                     asoScore.overallScore >= 60 ? 'Poor' : 'Critical'}
+                  </ASOScoreLabel>
+                </ASOScoreCircle>
+                <ASOScoreDetails>
+                  <ASOScoreOverallLabel>Overall App Store Optimization Score</ASOScoreOverallLabel>
+                  <ASOScoreOverallValue>{asoScore.overallScore}/100</ASOScoreOverallValue>
+                  <ASOScoreDescription>
+                    Your ASO score measures how well your app is optimized for the App Store.
+                    It considers keywords, metadata, visuals, ratings, and conversion performance.
+                  </ASOScoreDescription>
+                </ASOScoreDetails>
+              </ASOScoreMain>
+
+              {/* Component Scores Grid */}
+              <ASOScoreComponentsGrid>
+                {/* Keyword Score */}
+                <ASOScoreComponentCard>
+                  <ASOScoreComponentHeader>
+                    <ASOScoreComponentName>🔑 Keywords</ASOScoreComponentName>
+                    <ASOScoreComponentValue score={asoScore.keywordScore}>{asoScore.keywordScore}</ASOScoreComponentValue>
+                  </ASOScoreComponentHeader>
+                  <ASOScoreComponentBar>
+                    <ASOScoreComponentFill score={asoScore.keywordScore} />
+                  </ASOScoreComponentBar>
+                  <ASOScoreComponentFactors>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Ranking</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.keywordRanking?.score}>{asoScore.factors.keywordRanking?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Coverage</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.keywordCoverage?.score}>{asoScore.factors.keywordCoverage?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Relevance</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.keywordRelevance?.score}>{asoScore.factors.keywordRelevance?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Density</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.keywordDensity?.score}>{asoScore.factors.keywordDensity?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                  </ASOScoreComponentFactors>
+                </ASOScoreComponentCard>
+
+                {/* Metadata Score */}
+                <ASOScoreComponentCard>
+                  <ASOScoreComponentHeader>
+                    <ASOScoreComponentName>📝 Metadata</ASOScoreComponentName>
+                    <ASOScoreComponentValue score={asoScore.metadataScore}>{asoScore.metadataScore}</ASOScoreComponentValue>
+                  </ASOScoreComponentHeader>
+                  <ASOScoreComponentBar>
+                    <ASOScoreComponentFill score={asoScore.metadataScore} />
+                  </ASOScoreComponentBar>
+                  <ASOScoreComponentFactors>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Title</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.titleOptimization?.score}>{asoScore.factors.titleOptimization?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Subtitle</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.subtitleOptimization?.score}>{asoScore.factors.subtitleOptimization?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Description</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.descriptionQuality?.score}>{asoScore.factors.descriptionQuality?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                  </ASOScoreComponentFactors>
+                </ASOScoreComponentCard>
+
+                {/* Visual Score */}
+                <ASOScoreComponentCard>
+                  <ASOScoreComponentHeader>
+                    <ASOScoreComponentName>🎨 Visuals</ASOScoreComponentName>
+                    <ASOScoreComponentValue score={asoScore.visualScore}>{asoScore.visualScore}</ASOScoreComponentValue>
+                  </ASOScoreComponentHeader>
+                  <ASOScoreComponentBar>
+                    <ASOScoreComponentFill score={asoScore.visualScore} />
+                  </ASOScoreComponentBar>
+                  <ASOScoreComponentFactors>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Icon</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.iconQuality?.score}>{asoScore.factors.iconQuality?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Screenshots</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.screenshotQuality?.score}>{asoScore.factors.screenshotQuality?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Consistency</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.visualConsistency?.score}>{asoScore.factors.visualConsistency?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                  </ASOScoreComponentFactors>
+                </ASOScoreComponentCard>
+
+                {/* Ratings Score */}
+                <ASOScoreComponentCard>
+                  <ASOScoreComponentHeader>
+                    <ASOScoreComponentName>⭐ Ratings</ASOScoreComponentName>
+                    <ASOScoreComponentValue score={asoScore.ratingsScore}>{asoScore.ratingsScore}</ASOScoreComponentValue>
+                  </ASOScoreComponentHeader>
+                  <ASOScoreComponentBar>
+                    <ASOScoreComponentFill score={asoScore.ratingsScore} />
+                  </ASOScoreComponentBar>
+                  <ASOScoreComponentFactors>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Average Rating</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.averageRating?.score}>{asoScore.factors.averageRating?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Rating Count</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.ratingCount?.score}>{asoScore.factors.ratingCount?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Sentiment</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.reviewSentiment?.score}>{asoScore.factors.reviewSentiment?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                  </ASOScoreComponentFactors>
+                </ASOScoreComponentCard>
+
+                {/* Conversion Score */}
+                <ASOScoreComponentCard>
+                  <ASOScoreComponentHeader>
+                    <ASOScoreComponentName>📈 Conversion</ASOScoreComponentName>
+                    <ASOScoreComponentValue score={asoScore.conversionScore}>{asoScore.conversionScore}</ASOScoreComponentValue>
+                  </ASOScoreComponentHeader>
+                  <ASOScoreComponentBar>
+                    <ASOScoreComponentFill score={asoScore.conversionScore} />
+                  </ASOScoreComponentBar>
+                  <ASOScoreComponentFactors>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Conversion Rate</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.conversionRate?.score}>{asoScore.factors.conversionRate?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                    <ASOScoreFactor>
+                      <ASOScoreFactorName>Category Ranking</ASOScoreFactorName>
+                      <ASOScoreFactorScore score={asoScore.factors.categoryRanking?.score}>{asoScore.factors.categoryRanking?.score}</ASOScoreFactorScore>
+                    </ASOScoreFactor>
+                  </ASOScoreComponentFactors>
+                </ASOScoreComponentCard>
+              </ASOScoreComponentsGrid>
+
+              {/* Recommendations */}
+              {asoScore.recommendations && asoScore.recommendations.length > 0 && (
+                <ASOScoreRecommendations>
+                  <ASOScoreRecommendationsTitle>💡 Optimization Recommendations</ASOScoreRecommendationsTitle>
+                  {asoScore.recommendations.slice(0, 5).map((rec, index) => (
+                    <ASOScoreRecommendationCard key={index} priority={rec.priority}>
+                      <ASOScoreRecommendationBadge priority={rec.priority}>
+                        {rec.priority}
+                      </ASOScoreRecommendationBadge>
+                      <ASOScoreRecommendationContent>
+                        <ASOScoreRecommendationTitle>{rec.title}</ASOScoreRecommendationTitle>
+                        <ASOScoreRecommendationDescription>{rec.description}</ASOScoreRecommendationDescription>
+                        <ASOScoreRecommendationImpact impact={rec.expectedImpact}>
+                          Potential improvement: +{rec.expectedImpact} points
+                        </ASOScoreRecommendationImpact>
+                      </ASOScoreRecommendationContent>
+                    </ASOScoreRecommendationCard>
+                  ))}
+                </ASOScoreRecommendations>
+              )}
+
+              {/* Competitor Comparison */}
+              {asoScore.competitorComparison && asoScore.competitorComparison.length > 0 && (
+                <ASOScoreComparison>
+                  <ASOScoreComparisonTitle>🏆 Competitor Comparison</ASOScoreComparisonTitle>
+                  <ASOScoreComparisonList>
+                    {asoScore.competitorComparison.map((comp, index) => (
+                      <ASOScoreComparisonItem key={index}>
+                        <ASOScoreComparisonCompetitor>{comp.competitorAppName}</ASOScoreComparisonCompetitor>
+                        <ASOScoreComparisonScores>
+                          <ASOScoreComparisonCompetitorScore>{comp.competitorScore}</ASOScoreComparisonCompetitorScore>
+                          <ASOScoreComparisonDifference difference={comp.scoreDifference}>
+                            {comp.scoreDifference > 0 ? `+${comp.scoreDifference}` : comp.scoreDifference}
+                          </ASOScoreComparisonDifference>
+                        </ASOScoreComparisonScores>
+                      </ASOScoreComparisonItem>
+                    ))}
+                  </ASOScoreComparisonList>
+                </ASOScoreComparison>
+              )}
+            </ASOScoreContainer>
+          )}
 
           {/* Competitor Keyword Monitoring Section */}
           {competitorMonitoring && (
