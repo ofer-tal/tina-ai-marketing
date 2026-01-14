@@ -27,6 +27,7 @@ import tiktokAudioRouter from "./api/tiktok-audio.js";
 import audioOverlayRouter from "./api/audio-overlay.js";
 import metricsRouter from "./api/metrics.js";
 import appstoreRouter from "./api/appstore.js";
+import asoRouter from "./api/aso.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -191,6 +192,7 @@ app.use("/api/tiktok-audio", tiktokAudioRouter);
 app.use("/api/audio-overlay", audioOverlayRouter);
 app.use("/api/metrics", metricsRouter);
 app.use("/api/appstore", appstoreRouter);
+app.use("/api/aso", asoRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
