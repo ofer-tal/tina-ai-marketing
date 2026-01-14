@@ -21,6 +21,7 @@ import blacklistRouter from "./api/blacklist.js";
 import tiktokRouter from "./api/tiktok.js";
 import instagramRouter from "./api/instagram.js";
 import youtubeRouter from "./api/youtube.js";
+import rateLimitsRouter from "./api/rateLimits.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -179,6 +180,7 @@ app.use("/api/blacklist", blacklistRouter);
 app.use("/api/tiktok", tiktokRouter);
 app.use("/api/instagram", instagramRouter);
 app.use("/api/youtube", youtubeRouter);
+app.use("/api/rate-limits", rateLimitsRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {

@@ -32,7 +32,17 @@ class RateLimiter {
       baseDelay: 1000, // Base delay in ms
       maxDelay: 60000, // Max delay in ms (1 minute)
       backoffMultiplier: 2, // Exponential backoff multiplier
+      // Platform-specific request delays (proactive throttling)
+      requestDelays: {
+        'open.tiktokapis.com': 500, // 500ms between TikTok requests
+        'graph.facebook.com': 5000, // 5s between Instagram requests
+        'www.googleapis.com': 100, // 100ms between YouTube requests
+        'upload.youtube.com': 2000, // 2s between YouTube uploads
+      },
     };
+
+    // Track last request time per host (for proactive throttling)
+    this.lastRequestTime = new Map();
   }
 
   /**
@@ -196,10 +206,28 @@ class RateLimiter {
       });
     }
 
+    // Proactive throttling: Add delay between requests for specific hosts
+    const delay = this.config.requestDelays[host];
+    if (delay) {
+      const lastRequest = this.lastRequestTime.get(host) || 0;
+      const timeSinceLastRequest = Date.now() - lastRequest;
+
+      if (timeSinceLastRequest < delay) {
+        const waitTime = delay - timeSinceLastRequest;
+        logger.debug(`Throttling request to ${host}`, {
+          delay: `${waitTime}ms`,
+          url,
+        });
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+      }
+    }
+
     // Execute request
     let response;
     try {
       response = await fetch(url, options);
+      // Update last request time
+      this.lastRequestTime.set(host, Date.now());
     } catch (error) {
       // Network errors don't have status codes
       throw error;

@@ -112,7 +112,8 @@ class BaseApiClient {
 
       return retryService.retry(
         async () => {
-          const response = await fetch(url, options);
+          // Use rate limiter for retries too
+          const response = await this.rateLimiter.fetch(url, options);
           if (!response.ok) {
             throw await this._handleError(response);
           }
