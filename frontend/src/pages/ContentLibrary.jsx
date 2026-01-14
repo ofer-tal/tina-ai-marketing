@@ -635,6 +635,91 @@ const RescheduleButton = styled.button`
   }
 `;
 
+const ScheduleButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: linear-gradient(135deg, #0056b3, #004494);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+
+const ConfirmScheduleButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: #28a745;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #218838;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+
+const CancelScheduleButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: #dc3545;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #c82333;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+
 const DateTimePickerContainer = styled.div`
   margin-top: 1rem;
   padding: 1rem;
@@ -1536,6 +1621,8 @@ function ContentLibrary() {
   const [newHashtag, setNewHashtag] = useState('');
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [newScheduledTime, setNewScheduledTime] = useState('');
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduledTimeForApproval, setScheduledTimeForApproval] = useState('');
   const [countdown, setCountdown] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
   const [progressPollInterval, setProgressPollInterval] = useState(null);
@@ -1746,8 +1833,8 @@ function ContentLibrary() {
     if (!newScheduledTime) return;
 
     try {
-      const response = await fetch('http://localhost:3003/api/content/' + selectedVideo._id + '/schedule', {
-        method: 'PATCH',
+      const response = await fetch('http://localhost:3003/api/content/posts/' + selectedVideo._id, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledAt: new Date(newScheduledTime).toISOString() })
       });
@@ -1768,6 +1855,76 @@ function ContentLibrary() {
       setRescheduleMode(false);
       setNewScheduledTime('');
       alert('Updated locally');
+    }
+  };
+
+  const handleStartSchedule = () => {
+    setScheduleMode(true);
+    const defaultTime = new Date(Date.now() + 3600000); // Default 1 hour from now
+    setScheduledTimeForApproval(defaultTime.toISOString().slice(0, 16));
+  };
+
+  const handleCancelSchedule = () => {
+    setScheduleMode(false);
+    setScheduledTimeForApproval('');
+  };
+
+  const handleApproveAndSchedule = async () => {
+    if (!selectedVideo || !scheduledTimeForApproval) return;
+
+    try {
+      // First approve the post
+      const approveResponse = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}/approve`, {
+        method: 'POST'
+      });
+
+      if (!approveResponse.ok) {
+        throw new Error('Failed to approve post');
+      }
+
+      // Then schedule it
+      const scheduleResponse = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}/schedule`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt: new Date(scheduledTimeForApproval).toISOString() })
+      });
+
+      if (!scheduleResponse.ok) {
+        throw new Error('Failed to schedule post');
+      }
+
+      // Update local state
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post._id === selectedVideo._id
+            ? { ...post, status: 'scheduled', scheduledAt: new Date(scheduledTimeForApproval).toISOString() }
+            : post
+        )
+      );
+
+      // Update selected video
+      setSelectedVideo(prev => ({
+        ...prev,
+        status: 'scheduled',
+        scheduledAt: new Date(scheduledTimeForApproval).toISOString()
+      }));
+
+      setScheduleMode(false);
+      setScheduledTimeForApproval('');
+      fetchPosts();
+      alert('✅ Post approved and scheduled successfully!');
+    } catch (err) {
+      console.error('Error approving and scheduling post:', err);
+      // Fallback: at least approve locally
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post._id === selectedVideo._id
+            ? { ...post, status: 'approved' }
+            : post
+        )
+      );
+      setSelectedVideo(prev => ({ ...prev, status: 'approved' }));
+      alert('⚠️ Approved (backend not connected for scheduling)');
     }
   };
 
@@ -2487,6 +2644,27 @@ function ContentLibrary() {
                     </DateTimePickerContainer>
                   )}
 
+                  {/* Schedule Mode UI */}
+                  {scheduleMode && (
+                    <DateTimePickerContainer $visible={scheduleMode}>
+                      <DateTimePickerRow>
+                        <label style={{ color: '#eaeaea', fontWeight: '600' }}>📅 Schedule for:</label>
+                        <DateTimeInput
+                          type="datetime-local"
+                          value={scheduledTimeForApproval}
+                          onChange={(e) => setScheduledTimeForApproval(e.target.value)}
+                          min={new Date().toISOString().slice(0, 16)}
+                        />
+                        <ConfirmScheduleButton onClick={handleApproveAndSchedule}>
+                          ✅ Confirm & Schedule
+                        </ConfirmScheduleButton>
+                        <CancelScheduleButton onClick={handleCancelSchedule}>
+                          ✖ Cancel
+                        </CancelScheduleButton>
+                      </DateTimePickerRow>
+                    </DateTimePickerContainer>
+                  )}
+
                   {/* Edit Mode UI */}
                   {editMode ? (
                     <>
@@ -2668,9 +2846,20 @@ function ContentLibrary() {
                             🔄 Regenerate
                           </RegenerateButton>
                         </>
+                      ) : scheduleMode ? (
+                        <>
+                          {/* Show schedule datetime picker */}
+                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                          <RegenerateButton onClick={handleRegenerate}>
+                            🔄 Regenerate
+                          </RegenerateButton>
+                          <ApproveButton onClick={handleApprove}>
+                            ✅ Approve Now
+                          </ApproveButton>
+                        </>
                       ) : (
                         <>
-                          {/* Show approve/reject for non-approved posts */}
+                          {/* Show approve/reject/schedule for non-approved posts */}
                           <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
                           <RegenerateButton onClick={handleRegenerate}>
                             🔄 Regenerate
@@ -2678,6 +2867,9 @@ function ContentLibrary() {
                           <ApproveButton onClick={handleApprove}>
                             ✅ Approve
                           </ApproveButton>
+                          <ScheduleButton onClick={handleStartSchedule}>
+                            📅 Schedule
+                          </ScheduleButton>
                           <RejectButton onClick={handleReject}>
                             ❌ Reject
                           </RejectButton>

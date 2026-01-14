@@ -22,6 +22,7 @@ import tiktokRouter from "./api/tiktok.js";
 import instagramRouter from "./api/instagram.js";
 import youtubeRouter from "./api/youtube.js";
 import storageService from "./services/storage.js";
+import postingSchedulerJob from "./jobs/postingScheduler.js";
 
 dotenv.config();
 
@@ -254,6 +255,10 @@ async function startServer() {
     console.log("Connecting to MongoDB...");
     await databaseService.connect();
     console.log("MongoDB connection established");
+
+    // Start the posting scheduler job after MongoDB connects
+    postingSchedulerJob.start();
+    console.log("Posting scheduler job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -293,6 +298,11 @@ const gracefulShutdown = async (signal) => {
     console.log('  [3/5] Closing database connections...');
     await databaseService.disconnect();
     console.log('  ✓ Database disconnected');
+
+    // Stop scheduler jobs
+    console.log('  Stopping scheduler jobs...');
+    postingSchedulerJob.stop();
+    console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
     console.log('  [4/5] Running cleanup tasks...');

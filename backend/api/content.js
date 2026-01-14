@@ -1,6 +1,7 @@
 import express from 'express';
 import winston from 'winston';
 import contentGenerationJob from '../jobs/contentGeneration.js';
+import postingSchedulerJob from '../jobs/postingScheduler.js';
 import captionGenerationService from '../services/captionGenerationService.js';
 import hashtagGenerationService from '../services/hashtagGenerationService.js';
 import hookGenerationService from '../services/hookGenerationService.js';
@@ -2406,6 +2407,204 @@ router.get("/rejection-insights", async (req, res) => {
     res.status(500).json({
       error: 'Failed to fetch rejection insights',
       details: error.message
+    });
+  }
+});
+
+// ========================================
+// Scheduled Posting Endpoints
+// ========================================
+
+/**
+ * POST /api/content/scheduler/start
+ * Start the scheduled posting job
+ */
+router.post('/scheduler/start', (req, res) => {
+  try {
+    logger.info('Starting scheduled posting job');
+
+    postingSchedulerJob.start();
+
+    res.json({
+      success: true,
+      message: 'Scheduled posting job started'
+    });
+
+  } catch (error) {
+    logger.error('Start scheduler API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/scheduler/stop
+ * Stop the scheduled posting job
+ */
+router.post('/scheduler/stop', (req, res) => {
+  try {
+    logger.info('Stopping scheduled posting job');
+
+    postingSchedulerJob.stop();
+
+    res.json({
+      success: true,
+      message: 'Scheduled posting job stopped'
+    });
+
+  } catch (error) {
+    logger.error('Stop scheduler API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/scheduler/status
+ * Get the status of the scheduled posting job
+ */
+router.get('/scheduler/status', (req, res) => {
+  try {
+    const status = postingSchedulerJob.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+
+  } catch (error) {
+    logger.error('Get scheduler status API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/scheduler/trigger
+ * Manually trigger the scheduled posting job (for testing)
+ */
+router.post('/scheduler/trigger', async (req, res) => {
+  try {
+    logger.info('Manually triggering scheduled posting job');
+
+    await postingSchedulerJob.trigger();
+
+    res.json({
+      success: true,
+      message: 'Scheduled posting job triggered'
+    });
+
+  } catch (error) {
+    logger.error('Trigger scheduler API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/scheduled
+ * Get all scheduled posts
+ */
+router.get('/scheduled', async (req, res) => {
+  try {
+    const { limit = 50, skip = 0 } = req.query;
+
+    logger.info('Fetching scheduled posts', { limit, skip });
+
+    const posts = await MarketingPost.find({
+      status: 'scheduled'
+    })
+      .populate('storyId', 'title coverPath spiciness category')
+      .sort({ scheduledAt: 1 })
+      .limit(parseInt(limit))
+      .skip(parseInt(skip));
+
+    const total = await MarketingPost.countDocuments({
+      status: 'scheduled'
+    });
+
+    res.json({
+      success: true,
+      data: {
+        posts,
+        pagination: {
+          total,
+          limit: parseInt(limit),
+          skip: parseInt(skip),
+          hasMore: total > parseInt(skip) + parseInt(limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get scheduled posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/scheduled/due
+ * Get posts that are due to be posted (scheduledAt <= now)
+ */
+router.get('/scheduled/due', async (req, res) => {
+  try {
+    logger.info('Fetching due scheduled posts');
+
+    const posts = await MarketingPost.find({
+      status: 'scheduled',
+      scheduledAt: { $lte: new Date() }
+    })
+      .populate('storyId', 'title coverPath spiciness category')
+      .sort({ scheduledAt: 1 });
+
+    res.json({
+      success: true,
+      data: {
+        count: posts.length,
+        posts
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get due scheduled posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
