@@ -592,6 +592,155 @@ const RejectButton = styled.button`
   }
 `;
 
+// Rejection Modal Components
+const RejectModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+`;
+
+const RejectModalContent = styled.div`
+  background: #16213e;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+`;
+
+const RejectModalTitle = styled.h3`
+  margin: 0 0 1rem 0;
+  color: #ff6b6b;
+  font-size: 1.5rem;
+`;
+
+const RejectModalLabel = styled.label`
+  display: block;
+  margin: 1.5rem 0 0.5rem 0;
+  color: #eaeaea;
+  font-weight: 500;
+  font-size: 0.95rem;
+`;
+
+const RejectModalTextarea = styled.textarea`
+  width: 100%;
+  min-height: 100px;
+  padding: 0.75rem;
+  background: #0f1629;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #ff6b6b;
+    box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+  }
+
+  &::placeholder {
+    color: #a0a0a0;
+  }
+`;
+
+const RejectModalCheckbox = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #1a2332;
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    background: #1f2940;
+  }
+
+  input[type="checkbox"] {
+    margin-top: 0.25rem;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #e94560;
+  }
+`;
+
+const RejectModalCheckboxLabel = styled.div`
+  flex: 1;
+  color: #c0c0c0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+`;
+
+const RejectModalWarning = styled.div`
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(233, 69, 96, 0.1);
+  border-left: 3px solid #e94560;
+  border-radius: 4px;
+  color: #e94560;
+  font-size: 0.85rem;
+`;
+
+const RejectModalActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+`;
+
+const RejectModalButton = styled.button`
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.cancel {
+    background: #2d3561;
+    color: #eaeaea;
+
+    &:hover {
+      background: #3a456b;
+    }
+  }
+
+  &.confirm {
+    background: #ff6b6b;
+    color: white;
+
+    &:hover {
+      background: #ff5252;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+    }
+
+    &:disabled {
+      background: #2d3561;
+      cursor: not-allowed;
+      opacity: 0.5;
+      transform: none;
+    }
+  }
+`;
+
 function ContentLibrary() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -608,6 +757,11 @@ function ContentLibrary() {
     hasMore: false
   });
   const [selectedVideo, setSelectedVideo] = useState(null);
+  const [rejectModal, setRejectModal] = useState({
+    isOpen: false,
+    reason: '',
+    blacklistStory: false
+  });
 
   useEffect(() => {
     fetchPosts();
@@ -859,22 +1013,64 @@ function ContentLibrary() {
     }
   };
 
-  const handleReject = async () => {
+  const handleReject = () => {
     if (!selectedVideo) return;
+    // Open the rejection modal
+    setRejectModal({
+      isOpen: true,
+      reason: '',
+      blacklistStory: false
+    });
+  };
 
-    const reason = prompt('Enter rejection reason (optional):');
-    if (reason === null) return; // User cancelled
+  const handleCloseRejectModal = () => {
+    setRejectModal({
+      isOpen: false,
+      reason: '',
+      blacklistStory: false
+    });
+  };
+
+  const handleConfirmReject = async () => {
+    if (!selectedVideo || !rejectModal.reason.trim()) {
+      alert('Please provide a rejection reason.');
+      return;
+    }
 
     try {
-      // Try API call first
-      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/reject`, {
+      // Try API call first for rejection
+      const rejectResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ reason: rejectModal.reason })
       });
 
-      if (!response.ok) {
+      if (!rejectResponse.ok) {
         throw new Error('Failed to reject post');
+      }
+
+      // If blacklist is checked, call blacklist API
+      if (rejectModal.blacklistStory && selectedVideo.storyId) {
+        try {
+          const blacklistResponse = await fetch('http://localhost:3001/api/blacklist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storyId: selectedVideo.storyId,
+              reason: rejectModal.reason,
+              blacklistedBy: 'user'
+            })
+          });
+
+          if (blacklistResponse.ok) {
+            console.log('Story added to blacklist successfully');
+          } else {
+            console.warn('Failed to add story to blacklist, but post was rejected');
+          }
+        } catch (blacklistErr) {
+          console.error('Error blacklisting story:', blacklistErr);
+          // Continue even if blacklist fails
+        }
       }
 
       // Update local state
@@ -886,8 +1082,14 @@ function ContentLibrary() {
         )
       );
 
+      handleCloseRejectModal();
       handleCloseModal();
-      alert('❌ Post rejected.');
+
+      if (rejectModal.blacklistStory) {
+        alert('❌ Post rejected and story blacklisted.');
+      } else {
+        alert('❌ Post rejected.');
+      }
     } catch (err) {
       console.error('Error rejecting post:', err);
       // For development, update local state anyway
@@ -898,6 +1100,7 @@ function ContentLibrary() {
             : post
         )
       );
+      handleCloseRejectModal();
       handleCloseModal();
       alert('❌ Post rejected! (Note: Backend not connected)');
     }
@@ -1109,6 +1312,56 @@ function ContentLibrary() {
                 </ModalInfo>
               </ModalContent>
             </ModalOverlay>
+          )}
+
+          {/* Rejection Modal */}
+          {rejectModal.isOpen && (
+            <RejectModalOverlay onClick={handleCloseRejectModal}>
+              <RejectModalContent onClick={(e) => e.stopPropagation()}>
+                <RejectModalTitle>❌ Reject Content</RejectModalTitle>
+
+                <RejectModalLabel htmlFor="reject-reason">
+                  Rejection Reason <span style={{color: '#e94560'}}>*</span>
+                </RejectModalLabel>
+                <RejectModalTextarea
+                  id="reject-reason"
+                  placeholder="Please explain why this content is being rejected... (e.g., Low quality, inappropriate content, poor engagement potential)"
+                  value={rejectModal.reason}
+                  onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+                  autoFocus
+                />
+
+                <RejectModalCheckbox>
+                  <input
+                    type="checkbox"
+                    checked={rejectModal.blacklistStory}
+                    onChange={(e) => setRejectModal(prev => ({ ...prev, blacklistStory: e.target.checked }))}
+                  />
+                  <RejectModalCheckboxLabel>
+                    <strong>🚫 Blacklist this story</strong>
+                    <div>Prevent this story from being used for future content generation</div>
+                    {rejectModal.blacklistStory && (
+                      <RejectModalWarning>
+                        ⚠️ This story will not be used for any future content. This action helps AI learn what content to avoid.
+                      </RejectModalWarning>
+                    )}
+                  </RejectModalCheckboxLabel>
+                </RejectModalCheckbox>
+
+                <RejectModalActions>
+                  <RejectModalButton className="cancel" onClick={handleCloseRejectModal}>
+                    Cancel
+                  </RejectModalButton>
+                  <RejectModalButton
+                    className="confirm"
+                    onClick={handleConfirmReject}
+                    disabled={!rejectModal.reason.trim()}
+                  >
+                    Reject {rejectModal.blacklistStory && '& Blacklist'}
+                  </RejectModalButton>
+                </RejectModalActions>
+              </RejectModalContent>
+            </RejectModalOverlay>
           )}
 
           {pagination.total > pagination.limit && (
