@@ -346,4 +346,98 @@ router.get('/suggestions', async (req, res) => {
     });
   }
 });
+
+/**
+ * GET /api/aso/category/ranking
+ * Get current category ranking for the app
+ */
+router.get('/category/ranking', async (req, res) => {
+  try {
+    const categoryRankingService = (await import('../services/categoryRankingService.js')).default;
+    const ranking = await categoryRankingService.getCurrentRanking();
+
+    res.json({
+      success: true,
+      data: ranking
+    });
+  } catch (error) {
+    console.error('Error fetching category ranking:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/category/history
+ * Get category ranking history
+ * Query params:
+ * - days: Number of days to look back (default: 30)
+ */
+router.get('/category/history', async (req, res) => {
+  try {
+    const categoryRankingService = (await import('../services/categoryRankingService.js')).default;
+    const days = parseInt(req.query.days) || 30;
+    const history = await categoryRankingService.getRankingHistory(days);
+
+    res.json({
+      success: true,
+      data: history
+    });
+  } catch (error) {
+    console.error('Error fetching category ranking history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/category/stats
+ * Get category ranking statistics and trends
+ */
+router.get('/category/stats', async (req, res) => {
+  try {
+    const categoryRankingService = (await import('../services/categoryRankingService.js')).default;
+    const stats = await categoryRankingService.getRankingStats();
+
+    res.json({
+      success: true,
+      data: stats
+    });
+  } catch (error) {
+    console.error('Error fetching category ranking stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/category/sync
+ * Manually trigger category ranking sync
+ * Fetches current ranking from App Store Connect and stores it
+ */
+router.post('/category/sync', async (req, res) => {
+  try {
+    const categoryRankingService = (await import('../services/categoryRankingService.js')).default;
+    const ranking = await categoryRankingService.fetchAndStoreRanking();
+
+    res.json({
+      success: true,
+      message: 'Category ranking synced successfully',
+      data: ranking
+    });
+  } catch (error) {
+    console.error('Error syncing category ranking:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

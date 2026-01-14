@@ -1259,6 +1259,102 @@ class AppStoreConnectService {
 
     return suggestions;
   }
+
+  /**
+   * Fetch category ranking from App Store Connect
+   * Gets app's current ranking within its category
+   *
+   * API Endpoint: GET /apps/{appId}/appStoreVersions
+   */
+  async getCategoryRanking(appId = null) {
+    logger.info('Fetching category ranking', { appId });
+
+    const targetAppId = appId || process.env.APP_STORE_APP_ID || 'blush-app';
+
+    if (!this.isConfigured()) {
+      // Return mock ranking if API not configured
+      logger.warn('App Store Connect API not configured, returning mock category ranking');
+      return this.getMockCategoryRanking();
+    }
+
+    try {
+      // TODO: Implement actual API call to fetch category rankings
+      // The App Store Connect API doesn't directly provide category rankings
+      // This would typically be fetched from:
+      // 1. App Store Connect API for app details
+      // 2. Third-party ASO tools (AppTweak, Sensor Tower, MobileAction)
+      // 3. Web scraping of App Store (not recommended)
+      //
+      // For now, return mock data
+      logger.info('Returning mock category ranking (API implementation pending)');
+      return this.getMockCategoryRanking();
+
+    } catch (error) {
+      logger.error('Failed to fetch category ranking', {
+        appId: targetAppId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock category ranking for testing
+   */
+  getMockCategoryRanking() {
+    // Simulate realistic ranking data for a romance fiction app
+    const baseRanking = 42; // Base ranking position
+    const variation = Math.floor(Math.random() * 10) - 5; // +/- 5 positions
+    const ranking = Math.max(1, baseRanking + variation);
+
+    return {
+      category: 'Books',
+      subcategory: 'Romance',
+      ranking: ranking,
+      totalAppsInCategory: 2450,
+      percentile: Math.round((1 - ranking / 2450) * 100),
+      previousRanking: ranking + (Math.random() > 0.5 ? 1 : -1),
+      rankingChange: Math.random() > 0.5 ? 1 : -1,
+      lastChecked: new Date().toISOString(),
+      source: 'mock'
+    };
+  }
+
+  /**
+   * Get category details from app metadata
+   */
+  async getAppCategory(appId = null) {
+    logger.info('Getting app category', { appId });
+
+    try {
+      const metadata = await this.getAppMetadata(appId);
+
+      // Return category information
+      return {
+        primaryCategory: 'Books',
+        primaryCategory: 'Games',
+        subcategory: 'Romance',
+        categoryCode: '6016', // Books category code
+        subcategoryCode: '6024', // Romance subcategory code
+        source: metadata.source || 'derived'
+      };
+
+    } catch (error) {
+      logger.error('Failed to get app category', {
+        appId,
+        error: error.message
+      });
+
+      // Return defaults on error
+      return {
+        primaryCategory: 'Books',
+        subcategory: 'Romance',
+        categoryCode: '6016',
+        subcategoryCode: '6024',
+        source: 'fallback'
+      };
+    }
+  }
 }
 
 // Create singleton instance

@@ -452,4 +452,72 @@ router.get('/icon/ab-testing/:appId?', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/appstore/category/ranking/:appId?
+ *
+ * Get current category ranking for the app
+ * Query params:
+ * - appId: App ID (optional, defaults to APP_STORE_APP_ID env var or 'blush-app')
+ */
+router.get('/category/ranking/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Fetching category ranking', { appId });
+
+    const ranking = await appStoreConnectService.getCategoryRanking(appId);
+
+    res.json({
+      success: true,
+      appId: appId || process.env.APP_STORE_APP_ID || 'blush-app',
+      ranking: ranking,
+      fetchedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Failed to fetch category ranking', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/appstore/category/:appId?
+ *
+ * Get app category information
+ * Query params:
+ * - appId: App ID (optional, defaults to APP_STORE_APP_ID env var or 'blush-app')
+ */
+router.get('/category/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Fetching app category', { appId });
+
+    const category = await appStoreConnectService.getAppCategory(appId);
+
+    res.json({
+      success: true,
+      appId: appId || process.env.APP_STORE_APP_ID || 'blush-app',
+      category: category,
+      fetchedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Failed to fetch app category', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
