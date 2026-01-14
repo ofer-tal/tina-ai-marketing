@@ -1,0 +1,21 @@
+
+/**
+ * GET /api/aso/suggestions
+ * Get new keyword opportunity suggestions
+ * Returns keywords not currently tracked that have high potential
+ */
+router.get('/suggestions', async (req, res) => {
+  try {
+    const suggestions = await asoRankingService.getKeywordSuggestions();
+    res.json({
+      success: true,
+      data: suggestions
+    });
+  } catch (error) {
+    console.error('Error fetching keyword suggestions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});

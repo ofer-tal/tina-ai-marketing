@@ -560,6 +560,158 @@ const MoreKeywords = styled.div`
   font-style: italic;
 `;
 
+// ASO Keyword Suggestions Styled Components
+const SuggestionsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+`;
+
+const SuggestionsTitle = styled.h3`
+  font-size: 1.1rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const SuggestionsCount = styled.span`
+  background: #7b2cbf;
+  color: #fff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+`;
+
+const SuggestionsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const SuggestionCard = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #7b2cbf;
+    box-shadow: 0 4px 20px rgba(123, 44, 191, 0.15);
+    transform: translateY(-2px);
+  }
+`;
+
+const SuggestionKeyword = styled.div`
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.5rem;
+`;
+
+const SuggestionCategory = styled.div`
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.75rem;
+  background: ${props => {
+    switch (props.$category) {
+      case 'romance': return 'rgba(233, 69, 96, 0.2)';
+      case 'stories': return 'rgba(123, 44, 191, 0.2)';
+      case 'spicy': return 'rgba(255, 107, 157, 0.2)';
+      case 'games': return 'rgba(0, 210, 106, 0.2)';
+      default: return 'rgba(160, 160, 160, 0.2)';
+    }
+  }};
+  color: ${props => {
+    switch (props.$category) {
+      case 'romance': return '#e94560';
+      case 'stories': return '#7b2cbf';
+      case 'spicy': return '#ff6b9d';
+      case 'games': return '#00d26a';
+      default: return '#a0a0a0';
+    }
+  }};
+`;
+
+const SuggestionReason = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+`;
+
+const SuggestionMetrics = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+`;
+
+const SuggestionMetric = styled.div`
+  text-align: center;
+  padding: 0.5rem;
+  background: #16213e;
+  border-radius: 6px;
+`;
+
+const SuggestionMetricLabel = styled.div`
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+`;
+
+const SuggestionMetricValue = styled.div`
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: ${props => props.$positive ? '#00d26a' : props.$negative ? '#f94144' : '#eaeaea'};
+`;
+
+const AddKeywordButton = styled.button`
+  background: linear-gradient(135deg, #7b2cbf 0%, #e94560 100%);
+  border: none;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  margin-top: 0.75rem;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(123, 44, 191, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
+const NoSuggestions = styled.div`
+  text-align: center;
+  padding: 3rem;
+  color: #a0a0a0;
+  font-size: 0.95rem;
+`;
+
+
+
 function StrategicDashboard() {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState('30d');
@@ -572,6 +724,7 @@ function StrategicDashboard() {
   const [funnelData, setFunnelData] = useState(null);
   const [selectedFunnelStage, setSelectedFunnelStage] = useState(null);
   const [competitivenessData, setCompetitivenessData] = useState(null);
+  const [suggestionsData, setSuggestionsData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -584,6 +737,7 @@ function StrategicDashboard() {
     fetchRoiByChannel();
     fetchConversionFunnel();
     fetchCompetitivenessData();
+    fetchSuggestionsData();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -835,6 +989,20 @@ function StrategicDashboard() {
       setCompetitivenessData(result.data);
     } catch (err) {
       console.error('Failed to fetch competitiveness data:', err);
+    }
+  };
+  const fetchSuggestionsData = async () => {
+    try {
+      const response = await fetch('/api/aso/suggestions');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setSuggestionsData(result.data);
+    } catch (err) {
+      console.error('Failed to fetch keyword suggestions:', err);
     }
   };
 
@@ -1239,6 +1407,42 @@ function StrategicDashboard() {
   const formatNumber = (value) => {
     return new Intl.NumberFormat('en-US').format(value);
   };
+  const handleAddKeyword = async (suggestion) => {
+    try {
+      const response = await fetch('/api/aso/keywords', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          keyword: suggestion.keyword,
+          volume: suggestion.volume,
+          difficulty: suggestion.difficulty,
+          competition: suggestion.competition,
+          target: true
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Refresh suggestions to remove the added keyword
+      await fetchSuggestionsData();
+
+      // Refresh competitiveness data to include the new keyword
+      await fetchCompetitivenessData();
+
+      // Show success message
+      alert(`Keyword "${suggestion.keyword}" added to tracking!`);
+    } catch (error) {
+      console.error('Failed to add keyword:', error);
+      alert(`Failed to add keyword: ${error.message}`);
+    }
+  };
+
 
   const formatDate = (dateStr) => {
     const date = new Date(dateStr);
@@ -1989,6 +2193,72 @@ function StrategicDashboard() {
               </ChartContainer>
             </>
           )}
+
+
+          {/* ASO Keyword Suggestions Section */}
+          {suggestionsData && (
+            <>
+              <ChartContainer>
+                <SuggestionsHeader>
+                  <SuggestionsTitle>
+                    🎯 New Keyword Opportunities
+                    <SuggestionsCount>{suggestionsData.total} suggestions</SuggestionsCount>
+                  </SuggestionsTitle>
+                </SuggestionsHeader>
+
+                {suggestionsData.suggestions.length > 0 ? (
+                  <>
+                    <SuggestionsGrid>
+                      {suggestionsData.suggestions.map((suggestion, index) => (
+                        <SuggestionCard key={index}>
+                          <SuggestionCategory $category={suggestion.category}>
+                            {suggestion.category}
+                          </SuggestionCategory>
+                          <SuggestionKeyword>{suggestion.keyword}</SuggestionKeyword>
+                          <SuggestionReason>{suggestion.reason}</SuggestionReason>
+                          <SuggestionMetrics>
+                            <SuggestionMetric>
+                              <SuggestionMetricLabel>Volume</SuggestionMetricLabel>
+                              <SuggestionMetricValue>
+                                {formatNumber(suggestion.volume)}
+                              </SuggestionMetricValue>
+                            </SuggestionMetric>
+                            <SuggestionMetric>
+                              <SuggestionMetricLabel>Difficulty</SuggestionMetricLabel>
+                              <SuggestionMetricValue
+                                $positive={suggestion.difficulty < 50}
+                                $negative={suggestion.difficulty > 70}
+                              >
+                                {suggestion.difficulty}/100
+                              </SuggestionMetricValue>
+                            </SuggestionMetric>
+                            <SuggestionMetric>
+                              <SuggestionMetricLabel>Score</SuggestionMetricLabel>
+                              <SuggestionMetricValue $positive={true}>
+                                {suggestion.opportunityScore}
+                              </SuggestionMetricValue>
+                            </SuggestionMetric>
+                          </SuggestionMetrics>
+                          <AddKeywordButton onClick={() => handleAddKeyword(suggestion)}>
+                            + Add to Tracking
+                          </AddKeywordButton>
+                        </SuggestionCard>
+                      ))}
+                    </SuggestionsGrid>
+
+                    <div style={{ marginTop: '1rem', padding: '1rem', background: '#16213e', borderRadius: '8px', fontSize: '0.9rem', color: '#a0a0a0' }}>
+                      <strong>💡 Tip:</strong> These keywords are not currently being tracked but show high potential based on search volume and competition analysis.
+                    </div>
+                  </>
+                ) : (
+                  <NoSuggestions>
+                    No new keyword opportunities found at this time. Check back later after analyzing more data.
+                  </NoSuggestions>
+                )}
+              </ChartContainer>
+            </>
+          )}
+
 
           {/* Conversion Funnel Section */}
           {funnelData && (
