@@ -198,6 +198,38 @@ const marketingPostSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  instagramMediaId: {
+    type: String,
+    trim: true
+  },
+  instagramPermalink: {
+    type: String,
+    trim: true
+  },
+  youtubeVideoId: {
+    type: String,
+    trim: true
+  },
+  youtubeUrl: {
+    type: String,
+    trim: true
+  },
+
+  // Metrics tracking
+  metricsLastFetchedAt: {
+    type: Date
+  },
+  metricsHistory: [{
+    fetchedAt: {
+      type: Date,
+      default: Date.now
+    },
+    views: Number,
+    likes: Number,
+    comments: Number,
+    shares: Number,
+    engagementRate: Number
+  }],
 
   // Upload progress tracking
   uploadProgress: {

@@ -25,6 +25,7 @@ import rateLimitsRouter from "./api/rateLimits.js";
 import platformOptimizationRouter from "./api/platform-optimization.js";
 import tiktokAudioRouter from "./api/tiktok-audio.js";
 import audioOverlayRouter from "./api/audio-overlay.js";
+import metricsRouter from "./api/metrics.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -187,6 +188,7 @@ app.use("/api/rate-limits", rateLimitsRouter);
 app.use("/api/platform-optimization", platformOptimizationRouter);
 app.use("/api/tiktok-audio", tiktokAudioRouter);
 app.use("/api/audio-overlay", audioOverlayRouter);
+app.use("/api/metrics", metricsRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
