@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import StrategicDashboard from './pages/StrategicDashboard';
 import Chat from './pages/Chat';
 import ContentLibrary from './pages/ContentLibrary';
+import BatchApprovalQueue from './pages/BatchApprovalQueue';
 import TodoSidebar from './components/TodoSidebar';
 
 const AppContainer = styled.div`
@@ -219,6 +220,7 @@ function App() {
             <SidebarNavLink to="/dashboard">📊 Dashboard</SidebarNavLink>
             <SidebarNavLink to="/dashboard/strategic">📈 Strategic</SidebarNavLink>
             <SidebarNavLink to="/content/library">📝 Content</SidebarNavLink>
+            <SidebarNavLink to="/content/approval">✅ Approvals</SidebarNavLink>
             <SidebarNavLink to="/chat">🤖 AI Chat</SidebarNavLink>
             <SidebarNavLink to="/settings">⚙️ Settings</SidebarNavLink>
           </SidebarNav>
@@ -230,6 +232,7 @@ function App() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/dashboard/strategic" element={<StrategicDashboard />} />
                 <Route path="/content/library" element={<ContentLibrary />} />
+                <Route path="/content/approval" element={<BatchApprovalQueue />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
