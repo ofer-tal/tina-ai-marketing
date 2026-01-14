@@ -302,7 +302,7 @@ function BatchApprovalQueue() {
   const fetchPosts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts');
+      const response = await fetch('http://localhost:3003/api/content/posts');
       if (!response.ok) throw new Error('Failed to fetch');
       const data = await response.json();
       setPosts(data);
@@ -379,7 +379,7 @@ function BatchApprovalQueue() {
 
     try {
       const promises = Array.from(selectedPosts).map(id =>
-        fetch(`http://localhost:3001/api/content/posts/${id}`, {
+        fetch(`http://localhost:3003/api/content/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'approved' })
@@ -409,7 +409,7 @@ function BatchApprovalQueue() {
 
     try {
       const promises = Array.from(selectedPosts).map(id =>
-        fetch(`http://localhost:3001/api/content/posts/${id}`, {
+        fetch(`http://localhost:3003/api/content/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'rejected', rejectionReason: reason })
@@ -433,7 +433,7 @@ function BatchApprovalQueue() {
 
   const handleQuickApprove = async (postId) => {
     try {
-      await fetch(`http://localhost:3001/api/content/posts/${postId}`, {
+      await fetch(`http://localhost:3003/api/content/posts/${postId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'approved' })
@@ -451,7 +451,7 @@ function BatchApprovalQueue() {
     if (!reason) return;
 
     try {
-      await fetch(`http://localhost:3001/api/content/posts/${postId}`, {
+      await fetch(`http://localhost:3003/api/content/posts/${postId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: 'rejected', rejectionReason: reason })

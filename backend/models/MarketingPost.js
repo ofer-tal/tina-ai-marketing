@@ -110,6 +110,11 @@ const marketingPostSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  rejectionCategory: {
+    type: String,
+    enum: ['content_quality', 'tone_mismatch', 'inappropriate', 'cta_missing', 'engagement_weak', 'brand_voice', 'timing', 'technical', 'other'],
+    trim: true
+  },
   feedback: {
     type: String,
     trim: true
@@ -238,12 +243,71 @@ marketingPostSchema.methods.markAsApproved = function(userId = 'Founder') {
   return this.save();
 };
 
+// Helper function to categorize rejection reasons
+function categorizeRejectionReason(reason) {
+  if (!reason) return 'other';
+
+  const lowerReason = reason.toLowerCase();
+
+  // Content quality issues
+  if (lowerReason.includes('boring') || lowerReason.includes('dull') || lowerReason.includes('uninteresting') ||
+      lowerReason.includes('weak') || lowerReason.includes('poor quality') || lowerReason.includes('generic')) {
+    return 'content_quality';
+  }
+
+  // Tone mismatch
+  if (lowerReason.includes('too sexy') || lowerReason.includes('too hot') || lowerReason.includes('too spicy') ||
+      lowerReason.includes('not sexy enough') || lowerReason.includes('not enough passion') ||
+      lowerReason.includes('too formal') || lowerReason.includes('too casual') ||
+      lowerReason.includes('tone') || lowerReason.includes('voice')) {
+    return 'tone_mismatch';
+  }
+
+  // Inappropriate content
+  if (lowerReason.includes('offensive') || lowerReason.includes('inappropriate') || lowerReason.includes('too explicit') ||
+      lowerReason.includes('violates guidelines') || lowerReason.includes('against policy')) {
+    return 'inappropriate';
+  }
+
+  // CTA missing or weak
+  if (lowerReason.includes('no cta') || lowerReason.includes('missing cta') || lowerReason.includes('call to action') ||
+      lowerReason.includes('no link') || lowerReason.includes('no download')) {
+    return 'cta_missing';
+  }
+
+  // Engagement issues
+  if (lowerReason.includes('won\'t engage') || lowerReason.includes('low engagement') || lowerReason.includes('boring caption') ||
+      lowerReason.includes('not catchy') || lowerReason.includes('attention-grabbing')) {
+    return 'engagement_weak';
+  }
+
+  // Brand voice issues
+  if (lowerReason.includes('not on brand') || lowerReason.includes('brand voice') || lowerReason.includes('doesn\'t sound like us') ||
+      lowerReason.includes('inconsistent')) {
+    return 'brand_voice';
+  }
+
+  // Timing issues
+  if (lowerReason.includes('bad timing') || lowerReason.includes('wrong time') || lowerReason.includes('schedule')) {
+    return 'timing';
+  }
+
+  // Technical issues
+  if (lowerReason.includes('video') || lowerReason.includes('image') || lowerReason.includes('format') ||
+      lowerReason.includes('quality issue') || lowerReason.includes('technical')) {
+    return 'technical';
+  }
+
+  return 'other';
+}
+
 // Method to mark as rejected
 marketingPostSchema.methods.markAsRejected = function(reason, feedback = null, userId = 'Founder') {
   this.status = 'rejected';
   this.rejectedAt = new Date();
   this.rejectedBy = userId;
   this.rejectionReason = reason;
+  this.rejectionCategory = categorizeRejectionReason(reason);
   if (feedback) {
     this.feedback = feedback;
   }
@@ -256,7 +320,8 @@ marketingPostSchema.methods.markAsRejected = function(reason, feedback = null, u
     userId: userId,
     details: {
       reason: reason,
-      feedback: feedback
+      feedback: feedback,
+      category: this.rejectionCategory
     }
   });
 

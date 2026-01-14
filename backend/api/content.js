@@ -2339,4 +2339,75 @@ router.get('/:id/regeneration-history', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/content/rejection-insights
+ * Get rejection statistics and insights for AI learning
+ */
+router.get("/rejection-insights", async (req, res) => {
+  try {
+    logger.info('Fetching rejection insights');
+
+    // Get all rejected posts
+    const rejectedPosts = await MarketingPost.find({
+      status: 'rejected'
+    }).select('rejectionReason rejectionCategory rejectedAt storyCategory platform');
+
+    // Analyze by category
+    const categoryStats = {};
+    rejectedPosts.forEach(post => {
+      const category = post.rejectionCategory || 'other';
+      if (!categoryStats[category]) {
+        categoryStats[category] = {
+          count: 0,
+          reasons: [],
+          recentRejections: []
+        };
+      }
+      categoryStats[category].count++;
+
+      // Add unique reasons
+      if (post.rejectionReason && !categoryStats[category].reasons.includes(post.rejectionReason)) {
+        categoryStats[category].reasons.push(post.rejectionReason);
+      }
+
+      // Add recent rejections
+      categoryStats[category].recentRejections.push({
+        reason: post.rejectionReason,
+        date: post.rejectedAt,
+        category: post.storyCategory,
+        platform: post.platform
+      });
+    });
+
+    // Calculate total rejections
+    const totalRejections = rejectedPosts.length;
+
+    // Sort categories by count
+    const sortedCategories = Object.entries(categoryStats)
+      .sort((a, b) => b[1].count - a[1].count)
+      .reduce((acc, [key, value]) => {
+        acc[key] = value;
+        return acc;
+      }, {});
+
+    res.json({
+      totalRejections,
+      categoryBreakdown: sortedCategories,
+      commonReasons: Object.values(sortedCategories).flatMap(cat => cat.reasons).slice(0, 10),
+      lastUpdated: new Date()
+    });
+
+    logger.info('Rejection insights retrieved', {
+      totalRejections,
+      categories: Object.keys(sortedCategories).length
+    });
+  } catch (error) {
+    logger.error('Error fetching rejection insights:', error);
+    res.status(500).json({
+      error: 'Failed to fetch rejection insights',
+      details: error.message
+    });
+  }
+});
+
 export default router;
