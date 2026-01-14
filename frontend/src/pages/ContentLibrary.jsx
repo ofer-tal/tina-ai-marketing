@@ -868,6 +868,34 @@ const PostToTikTokButton = styled.button`
   }
 `;
 
+const PostToInstagramButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(131, 58, 180, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
 const PlayButton = styled.button`
   position: absolute;
   top: 50%;
@@ -2005,6 +2033,99 @@ function ContentLibrary() {
     }
   };
 
+  const handlePostToInstagram = async () => {
+    if (!selectedVideo || selectedVideo.status !== 'approved') {
+      alert('Please approve the post first');
+      return;
+    }
+
+    try {
+      // Initialize upload progress
+      setUploadProgress({
+        status: 'initializing',
+        progress: 0,
+        stage: 'Starting Instagram upload...'
+      });
+
+      // Start the upload using EventSource for SSE
+      const eventSource = new EventSource(`http://localhost:3003/api/instagram/post/${selectedVideo._id}`);
+
+      eventSource.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+
+        if (data.stage === 'completed') {
+          setUploadProgress({
+            status: 'completed',
+            progress: 100,
+            stage: 'Posted successfully!',
+            mediaId: data.mediaId
+          });
+
+          // Update local state
+          setPosts(prevPosts =>
+            prevPosts.map(post =>
+              post._id === selectedVideo._id
+                ? { ...post, status: 'posted', postedAt: new Date().toISOString(), instagramPostId: data.mediaId }
+                : post
+            )
+          );
+
+          setSelectedVideo(prev => ({
+            ...prev,
+            status: 'posted',
+            postedAt: new Date().toISOString(),
+            instagramPostId: data.mediaId
+          }));
+
+          alert('✅ Successfully posted to Instagram!');
+          eventSource.close();
+        } else if (data.stage === 'failed') {
+          setUploadProgress({
+            status: 'failed',
+            progress: 0,
+            stage: 'Upload failed',
+            errorMessage: data.error
+          });
+          alert(`❌ Error posting to Instagram: ${data.error}`);
+          eventSource.close();
+        } else {
+          // Progress update
+          setUploadProgress({
+            status: 'uploading',
+            progress: data.progress || 0,
+            stage: data.stage || 'Uploading...'
+          });
+        }
+      };
+
+      eventSource.onerror = (err) => {
+        console.error('EventSource error:', err);
+        setUploadProgress({
+          status: 'failed',
+          progress: 0,
+          stage: 'Upload failed',
+          errorMessage: 'Connection error'
+        });
+        alert('❌ Error posting to Instagram: Connection error');
+        eventSource.close();
+      };
+
+      // Store eventSource for cleanup
+      window.currentInstagramEventSource = eventSource;
+
+      alert('✅ Posting to Instagram started! Check progress below.');
+    } catch (err) {
+      console.error('Error posting to Instagram:', err);
+      setUploadProgress({
+        status: 'failed',
+        progress: 0,
+        stage: 'Upload failed',
+        errorMessage: err.message
+      });
+      alert(`❌ Error posting to Instagram: ${err.message}`);
+    }
+  };
+
   const handleApprove = async () => {
     if (!selectedVideo) return;
 
@@ -2677,6 +2798,22 @@ function ContentLibrary() {
                             🔄 Regenerate
                           </RegenerateButton>
                         </>
+                      ) : selectedVideo.status === 'approved' && selectedVideo.platform === 'instagram' ? (
+                        <>
+                          {/* Show Post to Instagram button for approved Instagram posts */}
+                          <PostToInstagramButton
+                            onClick={handlePostToInstagram}
+                            disabled={uploadProgress && uploadProgress.status === 'uploading'}
+                          >
+                            {uploadProgress && uploadProgress.status === 'uploading'
+                              ? '📤 Posting...'
+                              : '📤 Post to Instagram'}
+                          </PostToInstagramButton>
+                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                          <RegenerateButton onClick={handleRegenerate}>
+                            🔄 Regenerate
+                          </RegenerateButton>
+                        </>
                       ) : (
                         <>
                           {/* Show approve/reject for non-approved posts */}
@@ -2700,7 +2837,7 @@ function ContentLibrary() {
                     <UploadProgressContainer>
                       <UploadProgressHeader>
                         <UploadProgressTitle>
-                          📤 Upload to TikTok
+                          📤 Upload to {selectedVideo.platform === 'instagram' ? 'Instagram' : 'TikTok'}
                         </UploadProgressTitle>
                         <UploadProgressPercentage>
                           {uploadProgress.progress}%
@@ -2714,7 +2851,7 @@ function ContentLibrary() {
                       </UploadProgressStage>
                       {uploadProgress.status === 'completed' && (
                         <div style={{color: '#00d26a', marginTop: '0.5rem', fontSize: '0.9rem'}}>
-                          ✅ Successfully posted to TikTok!
+                          ✅ Successfully posted to {selectedVideo.platform === 'instagram' ? 'Instagram' : 'TikTok'}!
                         </div>
                       )}
                       {uploadProgress.status === 'failed' && (
