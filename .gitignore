@@ -9,6 +9,9 @@ pnpm-lock.yaml
 .env.local
 .env.*.local
 
+# Credentials and secrets
+config/credentials/
+
 # Logs
 logs/
 *.log

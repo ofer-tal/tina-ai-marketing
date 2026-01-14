@@ -358,6 +358,79 @@ const Hashtag = styled.span`
   font-weight: 500;
 `;
 
+const PerformanceMetrics = styled.div`
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(45, 53, 97, 0.5);
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const MetricsTitle = styled.h4`
+  color: #7b2cbf;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &::before {
+    content: '📊';
+  }
+`;
+
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+`;
+
+const MetricItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const MetricLabel = styled.span`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const MetricValue = styled.span`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e94560;
+`;
+
+const EngagementRate = styled.div`
+  grid-column: 1 / -1;
+  padding-top: 1rem;
+  border-top: 1px solid #2d3561;
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const EngagementLabel = styled.span`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  font-weight: 500;
+`;
+
+const EngagementValue = styled.span`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: ${props => {
+    const rate = props.$rate || 0;
+    if (rate >= 5) return '#00d26a';
+    if (rate >= 3) return '#ffb020';
+    return '#f8312f';
+  }};
+`;
+
 const VideoContainer = styled.div`
   display: flex;
   justify-content: center;
@@ -558,11 +631,14 @@ function ContentLibrary() {
 
     return Array.from({ length: 8 }, (_, i) => {
       const isImage = i % 3 === 2; // Every 3rd post is an image
+      const status = statuses[i % statuses.length];
+      const isPosted = status === 'posted';
+
       return {
         _id: `mock_${i}`,
         title: `${stories[i % stories.length]} - Part ${Math.floor(i / 5) + 1}`,
         platform: platforms[i % platforms.length],
-        status: statuses[i % statuses.length],
+        status: status,
         contentType: isImage ? 'image' : 'video',
         videoPath: !isImage && i % 2 === 0 ? 'https://www.w3schools.com/html/mov_bbb.mp4' : null,
         imagePath: isImage ? 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?w=800&h=1200&fit=crop' : null, // Sample image for testing
@@ -570,7 +646,15 @@ function ContentLibrary() {
         storyName: stories[i % stories.length],
         storyCategory: 'Romance',
         caption: 'Amazing story you need to read! 📚❤️ #romance #books',
-        hashtags: ['#romance', '#books', '#reading', '#lovestory']
+        hashtags: ['#romance', '#books', '#reading', '#lovestory'],
+        // Add performance metrics for posted posts
+        performanceMetrics: isPosted ? {
+          views: Math.floor(Math.random() * 50000) + 1000,
+          likes: Math.floor(Math.random() * 5000) + 100,
+          comments: Math.floor(Math.random() * 500) + 10,
+          shares: Math.floor(Math.random() * 200) + 5,
+          engagementRate: parseFloat((Math.random() * 8 + 1).toFixed(2))
+        } : null
       };
     });
   };
@@ -612,6 +696,13 @@ function ContentLibrary() {
       youtube_shorts: '▶️'
     };
     return emojis[platform] || '📱';
+  };
+
+  const formatMetric = (value) => {
+    if (!value && value !== 0) return '0';
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toString();
   };
 
   const handleVideoPreview = (post) => {
@@ -793,6 +884,36 @@ function ContentLibrary() {
                         <Hashtag key={index}>{tag}</Hashtag>
                       ))}
                     </ModalHashtags>
+                  )}
+
+                  {selectedVideo.status === 'posted' && selectedVideo.performanceMetrics && (
+                    <PerformanceMetrics>
+                      <MetricsTitle>Performance Metrics</MetricsTitle>
+                      <MetricsGrid>
+                        <MetricItem>
+                          <MetricLabel>Views</MetricLabel>
+                          <MetricValue>{formatMetric(selectedVideo.performanceMetrics.views)}</MetricValue>
+                        </MetricItem>
+                        <MetricItem>
+                          <MetricLabel>Likes</MetricLabel>
+                          <MetricValue>{formatMetric(selectedVideo.performanceMetrics.likes)}</MetricValue>
+                        </MetricItem>
+                        <MetricItem>
+                          <MetricLabel>Comments</MetricLabel>
+                          <MetricValue>{formatMetric(selectedVideo.performanceMetrics.comments)}</MetricValue>
+                        </MetricItem>
+                        <MetricItem>
+                          <MetricLabel>Shares</MetricLabel>
+                          <MetricValue>{formatMetric(selectedVideo.performanceMetrics.shares)}</MetricValue>
+                        </MetricItem>
+                        <EngagementRate>
+                          <EngagementLabel>Engagement Rate</EngagementLabel>
+                          <EngagementValue $rate={selectedVideo.performanceMetrics.engagementRate}>
+                            {selectedVideo.performanceMetrics.engagementRate?.toFixed(2) || '0.00'}%
+                          </EngagementValue>
+                        </EngagementRate>
+                      </MetricsGrid>
+                    </PerformanceMetrics>
                   )}
                 </ModalInfo>
               </ModalContent>
