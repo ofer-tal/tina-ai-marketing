@@ -1,0 +1,574 @@
+import React, { useState, useEffect } from 'react';
+import styled from 'styled-components';
+
+const LibraryContainer = styled.div`
+  width: 100%;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+`;
+
+const Title = styled.h1`
+  font-size: 2rem;
+  margin: 0;
+  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
+const FilterBar = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+`;
+
+const FilterSelect = styled.select`
+  padding: 0.5rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+`;
+
+const SearchInput = styled.input`
+  padding: 0.5rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  min-width: 250px;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+
+  &::placeholder {
+    color: #a0a0a0;
+  }
+`;
+
+const Button = styled.button`
+  padding: 0.5rem 1.5rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const ContentGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+`;
+
+const ContentCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(233, 69, 96, 0.15);
+  }
+`;
+
+const ThumbnailContainer = styled.div`
+  width: 100%;
+  aspect-ratio: 9/16;
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+`;
+
+const Thumbnail = styled.div`
+  width: 100%;
+  height: 100%;
+  background: ${props => {
+    const gradients = {
+      tiktok: 'linear-gradient(135deg, #00f2ea 0%, #ff0050 100%)',
+      instagram: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
+      youtube_shorts: 'linear-gradient(135deg, #ff0000 0%, #282828 100%)'
+    };
+    return gradients[props.platform] || 'linear-gradient(135deg, #e94560 0%, #7b2cbf 100%)';
+  }};
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+`;
+
+const StatusBadge = styled.div`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: ${props => {
+    const colors = {
+      draft: '#6c757d',
+      ready: '#17a2b8',
+      approved: '#28a745',
+      scheduled: '#007bff',
+      posted: '#00d26a',
+      failed: '#dc3545',
+      rejected: '#ff6b6b'
+    };
+    return colors[props.status] || '#6c757d';
+  }};
+  color: white;
+`;
+
+const PlatformIcon = styled.div`
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+`;
+
+const CardContent = styled.div`
+  padding: 1rem;
+`;
+
+const CardTitle = styled.h3`
+  font-size: 1rem;
+  margin: 0 0 0.5rem 0;
+  color: #eaeaea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const CardMeta = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+`;
+
+const ScheduledTime = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
+
+const StoryName = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const CardActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const ActionButton = styled.button`
+  flex: 1;
+  padding: 0.4rem 0.8rem;
+  background: #2d3561;
+  border: none;
+  border-radius: 4px;
+  color: #eaeaea;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+  }
+`;
+
+const LoadingSpinner = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4rem;
+  font-size: 1.2rem;
+  color: #a0a0a0;
+`;
+
+const EmptyState = styled.div`
+  text-align: center;
+  padding: 4rem 2rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+
+  h3 {
+    margin: 0 0 0.5rem 0;
+    color: #eaeaea;
+  }
+
+  p {
+    margin: 0;
+    color: #a0a0a0;
+  }
+`;
+
+const Pagination = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+`;
+
+const PaginationButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: ${props => props.disabled ? '#2d3561' : '#16213e'};
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: ${props => props.disabled ? '#6c757d' : '#eaeaea'};
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background: #e94560;
+    border-color: #e94560;
+  }
+`;
+
+const PageInfo = styled.div`
+  color: #a0a0a0;
+  font-size: 0.9rem;
+`;
+
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+`;
+
+const ModalContent = styled.div`
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const ModalInfo = styled.div`
+  background: #16213e;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 600px;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0 0 0.75rem 0;
+  color: #eaeaea;
+  font-size: 1.2rem;
+`;
+
+const ModalCaption = styled.p`
+  margin: 0 0 1rem 0;
+  color: #c0c0c0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+`;
+
+const ModalHashtags = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const Hashtag = styled.span`
+  padding: 0.25rem 0.75rem;
+  background: #2d3561;
+  border-radius: 16px;
+  color: #e94560;
+  font-size: 0.85rem;
+  font-weight: 500;
+`;
+
+const PerformanceMetrics = styled.div`
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(45, 53, 97, 0.5);
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const MetricsTitle = styled.h4`
+  color: #7b2cbf;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &::before {
+    content: '📊';
+  }
+`;
+
+const MetricsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 1rem;
+`;
+
+const MetricItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const MetricLabel = styled.span`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const MetricValue = styled.span`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #e94560;
+`;
+
+const EngagementRate = styled.div`
+  grid-column: 1 / -1;
+  padding-top: 1rem;
+  border-top: 1px solid #2d3561;
+  margin-top: 0.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const EngagementLabel = styled.span`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  font-weight: 500;
+`;
+
+const EngagementValue = styled.span`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: ${props => {
+    const rate = props.$rate || 0;
+    if (rate >= 5) return '#00d26a';
+    if (rate >= 3) return '#ffb020';
+    return '#f8312f';
+  }};
+`;
+
+const VideoContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+`;
+
+const VideoPlayer = styled.video`
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+`;
+
+const ImageContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+`;
+
+const ImagePreview = styled.img`
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+`;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: -40px;
+  right: 0;
+  padding: 0.5rem 1rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: scale(1.05);
+  }
+`;
+
+const PlayButton = styled.button`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  background: rgba(233, 69, 96, 0.9);
+  border: 3px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  opacity: 0;
+  pointer-events: none;
+
+  ${ThumbnailContainer}:hover & {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &:hover {
+    background: rgba(233, 69, 96, 1);
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+
+  &::after {
+    content: '▶';
+    color: white;
+    font-size: 1.5rem;
+    margin-left: 4px;
+  }
+`;
+
+const VideoIndicator = styled.div`
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
+
+function ContentLibrary() {
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({
+    platform: 'all',
+    status: 'all',
+    search: ''
+  });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 12,
+    total: 0,
+    hasMore: false
+  });
+  const [selectedVideo, setSelectedVideo] = useState(null);
+
+  useEffect(() => {
+    fetchPosts();
+  }, [filters, pagination.page]);
+
+  const fetchPosts = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      const params = new URLSearchParams();
+      if (filters.platform !== 'all') params.append('platform', filters.platform);
+      if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.search) params.append('search', filters.search);
+      params.append('limit', pagination.limit);
+      params.append('skip', (pagination.page - 1) * pagination.limit);
+
+      // Try to fetch from API
+      const response = await fetch(`http://localhost:3001/api/content/posts?${params}`);
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch posts');
+      }
+

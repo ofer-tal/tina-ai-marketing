@@ -532,66 +532,6 @@ const VideoIndicator = styled.div`
   gap: 0.25rem;
 `;
 
-const ModalActions = styled.div`
-  display: flex;
-  gap: 1rem;
-  margin-top: 1.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid #2d3561;
-`;
-
-const ApproveButton = styled.button`
-  flex: 1;
-  padding: 0.75rem 1.5rem;
-  background: #00d26a;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-
-  &:hover {
-    background: #00b35d;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 210, 106, 0.3);
-  }
-
-  &:disabled {
-    background: #2d3561;
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-`;
-
-const RejectButton = styled.button`
-  flex: 1;
-  padding: 0.75rem 1.5rem;
-  background: #ff6b6b;
-  border: none;
-  border-radius: 8px;
-  color: white;
-  font-size: 1rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-
-  &:hover {
-    background: #ff5252;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
-  }
-`;
-
 function ContentLibrary() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -818,91 +758,6 @@ function ContentLibrary() {
     }
   };
 
-  const handleApprove = async () => {
-    if (!selectedVideo) return;
-
-    try {
-      // Try API call first
-      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/approve`, {
-        method: 'POST'
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to approve post');
-      }
-
-      // Update local state
-      setPosts(prevPosts =>
-        prevPosts.map(post =>
-          post._id === selectedVideo._id
-            ? { ...post, status: 'approved' }
-            : post
-        )
-      );
-
-      // Update selected video
-      setSelectedVideo(prev => ({ ...prev, status: 'approved' }));
-
-      alert('✅ Post approved successfully!');
-    } catch (err) {
-      console.error('Error approving post:', err);
-      // For development, update local state anyway
-      setPosts(prevPosts =>
-        prevPosts.map(post =>
-          post._id === selectedVideo._id
-            ? { ...post, status: 'approved' }
-            : post
-        )
-      );
-      setSelectedVideo(prev => ({ ...prev, status: 'approved' }));
-      alert('✅ Post approved! (Note: Backend not connected)');
-    }
-  };
-
-  const handleReject = async () => {
-    if (!selectedVideo) return;
-
-    const reason = prompt('Enter rejection reason (optional):');
-    if (reason === null) return; // User cancelled
-
-    try {
-      // Try API call first
-      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/reject`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to reject post');
-      }
-
-      // Update local state
-      setPosts(prevPosts =>
-        prevPosts.map(post =>
-          post._id === selectedVideo._id
-            ? { ...post, status: 'rejected' }
-            : post
-        )
-      );
-
-      handleCloseModal();
-      alert('❌ Post rejected.');
-    } catch (err) {
-      console.error('Error rejecting post:', err);
-      // For development, update local state anyway
-      setPosts(prevPosts =>
-        prevPosts.map(post =>
-          post._id === selectedVideo._id
-            ? { ...post, status: 'rejected' }
-            : post
-        )
-      );
-      handleCloseModal();
-      alert('❌ Post rejected! (Note: Backend not connected)');
-    }
-  };
-
   if (loading) {
     return (
       <LibraryContainer>
@@ -1094,17 +949,6 @@ function ContentLibrary() {
                         </EngagementRate>
                       </MetricsGrid>
                     </PerformanceMetrics>
-                  )}
-                  {/* Show approve/reject buttons only for non-posted posts */}
-                  {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && (
-                    <ModalActions>
-                      <ApproveButton onClick={handleApprove}>
-                        ✅ Approve
-                      </ApproveButton>
-                      <RejectButton onClick={handleReject}>
-                        ❌ Reject
-                      </RejectButton>
-                    </ModalActions>
                   )}
                 </ModalInfo>
               </ModalContent>
