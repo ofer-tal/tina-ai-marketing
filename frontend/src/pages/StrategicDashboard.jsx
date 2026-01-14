@@ -367,6 +367,199 @@ const FunnelLegendColor = styled.div`
   background: ${props => props.$color};
 `;
 
+// ASO Competitiveness Analysis Styled Components
+const OpportunityAlert = styled.div`
+  background: linear-gradient(135deg, rgba(0, 210, 106, 0.1) 0%, rgba(0, 210, 106, 0.05) 100%);
+  border: 1px solid rgba(0, 210, 106, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const OpportunityIcon = styled.div`
+  font-size: 1.5rem;
+`;
+
+const OpportunityText = styled.div`
+  color: #eaeaea;
+  font-size: 0.95rem;
+`;
+
+const OpportunityGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const OpportunityCard = styled.div`
+  background: rgba(0, 210, 106, 0.05);
+  border: 1px solid rgba(0, 210, 106, 0.2);
+  border-radius: 8px;
+  padding: 1rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(0, 210, 106, 0.1);
+    border-color: rgba(0, 210, 106, 0.4);
+    transform: translateY(-2px);
+  }
+`;
+
+const OpportunityHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+`;
+
+const OpportunityKeyword = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 1rem;
+`;
+
+const OpportunityScore = styled.div`
+  background: #00d26a;
+  color: #000;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-weight: 700;
+  font-size: 0.9rem;
+`;
+
+const OpportunityMetrics = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.5rem;
+`;
+
+const OpportunityMetric = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const OpportunityMetricLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const OpportunityMetricValue = styled.div`
+  font-size: 0.9rem;
+  color: ${props => props.$positive ? '#00d26a' : '#eaeaea'};
+  font-weight: 500;
+`;
+
+const CompetitivenessBreakdown = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+`;
+
+const CompetitionLevel = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: ${props => props.$color};
+  }
+`;
+
+const CompetitionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const CompetitionBadge = styled.div`
+  background: ${props => props.$color};
+  color: #000;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+`;
+
+const CompetitionCount = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+`;
+
+const CompetitionStats = styled.div`
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #2d3561;
+`;
+
+const Stat = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const StatLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+`;
+
+const StatValue = styled.div`
+  font-size: 1rem;
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const KeywordList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const KeywordItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: #16213e;
+  border-radius: 4px;
+`;
+
+const KeywordName = styled.div`
+  color: #eaeaea;
+  font-size: 0.9rem;
+`;
+
+const KeywordDifficulty = styled.div`
+  font-size: 0.85rem;
+  color: ${props => {
+    if (props.$difficulty < 40) return '#00d26a';
+    if (props.$difficulty < 60) return '#ffc107';
+    return '#f94144';
+  }};
+  font-weight: 600;
+`;
+
+const MoreKeywords = styled.div`
+  color: #a0a0a0;
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 0.5rem;
+  font-style: italic;
+`;
+
 function StrategicDashboard() {
   const navigate = useNavigate();
   const [dateRange, setDateRange] = useState('30d');
@@ -378,6 +571,7 @@ function StrategicDashboard() {
   const [roiData, setRoiData] = useState(null);
   const [funnelData, setFunnelData] = useState(null);
   const [selectedFunnelStage, setSelectedFunnelStage] = useState(null);
+  const [competitivenessData, setCompetitivenessData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -389,6 +583,7 @@ function StrategicDashboard() {
     fetchRevenueSpendTrend();
     fetchRoiByChannel();
     fetchConversionFunnel();
+    fetchCompetitivenessData();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -625,6 +820,21 @@ function StrategicDashboard() {
       // Set mock data for development
       const mockData = generateMockFunnelData(dateRange);
       setFunnelData(mockData);
+    }
+  };
+
+  const fetchCompetitivenessData = async () => {
+    try {
+      const response = await fetch('/api/aso/competitiveness');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setCompetitivenessData(result.data);
+    } catch (err) {
+      console.error('Failed to fetch competitiveness data:', err);
     }
   };
 
@@ -1672,6 +1882,110 @@ function StrategicDashboard() {
                     </ROIChannelCard>
                   ))}
                 </ROIChannelGrid>
+              </ChartContainer>
+            </>
+          )}
+
+          {/* ASO Competitiveness Analysis Section */}
+          {competitivenessData && (
+            <>
+              <MetricsRow>
+                <MetricCard>
+                  <MetricLabel>Total Keywords</MetricLabel>
+                  <MetricValue>{competitivenessData.summary.totalKeywords}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Avg Difficulty</MetricLabel>
+                  <MetricValue>{competitivenessData.summary.avgDifficulty}/100</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>Low Competition</MetricLabel>
+                  <MetricValue $positive={true}>{competitivenessData.summary.lowCompetitionCount}</MetricValue>
+                </MetricCard>
+                <MetricCard>
+                  <MetricLabel>High Competition</MetricLabel>
+                  <MetricValue $positive={false}>{competitivenessData.summary.highCompetitionCount}</MetricValue>
+                </MetricCard>
+              </MetricsRow>
+
+              <ChartContainer>
+                <ChartTitle>Keyword Competitiveness Analysis</ChartTitle>
+
+                {competitivenessData.lowCompetitionOpportunities.length > 0 && (
+                  <>
+                    <OpportunityAlert>
+                      <OpportunityIcon>💡</OpportunityIcon>
+                      <OpportunityText>
+                        <strong>Low-Competition Opportunities:</strong> {competitivenessData.lowCompetitionOpportunities.length} keywords with high potential and low competition
+                      </OpportunityText>
+                    </OpportunityAlert>
+
+                    <OpportunityGrid>
+                      {competitivenessData.lowCompetitionOpportunities.map((opportunity, index) => (
+                        <OpportunityCard key={index}>
+                          <OpportunityHeader>
+                            <OpportunityKeyword>{opportunity.keyword}</OpportunityKeyword>
+                            <OpportunityScore>{opportunity.opportunityScore}</OpportunityScore>
+                          </OpportunityHeader>
+                          <OpportunityMetrics>
+                            <OpportunityMetric>
+                              <OpportunityMetricLabel>Volume</OpportunityMetricLabel>
+                              <OpportunityMetricValue>{formatNumber(opportunity.volume)}</OpportunityMetricValue>
+                            </OpportunityMetric>
+                            <OpportunityMetric>
+                              <OpportunityMetricLabel>Difficulty</OpportunityMetricLabel>
+                              <OpportunityMetricValue $positive={opportunity.difficulty < 50}>
+                                {opportunity.difficulty}/100
+                              </OpportunityMetricValue>
+                            </OpportunityMetric>
+                            {opportunity.ranking && (
+                              <OpportunityMetric>
+                                <OpportunityMetricLabel>Ranking</OpportunityMetricLabel>
+                                <OpportunityMetricValue>#{opportunity.ranking}</OpportunityMetricValue>
+                              </OpportunityMetric>
+                            )}
+                          </OpportunityMetrics>
+                        </OpportunityCard>
+                      ))}
+                    </OpportunityGrid>
+                  </>
+                )}
+
+                <CompetitivenessBreakdown>
+                  {Object.entries(competitivenessData.byLevel).map(([level, data]) => (
+                    <CompetitionLevel key={level}>
+                      <CompetitionHeader>
+                        <CompetitionBadge $color={data.color}>{data.label}</CompetitionBadge>
+                        <CompetitionCount>{data.count} keywords</CompetitionCount>
+                      </CompetitionHeader>
+                      <CompetitionStats>
+                        <Stat>
+                          <StatLabel>Avg Difficulty</StatLabel>
+                          <StatValue>{data.avgDifficulty}/100</StatValue>
+                        </Stat>
+                        <Stat>
+                          <StatLabel>Total Volume</StatLabel>
+                          <StatValue>{formatNumber(data.totalVolume)}</StatValue>
+                        </Stat>
+                      </CompetitionStats>
+                      {data.keywords.length > 0 && (
+                        <KeywordList>
+                          {data.keywords.slice(0, 5).map((kw, idx) => (
+                            <KeywordItem key={idx}>
+                              <KeywordName>{kw.keyword}</KeywordName>
+                              <KeywordDifficulty $difficulty={kw.difficulty}>
+                                {kw.difficulty}/100
+                              </KeywordDifficulty>
+                            </KeywordItem>
+                          ))}
+                          {data.keywords.length > 5 && (
+                            <MoreKeywords>+{data.keywords.length - 5} more</MoreKeywords>
+                          )}
+                        </KeywordList>
+                      )}
+                    </CompetitionLevel>
+                  ))}
+                </CompetitivenessBreakdown>
               </ChartContainer>
             </>
           )}

@@ -183,4 +183,112 @@ router.get('/performance', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/aso/competitiveness
+ * Get keyword competitiveness analysis
+ * Returns keywords grouped by competition level with metrics
+ */
+router.get('/competitiveness', async (req, res) => {
+  try {
+    const ASOKeyword = (await import('../models/ASOKeyword.js')).default;
+
+    // Fetch all keywords with competition and difficulty data
+    const keywords = await ASOKeyword.find({}).sort({ difficulty: 1 });
+
+    // Group by competition level
+    const competitiveness = {
+      low: {
+        label: 'Low Competition',
+        keywords: [],
+        avgDifficulty: 0,
+        totalVolume: 0,
+        count: 0,
+        color: '#00d26a' // Green
+      },
+      medium: {
+        label: 'Medium Competition',
+        keywords: [],
+        avgDifficulty: 0,
+        totalVolume: 0,
+        count: 0,
+        color: '#ffc107' // Yellow/Orange
+      },
+      high: {
+        label: 'High Competition',
+        keywords: [],
+        avgDifficulty: 0,
+        totalVolume: 0,
+        count: 0,
+        color: '#f94144' // Red
+      }
+    };
+
+    // Categorize keywords
+    keywords.forEach(kw => {
+      const category = competitiveness[kw.competition];
+      if (category) {
+        category.keywords.push({
+          keyword: kw.keyword,
+          difficulty: kw.difficulty,
+          volume: kw.volume,
+          ranking: kw.ranking,
+          opportunityScore: kw.opportunityScore,
+          target: kw.target
+        });
+        category.totalVolume += kw.volume || 0;
+        category.count++;
+      }
+    });
+
+    // Calculate averages
+    Object.keys(competitiveness).forEach(level => {
+      const category = competitiveness[level];
+      if (category.count > 0) {
+        category.avgDifficulty = Math.round(
+          category.keywords.reduce((sum, kw) => sum + kw.difficulty, 0) / category.count
+        );
+      }
+    });
+
+    // Find low-competition opportunities (high opportunity score, low competition)
+    const lowCompetitionOpportunities = keywords
+      .filter(kw => kw.competition === 'low' && kw.opportunityScore >= 60)
+      .map(kw => ({
+        keyword: kw.keyword,
+        opportunityScore: kw.opportunityScore,
+        volume: kw.volume,
+        difficulty: kw.difficulty,
+        ranking: kw.ranking
+      }))
+      .sort((a, b) => b.opportunityScore - a.opportunityScore)
+      .slice(0, 10);
+
+    // Calculate overall statistics
+    const totalKeywords = keywords.length;
+    const avgDifficulty = totalKeywords > 0
+      ? Math.round(keywords.reduce((sum, kw) => sum + kw.difficulty, 0) / totalKeywords)
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        byLevel: competitiveness,
+        lowCompetitionOpportunities,
+        summary: {
+          totalKeywords,
+          avgDifficulty,
+          lowCompetitionCount: competitiveness.low.count,
+          highCompetitionCount: competitiveness.high.count
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching competitiveness analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
