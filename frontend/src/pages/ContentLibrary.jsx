@@ -573,12 +573,47 @@ function ContentLibrary() {
       }
 
       const data = await response.json();
-      setPosts(data.data.posts || []);
-      setPagination(prev => ({
-        ...prev,
-        total: data.data.pagination?.total || 0,
-        hasMore: data.data.pagination?.hasMore || false
-      }));
+      const fetchedPosts = data.data.posts || [];
+
+      // If API returns empty data, use mock data for development
+      if (fetchedPosts.length === 0) {
+        console.log('API returned empty data, using mock data for development');
+        let mockPosts = generateMockPosts();
+
+        // Apply filters to mock data
+        if (filters.platform !== 'all') {
+          mockPosts = mockPosts.filter(post => post.platform === filters.platform);
+        }
+        if (filters.status !== 'all') {
+          mockPosts = mockPosts.filter(post => post.status === filters.status);
+        }
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          mockPosts = mockPosts.filter(post =>
+            post.title.toLowerCase().includes(searchLower) ||
+            post.storyName.toLowerCase().includes(searchLower)
+          );
+        }
+
+        // Apply pagination to mock data
+        const startIndex = (pagination.page - 1) * pagination.limit;
+        const endIndex = startIndex + pagination.limit;
+        const paginatedPosts = mockPosts.slice(startIndex, endIndex);
+
+        setPosts(paginatedPosts);
+        setPagination(prev => ({
+          ...prev,
+          total: mockPosts.length,
+          hasMore: endIndex < mockPosts.length
+        }));
+      } else {
+        setPosts(fetchedPosts);
+        setPagination(prev => ({
+          ...prev,
+          total: data.data.pagination?.total || 0,
+          hasMore: data.data.pagination?.hasMore || false
+        }));
+      }
 
     } catch (err) {
       console.error('Error fetching posts:', err);
