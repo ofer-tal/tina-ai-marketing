@@ -1990,6 +1990,7 @@ router.get('/posts', async (req, res) => {
     const {
       platform,
       status,
+      search,
       startDate,
       endDate,
       limit = 50,
@@ -1999,6 +2000,7 @@ router.get('/posts', async (req, res) => {
     logger.info('Fetching marketing posts with filters', {
       platform,
       status,
+      search,
       startDate,
       endDate,
       limit,
@@ -2009,11 +2011,21 @@ router.get('/posts', async (req, res) => {
     const query = {};
     if (platform) query.platform = platform;
     if (status) query.status = status;
+    if (search) {
+      query.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { storyName: { $regex: search, $options: 'i' } },
+        { caption: { $regex: search, $options: 'i' } }
+      ];
+      logger.info('Search query built', { search, query });
+    }
     if (startDate || endDate) {
       query.scheduledAt = {};
       if (startDate) query.scheduledAt.$gte = new Date(startDate);
       if (endDate) query.scheduledAt.$lte = new Date(endDate);
     }
+
+    logger.info('MongoDB query', { query });
 
     const posts = await MarketingPost.find(query)
       .populate('storyId', 'title coverPath spiciness category')
