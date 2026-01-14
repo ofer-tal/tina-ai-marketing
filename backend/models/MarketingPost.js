@@ -95,8 +95,16 @@ const marketingPostSchema = new mongoose.Schema({
   approvedAt: {
     type: Date
   },
+  approvedBy: {
+    type: String,
+    default: 'Founder'
+  },
   rejectedAt: {
     type: Date
+  },
+  rejectedBy: {
+    type: String,
+    default: 'Founder'
   },
   rejectionReason: {
     type: String,
@@ -110,6 +118,28 @@ const marketingPostSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+
+  // Approval history tracking
+  approvalHistory: [{
+    timestamp: {
+      type: Date,
+      default: Date.now
+    },
+    action: {
+      type: String,
+      enum: ['approved', 'rejected', 'regenerated', 'edited']
+    },
+    userId: {
+      type: String,
+      default: 'Founder'
+    },
+    details: {
+      reason: String,
+      feedback: String,
+      previousCaption: String,
+      previousHashtags: [String]
+    }
+  }],
 
   // Regeneration tracking
   regenerationCount: {
@@ -192,25 +222,49 @@ marketingPostSchema.virtual('timeUntilScheduled').get(function() {
 });
 
 // Method to mark as approved
-marketingPostSchema.methods.markAsApproved = function() {
+marketingPostSchema.methods.markAsApproved = function(userId = 'Founder') {
   this.status = 'approved';
   this.approvedAt = new Date();
+  this.approvedBy = userId;
+
+  // Track in approval history
+  this.approvalHistory = this.approvalHistory || [];
+  this.approvalHistory.push({
+    timestamp: new Date(),
+    action: 'approved',
+    userId: userId
+  });
+
   return this.save();
 };
 
 // Method to mark as rejected
-marketingPostSchema.methods.markAsRejected = function(reason, feedback = null) {
+marketingPostSchema.methods.markAsRejected = function(reason, feedback = null, userId = 'Founder') {
   this.status = 'rejected';
   this.rejectedAt = new Date();
+  this.rejectedBy = userId;
   this.rejectionReason = reason;
   if (feedback) {
     this.feedback = feedback;
   }
+
+  // Track in approval history
+  this.approvalHistory = this.approvalHistory || [];
+  this.approvalHistory.push({
+    timestamp: new Date(),
+    action: 'rejected',
+    userId: userId,
+    details: {
+      reason: reason,
+      feedback: feedback
+    }
+  });
+
   return this.save();
 };
 
 // Method to regenerate content with feedback
-marketingPostSchema.methods.regenerateWithFeedback = function(feedback) {
+marketingPostSchema.methods.regenerateWithFeedback = function(feedback, userId = 'Founder') {
   // Store previous values in history
   this.regenerationHistory = this.regenerationHistory || [];
   this.regenerationHistory.push({
@@ -219,6 +273,19 @@ marketingPostSchema.methods.regenerateWithFeedback = function(feedback) {
     previousCaption: this.caption,
     previousHashtags: this.hashtags,
     previousHook: this.hook
+  });
+
+  // Track in approval history
+  this.approvalHistory = this.approvalHistory || [];
+  this.approvalHistory.push({
+    timestamp: new Date(),
+    action: 'regenerated',
+    userId: userId,
+    details: {
+      feedback: feedback,
+      previousCaption: this.caption,
+      previousHashtags: [...this.hashtags]
+    }
   });
 
   // Update regeneration tracking

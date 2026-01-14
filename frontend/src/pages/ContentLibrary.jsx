@@ -431,6 +431,124 @@ const EngagementValue = styled.span`
   }};
 `;
 
+const ApprovalHistory = styled.div`
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background: rgba(45, 53, 97, 0.5);
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const ApprovalHistoryTitle = styled.h4`
+  color: #7b2cbf;
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &::before {
+    content: '📋';
+  }
+`;
+
+const ApprovalHistoryList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 300px;
+  overflow-y: auto;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #16213e;
+    border-radius: 3px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #7b2cbf;
+    border-radius: 3px;
+  }
+`;
+
+const ApprovalHistoryItem = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(22, 33, 62, 0.7);
+  border-radius: 6px;
+  border-left: 3px solid ${props => {
+    switch (props.$action) {
+      case 'approved': return '#00d26a';
+      case 'rejected': return '#ff6b6b';
+      case 'regenerated': return '#7b2cbf';
+      case 'edited': return '#ffb020';
+      default: return '#2d3561';
+    }
+  }};
+`;
+
+const ApprovalHistoryIcon = styled.div`
+  font-size: 1.25rem;
+  line-height: 1;
+`;
+
+const ApprovalHistoryContent = styled.div`
+  flex: 1;
+  min-width: 0;
+`;
+
+const ApprovalHistoryAction = styled.div`
+  font-weight: 600;
+  color: ${props => {
+    switch (props.$action) {
+      case 'approved': return '#00d26a';
+      case 'rejected': return '#ff6b6b';
+      case 'regenerated': return '#b36bf7';
+      case 'edited': return '#ffb020';
+      default: return '#eaeaea';
+    }
+  }};
+  margin-bottom: 0.25rem;
+`;
+
+const ApprovalHistoryUser = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const ApprovalHistoryTime = styled.div`
+  font-size: 0.75rem;
+  color: #6c757d;
+`;
+
+const ApprovalHistoryDetails = styled.div`
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid #2d3561;
+  font-size: 0.85rem;
+  color: #c0c0c0;
+`;
+
+const ApprovalHistoryDetail = styled.div`
+  margin-bottom: 0.25rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const NoHistoryMessage = styled.div`
+  text-align: center;
+  padding: 1.5rem;
+  color: #6c757d;
+  font-style: italic;
+`;
+
 const VideoContainer = styled.div`
   display: flex;
   justify-content: center;
@@ -1240,6 +1358,54 @@ function ContentLibrary() {
       const status = statuses[i % statuses.length];
       const isPosted = status === 'posted';
 
+      // Generate approval history based on status
+      const approvalHistory = [];
+      const now = new Date();
+
+      // Add initial generation
+      approvalHistory.push({
+        timestamp: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+        action: 'edited',
+        userId: 'Founder',
+        details: {
+          previousCaption: 'Initial caption draft',
+          feedback: 'Initial content generation'
+        }
+      });
+
+      // Add regeneration for some posts
+      if (i % 2 === 0) {
+        approvalHistory.push({
+          timestamp: new Date(now - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
+          action: 'regenerated',
+          userId: 'Founder',
+          details: {
+            feedback: 'Make the hook more engaging and add better transitions',
+            previousCaption: 'Old caption before regeneration...'
+          }
+        });
+      }
+
+      // Add approval/rejection
+      if (status === 'approved' || status === 'posted' || status === 'scheduled') {
+        approvalHistory.push({
+          timestamp: new Date(now - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+          action: 'approved',
+          userId: 'Founder',
+          details: {}
+        });
+      } else if (status === 'rejected') {
+        approvalHistory.push({
+          timestamp: new Date(now - 30 * 60 * 1000).toISOString(), // 30 minutes ago
+          action: 'rejected',
+          userId: 'Founder',
+          details: {
+            reason: 'Quality not meeting standards',
+            feedback: 'Need better visuals and more engaging hook'
+          }
+        });
+      }
+
       return {
         _id: `mock_${i}`,
         title: `${stories[i % stories.length]} - Part ${Math.floor(i / 5) + 1}`,
@@ -1253,6 +1419,7 @@ function ContentLibrary() {
         storyCategory: 'Romance',
         caption: 'Amazing story you need to read! 📚❤️ #romance #books',
         hashtags: ['#romance', '#books', '#reading', '#lovestory'],
+        approvalHistory: approvalHistory,
         // Add performance metrics for posted posts
         performanceMetrics: isPosted ? {
           views: Math.floor(Math.random() * 50000) + 1000,
@@ -1309,6 +1476,41 @@ function ContentLibrary() {
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
     if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
     return value.toString();
+  };
+
+  const formatHistoryTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const getActionIcon = (action) => {
+    const icons = {
+      approved: '✅',
+      rejected: '❌',
+      regenerated: '🔄',
+      edited: '✏️'
+    };
+    return icons[action] || '📌';
+  };
+
+  const getActionLabel = (action) => {
+    const labels = {
+      approved: 'Approved',
+      rejected: 'Rejected',
+      regenerated: 'Regenerated',
+      edited: 'Edited'
+    };
+    return labels[action] || 'Updated';
   };
 
   const handleVideoPreview = (post) => {
@@ -1887,6 +2089,54 @@ function ContentLibrary() {
                       </MetricsGrid>
                     </PerformanceMetrics>
                   )}
+
+                  {/* Approval History Section */}
+                  {selectedVideo.approvalHistory && selectedVideo.approvalHistory.length > 0 && (
+                    <ApprovalHistory>
+                      <ApprovalHistoryTitle>Approval History</ApprovalHistoryTitle>
+                      <ApprovalHistoryList>
+                        {selectedVideo.approvalHistory.slice().reverse().map((historyItem, index) => (
+                          <ApprovalHistoryItem key={index} $action={historyItem.action}>
+                            <ApprovalHistoryIcon>
+                              {getActionIcon(historyItem.action)}
+                            </ApprovalHistoryIcon>
+                            <ApprovalHistoryContent>
+                              <ApprovalHistoryAction $action={historyItem.action}>
+                                {getActionLabel(historyItem.action)}
+                              </ApprovalHistoryAction>
+                              <ApprovalHistoryUser>
+                                by {historyItem.userId || 'Founder'}
+                              </ApprovalHistoryUser>
+                              <ApprovalHistoryTime>
+                                {formatHistoryTimestamp(historyItem.timestamp)}
+                              </ApprovalHistoryTime>
+                              {historyItem.details && (
+                                <ApprovalHistoryDetails>
+                                  {historyItem.details.reason && (
+                                    <ApprovalHistoryDetail>
+                                      <strong>Reason:</strong> {historyItem.details.reason}
+                                    </ApprovalHistoryDetail>
+                                  )}
+                                  {historyItem.details.feedback && (
+                                    <ApprovalHistoryDetail>
+                                      <strong>Feedback:</strong> {historyItem.details.feedback}
+                                    </ApprovalHistoryDetail>
+                                  )}
+                                  {historyItem.details.previousCaption && (
+                                    <ApprovalHistoryDetail>
+                                      <strong>Previous caption:</strong> {historyItem.details.previousCaption.substring(0, 100)}
+                                      {historyItem.details.previousCaption.length > 100 ? '...' : ''}
+                                    </ApprovalHistoryDetail>
+                                  )}
+                                </ApprovalHistoryDetails>
+                              )}
+                            </ApprovalHistoryContent>
+                          </ApprovalHistoryItem>
+                        ))}
+                      </ApprovalHistoryList>
+                    </ApprovalHistory>
+                  )}
+
                   {/* Show approve/reject/edit buttons only for non-posted posts and when not in edit mode */}
                   {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && !editMode && (
                     <ModalActions>
