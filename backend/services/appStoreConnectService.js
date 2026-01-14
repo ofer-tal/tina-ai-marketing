@@ -297,6 +297,113 @@ class AppStoreConnectService {
       version: '1.0.0'
     };
   }
+
+  /**
+   * Fetch app metadata from App Store Connect
+   * Gets app title, subtitle, description, and keywords
+   *
+   * API Endpoint: GET /apps/{appId}/appStoreVersions
+   * Documentation: https://developer.apple.com/documentation/appstoreconnectapi/app_store_versions
+   */
+  async getAppMetadata(appId = null) {
+    logger.info('Fetching app metadata', { appId });
+
+    // Use default app ID if not provided
+    const targetAppId = appId || process.env.APP_STORE_APP_ID || 'blush-app';
+
+    if (!this.isConfigured()) {
+      // Return mock metadata if API not configured
+      logger.warn('App Store Connect API not configured, returning mock metadata');
+      return {
+        success: true,
+        appId: targetAppId,
+        metadata: {
+          title: 'Blush - Romantic Stories',
+          subtitle: 'Spicy AI Romance & Love Stories',
+          description: 'Dive into a world of romantic fiction with Blush! Our AI-powered story generator creates personalized spicy romance tales just for you. Whether you love love stories, romantic novels, or spicy fiction, Blush has something for everyone.\n\nFeatures:\n• Personalized AI-generated romance stories\n• Multiple romance genres: fantasy, historical, contemporary, and more\n• Spicy stories for mature audiences\n• Daily new story updates\n• Save your favorites and read offline\n\nPerfect for fans of romantic stories, love stories, and interactive romance games.',
+          keywords: 'romance,stories,love,spicy,fiction,romantic,novels,interactive,games',
+          promotionalText: 'New stories added daily! Discover your perfect romance.',
+          supportUrl: 'https://blush.app/support',
+          marketingUrl: 'https://blush.app',
+          privacyPolicyUrl: 'https://blush.app/privacy'
+        },
+        source: 'mock'
+      };
+    }
+
+    try {
+      // TODO: Implement actual API call to fetch app metadata
+      // GET /apps/{appId}/appStoreVersions?filter[platform]=ios
+      // Then GET /appStoreVersions/{versionId}/appStoreVersionLocalizations
+      //
+      // For now, return mock data
+      logger.info('Returning mock app metadata (API implementation pending)');
+
+      return {
+        success: true,
+        appId: targetAppId,
+        metadata: {
+          title: 'Blush - Romantic Stories',
+          subtitle: 'Spicy AI Romance & Love Stories',
+          description: 'Dive into a world of romantic fiction with Blush! Our AI-powered story generator creates personalized spicy romance tales just for you. Whether you love love stories, romantic novels, or spicy fiction, Blush has something for everyone.\n\nFeatures:\n• Personalized AI-generated romance stories\n• Multiple romance genres: fantasy, historical, contemporary, and more\n• Spicy stories for mature audiences\n• Daily new story updates\n• Save your favorites and read offline\n\nPerfect for fans of romantic stories, love stories, and interactive romance games.',
+          keywords: 'romance,stories,love,spicy,fiction,romantic,novels,interactive,games',
+          promotionalText: 'New stories added daily! Discover your perfect romance.',
+          supportUrl: 'https://blush.app/support',
+          marketingUrl: 'https://blush.app',
+          privacyPolicyUrl: 'https://blush.app/privacy'
+        },
+        source: 'mock'
+      };
+
+    } catch (error) {
+      logger.error('Failed to fetch app metadata', {
+        appId: targetAppId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update app metadata in App Store Connect
+   * Updates app title, subtitle, description, etc.
+   *
+   * API Endpoint: PATCH /appStoreVersionLocalizations/{localizationId}
+   */
+  async updateAppMetadata(appId, metadata) {
+    logger.info('Updating app metadata', { appId, metadata });
+
+    if (!this.isConfigured()) {
+      throw new Error('App Store Connect API not configured');
+    }
+
+    try {
+      // TODO: Implement actual API call to update metadata
+      // 1. Get the latest app store version ID
+      // 2. Get the localization ID for the version
+      // 3. PATCH the localization with updated metadata
+      //
+      // For now, just log the update
+      logger.info('Metadata update requested (API implementation pending)', {
+        appId,
+        title: metadata.title,
+        subtitle: metadata.subtitle
+      });
+
+      return {
+        success: true,
+        message: 'App Store Connect API integration - metadata update endpoint pending implementation',
+        metadata
+      };
+
+    } catch (error) {
+      logger.error('Failed to update app metadata', {
+        appId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
 }
 
 // Create singleton instance

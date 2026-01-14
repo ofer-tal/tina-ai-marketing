@@ -227,4 +227,78 @@ router.get('/app/:appId', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/appstore/metadata/:appId?
+ *
+ * Get app metadata (title, subtitle, description, keywords)
+ * Query params:
+ * - appId: App ID (optional, defaults to APP_STORE_APP_ID env var or 'blush-app')
+ */
+router.get('/metadata/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Fetching app metadata', { appId });
+
+    const result = await appStoreConnectService.getAppMetadata(appId);
+
+    res.json({
+      success: true,
+      appId: result.appId,
+      metadata: result.metadata,
+      source: result.source || 'api'
+    });
+
+  } catch (error) {
+    logger.error('Failed to fetch app metadata', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * PATCH /api/appstore/metadata/:appId
+ *
+ * Update app metadata (title, subtitle, description, keywords)
+ * Body: { title, subtitle, description, keywords, promotionalText, etc. }
+ */
+router.patch('/metadata/:appId', async (req, res) => {
+  try {
+    const { appId } = req.params;
+    const metadata = req.body;
+
+    logger.info('Updating app metadata', { appId, metadata });
+
+    if (!appStoreConnectService.isConfigured()) {
+      return res.status(400).json({
+        success: false,
+        error: 'App Store Connect API not configured'
+      });
+    }
+
+    const result = await appStoreConnectService.updateAppMetadata(appId, metadata);
+
+    res.json({
+      success: true,
+      message: result.message,
+      metadata: result.metadata
+    });
+
+  } catch (error) {
+    logger.error('Failed to update app metadata', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;

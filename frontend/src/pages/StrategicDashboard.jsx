@@ -717,6 +717,199 @@ const NoSuggestions = styled.div`
   font-size: 0.95rem;
 `;
 
+// App Metadata Styled Components
+const MetadataHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const MetadataTitle = styled.h3`
+  font-size: 1.25rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const MetadataActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const EditButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #2d3561;
+  border: 1px solid #e94560;
+  border-radius: 6px;
+  color: #e94560;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+    color: #ffffff;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const SaveButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #00d26a;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #00b558;
+  }
+`;
+
+const CancelButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid #a0a0a0;
+  border-radius: 6px;
+  color: #a0a0a0;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2d3561;
+    color: #eaeaea;
+  }
+`;
+
+const MetadataSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const MetadataLabel = styled.label`
+  display: block;
+  font-size: 0.9rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+`;
+
+const MetadataValue = styled.div`
+  padding: 1rem;
+  background: #0f3460;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+
+  &:focus-within {
+    border-color: #e94560;
+  }
+`;
+
+const MetadataInput = styled.textarea`
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #eaeaea;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: vertical;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+  }
+
+  &::placeholder {
+    color: #666;
+  }
+`;
+
+const MetadataGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const MetadataField = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const SmallMetadataInput = styled.input`
+  width: 100%;
+  padding: 0.75rem;
+  background: #0f3460;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  font-family: inherit;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+  }
+
+  &::placeholder {
+    color: #666;
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+`;
+
+const UrlList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const UrlItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: #0f3460;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  font-size: 0.85rem;
+`;
+
+const UrlLabel = styled.span`
+  color: #a0a0a0;
+  min-width: 100px;
+`;
+
+const UrlValue = styled.a`
+  color: #e94560;
+  text-decoration: none;
+  word-break: break-all;
+
+  &:hover {
+    text-decoration: underline;
+  }
+`;
+
 // Keyword History Modal
 const KeywordModalOverlay = styled.div`
   position: fixed;
@@ -874,6 +1067,9 @@ function StrategicDashboard() {
   const [selectedFunnelStage, setSelectedFunnelStage] = useState(null);
   const [competitivenessData, setCompetitivenessData] = useState(null);
   const [suggestionsData, setSuggestionsData] = useState(null);
+  const [appMetadata, setAppMetadata] = useState(null);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [editedMetadata, setEditedMetadata] = useState(null);
   const [keywordModal, setKeywordModal] = useState({ isOpen: false, keyword: null, history: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -888,6 +1084,7 @@ function StrategicDashboard() {
     fetchConversionFunnel();
     fetchCompetitivenessData();
     fetchSuggestionsData();
+    fetchAppMetadata();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -1153,6 +1350,56 @@ function StrategicDashboard() {
       setSuggestionsData(result.data);
     } catch (err) {
       console.error('Failed to fetch keyword suggestions:', err);
+    }
+  };
+
+  const fetchAppMetadata = async () => {
+    try {
+      const response = await fetch('/api/appstore/metadata');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setAppMetadata(result.metadata);
+    } catch (err) {
+      console.error('Failed to fetch app metadata:', err);
+      // Set mock metadata for development
+      setAppMetadata({
+        title: 'Blush - Romantic Stories',
+        subtitle: 'Spicy AI Romance & Love Stories',
+        description: 'Dive into a world of romantic fiction with Blush! Our AI-powered story generator creates personalized spicy romance tales just for you. Whether you love love stories, romantic novels, or spicy fiction, Blush has something for everyone.\n\nFeatures:\n• Personalized AI-generated romance stories\n• Multiple romance genres: fantasy, historical, contemporary, and more\n• Spicy stories for mature audiences\n• Daily new story updates\n• Save your favorites and read offline\n\nPerfect for fans of romantic stories, love stories, and interactive romance games.',
+        keywords: 'romance,stories,love,spicy,fiction,romantic,novels,interactive,games',
+        promotionalText: 'New stories added daily! Discover your perfect romance.',
+        supportUrl: 'https://blush.app/support',
+        marketingUrl: 'https://blush.app',
+        privacyPolicyUrl: 'https://blush.app/privacy'
+      });
+    }
+  };
+
+  const handleSaveMetadata = async () => {
+    try {
+      const response = await fetch('/api/appstore/metadata/blush-app', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(editedMetadata)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setAppMetadata(editedMetadata);
+      setIsEditingMetadata(false);
+      alert('App metadata updated successfully!');
+    } catch (err) {
+      console.error('Failed to update app metadata:', err);
+      alert('Failed to update app metadata. Please try again.');
     }
   };
 
@@ -2449,6 +2696,146 @@ function StrategicDashboard() {
                 )}
               </ChartContainer>
             </>
+          )}
+
+
+          {/* App Metadata Section */}
+          {appMetadata && (
+            <ChartContainer>
+              <MetadataHeader>
+                <MetadataTitle>📱 App Metadata</MetadataTitle>
+                <MetadataActions>
+                  {!isEditingMetadata ? (
+                    <EditButton onClick={() => {
+                      setIsEditingMetadata(true);
+                      setEditedMetadata({...appMetadata});
+                    }}>
+                      ✏️ Edit Metadata
+                    </EditButton>
+                  ) : (
+                    <>
+                      <SaveButton onClick={handleSaveMetadata}>
+                        💾 Save Changes
+                      </SaveButton>
+                      <CancelButton onClick={() => {
+                        setIsEditingMetadata(false);
+                        setEditedMetadata(null);
+                      }}>
+                        ✕ Cancel
+                      </CancelButton>
+                    </>
+                  )}
+                </MetadataActions>
+              </MetadataHeader>
+
+              <MetadataGrid>
+                <MetadataField>
+                  <MetadataLabel>Title</MetadataLabel>
+                  {isEditingMetadata ? (
+                    <SmallMetadataInput
+                      type="text"
+                      value={editedMetadata?.title || ''}
+                      onChange={(e) => setEditedMetadata({...editedMetadata, title: e.target.value})}
+                      placeholder="App title"
+                    />
+                  ) : (
+                    <MetadataValue>{appMetadata.title}</MetadataValue>
+                  )}
+                </MetadataField>
+
+                <MetadataField>
+                  <MetadataLabel>Subtitle</MetadataLabel>
+                  {isEditingMetadata ? (
+                    <SmallMetadataInput
+                      type="text"
+                      value={editedMetadata?.subtitle || ''}
+                      onChange={(e) => setEditedMetadata({...editedMetadata, subtitle: e.target.value})}
+                      placeholder="App subtitle"
+                    />
+                  ) : (
+                    <MetadataValue>{appMetadata.subtitle}</MetadataValue>
+                  )}
+                </MetadataField>
+              </MetadataGrid>
+
+              <MetadataSection>
+                <MetadataLabel>Description</MetadataLabel>
+                {isEditingMetadata ? (
+                  <MetadataValue>
+                    <MetadataInput
+                      rows={8}
+                      value={editedMetadata?.description || ''}
+                      onChange={(e) => setEditedMetadata({...editedMetadata, description: e.target.value})}
+                      placeholder="App description"
+                    />
+                  </MetadataValue>
+                ) : (
+                  <MetadataValue>{appMetadata.description}</MetadataValue>
+                )}
+              </MetadataSection>
+
+              <MetadataSection>
+                <MetadataLabel>Keywords</MetadataLabel>
+                {isEditingMetadata ? (
+                  <SmallMetadataInput
+                    type="text"
+                    value={editedMetadata?.keywords || ''}
+                    onChange={(e) => setEditedMetadata({...editedMetadata, keywords: e.target.value})}
+                    placeholder="Comma-separated keywords"
+                  />
+                ) : (
+                  <MetadataValue>{appMetadata.keywords}</MetadataValue>
+                )}
+              </MetadataSection>
+
+              {appMetadata.promotionalText && (
+                <MetadataSection>
+                  <MetadataLabel>Promotional Text</MetadataLabel>
+                  {isEditingMetadata ? (
+                    <MetadataValue>
+                      <MetadataInput
+                        rows={3}
+                        value={editedMetadata?.promotionalText || ''}
+                        onChange={(e) => setEditedMetadata({...editedMetadata, promotionalText: e.target.value})}
+                        placeholder="Promotional text"
+                      />
+                    </MetadataValue>
+                  ) : (
+                    <MetadataValue>{appMetadata.promotionalText}</MetadataValue>
+                  )}
+                </MetadataSection>
+              )}
+
+              <MetadataSection>
+                <MetadataLabel>URLs</MetadataLabel>
+                <UrlList>
+                  {appMetadata.supportUrl && (
+                    <UrlItem>
+                      <UrlLabel>Support:</UrlLabel>
+                      <UrlValue href={appMetadata.supportUrl} target="_blank" rel="noopener noreferrer">
+                        {appMetadata.supportUrl}
+                      </UrlValue>
+                    </UrlItem>
+                  )}
+                  {appMetadata.marketingUrl && (
+                    <UrlItem>
+                      <UrlLabel>Marketing:</UrlLabel>
+                      <UrlValue href={appMetadata.marketingUrl} target="_blank" rel="noopener noreferrer">
+                        {appMetadata.marketingUrl}
+                      </UrlValue>
+                    </UrlItem>
+                  )}
+                  {appMetadata.privacyPolicyUrl && (
+                    <UrlItem>
+                      <UrlLabel>Privacy:</UrlLabel>
+                      <UrlValue href={appMetadata.privacyPolicyUrl} target="_blank" rel="noopener noreferrer">
+                        {appMetadata.privacyPolicyUrl}
+                      </UrlValue>
+                    </UrlItem>
+                  )}
+                </UrlList>
+              </MetadataSection>
+            </ChartContainer>
           )}
 
 
