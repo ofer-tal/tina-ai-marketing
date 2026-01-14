@@ -910,6 +910,364 @@ const UrlValue = styled.a`
   }
 `;
 
+// Icon A/B Testing Styled Components
+const IconABTestingContainer = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+`;
+
+const IconABTestingHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+`;
+
+const IconABTestingTitle = styled.h3`
+  font-size: 1.5rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const CurrentIconSection = styled.div`
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #0f3460;
+  border-radius: 8px;
+`;
+
+const IconPreview = styled.div`
+  width: 200px;
+  height: 200px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid #2d3561;
+  background: #1a1a2e;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`;
+
+const IconAnalysisGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+`;
+
+const IconMetric = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const IconMetricLabel = styled.span`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+`;
+
+const IconMetricValue = styled.span`
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: ${props => {
+    const value = props.$value;
+    if (value >= 80) return '#00d26a';
+    if (value >= 60) return '#ffb020';
+    return '#e94560';
+  }};
+`;
+
+const IconDetails = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const IconDetailItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const IconDetailLabel = styled.span`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+`;
+
+const IconDetailValue = styled.span`
+  font-size: 0.95rem;
+  color: #eaeaea;
+`;
+
+const StrengthsWeaknessesGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const StrengthsWeaknessesBox = styled.div`
+  background: #0f3460;
+  padding: 1rem;
+  border-radius: 8px;
+`;
+
+const StrengthsWeaknessesTitle = styled.h4`
+  font-size: 1rem;
+  color: ${props => props.$type === 'strengths' ? '#00d26a' : '#e94560'};
+  margin: 0 0 0.75rem 0;
+`;
+
+const StrengthsWeaknessesList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 0;
+`;
+
+const StrengthsWeaknessesItem = styled.li`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #2d3561;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &::before {
+    content: ${props => props.$type === 'strengths' ? '"✓ "' : '"⚠ "'};
+    color: ${props => props.$type === 'strengths' ? '#00d26a' : '#e94560'};
+    margin-right: 0.5rem;
+  }
+`;
+
+const CompetitorAnalysisSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const SectionHeading = styled.h4`
+  font-size: 1.1rem;
+  color: #eaeaea;
+  margin: 0 0 1rem 0;
+`;
+
+const CompetitorGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const CompetitorCard = styled.div`
+  background: #0f3460;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const CompetitorName = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.5rem;
+`;
+
+const CompetitorDetail = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const MarketTrendsBox = styled.div`
+  background: #0f3460;
+  padding: 1rem;
+  border-radius: 8px;
+  border-left: 3px solid #e94560;
+`;
+
+const TrendItem = styled.div`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  margin-bottom: 0.5rem;
+`;
+
+const TrendLabel = styled.span`
+  color: #a0a0a0;
+`;
+
+const VariationsSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const VariationsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+`;
+
+const VariationCard = styled.div`
+  background: #0f3460;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 2px solid ${props => {
+    switch (props.$priority) {
+      case 'high': return '#00d26a';
+      case 'medium': return '#ffb020';
+      case 'low': return '#e94560';
+      default: return '#2d3561';
+    }
+  }};
+`;
+
+const VariationHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 1rem;
+`;
+
+const VariationName = styled.h5`
+  font-size: 1.1rem;
+  color: #eaeaea;
+  margin: 0;
+`;
+
+const PriorityBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: ${props => {
+    switch (props.$priority) {
+      case 'high': return '#00d26a';
+      case 'medium': return '#ffb020';
+      case 'low': return '#e94560';
+      default: return '#2d3561';
+    }
+  }};
+  color: #1a1a2e;
+`;
+
+const ConfidenceBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  background: #2d3561;
+  color: #a0a0a0;
+`;
+
+const VariationDescription = styled.p`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  margin: 0 0 1rem 0;
+  line-height: 1.5;
+`;
+
+const VariationHypothesis = styled.div`
+  background: #1a1a2e;
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+`;
+
+const HypothesisLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const HypothesisText = styled.div`
+  font-size: 0.85rem;
+  color: #00d26a;
+  font-style: italic;
+`;
+
+const ExpectedImprovement = styled.div`
+  font-size: 0.9rem;
+  color: #00d26a;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+`;
+
+const ExperimentStructureBox = styled.div`
+  background: #0f3460;
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 2px solid #e94560;
+`;
+
+const ExperimentStructureTitle = styled.h4`
+  font-size: 1rem;
+  color: #e94560;
+  margin: 0 0 1rem 0;
+`;
+
+const ExperimentGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const ExperimentItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const ExperimentLabel = styled.span`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+`;
+
+const ExperimentValue = styled.span`
+  font-size: 0.95rem;
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const SuccessCriteriaBox = styled.div`
+  background: #1a1a2e;
+  padding: 1rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+`;
+
+const SuccessCriteriaTitle = styled.div`
+  font-size: 0.9rem;
+  color: #00d26a;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+`;
+
+const SuccessCriteriaList = styled.ul`
+  list-style: none;
+  padding: 0;
+  margin: 0;
+`;
+
+const SuccessCriteriaItem = styled.li`
+  font-size: 0.85rem;
+  color: #eaeaea;
+  padding: 0.25rem 0;
+
+  &::before {
+    content: "✓ ";
+    color: #00d26a;
+    margin-right: 0.5rem;
+  }
+`;
+
 // Screenshot Analysis Styled Components
 const ScreenshotAnalysisHeader = styled.div`
   display: flex;
@@ -1245,6 +1603,7 @@ function StrategicDashboard() {
   const [editedMetadata, setEditedMetadata] = useState(null);
   const [keywordModal, setKeywordModal] = useState({ isOpen: false, keyword: null, history: null });
   const [screenshotAnalysis, setScreenshotAnalysis] = useState(null);
+  const [iconABTesting, setIconABTesting] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -1260,6 +1619,7 @@ function StrategicDashboard() {
     fetchSuggestionsData();
     fetchAppMetadata();
     fetchScreenshotAnalysis();
+    fetchIconABTesting();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -1615,6 +1975,121 @@ function StrategicDashboard() {
             { type: 'first_screenshot', severity: 'high', message: 'First screenshot must be compelling and show the app\'s core value.', recommendation: 'Ensure first screenshot shows: app name/logo, main benefit, and a clear call-to-action. Avoid text-heavy designs.' },
             { type: 'text_readability', severity: 'medium', message: 'Ensure text is readable on small screens.', recommendation: 'Use minimum 16pt font, high contrast, and limit to 20% of screenshot area.' }
           ]
+        }
+      });
+    }
+  };
+
+  const fetchIconABTesting = async () => {
+    try {
+      const response = await fetch('/api/appstore/icon/ab-testing');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setIconABTesting(result);
+    } catch (err) {
+      console.error('Failed to fetch icon A/B testing data:', err);
+      // Set mock data for development
+      setIconABTesting({
+        currentIcon: {
+          url: 'https://via.placeholder.com/1024x1024/1a1a2e/e94560?text=Blush+Icon',
+          size: '1024x1024',
+          format: 'PNG',
+          description: 'Current Blush app icon featuring romantic theme'
+        },
+        currentAnalysis: {
+          clarity: 75,
+          brandRecognition: 70,
+          emotionalAppeal: 80,
+          uniqueness: 65,
+          scalability: 85,
+          colorScheme: {
+            primary: '#e94560',
+            secondary: '#1a1a2e',
+            contrast: 'good',
+            vibrancy: 'high'
+          },
+          strengths: [
+            'Strong emotional appeal with romantic theme',
+            'Good color contrast for visibility',
+            'Clear brand identity'
+          ],
+          weaknesses: [
+            'Could be more distinctive in crowded category',
+            'Consider testing with character variations',
+            'Potential to stand out more with bolder design'
+          ]
+        },
+        competitorAnalysis: {
+          competitors: [
+            { name: 'Episode', iconStyle: 'Character-focused', colors: 'Purple/Pink gradient' },
+            { name: 'Chapters', iconStyle: 'Illustration', colors: 'Blue/Gold' },
+            { name: 'Choices', iconStyle: 'Typography-focused', colors: 'Red/White' },
+            { name: 'Romance Club', iconStyle: 'Photo-realistic', colors: 'Pink/Red' }
+          ],
+          marketTrends: {
+            commonColors: ['Pink', 'Purple', 'Red', 'Gold'],
+            commonStyles: ['Character-focused', 'Gradient backgrounds', 'Romantic imagery'],
+            differentiation: 'Most apps use pink/purple gradients with characters'
+          }
+        },
+        recommendations: {
+          variations: [
+            {
+              id: 'variation-a',
+              name: 'Bold Character Focus',
+              description: 'Emphasize romantic character with larger presence',
+              hypothesis: 'Larger, more expressive character will increase emotional connection and CTR by 15%',
+              expectedImprovement: '+15%',
+              priority: 'high',
+              confidence: 'medium'
+            },
+            {
+              id: 'variation-b',
+              name: 'Minimalist Symbol',
+              description: 'Clean, modern design with romantic symbol',
+              hypothesis: 'Minimalist design will stand out against busy competitor icons and increase CTR by 10%',
+              expectedImprovement: '+10%',
+              priority: 'medium',
+              confidence: 'medium'
+            },
+            {
+              id: 'variation-c',
+              name: 'Unique Color Scheme',
+              description: 'Differentiate with unexpected color combination',
+              hypothesis: 'Unique colors will grab attention in pink/purple saturated category and increase CTR by 12%',
+              expectedImprovement: '+12%',
+              priority: 'medium',
+              confidence: 'low'
+            },
+            {
+              id: 'variation-d',
+              name: 'Typography + Symbol',
+              description: 'Combine app name with romantic symbol',
+              hypothesis: 'Brand name visibility will increase recognition and CTR by 8%',
+              expectedImprovement: '+8%',
+              priority: 'low',
+              confidence: 'low'
+            }
+          ],
+          experimentStructure: {
+            testName: 'App Icon A/B Test - Conversion Optimization',
+            metric: 'Conversion Rate (Product Page Views → Downloads)',
+            baseline: {
+              currentRate: '17.3%',
+              weeklyProductPageViews: 18500,
+              weeklyDownloads: 3200
+            },
+            testConfiguration: {
+              duration: '14 days',
+              minSampleSize: 5000,
+              trafficSplit: '50/50',
+              significance: 95
+            }
+          }
         }
       });
     }
@@ -3127,6 +3602,197 @@ function StrategicDashboard() {
                 )}
               </AnalysisSection>
             </ChartContainer>
+          )}
+
+
+          {/* Icon A/B Testing Section */}
+          {iconABTesting && (
+            <IconABTestingContainer>
+              <IconABTestingHeader>
+                <IconABTestingTitle>🎨 Icon A/B Testing Recommendations</IconABTestingTitle>
+              </IconABTestingHeader>
+
+              {/* Current Icon Analysis */}
+              <CurrentIconSection>
+                <IconPreview>
+                  <img src={iconABTesting.currentIcon?.url || 'https://via.placeholder.com/200?text=Icon'} alt="Current Icon" />
+                </IconPreview>
+                <IconDetails>
+                  <IconDetailItem>
+                    <IconDetailLabel>Size</IconDetailLabel>
+                    <IconDetailValue>{iconABTesting.currentIcon?.size || '1024x1024'}</IconDetailValue>
+                  </IconDetailItem>
+                  <IconDetailItem>
+                    <IconDetailLabel>Format</IconDetailLabel>
+                    <IconDetailValue>{iconABTesting.currentIcon?.format || 'PNG'}</IconDetailValue>
+                  </IconDetailItem>
+                  <IconDetailItem>
+                    <IconDetailLabel>Description</IconDetailLabel>
+                    <IconDetailValue>{iconABTesting.currentIcon?.description || 'Current app icon'}</IconDetailValue>
+                  </IconDetailItem>
+                  <IconAnalysisGrid>
+                    <IconMetric>
+                      <IconMetricLabel>Clarity</IconMetricLabel>
+                      <IconMetricValue $value={iconABTesting.currentAnalysis?.clarity || 0}>
+                        {iconABTesting.currentAnalysis?.clarity || 0}/100
+                      </IconMetricValue>
+                    </IconMetric>
+                    <IconMetric>
+                      <IconMetricLabel>Brand Recognition</IconMetricLabel>
+                      <IconMetricValue $value={iconABTesting.currentAnalysis?.brandRecognition || 0}>
+                        {iconABTesting.currentAnalysis?.brandRecognition || 0}/100
+                      </IconMetricValue>
+                    </IconMetric>
+                    <IconMetric>
+                      <IconMetricLabel>Emotional Appeal</IconMetricLabel>
+                      <IconMetricValue $value={iconABTesting.currentAnalysis?.emotionalAppeal || 0}>
+                        {iconABTesting.currentAnalysis?.emotionalAppeal || 0}/100
+                      </IconMetricValue>
+                    </IconMetric>
+                    <IconMetric>
+                      <IconMetricLabel>Uniqueness</IconMetricLabel>
+                      <IconMetricValue $value={iconABTesting.currentAnalysis?.uniqueness || 0}>
+                        {iconABTesting.currentAnalysis?.uniqueness || 0}/100
+                      </IconMetricValue>
+                    </IconMetric>
+                    <IconMetric>
+                      <IconMetricLabel>Scalability</IconMetricLabel>
+                      <IconMetricValue $value={iconABTesting.currentAnalysis?.scalability || 0}>
+                        {iconABTesting.currentAnalysis?.scalability || 0}/100
+                      </IconMetricValue>
+                    </IconMetric>
+                  </IconAnalysisGrid>
+                </IconDetails>
+              </CurrentIconSection>
+
+              {/* Strengths and Weaknesses */}
+              <StrengthsWeaknessesGrid>
+                <StrengthsWeaknessesBox>
+                  <StrengthsWeaknessesTitle $type="strengths">✓ Strengths</StrengthsWeaknessesTitle>
+                  <StrengthsWeaknessesList>
+                    {iconABTesting.currentAnalysis?.strengths?.map((strength, index) => (
+                      <StrengthsWeaknessesItem key={index} $type="strengths">
+                        {strength}
+                      </StrengthsWeaknessesItem>
+                    ))}
+                  </StrengthsWeaknessesList>
+                </StrengthsWeaknessesBox>
+                <StrengthsWeaknessesBox>
+                  <StrengthsWeaknessesTitle $type="weaknesses">⚠ Areas for Improvement</StrengthsWeaknessesTitle>
+                  <StrengthsWeaknessesList>
+                    {iconABTesting.currentAnalysis?.weaknesses?.map((weakness, index) => (
+                      <StrengthsWeaknessesItem key={index} $type="weaknesses">
+                        {weakness}
+                      </StrengthsWeaknessesItem>
+                    ))}
+                  </StrengthsWeaknessesList>
+                </StrengthsWeaknessesBox>
+              </StrengthsWeaknessesGrid>
+
+              {/* Competitor Analysis */}
+              <CompetitorAnalysisSection>
+                <SectionHeading>📊 Competitor Analysis</SectionHeading>
+                <CompetitorGrid>
+                  {iconABTesting.competitorAnalysis?.competitors?.map((competitor, index) => (
+                    <CompetitorCard key={index}>
+                      <CompetitorName>{competitor.name}</CompetitorName>
+                      <CompetitorDetail>Style: {competitor.iconStyle}</CompetitorDetail>
+                      <CompetitorDetail>Colors: {competitor.colors}</CompetitorDetail>
+                    </CompetitorCard>
+                  ))}
+                </CompetitorGrid>
+                <MarketTrendsBox>
+                  <TrendItem>
+                    <TrendLabel>Common Colors: </TrendLabel>
+                    {iconABTesting.competitorAnalysis?.marketTrends?.commonColors?.join(', ')}
+                  </TrendItem>
+                  <TrendItem>
+                    <TrendLabel>Common Styles: </TrendLabel>
+                    {iconABTesting.competitorAnalysis?.marketTrends?.commonStyles?.join(', ')}
+                  </TrendItem>
+                  <TrendItem>
+                    <TrendLabel>Differentiation: </TrendLabel>
+                    {iconABTesting.competitorAnalysis?.marketTrends?.differentiation}
+                  </TrendItem>
+                </MarketTrendsBox>
+              </CompetitorAnalysisSection>
+
+              {/* A/B Test Variations */}
+              <VariationsSection>
+                <SectionHeading>🧪 Recommended A/B Test Variations</SectionHeading>
+                <VariationsGrid>
+                  {iconABTesting.recommendations?.variations?.map((variation) => (
+                    <VariationCard key={variation.id} $priority={variation.priority}>
+                      <VariationHeader>
+                        <VariationName>{variation.name}</VariationName>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <PriorityBadge $priority={variation.priority}>
+                            {variation.priority.toUpperCase()}
+                          </PriorityBadge>
+                          <ConfidenceBadge>
+                            {variation.confidence} confidence
+                          </ConfidenceBadge>
+                        </div>
+                      </VariationHeader>
+                      <VariationDescription>{variation.description}</VariationDescription>
+                      <VariationHypothesis>
+                        <HypothesisLabel>HYPOTHESIS</HypothesisLabel>
+                        <HypothesisText>"{variation.hypothesis}"</HypothesisText>
+                      </VariationHypothesis>
+                      <ExpectedImprovement>
+                        Expected: {variation.expectedImprovement}
+                      </ExpectedImprovement>
+                    </VariationCard>
+                  ))}
+                </VariationsGrid>
+              </VariationsSection>
+
+              {/* Experiment Structure */}
+              <ExperimentStructureBox>
+                <ExperimentStructureTitle>⚙️ Experiment Setup</ExperimentStructureTitle>
+                <ExperimentGrid>
+                  <ExperimentItem>
+                    <ExperimentLabel>Test Name</ExperimentLabel>
+                    <ExperimentValue>{iconABTesting.recommendations?.experimentStructure?.testName}</ExperimentValue>
+                  </ExperimentItem>
+                  <ExperimentItem>
+                    <ExperimentLabel>Primary Metric</ExperimentLabel>
+                    <ExperimentValue>{iconABTesting.recommendations?.experimentStructure?.metric}</ExperimentValue>
+                  </ExperimentItem>
+                  <ExperimentItem>
+                    <ExperimentLabel>Current Conversion Rate</ExperimentLabel>
+                    <ExperimentValue>{iconABTesting.recommendations?.experimentStructure?.baseline?.currentRate}</ExperimentValue>
+                  </ExperimentItem>
+                  <ExperimentItem>
+                    <ExperimentLabel>Test Duration</ExperimentLabel>
+                    <ExperimentValue>{iconABTesting.recommendations?.experimentStructure?.testConfiguration?.duration}</ExperimentValue>
+                  </ExperimentItem>
+                  <ExperimentItem>
+                    <ExperimentLabel>Sample Size</ExperimentLabel>
+                    <ExperimentValue>{formatNumber(iconABTesting.recommendations?.experimentStructure?.testConfiguration?.minSampleSize)}</ExperimentValue>
+                  </ExperimentItem>
+                  <ExperimentItem>
+                    <ExperimentLabel>Traffic Split</ExperimentLabel>
+                    <ExperimentValue>{iconABTesting.recommendations?.experimentStructure?.testConfiguration?.trafficSplit}</ExperimentValue>
+                  </ExperimentItem>
+                  <ExperimentItem>
+                    <ExperimentLabel>Statistical Significance</ExperimentLabel>
+                    <ExperimentValue>{iconABTesting.recommendations?.experimentStructure?.testConfiguration?.significance}%</ExperimentValue>
+                  </ExperimentItem>
+                </ExperimentGrid>
+                <SuccessCriteriaBox>
+                  <SuccessCriteriaTitle>✓ Success Criteria</SuccessCriteriaTitle>
+                  <SuccessCriteriaList>
+                    <SuccessCriteriaItem>
+                      {iconABTesting.recommendations?.experimentStructure?.successCriteria?.primary}
+                    </SuccessCriteriaItem>
+                    {iconABTesting.recommendations?.experimentStructure?.successCriteria?.secondary?.map((criterion, index) => (
+                      <SuccessCriteriaItem key={index}>{criterion}</SuccessCriteriaItem>
+                    ))}
+                  </SuccessCriteriaList>
+                </SuccessCriteriaBox>
+              </ExperimentStructureBox>
+            </IconABTestingContainer>
           )}
 
 

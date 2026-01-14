@@ -379,4 +379,46 @@ router.get('/screenshots/analysis/:appId?', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/appstore/icon/ab-testing/:appId?
+ *
+ * Analyze current icon and provide A/B testing recommendations
+ * Includes icon analysis, competitor comparison, and test variations
+ */
+router.get('/icon/ab-testing/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Analyzing icon for A/B testing', { appId });
+
+    const analysis = await appStoreConnectService.analyzeIconForABTesting(appId);
+
+    if (!analysis.success) {
+      return res.status(500).json({
+        success: false,
+        error: analysis.error
+      });
+    }
+
+    res.json({
+      success: true,
+      appId: analysis.appId,
+      currentIcon: analysis.currentIcon,
+      currentAnalysis: analysis.currentAnalysis,
+      competitorAnalysis: analysis.competitorAnalysis,
+      recommendations: analysis.recommendations
+    });
+
+  } catch (error) {
+    logger.error('Failed to analyze icon for A/B testing', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
