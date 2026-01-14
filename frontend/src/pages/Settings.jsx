@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
 
 const SettingsContainer = styled.div`
   padding: 2rem;
@@ -359,6 +360,9 @@ function Settings() {
           {message.text}
         </StatusMessage>
       )}
+
+      {/* TikTok Sandbox Configuration */}
+      <TikTokSandboxConfig />
 
       <Grid>
         {schema && Object.entries(schema).map(([category, keys]) => (
