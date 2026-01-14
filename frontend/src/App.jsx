@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import StrategicDashboard from './pages/StrategicDashboard';
 import Chat from './pages/Chat';
 import ContentLibrary from './pages/ContentLibrary';
+import TodoSidebar from './components/TodoSidebar';
 
 const AppContainer = styled.div`
   min-height: 100vh;
@@ -16,6 +17,61 @@ const AppContainer = styled.div`
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  display: flex;
+  flex-direction: column;
+`;
+
+const MainLayout = styled.div`
+  display: flex;
+  flex: 1;
+`;
+
+const SidebarNav = styled.nav`
+  width: 200px;
+  background: #16213e;
+  border-right: 1px solid #2d3561;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const SidebarNavLink = styled(Link)`
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #eaeaea;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #e94560;
+    border-color: #e94560;
+    transform: translateX(4px);
+  }
+
+  &.active {
+    background: #e94560;
+    border-color: #e94560;
+  }
+`;
+
+const MainContentArea = styled.main`
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+`;
+
+const PageContent = styled.div`
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  max-width: calc(100vw - 520px); // Subtract sidebar and todo sidebar
 `;
 
 const Header = styled.header`
@@ -155,26 +211,33 @@ function App() {
             <Title>Blush Marketing Operations Center</Title>
             <Subtitle>AI-Powered Marketing Automation for the Blush iPhone App</Subtitle>
           </HeaderLeft>
-          <Nav>
-            <NavLink to="/">Home</NavLink>
-            <NavLink to="/dashboard">Dashboard</NavLink>
-            <NavLink to="/dashboard/strategic">Strategic</NavLink>
-            <NavLink to="/content/library">Content</NavLink>
-            <NavLink to="/chat">AI Chat</NavLink>
-            <NavLink to="/settings">Settings</NavLink>
-          </Nav>
         </Header>
 
-        <Content>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/dashboard/strategic" element={<StrategicDashboard />} />
-            <Route path="/content/library" element={<ContentLibrary />} />
-            <Route path="/chat" element={<Chat />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </Content>
+        <MainLayout>
+          <SidebarNav>
+            <SidebarNavLink to="/">🏠 Home</SidebarNavLink>
+            <SidebarNavLink to="/dashboard">📊 Dashboard</SidebarNavLink>
+            <SidebarNavLink to="/dashboard/strategic">📈 Strategic</SidebarNavLink>
+            <SidebarNavLink to="/content/library">📝 Content</SidebarNavLink>
+            <SidebarNavLink to="/chat">🤖 AI Chat</SidebarNavLink>
+            <SidebarNavLink to="/settings">⚙️ Settings</SidebarNavLink>
+          </SidebarNav>
+
+          <MainContentArea>
+            <PageContent>
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/dashboard/strategic" element={<StrategicDashboard />} />
+                <Route path="/content/library" element={<ContentLibrary />} />
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </PageContent>
+
+            <TodoSidebar />
+          </MainContentArea>
+        </MainLayout>
       </AppContainer>
     </Router>
   );
