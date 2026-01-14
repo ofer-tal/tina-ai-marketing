@@ -19,6 +19,7 @@ import audioRouter from "./api/audio.js";
 import hooksRouter from "./api/hooks.js";
 import blacklistRouter from "./api/blacklist.js";
 import tiktokRouter from "./api/tiktok.js";
+import instagramRouter from "./api/instagram.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -76,6 +77,11 @@ app.get("/api/health", async (req, res) => {
                        process.env.TIKTOK_APP_SECRET),
         appKeyConfigured: !!process.env.TIKTOK_APP_KEY,
       },
+      instagram: {
+        configured: !!(process.env.INSTAGRAM_APP_ID &&
+                       process.env.INSTAGRAM_APP_SECRET),
+        appIdConfigured: !!process.env.INSTAGRAM_APP_ID,
+      },
       googleAnalytics: {
         configured: !!process.env.GA_VIEW_ID,
         viewIdConfigured: !!process.env.GA_VIEW_ID,
@@ -92,7 +98,7 @@ app.get("/api/health", async (req, res) => {
 
     // Calculate overall external API status
     const externalApiStatus = {
-      total: 6,
+      total: 7,
       configured: Object.values(externalApis).filter(api => api.configured).length,
       apis: externalApis
     };
@@ -162,6 +168,7 @@ app.use("/api/audio", audioRouter);
 app.use("/api/hooks", hooksRouter);
 app.use("/api/blacklist", blacklistRouter);
 app.use("/api/tiktok", tiktokRouter);
+app.use("/api/instagram", instagramRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {

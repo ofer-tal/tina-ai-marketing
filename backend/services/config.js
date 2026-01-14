@@ -131,6 +131,36 @@ const configSchema = {
     errorMessage: 'Must be a valid URL'
   },
 
+  // Instagram Graph API
+  INSTAGRAM_APP_ID: {
+    required: false,
+    description: 'Instagram Graph API App ID',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  INSTAGRAM_APP_SECRET: {
+    required: false,
+    description: 'Instagram Graph API App Secret',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  INSTAGRAM_REDIRECT_URI: {
+    required: false,
+    description: 'Instagram OAuth Redirect URI',
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        new URL(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    errorMessage: 'Must be a valid URL'
+  },
+
   // Google Analytics API
   GOOGLE_ANALYTICS_VIEW_ID: {
     required: false,
