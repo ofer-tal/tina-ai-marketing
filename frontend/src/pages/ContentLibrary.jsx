@@ -1022,6 +1022,34 @@ const ExportButton = styled.button`
   }
 `;
 
+const DownloadButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #00d26a 0%, #00b862 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 210, 106, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
 const ManualPostedButton = styled.button`
   flex: 1 1 0;
   padding: 0.75rem 1.5rem;
@@ -2614,9 +2642,9 @@ function ContentLibrary() {
     if (!selectedVideo) return;
 
     try {
-      // Try API call first
-      const response = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}`, {
-        method: 'PATCH',
+      // Try API call first (uses Vite proxy)
+      const response = await fetch(`/api/content/posts/${selectedVideo._id}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caption: editedCaption,
@@ -2663,6 +2691,43 @@ function ContentLibrary() {
       }));
       alert('✅ Changes saved! (Note: Backend not connected)');
       setEditMode(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!selectedVideo) return;
+
+    // For now, show a message that download functionality requires actual video files
+    // In production, this would download the video/image file from the server
+    const filePath = selectedVideo.videoPath || selectedVideo.imagePath;
+
+    if (!filePath) {
+      alert('⚠️ No media file available for download.\n\nThis post was created without an actual video/image file. In production, generated content would be stored locally and available for download.');
+      return;
+    }
+
+    // Create a download link using the existing /api/storage/file/* endpoint
+    try {
+      const response = await fetch(`/api/storage/file/${filePath}`);
+
+      if (!response.ok) {
+        throw new Error('File not found on server');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filePath.split('/').pop() || `content-${selectedVideo._id}.${selectedVideo.contentType === 'video' ? 'mp4' : 'jpg'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      alert('✅ Download started!');
+    } catch (err) {
+      console.error('Download error:', err);
+      alert('⚠️ Download failed: File not available on server\n\nThe file path was: ' + filePath + '\n\nIn production, files would be stored in the local storage directory and served via the API.');
     }
   };
 
@@ -2781,7 +2846,13 @@ function ContentLibrary() {
                     <ActionButton onClick={() => handleThumbnailClick(post)}>
                       {post.contentType === 'video' ? '▶ Play' : 'View'}
                     </ActionButton>
-                    <ActionButton>Edit</ActionButton>
+                    <ActionButton onClick={() => {
+                      setSelectedVideo(post);
+                      setEditMode(true);
+                      setEditedCaption(post.caption || '');
+                      setEditedHashtags([...(post.hashtags || [])]);
+                      setNewHashtag('');
+                    }}>Edit</ActionButton>
                   </CardActions>
                 </CardContent>
               </ContentCard>
@@ -3049,8 +3120,8 @@ function ContentLibrary() {
                     </ApprovalHistory>
                   )}
 
-                  {/* Show approve/reject/edit buttons only for non-posted posts and when not in edit mode */}
-                  {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && !editMode && (
+                  {/* Show approve/reject/edit buttons for non-rejected posts when not in edit mode */}
+                  {selectedVideo.status !== 'rejected' && !editMode && (
                     <ModalActions>
                       {selectedVideo.status === 'approved' && selectedVideo.platform === 'tiktok' ? (
                         <>
@@ -3119,6 +3190,14 @@ function ContentLibrary() {
                           </RejectButton>
                         </>
                       )}
+                    </ModalActions>
+                  )}
+
+                  {/* Show edit/download buttons for posted posts when not in edit mode */}
+                  {selectedVideo.status === 'posted' && !editMode && (
+                    <ModalActions>
+                      <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      <DownloadButton onClick={handleDownload}>📥 Download Content</DownloadButton>
                     </ModalActions>
                   )}
 
