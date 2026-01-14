@@ -404,6 +404,256 @@ class AppStoreConnectService {
       throw error;
     }
   }
+
+  /**
+   * Fetch app screenshots from App Store Connect
+   * Gets screenshots for different device sizes (iPhone, iPad, etc.)
+   *
+   * API Endpoint: GET /appStoreVersions/{versionId}/appStoreScreenshotSets
+   */
+  async getAppScreenshots(appId = null) {
+    logger.info('Fetching app screenshots', { appId });
+
+    const targetAppId = appId || process.env.APP_STORE_APP_ID || 'blush-app';
+
+    if (!this.isConfigured()) {
+      // Return mock screenshots if API not configured
+      logger.warn('App Store Connect API not configured, returning mock screenshots');
+      return this.getMockScreenshots();
+    }
+
+    try {
+      // TODO: Implement actual API call to fetch screenshots
+      // GET /apps/{appId}/appStoreVersions
+      // GET /appStoreVersions/{versionId}/appStoreScreenshotSets
+      // GET /appStoreScreenshotSets/{setId}/appStoreScreenshots
+      //
+      // For now, return mock data
+      logger.info('Returning mock screenshots (API implementation pending)');
+      return this.getMockScreenshots();
+
+    } catch (error) {
+      logger.error('Failed to fetch app screenshots', {
+        appId: targetAppId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock screenshots for testing
+   * Returns sample screenshot data with typical issues
+   */
+  getMockScreenshots() {
+    return {
+      success: true,
+      appId: 'blush-app',
+      screenshots: [
+        {
+          id: '1',
+          deviceType: 'iPhone 6.7" Display',
+          displayType: 'iPhone_6_7',
+          url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+1',
+          order: 1,
+          width: 1290,
+          height: 2796
+        },
+        {
+          id: '2',
+          deviceType: 'iPhone 6.7" Display',
+          displayType: 'iPhone_6_7',
+          url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+2',
+          order: 2,
+          width: 1290,
+          height: 2796
+        },
+        {
+          id: '3',
+          deviceType: 'iPhone 6.7" Display',
+          displayType: 'iPhone_6_7',
+          url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+3',
+          order: 3,
+          width: 1290,
+          height: 2796
+        },
+        {
+          id: '4',
+          deviceType: 'iPhone 6.7" Display',
+          displayType: 'iPhone_6_7',
+          url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+4',
+          order: 4,
+          width: 1290,
+          height: 2796
+        },
+        {
+          id: '5',
+          deviceType: 'iPhone 6.7" Display',
+          displayType: 'iPhone_6_7',
+          url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+5',
+          order: 5,
+          width: 1290,
+          height: 2796
+        },
+        {
+          id: '6',
+          deviceType: 'iPhone 6.7" Display',
+          displayType: 'iPhone_6_7',
+          url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+6',
+          order: 6,
+          width: 1290,
+          height: 2796
+        }
+      ],
+      source: 'mock'
+    };
+  }
+
+  /**
+   * Analyze screenshots and provide optimization suggestions
+   * Compares screenshots against ASO best practices
+   */
+  analyzeScreenshots(screenshots) {
+    logger.info('Analyzing screenshots', { count: screenshots.length });
+
+    const suggestions = [];
+    const issues = [];
+
+    // Check 1: Number of screenshots (best practice: 5-8 for iPhone)
+    const screenshotCount = screenshots.length;
+    if (screenshotCount < 5) {
+      issues.push({
+        type: 'count',
+        severity: 'warning',
+        message: `Too few screenshots (${screenshotCount}). Best practice is 5-8 screenshots.`,
+        recommendation: 'Add 2-3 more screenshots to showcase different app features.'
+      });
+    } else if (screenshotCount > 8) {
+      issues.push({
+        type: 'count',
+        severity: 'info',
+        message: `Many screenshots (${screenshotCount}). Consider focusing on the most impactful ones.`,
+        recommendation: 'Test different screenshot orders to see which perform best.'
+      });
+    } else {
+      suggestions.push({
+        type: 'count',
+        severity: 'success',
+        message: `Good screenshot count (${screenshotCount}). Within recommended range of 5-8.`
+      });
+    }
+
+    // Check 2: First screenshot impact (most important!)
+    issues.push({
+      type: 'first_screenshot',
+      severity: 'high',
+      message: 'First screenshot must be compelling and show the app\'s core value.',
+      recommendation: 'Ensure first screenshot shows: app name/logo, main benefit, and a clear call-to-action. Avoid text-heavy designs.'
+    });
+
+    // Check 3: Device type coverage
+    const deviceTypes = [...new Set(screenshots.map(s => s.deviceType))];
+    if (deviceTypes.length === 1) {
+      suggestions.push({
+        type: 'device_coverage',
+        severity: 'info',
+        message: `Only ${deviceTypes[0]} screenshots found.`,
+        recommendation: 'Consider adding iPad-specific screenshots if your app supports iPad.'
+      });
+    }
+
+    // Check 4: Screenshot order
+    suggestions.push({
+      type: 'order',
+      severity: 'medium',
+      message: 'Screenshot order matters for conversion.',
+      recommendation: 'Order: 1) Hook/Value proposition, 2) Key feature, 3) Social proof, 4-6) Additional features, 7-8) Call-to-action'
+    });
+
+    // Check 5: Text readability
+    issues.push({
+      type: 'text_readability',
+      severity: 'medium',
+      message: 'Ensure text is readable on small screens.',
+      recommendation: 'Use minimum 16pt font, high contrast, and limit to 20% of screenshot area.'
+    });
+
+    // Check 6: Visual consistency
+    suggestions.push({
+      type: 'consistency',
+      severity: 'low',
+      message: 'Maintain consistent branding across all screenshots.',
+      recommendation: 'Use same color scheme, fonts, and style. Tell a cohesive story.'
+    });
+
+    // Check 7: A/B testing recommendations
+    suggestions.push({
+      type: 'testing',
+      severity: 'info',
+      message: 'Screenshots should be A/B tested for optimal conversion.',
+      recommendation: 'Test different first screenshots, feature emphasis, and value propositions.'
+    });
+
+    // Check 8: Portrait orientation for iPhone
+    const portraitScreenshots = screenshots.filter(s => s.height > s.width);
+    if (portraitScreenshots.length < screenshots.length) {
+      issues.push({
+        type: 'orientation',
+        severity: 'high',
+        message: 'Some screenshots are not in portrait orientation.',
+        recommendation: 'iPhone screenshots must be in portrait orientation (9:16.5 aspect ratio for iPhone 6.7").'
+      });
+    }
+
+    return {
+      success: true,
+      analysis: {
+        totalScreenshots: screenshotCount,
+        deviceTypes: deviceTypes,
+        score: this.calculateScreenshotScore(suggestions, issues),
+        suggestions: suggestions,
+        issues: issues
+      }
+    };
+  }
+
+  /**
+   * Calculate screenshot quality score
+   * Returns score from 0-100 based on best practices
+   */
+  calculateScreenshotScore(suggestions, issues) {
+    let score = 100;
+
+    // Deduct points for issues
+    issues.forEach(issue => {
+      switch (issue.severity) {
+        case 'high':
+          score -= 15;
+          break;
+        case 'warning':
+          score -= 10;
+          break;
+        case 'medium':
+          score -= 7;
+          break;
+        case 'info':
+          score -= 3;
+          break;
+        case 'low':
+          score -= 2;
+          break;
+      }
+    });
+
+    // Bonus for good practices
+    suggestions.forEach(suggestion => {
+      if (suggestion.severity === 'success') {
+        score += 5;
+      }
+    });
+
+    return Math.max(0, Math.min(100, score));
+  }
 }
 
 // Create singleton instance

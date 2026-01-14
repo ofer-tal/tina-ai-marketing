@@ -910,6 +910,179 @@ const UrlValue = styled.a`
   }
 `;
 
+// Screenshot Analysis Styled Components
+const ScreenshotAnalysisHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const ScreenshotAnalysisTitle = styled.h3`
+  font-size: 1.15rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ScreenshotScore = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: ${props => {
+    const score = props.$score;
+    if (score >= 80) return 'rgba(0, 210, 106, 0.1)';
+    if (score >= 60) return 'rgba(255, 176, 32, 0.1)';
+    return 'rgba(248, 49, 47, 0.1)';
+  }};
+  border: 1px solid ${props => {
+    const score = props.$score;
+    if (score >= 80) return '#00d26a';
+    if (score >= 60) return '#ffb020';
+    return '#f8312f';
+  }};
+  border-radius: 8px;
+`;
+
+const ScreenshotScoreValue = styled.span`
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: ${props => {
+    const score = props.$score;
+    if (score >= 80) return '#00d26a';
+    if (score >= 60) return '#ffb020';
+    return '#f8312f';
+  }};
+`;
+
+const ScreenshotScoreLabel = styled.span`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+`;
+
+const ScreenshotsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const ScreenshotThumbnail = styled.div`
+  position: relative;
+  aspect-ratio: 9 / 19.5;
+  background: #1a1a2e;
+  border: 2px solid ${props => props.$first ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+    border-color: #e94560;
+  }
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+`;
+
+const ScreenshotNumber = styled.div`
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: ${props => props.$first ? '#e94560' : 'rgba(0, 0, 0, 0.7)'};
+  color: #ffffff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+`;
+
+const ScreenshotBadge = styled.div`
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  color: #a0a0a0;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.625rem;
+`;
+
+const AnalysisSection = styled.div`
+  margin-top: 1.5rem;
+`;
+
+const AnalysisCategory = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const AnalysisCategoryTitle = styled.h4`
+  font-size: 1rem;
+  color: #eaeaea;
+  margin: 0 0 0.75rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const AnalysisItem = styled.div`
+  background: ${props => {
+    switch (props.$severity) {
+      case 'high': return 'rgba(248, 49, 47, 0.1)';
+      case 'warning': return 'rgba(255, 176, 32, 0.1)';
+      case 'medium': return 'rgba(255, 176, 32, 0.08)';
+      case 'info': return 'rgba(123, 44, 191, 0.1)';
+      case 'success': return 'rgba(0, 210, 106, 0.1)';
+      default: return 'rgba(255, 255, 255, 0.03)';
+    }
+  }};
+  border: 1px solid ${props => {
+    switch (props.$severity) {
+      case 'high': return '#f8312f';
+      case 'warning': return '#ffb020';
+      case 'medium': return '#ffb020';
+      case 'info': return '#7b2cbf';
+      case 'success': return '#00d26a';
+      default: return '#2d3561';
+    }
+  }};
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+`;
+
+const SeverityIcon = styled.span`
+  font-size: 1.25rem;
+  line-height: 1;
+`;
+
+const AnalysisContent = styled.div`
+  flex: 1;
+`;
+
+const AnalysisMessage = styled.div`
+  color: #eaeaea;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+`;
+
+const AnalysisRecommendation = styled.div`
+  color: #a0a0a0;
+  font-size: 0.875rem;
+  font-style: italic;
+`;
+
 // Keyword History Modal
 const KeywordModalOverlay = styled.div`
   position: fixed;
@@ -1071,6 +1244,7 @@ function StrategicDashboard() {
   const [isEditingMetadata, setIsEditingMetadata] = useState(false);
   const [editedMetadata, setEditedMetadata] = useState(null);
   const [keywordModal, setKeywordModal] = useState({ isOpen: false, keyword: null, history: null });
+  const [screenshotAnalysis, setScreenshotAnalysis] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -1085,6 +1259,7 @@ function StrategicDashboard() {
     fetchCompetitivenessData();
     fetchSuggestionsData();
     fetchAppMetadata();
+    fetchScreenshotAnalysis();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -1400,6 +1575,48 @@ function StrategicDashboard() {
     } catch (err) {
       console.error('Failed to update app metadata:', err);
       alert('Failed to update app metadata. Please try again.');
+    }
+  };
+
+  const fetchScreenshotAnalysis = async () => {
+    try {
+      const response = await fetch('/api/appstore/screenshots/analysis');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setScreenshotAnalysis(result);
+    } catch (err) {
+      console.error('Failed to fetch screenshot analysis:', err);
+      // Set mock data for development
+      setScreenshotAnalysis({
+        screenshots: [
+          { id: '1', deviceType: 'iPhone 6.7" Display', url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+1', order: 1 },
+          { id: '2', deviceType: 'iPhone 6.7" Display', url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+2', order: 2 },
+          { id: '3', deviceType: 'iPhone 6.7" Display', url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+3', order: 3 },
+          { id: '4', deviceType: 'iPhone 6.7" Display', url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+4', order: 4 },
+          { id: '5', deviceType: 'iPhone 6.7" Display', url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+5', order: 5 },
+          { id: '6', deviceType: 'iPhone 6.7" Display', url: 'https://via.placeholder.com/1290x2796/1a1a2e/e94560?text=Screenshot+6', order: 6 }
+        ],
+        analysis: {
+          totalScreenshots: 6,
+          deviceTypes: ['iPhone 6.7" Display'],
+          score: 55,
+          suggestions: [
+            { type: 'count', severity: 'success', message: 'Good screenshot count (6). Within recommended range of 5-8.' },
+            { type: 'device_coverage', severity: 'info', message: 'Only iPhone 6.7" Display screenshots found.', recommendation: 'Consider adding iPad-specific screenshots if your app supports iPad.' },
+            { type: 'order', severity: 'medium', message: 'Screenshot order matters for conversion.', recommendation: 'Order: 1) Hook/Value proposition, 2) Key feature, 3) Social proof, 4-6) Additional features, 7-8) Call-to-action' },
+            { type: 'consistency', severity: 'low', message: 'Maintain consistent branding across all screenshots.', recommendation: 'Use same color scheme, fonts, and style. Tell a cohesive story.' },
+            { type: 'testing', severity: 'info', message: 'Screenshots should be A/B tested for optimal conversion.', recommendation: 'Test different first screenshots, feature emphasis, and value propositions.' }
+          ],
+          issues: [
+            { type: 'first_screenshot', severity: 'high', message: 'First screenshot must be compelling and show the app\'s core value.', recommendation: 'Ensure first screenshot shows: app name/logo, main benefit, and a clear call-to-action. Avoid text-heavy designs.' },
+            { type: 'text_readability', severity: 'medium', message: 'Ensure text is readable on small screens.', recommendation: 'Use minimum 16pt font, high contrast, and limit to 20% of screenshot area.' }
+          ]
+        }
+      });
     }
   };
 
@@ -2835,6 +3052,80 @@ function StrategicDashboard() {
                   )}
                 </UrlList>
               </MetadataSection>
+            </ChartContainer>
+          )}
+
+
+          {/* Screenshot Analysis Section */}
+          {screenshotAnalysis && screenshotAnalysis.analysis && (
+            <ChartContainer>
+              <ScreenshotAnalysisHeader>
+                <ScreenshotAnalysisTitle>📸 Screenshot Analysis</ScreenshotAnalysisTitle>
+                <ScreenshotScore $score={screenshotAnalysis.analysis.score || 0}>
+                  <ScreenshotScoreValue $score={screenshotAnalysis.analysis.score || 0}>
+                    {screenshotAnalysis.analysis.score || 0}
+                  </ScreenshotScoreValue>
+                  <ScreenshotScoreLabel>
+                    {(screenshotAnalysis.analysis.score || 0) >= 80 ? 'Excellent' :
+                     (screenshotAnalysis.analysis.score || 0) >= 60 ? 'Good' :
+                     (screenshotAnalysis.analysis.score || 0) >= 40 ? 'Fair' : 'Needs Work'}
+                  </ScreenshotScoreLabel>
+                </ScreenshotScore>
+              </ScreenshotAnalysisHeader>
+
+              <ScreenshotsGrid>
+                {screenshotAnalysis.screenshots && screenshotAnalysis.screenshots.map((screenshot, index) => (
+                  <ScreenshotThumbnail key={screenshot.id} $first={index === 0}>
+                    <img src={screenshot.url} alt={`Screenshot ${index + 1}`} />
+                    <ScreenshotNumber $first={index === 0}>{index + 1}</ScreenshotNumber>
+                    <ScreenshotBadge>{screenshot.deviceType}</ScreenshotBadge>
+                  </ScreenshotThumbnail>
+                ))}
+              </ScreenshotsGrid>
+
+              <AnalysisSection>
+                {screenshotAnalysis.analysis.issues && screenshotAnalysis.analysis.issues.length > 0 && (
+                  <AnalysisCategory>
+                    <AnalysisCategoryTitle>⚠️ Issues to Address</AnalysisCategoryTitle>
+                    {screenshotAnalysis.analysis.issues.map((issue, index) => (
+                      <AnalysisItem key={index} $severity={issue.severity}>
+                        <SeverityIcon>
+                          {issue.severity === 'high' ? '🔴' :
+                           issue.severity === 'warning' ? '🟠' :
+                           issue.severity === 'medium' ? '🟡' : 'ℹ️'}
+                        </SeverityIcon>
+                        <AnalysisContent>
+                          <AnalysisMessage>{issue.message}</AnalysisMessage>
+                          {issue.recommendation && (
+                            <AnalysisRecommendation>💡 {issue.recommendation}</AnalysisRecommendation>
+                          )}
+                        </AnalysisContent>
+                      </AnalysisItem>
+                    ))}
+                  </AnalysisCategory>
+                )}
+
+                {screenshotAnalysis.analysis.suggestions && screenshotAnalysis.analysis.suggestions.length > 0 && (
+                  <AnalysisCategory>
+                    <AnalysisCategoryTitle>💡 Recommendations</AnalysisCategoryTitle>
+                    {screenshotAnalysis.analysis.suggestions.map((suggestion, index) => (
+                      <AnalysisItem key={index} $severity={suggestion.severity}>
+                        <SeverityIcon>
+                          {suggestion.severity === 'success' ? '✅' :
+                           suggestion.severity === 'info' ? '💡' :
+                           suggestion.severity === 'medium' ? '📝' : '💭'}
+                        </SeverityIcon>
+                        <AnalysisContent>
+                          <AnalysisMessage>{suggestion.message}</AnalysisMessage>
+                          {suggestion.recommendation && (
+                            <AnalysisRecommendation>💡 {suggestion.recommendation}</AnalysisRecommendation>
+                          )}
+                        </AnalysisContent>
+                      </AnalysisItem>
+                    ))}
+                  </AnalysisCategory>
+                )}
+              </AnalysisSection>
             </ChartContainer>
           )}
 

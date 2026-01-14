@@ -301,4 +301,82 @@ router.patch('/metadata/:appId', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/appstore/screenshots/:appId?
+ *
+ * Get app screenshots from App Store Connect
+ * Query params:
+ * - appId: App ID (optional, defaults to APP_STORE_APP_ID env var or 'blush-app')
+ */
+router.get('/screenshots/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Fetching app screenshots', { appId });
+
+    const result = await appStoreConnectService.getAppScreenshots(appId);
+
+    res.json({
+      success: true,
+      appId: result.appId,
+      screenshots: result.screenshots,
+      source: result.source || 'api'
+    });
+
+  } catch (error) {
+    logger.error('Failed to fetch app screenshots', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/appstore/screenshots/analysis/:appId?
+ *
+ * Analyze screenshots and provide optimization suggestions
+ * Compares screenshots against ASO best practices
+ */
+router.get('/screenshots/analysis/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Analyzing app screenshots', { appId });
+
+    // Fetch screenshots
+    const screenshotsResult = await appStoreConnectService.getAppScreenshots(appId);
+
+    if (!screenshotsResult.success || !screenshotsResult.screenshots) {
+      return res.status(404).json({
+        success: false,
+        error: 'No screenshots found for this app'
+      });
+    }
+
+    // Analyze screenshots
+    const analysis = appStoreConnectService.analyzeScreenshots(screenshotsResult.screenshots);
+
+    res.json({
+      success: true,
+      appId: screenshotsResult.appId,
+      screenshots: screenshotsResult.screenshots,
+      analysis: analysis.analysis
+    });
+
+  } catch (error) {
+    logger.error('Failed to analyze screenshots', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
