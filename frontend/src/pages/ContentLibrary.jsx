@@ -1573,172 +1573,26 @@ function ContentLibrary() {
       const data = await response.json();
       const fetchedPosts = data.data.posts || [];
 
-      // If API returns empty data, use mock data for development
-      if (fetchedPosts.length === 0) {
-        console.log('API returned empty data, using mock data for development');
-        let mockPosts = generateMockPosts();
-
-        // Apply filters to mock data
-        if (filters.platform !== 'all') {
-          mockPosts = mockPosts.filter(post => post.platform === filters.platform);
-        }
-        if (filters.status !== 'all') {
-          mockPosts = mockPosts.filter(post => post.status === filters.status);
-        }
-        if (filters.search) {
-          const searchLower = filters.search.toLowerCase();
-          mockPosts = mockPosts.filter(post =>
-            post.title.toLowerCase().includes(searchLower) ||
-            post.storyName.toLowerCase().includes(searchLower)
-          );
-        }
-
-        // Apply pagination to mock data
-        const startIndex = (pagination.page - 1) * pagination.limit;
-        const endIndex = startIndex + pagination.limit;
-        const paginatedPosts = mockPosts.slice(startIndex, endIndex);
-
-        setPosts(paginatedPosts);
-        setPagination(prev => ({
-          ...prev,
-          total: mockPosts.length,
-          hasMore: endIndex < mockPosts.length
-        }));
-      } else {
-        setPosts(fetchedPosts);
-        setPagination(prev => ({
-          ...prev,
-          total: data.data.pagination?.total || 0,
-          hasMore: data.data.pagination?.hasMore || false
-        }));
-      }
+      // Set posts from API - no mock data fallback
+      setPosts(fetchedPosts);
+      setPagination(prev => ({
+        ...prev,
+        total: data.data.pagination?.total || 0,
+        hasMore: data.data.pagination?.hasMore || false
+      }));
 
     } catch (err) {
       console.error('Error fetching posts:', err);
       setError(err.message);
-
-      // Use mock data if API fails (for development)
-      let mockPosts = generateMockPosts();
-
-      // Apply filters to mock data
-      if (filters.platform !== 'all') {
-        mockPosts = mockPosts.filter(post => post.platform === filters.platform);
-      }
-      if (filters.status !== 'all') {
-        mockPosts = mockPosts.filter(post => post.status === filters.status);
-      }
-      if (filters.search) {
-        const searchLower = filters.search.toLowerCase();
-        mockPosts = mockPosts.filter(post =>
-          post.title.toLowerCase().includes(searchLower) ||
-          post.storyName.toLowerCase().includes(searchLower)
-        );
-      }
-
-      // Apply pagination to mock data
-      const startIndex = (pagination.page - 1) * pagination.limit;
-      const endIndex = startIndex + pagination.limit;
-      const paginatedPosts = mockPosts.slice(startIndex, endIndex);
-
-      setPosts(paginatedPosts);
+      setPosts([]);
       setPagination(prev => ({
         ...prev,
-        total: mockPosts.length,
-        hasMore: endIndex < mockPosts.length
+        total: 0,
+        hasMore: false
       }));
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateMockPosts = () => {
-    const platforms = ['tiktok', 'instagram', 'youtube_shorts'];
-    const statuses = ['draft', 'ready', 'approved', 'scheduled', 'posted'];
-    const stories = [
-      'The Billionaire\'s Secret Baby',
-      'Falling for the CEO',
-      'Wedding Night Surprise',
-      'The Mafia Don\'s Lover',
-      'Summer Romance in Paris'
-    ];
-
-    return Array.from({ length: 8 }, (_, i) => {
-      const isImage = i % 3 === 2; // Every 3rd post is an image
-      const status = statuses[i % statuses.length];
-      const isPosted = status === 'posted';
-
-      // Generate approval history based on status
-      const approvalHistory = [];
-      const now = new Date();
-
-      // Add initial generation
-      approvalHistory.push({
-        timestamp: new Date(now - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        action: 'edited',
-        userId: 'Founder',
-        details: {
-          previousCaption: 'Initial caption draft',
-          feedback: 'Initial content generation'
-        }
-      });
-
-      // Add regeneration for some posts
-      if (i % 2 === 0) {
-        approvalHistory.push({
-          timestamp: new Date(now - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
-          action: 'regenerated',
-          userId: 'Founder',
-          details: {
-            feedback: 'Make the hook more engaging and add better transitions',
-            previousCaption: 'Old caption before regeneration...'
-          }
-        });
-      }
-
-      // Add approval/rejection
-      if (status === 'approved' || status === 'posted' || status === 'scheduled') {
-        approvalHistory.push({
-          timestamp: new Date(now - 30 * 60 * 1000).toISOString(), // 30 minutes ago
-          action: 'approved',
-          userId: 'Founder',
-          details: {}
-        });
-      } else if (status === 'rejected') {
-        approvalHistory.push({
-          timestamp: new Date(now - 30 * 60 * 1000).toISOString(), // 30 minutes ago
-          action: 'rejected',
-          userId: 'Founder',
-          details: {
-            reason: 'Quality not meeting standards',
-            feedback: 'Need better visuals and more engaging hook'
-          }
-        });
-      }
-
-      return {
-        _id: `mock_${i}`,
-        title: `${stories[i % stories.length]} - Part ${Math.floor(i / 5) + 1}`,
-        platform: platforms[i % platforms.length],
-        status: status,
-        contentType: isImage ? 'image' : 'video',
-        videoPath: !isImage && i % 2 === 0 ? 'https://www.w3schools.com/html/mov_bbb.mp4' : null,
-        imagePath: isImage ? 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?w=800&h=1200&fit=crop' : null, // Sample image for testing
-        scheduledAt: new Date(Date.now() + i * 3600000).toISOString(),
-        storyName: stories[i % stories.length],
-        storyCategory: 'Romance',
-        caption: 'Amazing story you need to read! 📚❤️ #romance #books',
-        hashtags: ['#romance', '#books', '#reading', '#lovestory'],
-        approvalHistory: approvalHistory,
-        // Add performance metrics for posted posts
-        performanceMetrics: isPosted ? {
-          views: Math.floor(Math.random() * 50000) + 1000,
-          likes: Math.floor(Math.random() * 5000) + 100,
-          comments: Math.floor(Math.random() * 500) + 10,
-          shares: Math.floor(Math.random() * 200) + 5,
-          engagementRate: parseFloat((Math.random() * 8 + 1).toFixed(2))
-        } : null
-      };
-    });
   };
 
   const handleFilterChange = (key, value) => {
