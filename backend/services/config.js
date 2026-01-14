@@ -390,6 +390,38 @@ const configSchema = {
     errorMessage: 'Must be true or false'
   },
 
+  ENABLE_TIKTOK_AUDIO: {
+    required: false,
+    default: 'true',
+    description: 'Enable TikTok trending audio functionality',
+    validate: (value) => ['true', 'false', '1', '0'].includes(value.toLowerCase()),
+    errorMessage: 'Must be true or false'
+  },
+
+  ENABLE_AUDIO_OVERLAY: {
+    required: false,
+    default: 'true',
+    description: 'Enable audio overlay functionality',
+    validate: (value) => ['true', 'false', '1', '0'].includes(value.toLowerCase()),
+    errorMessage: 'Must be true or false'
+  },
+
+  TIKTOK_AUDIO_LIBRARY_PATH: {
+    required: false,
+    default: './audio-library/tiktok',
+    description: 'Path to TikTok audio library',
+    validate: (value) => value.length > 0,
+    errorMessage: 'Must be a valid path'
+  },
+
+  AUDIO_OVERLAY_OUTPUT_DIR: {
+    required: false,
+    default: './output/audio-overlay',
+    description: 'Path for audio overlay output',
+    validate: (value) => value.length > 0,
+    errorMessage: 'Must be a valid path'
+  },
+
   // Logging
   LOG_LEVEL: {
     required: false,
