@@ -1974,6 +1974,7 @@ function StrategicDashboard() {
   const [roiData, setRoiData] = useState(null);
   const [funnelData, setFunnelData] = useState(null);
   const [selectedFunnelStage, setSelectedFunnelStage] = useState(null);
+  const [conversionHistory, setConversionHistory] = useState(null);
   const [competitivenessData, setCompetitivenessData] = useState(null);
   const [suggestionsData, setSuggestionsData] = useState(null);
   const [appMetadata, setAppMetadata] = useState(null);
@@ -1995,6 +1996,7 @@ function StrategicDashboard() {
     fetchRevenueSpendTrend();
     fetchRoiByChannel();
     fetchConversionFunnel();
+    fetchConversionHistory();
     fetchCompetitivenessData();
     fetchSuggestionsData();
     fetchAppMetadata();
@@ -2225,19 +2227,47 @@ function StrategicDashboard() {
 
   const fetchConversionFunnel = async () => {
     try {
-      const response = await fetch(`/api/dashboard/conversion-funnel?period=${dateRange}`);
+      const response = await fetch('/api/conversion/funnel');
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
-      setFunnelData(data);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Transform new API format to match existing component structure
+        const transformedData = {
+          stages: result.data.stages,
+          summary: result.data.summary
+        };
+        setFunnelData(transformedData);
+      } else {
+        throw new Error('Invalid data format from API');
+      }
     } catch (err) {
       console.error('Failed to fetch conversion funnel data:', err);
       // Set mock data for development
       const mockData = generateMockFunnelData(dateRange);
       setFunnelData(mockData);
+    }
+  };
+
+  const fetchConversionHistory = async () => {
+    try {
+      const response = await fetch('/api/conversion/history?days=30');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setConversionHistory(result.data.history);
+      }
+    } catch (err) {
+      console.error('Failed to fetch conversion history:', err);
     }
   };
 
