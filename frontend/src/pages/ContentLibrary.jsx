@@ -981,6 +981,135 @@ const PostToInstagramButton = styled.button`
   }
 `;
 
+const ExportButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(118, 75, 162, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const ManualPostedButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(56, 239, 125, 0.4);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const InstructionsModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+`;
+
+const InstructionsContent = styled.div`
+  background: #1a1a2e;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+`;
+
+const InstructionsTitle = styled.h2`
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem 0;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
+const InstructionsList = styled.ol`
+  padding-left: 1.5rem;
+  margin: 0 0 1.5rem 0;
+
+  li {
+    margin-bottom: 0.75rem;
+    color: #eaeaea;
+    line-height: 1.6;
+  }
+`;
+
+const CaptionBox = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  max-height: 150px;
+  overflow-y: auto;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  line-height: 1.5;
+`;
+
+const CloseInstructionsButton = styled.button`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: #2d3561;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+  }
+`;
+
 const PlayButton = styled.button`
   position: absolute;
   top: 50%;
@@ -1626,6 +1755,10 @@ function ContentLibrary() {
   const [countdown, setCountdown] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
   const [progressPollInterval, setProgressPollInterval] = useState(null);
+  const [exportModal, setExportModal] = useState({
+    isOpen: false,
+    data: null
+  });
 
   useEffect(() => {
     fetchPosts();
@@ -2134,6 +2267,84 @@ function ContentLibrary() {
         errorMessage: err.message
       });
       alert(`❌ Error posting to Instagram: ${err.message}`);
+    }
+  };
+
+  const handleExportForManual = async () => {
+    if (!selectedVideo) return;
+
+    try {
+      const response = await fetch(`http://localhost:3004/api/content/posts/${selectedVideo._id}/export`);
+
+      if (!response.ok) {
+        throw new Error('Failed to export post');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        setExportModal({
+          isOpen: true,
+          data: result.data
+        });
+      } else {
+        alert(`❌ Error exporting post: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error exporting post:', err);
+      alert(`❌ Error exporting post: ${err.message}`);
+    }
+  };
+
+  const handleMarkAsManuallyPosted = async () => {
+    if (!selectedVideo) return;
+
+    const postedUrl = prompt('Enter the URL of the post (optional):');
+    const notes = prompt('Add any notes about this post (optional):');
+
+    try {
+      const response = await fetch(`http://localhost:3004/api/content/posts/${selectedVideo._id}/manual-posted`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          postedUrl: postedUrl || null,
+          notes: notes || null
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to mark as manually posted');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update local state
+        setPosts(prevPosts =>
+          prevPosts.map(post =>
+            post._id === selectedVideo._id
+              ? { ...post, status: 'posted', postedAt: new Date().toISOString(), postedUrl: postedUrl || null }
+              : post
+          )
+        );
+
+        setSelectedVideo(prev => ({
+          ...prev,
+          status: 'posted',
+          postedAt: new Date().toISOString(),
+          postedUrl: postedUrl || null
+        }));
+
+        alert('✅ Post marked as manually posted!');
+        setExportModal({ isOpen: false, data: null });
+      } else {
+        alert(`❌ Error marking as manually posted: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error marking as manually posted:', err);
+      alert(`❌ Error marking as manually posted: ${err.message}`);
     }
   };
 
@@ -2829,6 +3040,9 @@ function ContentLibrary() {
                           <RegenerateButton onClick={handleRegenerate}>
                             🔄 Regenerate
                           </RegenerateButton>
+                          <ExportButton onClick={handleExportForManual}>
+                            📥 Export for Manual
+                          </ExportButton>
                         </>
                       ) : selectedVideo.status === 'approved' && selectedVideo.platform === 'instagram' ? (
                         <>
@@ -2845,6 +3059,9 @@ function ContentLibrary() {
                           <RegenerateButton onClick={handleRegenerate}>
                             🔄 Regenerate
                           </RegenerateButton>
+                          <ExportButton onClick={handleExportForManual}>
+                            📥 Export for Manual
+                          </ExportButton>
                         </>
                       ) : scheduleMode ? (
                         <>
@@ -2998,6 +3215,47 @@ function ContentLibrary() {
                 </RegenerateModalActions>
               </RegenerateModalContent>
             </RegenerateModalOverlay>
+          )}
+
+          {/* Export for Manual Posting Modal */}
+          {exportModal.isOpen && exportModal.data && (
+            <InstructionsModal onClick={() => setExportModal({ isOpen: false, data: null })}>
+              <InstructionsContent onClick={(e) => e.stopPropagation()}>
+                <CloseInstructionsButton onClick={() => setExportModal({ isOpen: false, data: null })}>
+                  ✕
+                </CloseInstructionsButton>
+
+                <InstructionsTitle>{exportModal.data.instructions.title}</InstructionsTitle>
+
+                <div style={{marginBottom: '1.5rem'}}>
+                  <strong style={{color: '#667eea', fontSize: '1.1rem'}}>📦 Content Bundle:</strong>
+                  <div style={{marginTop: '0.5rem', color: '#eaeaea'}}>
+                    <div>🎬 Video: <code style={{background: '#16213e', padding: '0.25rem 0.5rem', borderRadius: '4px'}}>{exportModal.data.post.videoPath || 'N/A'}</code></div>
+                    <div style={{marginTop: '0.5rem'}}>📝 Caption & Hashtags:</div>
+                  </div>
+                </div>
+
+                <CaptionBox>
+                  {exportModal.data.bundle.captionText}
+                </CaptionBox>
+
+                <div style={{marginTop: '1.5rem'}}>
+                  <strong style={{color: '#667eea', fontSize: '1.1rem'}}>📋 Posting Instructions:</strong>
+                </div>
+
+                <InstructionsList>
+                  {exportModal.data.instructions.steps.map((step, index) => (
+                    <li key={index}>{step}</li>
+                  ))}
+                </InstructionsList>
+
+                <div style={{display: 'flex', gap: '1rem', marginTop: '1.5rem'}}>
+                  <ManualPostedButton onClick={handleMarkAsManuallyPosted}>
+                    ✅ Mark as Manually Posted
+                  </ManualPostedButton>
+                </div>
+              </InstructionsContent>
+            </InstructionsModal>
           )}
 
           {pagination.total > pagination.limit && (

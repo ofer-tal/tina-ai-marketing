@@ -2609,4 +2609,180 @@ router.get('/scheduled/due', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/content/posts/:id/export
+ * Export post content for manual posting
+ * Returns JSON with video path, caption, hashtags, and posting instructions
+ */
+router.get('/posts/:id/export', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    logger.info('Exporting post for manual posting', { id });
+
+    const post = await MarketingPost.findById(id)
+      .populate('storyId', 'title coverPath spiciness category tags');
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    // Generate platform-specific posting instructions
+    const instructions = {
+      tiktok: {
+        title: 'How to Manually Post to TikTok',
+        steps: [
+          '1. Open the TikTok app on your phone',
+          '2. Tap the + button to create a new post',
+          '3. Upload the video from the bundle',
+          '4. Copy and paste the caption from the text file',
+          '5. Add the hashtags from the text file',
+          '6. Set appropriate visibility settings (Public)',
+          '7. Tap "Post" to publish',
+          '8. Come back to this app and click "Mark as Manually Posted"'
+        ]
+      },
+      instagram: {
+        title: 'How to Manually Post to Instagram Reels',
+        steps: [
+          '1. Open the Instagram app on your phone',
+          '2. Tap the + button and select "Reel"',
+          '3. Upload the video from the bundle',
+          '4. Copy and paste the caption from the text file',
+          '5. Add the hashtags from the text file',
+          '6. Tag the @blush.app account',
+          '7. Set appropriate visibility settings (Public)',
+          '8. Tap "Share" to publish',
+          '9. Come back to this app and click "Mark as Manually Posted"'
+        ]
+      },
+      youtube_shorts: {
+        title: 'How to Manually Post to YouTube Shorts',
+        steps: [
+          '1. Open the YouTube app on your phone',
+          '2. Tap the + button and select "Create a Short"',
+          '3. Upload the video from the bundle',
+          '4. Copy and paste the caption from the text file',
+          '5. Add the hashtags from the text file to the description',
+          '6. Set appropriate visibility settings (Public)',
+          '7. Tap "Upload Short" to publish',
+          '8. Come back to this app and click "Mark as Manually Posted"'
+        ]
+      }
+    };
+
+    const platformInstructions = instructions[post.platform] || instructions.tiktok;
+
+    res.json({
+      success: true,
+      data: {
+        post: {
+          id: post._id,
+          title: post.title,
+          platform: post.platform,
+          videoPath: post.videoPath,
+          caption: post.caption,
+          hashtags: post.hashtags,
+          storyName: post.storyName,
+          storyCategory: post.storyCategory
+        },
+        bundle: {
+          videoFile: post.videoPath ? post.videoPath.split('/').pop() : null,
+          captionText: `${post.caption}\n\n${post.hashtags.join(' ')}`,
+          platform: post.platform
+        },
+        instructions: platformInstructions,
+        downloadUrl: `/api/content/posts/${id}/download`
+      }
+    });
+
+  } catch (error) {
+    logger.error('Export post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/:id/manual-posted
+ * Mark a post as manually posted
+ */
+router.post('/posts/:id/manual-posted', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { postedUrl, notes } = req.body;
+
+    logger.info('Marking post as manually posted', { id, postedUrl });
+
+    const post = await MarketingPost.findById(id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    // Update post status and metadata
+    post.status = 'posted';
+    post.postedAt = new Date();
+
+    if (postedUrl) {
+      post.postedUrl = postedUrl;
+    }
+
+    if (notes) {
+      post.notes = notes;
+    }
+
+    // Add to posting history if it doesn't exist
+    if (!post.postingHistory) {
+      post.postingHistory = [];
+    }
+
+    post.postingHistory.push({
+      status: 'posted',
+      timestamp: new Date(),
+      method: 'manual',
+      notes: notes || 'Manually posted by user'
+    });
+
+    await post.save();
+
+    logger.info('Post marked as manually posted', {
+      id,
+      platform: post.platform,
+      postedUrl: postedUrl || 'not provided'
+    });
+
+    res.json({
+      success: true,
+      data: {
+        post,
+        message: 'Post marked as manually posted successfully'
+      }
+    });
+
+  } catch (error) {
+    logger.error('Mark manual posted API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
