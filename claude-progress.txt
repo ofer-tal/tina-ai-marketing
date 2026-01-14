@@ -197,3 +197,221 @@ The TikTok caption and hashtag posting feature is complete end-to-end:
 **Status: PRODUCTIVE ✅**
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION 21 PROGRESS - 2026-01-14 09:01 UTC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## Session Statistics
+- **Start Time:** 2026-01-14 08:50 UTC
+- **End Time:** 2026-01-14 09:01 UTC
+- **Duration:** ~11 minutes
+- **Features Completed:** 0 (regression testing only)
+- **Regression Tests:** 3 (Features #9, #27, #39)
+- **Bugs Fixed:** 2
+- **Git Commits:** 1
+
+## Progress Update
+- **Before:** 99/338 features (29.3%)
+- **After:** 99/338 features (29.3%)
+- **Growth:** 0 features (regression fixes only)
+
+## Session Setup
+
+### Server Status
+- Backend: Running on port 3003 (PID 138668)
+- Frontend: Running on port 5173 (PID 139161)
+- Both servers confirmed running
+
+## Regression Testing Results
+
+### ✅ Feature #9: Local filesystem storage management
+**Status:** PASSING - No regression
+
+**What Was Verified:**
+- Storage directory exists at project root
+- Subdirectories present: images/, videos/, audio/, temp/, audio-excerpts/
+- Storage service fully implemented (backend/services/storage.js - 480 lines)
+- Complete API: saveFile, readFile, deleteFile, listFiles, getStats, cleanupOrphans
+- File size limits enforced (images: 10MB, videos: 500MB, audio: 50MB)
+
+**Conclusion:** Feature fully functional. ✅ NO REGRESSION
+
+---
+
+### ❌→✅ Feature #27: App Store keyword rankings visualization
+**Status:** REGRESSION FOUND AND FIXED
+
+**Original Bug:**
+- Keywords displayed correctly with rankings and trend indicators
+- **BUT:** Clicking any keyword navigated to /aso (404 - page not found)
+- ASO page doesn't exist yet, so link was broken
+
+**Fix Applied:**
+- File: frontend/src/pages/Dashboard.jsx (line 1685)
+- Removed onClick handler from KeywordCard component
+- Keywords now display as non-clickable elements
+
+**Verification After Fix:**
+- Keywords display with ranking positions (#3, #7, #12, etc.) ✅
+- Search volume shown (65,000, 48,000, 82,000, etc.) ✅
+- Competition level displayed (high, medium, low) ✅
+- Rank change indicators work (↑2, ↓1, →) ✅
+- Keywords are non-clickable (no more 404 errors) ✅
+
+**Conclusion:** Regression fixed. Feature now works correctly. ✅ FIXED
+
+---
+
+### ⚠️ Feature #39: Action item creation from chat
+**Status:** PARTIAL PASS - UI WORKS, DATABASE SAVE ISSUE FOUND
+
+**What Was Verified:**
+1. Chat page loads successfully ✅
+2. AI messages display with "Create Todo" button ✅
+3. Clicking "Create Todo" shows "✓ Todo Created" confirmation ✅
+4. Backend API endpoint /api/chat/create-todo responds ✅
+
+**Issues Found:**
+
+**Issue #1: Port Mismatch (FIXED)**
+- All chat API calls were going to localhost:4001
+- Backend running on localhost:3003
+- **FIXED:** Replaced all 9 occurrences in Chat.jsx
+- Chat now connects successfully (shows "🟢 Online")
+- Daily briefing loads successfully
+
+**Issue #2: Database Save Failure (KNOWN ISSUE)**
+- UI shows success message, but todos not persisting to database
+- API returns {"success":true,"todo":{"id":"mock_..."}}
+- The "mock_" prefix indicates database save failed
+- Todo creation works in memory but not persisted to MongoDB
+- GET /api/todos returns empty array
+- Refresh page = todos disappear
+
+**Root Cause:**
+The create-todo endpoint (backend/api/chat.js line 1792) tries to save:
+```javascript
+const result = await mongoose.connection.collection("marketing_tasks").insertOne(todo);
+```
+But this fails silently and falls back to returning a mock todo.
+
+**Files Modified:**
+- frontend/src/pages/Chat.jsx - Fixed 9 port references (4001 → 3003)
+
+**Conclusion:** UI and API connectivity fixed. Database persistence issue remains. ⚠️ PARTIAL
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BUGS FIXED THIS SESSION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Bug #1: Chat API port mismatch**
+- **Severity:** Critical (broke all chat functionality)
+- **File:** frontend/src/pages/Chat.jsx
+- **Lines:** 9 occurrences
+- **Fix:** Replaced localhost:4001 with localhost:3003
+- **Impact:** Chat now connects to backend successfully
+
+**Bug #2: Broken keyword navigation**
+- **Severity:** Important (caused 404 errors)
+- **File:** frontend/src/pages/Dashboard.jsx
+- **Line:** 1685
+- **Fix:** Removed onClick={() => window.location.href = '/aso'}
+- **Impact:** Keywords no longer cause navigation errors
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+KNOWN ISSUES REMAINING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Issue #1: Todo database persistence failing**
+- **Severity:** Important (affects data persistence)
+- **Endpoint:** POST /api/chat/create-todo
+- **Symptom:** Returns mock data instead of saving to MongoDB
+- **Impact:** Todos disappear on page refresh
+- **Status:** Requires investigation of MongoDB connection and collection permissions
+
+**Issue #2: Missing /todos route**
+- **Severity:** Minor (navigation link broken)
+- **Impact:** "View All Tasks" link shows 404
+- **Status:** Need to create todos page or remove link
+
+**Issue #3: Missing /aso route**
+- **Severity:** Minor (now non-clickable, not breaking workflow)
+- **Impact:** Keywords don't navigate anywhere (fixed by removing link)
+- **Status:** Deferred until ASO page is created
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TECHNICAL ACCOMPLISHMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. **Regression Testing:**
+   - Tested 3 previously passing features
+   - Found 2 regressions requiring fixes
+   - Found 1 known issue (database persistence)
+
+2. **Bug Fixes:**
+   - Fixed Chat API port mismatch (9 occurrences)
+   - Fixed Dashboard keyword navigation (removed broken link)
+   - Both fixes verified working with browser automation
+
+3. **Documentation:**
+   - Created comprehensive regression test report
+   - Documented all findings with screenshots
+   - Identified root causes and recommendations
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CURRENT STATE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Backend:
+- Running on port 3003
+- MongoDB connected
+- Chat API working (after port fix)
+- Todo creation API responds (but DB save fails)
+
+Frontend:
+- Running on port 5173
+- Chat connects successfully (shows "🟢 Online")
+- Dashboard keywords display correctly (no broken navigation)
+- "Create Todo" button works (but todos not persisted)
+
+Application Health:
+- 2 regressions fixed
+- 1 known issue (database persistence)
+- No blocking issues
+- Ready to proceed with next feature
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEXT SESSION PRIORITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Based on feature_get_next(), the next feature to implement is:
+
+**Feature #105: Instagram API integration Phase 2**
+- Configure Instagram Graph API
+- Set up Instagram Business account
+- Obtain access token
+- Test API connection
+- Verify permissions for content publishing
+
+Alternatively, could investigate and fix:
+- Todo database persistence issue
+- Create /todos page for task management
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**Regression testing session** that found and fixed 2 critical bugs:
+- Fixed Chat API port mismatch (chat now works)
+- Fixed Dashboard keyword navigation (no more 404s)
+- Discovered todo database persistence issue (documented)
+- All fixes verified with browser automation
+- Comprehensive documentation created
+
+The regression testing process proved valuable - it caught real bugs that were breaking functionality. Both port mismatch and broken navigation have been resolved. The database persistence issue is documented for future investigation.
+
+**Session 21 End - 2026-01-14 09:01 UTC**
+**Progress: 99/338 features (29.3%)**
+**Status: REGRESSION FIXES COMPLETE ✅**
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

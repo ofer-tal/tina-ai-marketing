@@ -9,6 +9,13 @@ export default defineConfig({
     strictPort: false, // Allow trying other ports if 5173 is taken
     watch: {
       usePolling: true // Better file watching in WSL
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3003',
+        changeOrigin: true,
+        secure: false
+      }
     }
   }
 });
