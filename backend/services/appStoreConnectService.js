@@ -938,6 +938,327 @@ class AppStoreConnectService {
       }
     };
   }
+
+  /**
+   * Analyze app description and provide optimization suggestions
+   * Generates recommendations for improving app store description
+   *
+   * @param {string} appId - App Store app ID (optional, uses env var if not provided)
+   * @returns {Object} Description analysis with optimization suggestions
+   */
+  async analyzeDescriptionForOptimization(appId = null) {
+    logger.info('Analyzing app description for optimization', { appId });
+
+    const targetAppId = appId || process.env.APP_STORE_APP_ID || 'blush-app';
+
+    try {
+      // Fetch current metadata
+      const metadataResult = await this.getAppMetadata(targetAppId);
+      const metadata = metadataResult.metadata || {};
+      const currentDescription = metadata.description || '';
+
+      // Analyze current description
+      const analysis = this.analyzeDescriptionContent(currentDescription);
+
+      // Get tracked keywords for inclusion
+      const trackedKeywords = await this.getTrackedKeywords();
+
+      // Identify keyword opportunities
+      const keywordOpportunities = this.identifyKeywordOpportunities(currentDescription, trackedKeywords);
+
+      // Generate optimized description
+      const optimizedDescription = this.generateOptimizedDescription(
+        currentDescription,
+        analysis,
+        keywordOpportunities
+      );
+
+      return {
+        success: true,
+        appId: targetAppId,
+        currentDescription: currentDescription,
+        analysis: analysis,
+        keywordOpportunities: keywordOpportunities,
+        optimizedDescription: optimizedDescription,
+        suggestions: this.generateDescriptionSuggestions(analysis, keywordOpportunities)
+      };
+
+    } catch (error) {
+      logger.error('Failed to analyze description for optimization', {
+        appId: targetAppId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Analyze description content characteristics
+   */
+  analyzeDescriptionContent(description) {
+    const words = description.split(/\s+/);
+    const sentences = description.split(/[.!?]+/).filter(s => s.trim().length > 0);
+
+    // Check for key elements
+    const hasHook = description.length > 0 && description.length < 200;
+    const hasFeatures = description.toLowerCase().includes('feature') ||
+                       description.toLowerCase().includes('include') ||
+                       description.split('\n').length > 3;
+    const hasCallToAction = description.toLowerCase().includes('download') ||
+                          description.toLowerCase().includes('install') ||
+                          description.toLowerCase().includes('try now');
+    const hasSocialProof = description.toLowerCase().includes('users') ||
+                         description.toLowerCase().includes('rated') ||
+                         description.toLowerCase().includes('reviews');
+    const hasEmotionalLanguage = /love|romance|passion|desire|heart|feel/i.test(description);
+
+    // Calculate readability score (simplified Flesch Reading Ease)
+    const avgWordsPerSentence = words.length / Math.max(sentences.length, 1);
+    const readability = this.calculateReadabilityScore(words.length, sentences.length);
+
+    return {
+      length: {
+        characters: description.length,
+        words: words.length,
+        sentences: sentences.length,
+        avgWordsPerSentence: Math.round(avgWordsPerSentence * 10) / 10
+      },
+      structure: {
+        hasHook,
+        hasFeatures,
+        hasCallToAction,
+        hasSocialProof,
+        hasEmotionalLanguage,
+        hasBullets: description.includes('•') || description.includes('-'),
+        lineCount: description.split('\n').length
+      },
+      readability: readability,
+      strengths: [],
+      weaknesses: []
+    };
+  }
+
+  /**
+   * Calculate readability score (simplified)
+   */
+  calculateReadabilityScore(wordCount, sentenceCount) {
+    if (sentenceCount === 0) return { score: 0, level: 'Unknown' };
+
+    const avgWordsPerSentence = wordCount / sentenceCount;
+
+    let score, level;
+    if (avgWordsPerSentence < 15) {
+      score = 80;
+      level = 'Easy to read';
+    } else if (avgWordsPerSentence < 20) {
+      score = 60;
+      level = 'Fairly easy to read';
+    } else if (avgWordsPerSentence < 25) {
+      score = 40;
+      level = 'Standard';
+    } else {
+      score = 20;
+      level = 'Difficult to read';
+    }
+
+    return { score, level };
+  }
+
+  /**
+   * Get tracked keywords from database
+   */
+  async getTrackedKeywords() {
+    try {
+      const ASOKeyword = await import('../models/ASOKeyword.js').then(m => m.default);
+      const keywords = await ASOKeyword.find({}).lean();
+      return keywords.map(k => k.keyword);
+    } catch (error) {
+      logger.warn('Could not fetch tracked keywords', { error: error.message });
+      return [];
+    }
+  }
+
+  /**
+   * Identify keywords that should be included in description
+   */
+  identifyKeywordOpportunities(description, trackedKeywords) {
+    const descriptionLower = description.toLowerCase();
+
+    // Check which tracked keywords are missing
+    const missingKeywords = trackedKeywords.filter(keyword =>
+      !descriptionLower.includes(keyword.toLowerCase())
+    );
+
+    // Prioritize by importance (simulated - in real app would use search volume data)
+    const prioritizedKeywords = missingKeywords.map(keyword => ({
+      keyword,
+      reason: this.getKeywordInclusionReason(keyword),
+      priority: this.calculateKeywordPriority(keyword)
+    })).sort((a, b) => b.priority - a.priority);
+
+    return {
+      totalMissing: missingKeywords.length,
+      topOpportunities: prioritizedKeywords.slice(0, 5),
+      allMissing: missingKeywords
+    };
+  }
+
+  /**
+   * Get reason for including keyword
+   */
+  getKeywordInclusionReason(keyword) {
+    const reasons = {
+      'romance': 'Core category term with high search volume',
+      'stories': 'Primary content type, important for discovery',
+      'love': 'High-volume emotional keyword',
+      'spicy': 'Differentiator from competitors',
+      'fiction': 'Category-defining term',
+      'romantic': 'Adjective form of core keyword',
+      'novels': 'Long-form content indicator',
+      'interactive': 'Key feature differentiator',
+      'games': 'Alternative categorization',
+      'otome': 'Niche-specific term with dedicated audience'
+    };
+
+    return reasons[keyword.toLowerCase()] || 'Relevant to app niche and audience';
+  }
+
+  /**
+   * Calculate keyword priority (1-100)
+   */
+  calculateKeywordPriority(keyword) {
+    const priorities = {
+      'romance': 95,
+      'stories': 90,
+      'love': 88,
+      'spicy': 85,
+      'fiction': 82,
+      'romantic': 80,
+      'novels': 75,
+      'interactive': 70,
+      'games': 68,
+      'otome': 65
+    };
+
+    return priorities[keyword.toLowerCase()] || 50;
+  }
+
+  /**
+   * Generate optimized description
+   */
+  generateOptimizedDescription(currentDescription, analysis, keywordOpportunities) {
+    // Start with current description
+    let optimized = currentDescription;
+
+    // Add missing keywords naturally
+    const topKeywords = keywordOpportunities.topOpportunities.slice(0, 3);
+    if (topKeywords.length > 0) {
+      // Add keywords to features section if it exists
+      if (analysis.structure.hasBullets) {
+        const keywordLine = `\n• Perfect for fans of ${topKeywords.map(k => k.keyword).join(', ')} and more!`;
+        optimized = optimized.replace(/\n• [^\n]*/, (match) => {
+          return optimized.includes(keywordLine) ? match : match + keywordLine;
+        });
+      }
+    }
+
+    // Ensure emotional hook at start
+    if (!analysis.structure.hasEmotionalLanguage) {
+      const emotionalHook = "Experience the romance you've been dreaming of. ";
+      optimized = emotionalHook + optimized;
+    }
+
+    // Add call to action if missing
+    if (!analysis.structure.hasCallToAction) {
+      optimized += '\n\nDownload now and start your romantic journey!';
+    }
+
+    return optimized;
+  }
+
+  /**
+   * Generate specific suggestions for improvement
+   */
+  generateDescriptionSuggestions(analysis, keywordOpportunities) {
+    const suggestions = [];
+
+    // Structure suggestions
+    if (!analysis.structure.hasHook) {
+      suggestions.push({
+        category: 'Structure',
+        priority: 'HIGH',
+        suggestion: 'Add an engaging hook in the first 2 lines to capture attention',
+        example: '💕 Dive into a world of romance where YOUR choices shape the story!'
+      });
+    }
+
+    if (!analysis.structure.hasBullets) {
+      suggestions.push({
+        category: 'Structure',
+        priority: 'HIGH',
+        suggestion: 'Use bullet points to highlight key features for easy scanning',
+        example: '• Thousands of romantic stories\n• Multiple genres to explore\n• New content daily'
+      });
+    }
+
+    if (!analysis.structure.hasCallToAction) {
+      suggestions.push({
+        category: 'Call to Action',
+        priority: 'HIGH',
+        suggestion: 'Add a clear call to action at the end to drive conversions',
+        example: 'Download now and find your perfect romance! 💝'
+      });
+    }
+
+    // Keyword suggestions
+    if (keywordOpportunities.totalMissing > 0) {
+      suggestions.push({
+        category: 'Keywords',
+        priority: 'HIGH',
+        suggestion: `Include ${keywordOpportunities.totalMissing} missing tracked keywords for better ASO`,
+        details: `Top opportunities: ${keywordOpportunities.topOpportunities.slice(0, 3).map(k => k.keyword).join(', ')}`
+      });
+    }
+
+    // Emotional language
+    if (!analysis.structure.hasEmotionalLanguage) {
+      suggestions.push({
+        category: 'Emotional Appeal',
+        priority: 'MEDIUM',
+        suggestion: 'Add more emotional language to connect with target audience',
+        example: 'Use words like: love, passion, heart, desire, romance, feelings'
+      });
+    }
+
+    // Social proof
+    if (!analysis.structure.hasSocialProof) {
+      suggestions.push({
+        category: 'Social Proof',
+        priority: 'MEDIUM',
+        suggestion: 'Add social proof elements to build trust',
+        example: 'Join thousands of readers who found their perfect story'
+      });
+    }
+
+    // Length optimization
+    if (analysis.length.characters < 500) {
+      suggestions.push({
+        category: 'Length',
+        priority: 'LOW',
+        suggestion: 'Consider expanding description to include more keywords and details',
+        details: `Current: ${analysis.length.characters} characters. Recommended: 500-1000 characters`
+      });
+    } else if (analysis.length.characters > 4000) {
+      suggestions.push({
+        category: 'Length',
+        priority: 'MEDIUM',
+        suggestion: 'Description is quite long. Consider condensing for better readability',
+        details: `Current: ${analysis.length.characters} characters. Recommended: 500-1000 characters`
+      });
+    }
+
+    return suggestions;
+  }
 }
 
 // Create singleton instance

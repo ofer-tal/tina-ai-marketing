@@ -302,6 +302,37 @@ router.patch('/metadata/:appId', async (req, res) => {
 });
 
 /**
+ * GET /api/appstore/description/analyze/:appId?
+ *
+ * Analyze app description and provide optimization suggestions
+ * Returns analysis, keyword opportunities, and optimized description draft
+ */
+router.get('/description/analyze/:appId?', async (req, res) => {
+  try {
+    const { appId } = req.params;
+
+    logger.info('Analyzing app description for optimization', { appId });
+
+    const result = await appStoreConnectService.analyzeDescriptionForOptimization(appId);
+
+    res.json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    logger.error('Failed to analyze description', {
+      appId: req.params.appId,
+      error: error.message
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/appstore/screenshots/:appId?
  *
  * Get app screenshots from App Store Connect

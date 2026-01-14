@@ -910,6 +910,267 @@ const UrlValue = styled.a`
   }
 `;
 
+// Description Optimization Styled Components
+const DescriptionOptimizationContainer = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-bottom: 2rem;
+`;
+
+const DescriptionOptimizationHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+`;
+
+const DescriptionOptimizationTitle = styled.h3`
+  font-size: 1.5rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const DescriptionAnalysisGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const DescriptionMetricCard = styled.div`
+  background: #0f3460;
+  border-radius: 8px;
+  padding: 1rem;
+  border: 1px solid #2d3561;
+`;
+
+const DescriptionMetricLabel = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+`;
+
+const DescriptionMetricValue = styled.div`
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #e94560;
+`;
+
+const DescriptionCurrentPreview = styled.div`
+  background: #0f3460;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid #2d3561;
+`;
+
+const DescriptionSectionTitle = styled.h4`
+  font-size: 1.1rem;
+  color: #eaeaea;
+  margin: 0 0 1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const DescriptionText = styled.div`
+  background: #1a1a2e;
+  border-radius: 6px;
+  padding: 1rem;
+  color: #e0e0e0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+`;
+
+const DescriptionSuggestionsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const DescriptionSuggestionCard = styled.div`
+  background: #0f3460;
+  border-radius: 8px;
+  padding: 1.25rem;
+  border: 1px solid #2d3561;
+  border-left: 4px solid ${props => {
+    switch(props.$priority) {
+      case 'HIGH': return '#e94560';
+      case 'MEDIUM': return '#f39c12';
+      case 'LOW': return '#3498db';
+      default: return '#2d3561';
+    }
+  }};
+`;
+
+const DescriptionSuggestionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+`;
+
+const DescriptionSuggestionCategory = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+`;
+
+const DescriptionSuggestionPriority = styled.span`
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 600;
+  background: ${props => {
+    switch(props.$priority) {
+      case 'HIGH': return '#e94560';
+      case 'MEDIUM': return '#f39c12';
+      case 'LOW': return '#3498db';
+      default: return '#2d3561';
+    }
+  }};
+  color: #fff;
+`;
+
+const DescriptionSuggestionText = styled.div`
+  color: #e0e0e0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 0.75rem;
+`;
+
+const DescriptionSuggestionExample = styled.div`
+  background: #1a1a2e;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  font-style: italic;
+  border-left: 2px solid #e94560;
+`;
+
+const DescriptionSuggestionDetails = styled.div`
+  background: #1a1a2e;
+  border-radius: 6px;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin-top: 0.5rem;
+`;
+
+const OptimizedDescriptionSection = styled.div`
+  background: linear-gradient(135deg, #0f3460 0%, #1a1a2e 100%);
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 2px solid #e94560;
+`;
+
+const OptimizedDescriptionText = styled.div`
+  background: #1a1a2e;
+  border-radius: 6px;
+  padding: 1rem;
+  color: #e0e0e0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  margin-bottom: 1rem;
+  max-height: 250px;
+  overflow-y: auto;
+`;
+
+const ActionButtons = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const ApplyButton = styled.button`
+  background: #e94560;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: translateY(-1px);
+  }
+
+  &:disabled {
+    background: #4a4a4a;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const DismissButton = styled.button`
+  background: transparent;
+  color: #a0a0a0;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2d3561;
+    color: #eaeaea;
+  }
+`;
+
+const KeywordOpportunitiesSection = styled.div`
+  background: #0f3460;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid #2d3561;
+`;
+
+const KeywordOpportunityItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #2d3561;
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const DescriptionKeywordName = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const DescriptionKeywordReason = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  flex: 1;
+  margin-left: 1rem;
+`;
+
+const DescriptionKeywordPriority = styled.div`
+  font-size: 0.875rem;
+  color: #e94560;
+  font-weight: 600;
+`;
+
 // Icon A/B Testing Styled Components
 const IconABTestingContainer = styled.div`
   background: #1a1a2e;
@@ -1604,6 +1865,7 @@ function StrategicDashboard() {
   const [keywordModal, setKeywordModal] = useState({ isOpen: false, keyword: null, history: null });
   const [screenshotAnalysis, setScreenshotAnalysis] = useState(null);
   const [iconABTesting, setIconABTesting] = useState(null);
+  const [descriptionOptimization, setDescriptionOptimization] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -1620,6 +1882,7 @@ function StrategicDashboard() {
     fetchAppMetadata();
     fetchScreenshotAnalysis();
     fetchIconABTesting();
+    fetchDescriptionOptimization();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -2091,6 +2354,54 @@ function StrategicDashboard() {
             }
           }
         }
+      });
+    }
+  };
+
+  const fetchDescriptionOptimization = async () => {
+    try {
+      const response = await fetch('/api/appstore/description/analyze');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      setDescriptionOptimization(result.data);
+    } catch (err) {
+      console.error('Failed to fetch description optimization:', err);
+      // Set mock data for development
+      setDescriptionOptimization({
+        currentDescription: 'Dive into a world of romantic fiction with Blush! Our AI-powered story generator creates personalized spicy romance tales just for you.',
+        analysis: {
+          length: {
+            characters: 150,
+            words: 20,
+            sentences: 2
+          },
+          structure: {
+            hasHook: false,
+            hasFeatures: false,
+            hasCallToAction: false,
+            hasSocialProof: false
+          },
+          readability: {
+            score: 60,
+            level: 'Fairly easy to read'
+          }
+        },
+        suggestions: [
+          {
+            category: 'Structure',
+            priority: 'HIGH',
+            suggestion: 'Add bullet points to highlight features'
+          },
+          {
+            category: 'Keywords',
+            priority: 'HIGH',
+            suggestion: 'Include more tracked keywords'
+          }
+        ]
       });
     }
   };
@@ -3528,6 +3839,128 @@ function StrategicDashboard() {
                 </UrlList>
               </MetadataSection>
             </ChartContainer>
+          )}
+
+
+          {/* Description Optimization Section */}
+          {descriptionOptimization && descriptionOptimization.analysis && (
+            <DescriptionOptimizationContainer>
+              <DescriptionOptimizationHeader>
+                <DescriptionOptimizationTitle>✍️ Description Optimization</DescriptionOptimizationTitle>
+              </DescriptionOptimizationHeader>
+
+              {/* Analysis Metrics */}
+              <DescriptionAnalysisGrid>
+                <DescriptionMetricCard>
+                  <DescriptionMetricLabel>Characters</DescriptionMetricLabel>
+                  <DescriptionMetricValue>
+                    {descriptionOptimization.analysis.length?.characters || 0}
+                  </DescriptionMetricValue>
+                </DescriptionMetricCard>
+                <DescriptionMetricCard>
+                  <DescriptionMetricLabel>Words</DescriptionMetricLabel>
+                  <DescriptionMetricValue>
+                    {descriptionOptimization.analysis.length?.words || 0}
+                  </DescriptionMetricValue>
+                </DescriptionMetricCard>
+                <DescriptionMetricCard>
+                  <DescriptionMetricLabel>Readability</DescriptionMetricLabel>
+                  <DescriptionMetricValue style={{fontSize: '1.1rem'}}>
+                    {descriptionOptimization.analysis.readability?.level || 'Unknown'}
+                  </DescriptionMetricValue>
+                </DescriptionMetricCard>
+                <DescriptionMetricCard>
+                  <DescriptionMetricLabel>Missing Keywords</DescriptionMetricLabel>
+                  <DescriptionMetricValue>
+                    {descriptionOptimization.keywordOpportunities?.totalMissing || 0}
+                  </DescriptionMetricValue>
+                </DescriptionMetricCard>
+              </DescriptionAnalysisGrid>
+
+              {/* Current Description */}
+              <DescriptionCurrentPreview>
+                <DescriptionSectionTitle>📄 Current Description</DescriptionSectionTitle>
+                <DescriptionText>
+                  {descriptionOptimization.currentDescription || 'No description set'}
+                </DescriptionText>
+              </DescriptionCurrentPreview>
+
+              {/* Keyword Opportunities */}
+              {descriptionOptimization.keywordOpportunities?.totalMissing > 0 && (
+                <KeywordOpportunitiesSection>
+                  <DescriptionSectionTitle>🎯 Keyword Opportunities</DescriptionSectionTitle>
+                  {descriptionOptimization.keywordOpportunities.topOpportunities?.slice(0, 5).map((opportunity, index) => (
+                    <KeywordOpportunityItem key={index}>
+                      <DescriptionKeywordName>{opportunity.keyword}</DescriptionKeywordName>
+                      <DescriptionKeywordReason>{opportunity.reason}</DescriptionKeywordReason>
+                      <DescriptionKeywordPriority>Priority: {opportunity.priority}/100</DescriptionKeywordPriority>
+                    </KeywordOpportunityItem>
+                  ))}
+                </KeywordOpportunitiesSection>
+              )}
+
+              {/* Suggestions */}
+              {descriptionOptimization.suggestions && descriptionOptimization.suggestions.length > 0 && (
+                <>
+                  <DescriptionSectionTitle>💡 Optimization Suggestions</DescriptionSectionTitle>
+                  <DescriptionSuggestionsGrid>
+                    {descriptionOptimization.suggestions.map((suggestion, index) => (
+                      <DescriptionSuggestionCard key={index} $priority={suggestion.priority}>
+                        <DescriptionSuggestionHeader>
+                          <DescriptionSuggestionCategory>{suggestion.category}</DescriptionSuggestionCategory>
+                          <DescriptionSuggestionPriority $priority={suggestion.priority}>
+                            {suggestion.priority}
+                          </DescriptionSuggestionPriority>
+                        </DescriptionSuggestionHeader>
+                        <DescriptionSuggestionText>{suggestion.suggestion}</DescriptionSuggestionText>
+                        {suggestion.example && (
+                          <DescriptionSuggestionExample>Example: {suggestion.example}</DescriptionSuggestionExample>
+                        )}
+                        {suggestion.details && (
+                          <DescriptionSuggestionDetails>{suggestion.details}</DescriptionSuggestionDetails>
+                        )}
+                      </DescriptionSuggestionCard>
+                    ))}
+                  </DescriptionSuggestionsGrid>
+                </>
+              )}
+
+              {/* Optimized Description */}
+              {descriptionOptimization.optimizedDescription && (
+                <OptimizedDescriptionSection>
+                  <DescriptionSectionTitle>✨ Optimized Description Draft</DescriptionSectionTitle>
+                  <OptimizedDescriptionText>
+                    {descriptionOptimization.optimizedDescription}
+                  </OptimizedDescriptionText>
+                  <ActionButtons>
+                    <ApplyButton
+                      onClick={async () => {
+                        if (appMetadata) {
+                          const updatedMetadata = {
+                            ...appMetadata,
+                            description: descriptionOptimization.optimizedDescription
+                          };
+                          await fetch('/api/appstore/metadata/' + (process.env.REACT_APP_APP_ID || 'blush-app'), {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(updatedMetadata)
+                          });
+                          await fetchAppMetadata();
+                          await fetchDescriptionOptimization();
+                        }
+                      }}
+                    >
+                      Apply Optimized Description
+                    </ApplyButton>
+                    <DismissButton
+                      onClick={() => setDescriptionOptimization(null)}
+                    >
+                      Dismiss
+                    </DismissButton>
+                  </ActionButtons>
+                </OptimizedDescriptionSection>
+              )}
+            </DescriptionOptimizationContainer>
           )}
 
 
