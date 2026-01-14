@@ -186,10 +186,214 @@ const EmptyState = styled.div`
   font-size: 0.9rem;
 `;
 
+// Modal components
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+`;
+
+const ModalContent = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(233, 69, 96, 0.2);
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #1a1a2e;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #2d3561;
+    border-radius: 3px;
+  }
+`;
+
+const ModalHeader = styled.div`
+  padding: 1.5rem;
+  border-bottom: 1px solid #2d3561;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0;
+  font-size: 1.3rem;
+  color: #eaeaea;
+  flex: 1;
+  padding-right: 1rem;
+`;
+
+const CloseButton = styled.button`
+  background: transparent;
+  border: none;
+  color: #a0a0a0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+    color: white;
+  }
+`;
+
+const ModalBody = styled.div`
+  padding: 1.5rem;
+`;
+
+const ModalDescription = styled.p`
+  color: #c0c0c0;
+  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+`;
+
+const MetaInfo = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const MetaItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const MetaLabel = styled.span`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const MetaValue = styled.span`
+  font-size: 0.95rem;
+  color: #eaeaea;
+`;
+
+const ResourcesSection = styled.div`
+  margin-top: 1.5rem;
+`;
+
+const ResourcesTitle = styled.h4`
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  color: #7b2cbf;
+`;
+
+const ResourceList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const ResourceItem = styled.a`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+
+  &:hover {
+    border-color: #e94560;
+    transform: translateX(4px);
+  }
+`;
+
+const ResourceIcon = styled.span`
+  font-size: 1.2rem;
+`;
+
+const ResourceInfo = styled.div`
+  flex: 1;
+`;
+
+const ResourceType = styled.div`
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+`;
+
+const ResourceTitle = styled.div`
+  font-size: 0.9rem;
+  font-weight: 500;
+`;
+
+const ModalFooter = styled.div`
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #2d3561;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+`;
+
+const ModalButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.primary {
+    background: #e94560;
+    color: white;
+
+    &:hover {
+      background: #ff6b6b;
+    }
+  }
+
+  &.secondary {
+    background: #2d3561;
+    color: #eaeaea;
+
+    &:hover {
+      background: #3d4171;
+    }
+  }
+`;
+
 function TodoSidebar() {
   const [todos, setTodos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [selectedTodo, setSelectedTodo] = useState(null);
 
   useEffect(() => {
     fetchTodos();
@@ -228,26 +432,42 @@ function TodoSidebar() {
         {
           _id: '1',
           title: 'Review and approve 3 pending posts',
+          description: 'You have 3 posts scheduled for today that need approval before posting. Review the content library and approve or reject each post.',
           category: 'review',
           priority: 'high',
           status: 'pending',
-          scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+          scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+          resources: [
+            { type: 'link', url: '/content/library', description: 'View Content Library' },
+            { type: 'video', url: '#', description: 'Watch Approval Tutorial' }
+          ]
         },
         {
           _id: '2',
           title: 'Update ASO keywords',
+          description: 'Fix declining "spicy fiction" keyword ranking (dropped from #5 to #7). Update keyword strategy and add new high-opportunity keywords.',
           category: 'configuration',
           priority: 'medium',
           status: 'pending',
-          scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+          resources: [
+            { type: 'link', url: '/settings', description: 'ASO Settings' },
+            { type: 'document', url: '#', description: 'Keyword Research Report' }
+          ]
         },
         {
           _id: '3',
           title: 'Create 10 Professor Romance story posts',
+          description: 'Increase content volume for top-performing category. Professor Romance stories have 3.2x average engagement rate.',
           category: 'posting',
           priority: 'high',
           status: 'in_progress',
-          scheduledAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString()
+          scheduledAt: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+          resources: [
+            { type: 'link', url: '/content', description: 'Content Library' },
+            { type: 'document', url: '#', description: 'Professor Romance Story Guide' },
+            { type: 'video', url: '#', description: 'Content Generation Tutorial' }
+          ]
         }
       ];
 
@@ -280,8 +500,29 @@ function TodoSidebar() {
   };
 
   const handleTodoClick = (todo) => {
-    // For now, just log - could expand to show details modal
-    console.log('Todo clicked:', todo);
+    setSelectedTodo(todo);
+  };
+
+  const handleCloseModal = () => {
+    setSelectedTodo(null);
+  };
+
+  const handleCompleteTodo = async () => {
+    if (!selectedTodo) return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}/complete`, {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        // Refresh todos and close modal
+        fetchTodos();
+        handleCloseModal();
+      }
+    } catch (err) {
+      console.error('Error completing todo:', err);
+    }
   };
 
   return (
@@ -322,6 +563,92 @@ function TodoSidebar() {
       <SidebarFooter>
         <ViewAllLink href="/todos">View All Tasks →</ViewAllLink>
       </SidebarFooter>
+
+      {/* Todo Detail Modal */}
+      {selectedTodo && (
+        <ModalOverlay onClick={handleCloseModal}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalHeader>
+              <ModalTitle>{selectedTodo.title}</ModalTitle>
+              <CloseButton onClick={handleCloseModal}>×</CloseButton>
+            </ModalHeader>
+
+            <ModalBody>
+              {selectedTodo.description && (
+                <ModalDescription>{selectedTodo.description}</ModalDescription>
+              )}
+
+              <MetaInfo>
+                <MetaItem>
+                  <MetaLabel>Status</MetaLabel>
+                  <MetaValue>
+                    <TodoStatus $status={selectedTodo.status}>
+                      {selectedTodo.status === 'in_progress' ? 'In Progress' : selectedTodo.status}
+                    </TodoStatus>
+                  </MetaValue>
+                </MetaItem>
+                <MetaItem>
+                  <MetaLabel>Priority</MetaLabel>
+                  <MetaValue>
+                    <PriorityBadge $priority={selectedTodo.priority}>
+                      {selectedTodo.priority}
+                    </PriorityBadge>
+                  </MetaValue>
+                </MetaItem>
+                <MetaItem>
+                  <MetaLabel>Category</MetaLabel>
+                  <MetaValue>
+                    <CategoryBadge>{selectedTodo.category}</CategoryBadge>
+                  </MetaValue>
+                </MetaItem>
+                <MetaItem>
+                  <MetaLabel>Scheduled</MetaLabel>
+                  <MetaValue>{formatTime(selectedTodo.scheduledAt)}</MetaValue>
+                </MetaItem>
+              </MetaInfo>
+
+              {selectedTodo.resources && selectedTodo.resources.length > 0 && (
+                <ResourcesSection>
+                  <ResourcesTitle>Associated Resources</ResourcesTitle>
+                  <ResourceList>
+                    {selectedTodo.resources.map((resource, idx) => {
+                      const icon = resource.type === 'link' ? '🔗' :
+                                   resource.type === 'document' ? '📄' :
+                                   resource.type === 'video' ? '🎥' : '📎';
+
+                      return (
+                        <ResourceItem
+                          key={idx}
+                          href={resource.url}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            // Allow default link behavior
+                          }}
+                        >
+                          <ResourceIcon>{icon}</ResourceIcon>
+                          <ResourceInfo>
+                            <ResourceType>{resource.type}</ResourceType>
+                            <ResourceTitle>{resource.description}</ResourceTitle>
+                          </ResourceInfo>
+                        </ResourceItem>
+                      );
+                    })}
+                  </ResourceList>
+                </ResourcesSection>
+              )}
+            </ModalBody>
+
+            <ModalFooter>
+              <ModalButton className="secondary" onClick={handleCloseModal}>
+                Close
+              </ModalButton>
+              <ModalButton className="primary" onClick={handleCompleteTodo}>
+                ✓ Mark Complete
+              </ModalButton>
+            </ModalFooter>
+          </ModalContent>
+        </ModalOverlay>
+      )}
     </Sidebar>
   );
 }
