@@ -1355,6 +1355,301 @@ class AppStoreConnectService {
       };
     }
   }
+
+  /**
+   * Start an A/B test via App Store Connect API
+   *
+   * API Endpoint: POST /apps/{appId}/appStoreVersionExperiments
+   *
+   * @param {Object} testConfig - Test configuration
+   * @param {string} testConfig.name - Test name
+   * @param {string} testConfig.type - Test type (icon, screenshots, subtitle, description)
+   * @param {Date} testConfig.startDate - Start date
+   * @param {number} testConfig.durationDays - Duration in days
+   * @param {string} testConfig.metric - Success metric
+   * @param {Object} testConfig.variantA - Control variant
+   * @param {Object} testConfig.variantB - Treatment variant
+   */
+  async startABTest(testConfig) {
+    logger.info('Starting A/B test via App Store Connect', {
+      name: testConfig.name,
+      type: testConfig.type
+    });
+
+    if (!this.isConfigured()) {
+      logger.warn('App Store Connect API not configured, returning mock A/B test start');
+      return this.getMockABTestStart(testConfig);
+    }
+
+    try {
+      // TODO: Implement actual API call
+      // POST https://api.appstoreconnect.apple.com/v1/apps/{appId}/appStoreVersionExperiments
+      //
+      // Request body structure:
+      // {
+      //   "data": {
+      //     "type": "appStoreVersionExperiments",
+      //     "attributes": {
+      //       "name": "Test Name",
+      //       "trafficProportion": [50, 50],
+      //       "startDate": "2024-01-15T00:00:00Z",
+      //       "endDate": "2024-01-29T00:00:00Z"
+      //     },
+      //     "relationships": {
+      //       "appStoreVersion" -> control version,
+      //       "appStoreVersionExperimentTreatments" -> variants
+      //     }
+      //   }
+      // }
+
+      logger.info('A/B test API start not yet implemented, returning mock response');
+      return this.getMockABTestStart(testConfig);
+
+    } catch (error) {
+      logger.error('Failed to start A/B test', {
+        testName: testConfig.name,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock A/B test start response
+   */
+  getMockABTestStart(testConfig) {
+    const mockTreatmentId = `treatment_${Date.now()}`;
+    const mockCampaignId = `campaign_${Date.now()}`;
+
+    return {
+      treatmentId: mockTreatmentId,
+      campaignId: mockCampaignId,
+      status: 'STARTED',
+      startDate: testConfig.startDate || new Date().toISOString(),
+      endDate: new Date(Date.now() + testConfig.durationDays * 24 * 60 * 60 * 1000).toISOString(),
+      trafficSplit: '50/50',
+      source: 'mock'
+    };
+  }
+
+  /**
+   * Stop an A/B test via App Store Connect API
+   *
+   * API Endpoint: PATCH /apps/{appId}/appStoreVersionExperiments/{experimentId}
+   *
+   * @param {string} campaignId - A/B test campaign ID
+   */
+  async stopABTest(campaignId) {
+    logger.info('Stopping A/B test via App Store Connect', { campaignId });
+
+    if (!this.isConfigured()) {
+      logger.warn('App Store Connect API not configured, returning mock A/B test stop');
+      return this.getMockABTestStop(campaignId);
+    }
+
+    try {
+      // TODO: Implement actual API call
+      // PATCH https://api.appstoreconnect.apple.com/v1/apps/{appId}/appStoreVersionExperiments/{experimentId}
+      //
+      // Request body:
+      // {
+      //   "data": {
+      //     "type": "appStoreVersionExperiments",
+      //     "id": "{experimentId}",
+      //     "attributes": {
+      //       "status": "COMPLETE",
+      //       "endDate": "2024-01-29T00:00:00Z"
+      //     }
+      //   }
+      // }
+
+      logger.info('A/B test API stop not yet implemented, returning mock response');
+      return this.getMockABTestStop(campaignId);
+
+    } catch (error) {
+      logger.error('Failed to stop A/B test', {
+        campaignId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock A/B test stop response
+   */
+  getMockABTestStop(campaignId) {
+    return {
+      campaignId: campaignId,
+      status: 'STOPPED',
+      stoppedAt: new Date().toISOString(),
+      source: 'mock'
+    };
+  }
+
+  /**
+   * Get A/B test metrics from App Store Connect API
+   *
+   * API Endpoint: GET /apps/{appId}/appStoreVersionExperiments/{experimentId}/metrics
+   *
+   * @param {string} campaignId - A/B test campaign ID
+   */
+  async getABTestMetrics(campaignId) {
+    logger.info('Fetching A/B test metrics from App Store Connect', { campaignId });
+
+    if (!this.isConfigured()) {
+      logger.warn('App Store Connect API not configured, returning mock A/B test metrics');
+      return this.getMockABTestMetrics(campaignId);
+    }
+
+    try {
+      // TODO: Implement actual API call
+      // GET https://api.appstoreconnect.apple.com/v1/apps/{appId}/appStoreVersionExperiments/{experimentId}/metrics
+      //
+      // Returns metrics for each treatment:
+      // - Impressions / Views
+      // - Conversion rate
+      // - Downloads
+      // - Retention
+      // - Revenue
+
+      logger.info('A/B test metrics API not yet implemented, returning mock response');
+      return this.getMockABTestMetrics(campaignId);
+
+    } catch (error) {
+      logger.error('Failed to fetch A/B test metrics', {
+        campaignId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock A/B test metrics
+   */
+  getMockABTestMetrics(campaignId) {
+    // Simulate realistic test metrics
+    const baseViews = 10000 + Math.floor(Math.random() * 5000);
+    const baseConversionRate = 0.03 + Math.random() * 0.02;
+
+    return {
+      campaignId: campaignId,
+      variantA: {
+        views: baseViews,
+        conversions: Math.floor(baseViews * baseConversionRate),
+        conversionRate: baseConversionRate * 100
+      },
+      variantB: {
+        views: baseViews + Math.floor(Math.random() * 1000) - 500,
+        conversions: Math.floor(baseViews * (baseConversionRate + (Math.random() * 0.01 - 0.005))),
+        conversionRate: (baseConversionRate + (Math.random() * 0.01 - 0.005)) * 100
+      },
+      source: 'mock'
+    };
+  }
+
+  /**
+   * Get A/B test results and analysis
+   *
+   * @param {string} campaignId - A/B test campaign ID
+   */
+  async getABTestResults(campaignId) {
+    logger.info('Fetching A/B test results', { campaignId });
+
+    try {
+      const metrics = await this.getABTestMetrics(campaignId);
+
+      // Calculate statistics
+      const conversionA = metrics.variantA.conversions / metrics.variantA.views;
+      const conversionB = metrics.variantB.conversions / metrics.variantB.views;
+      const lift = ((conversionB - conversionA) / conversionA) * 100;
+
+      // Determine winner (simplified)
+      let winner = 'inconclusive';
+      if (Math.abs(lift) > 5) {
+        winner = lift > 0 ? 'variantB' : 'variantA';
+      }
+
+      return {
+        campaignId,
+        metrics,
+        analysis: {
+          winner,
+          lift: lift.toFixed(2) + '%',
+          conversionA: (conversionA * 100).toFixed(2) + '%',
+          conversionB: (conversionB * 100).toFixed(2) + '%',
+          significance: lift > 10 ? 'high' : lift > 5 ? 'medium' : 'low'
+        }
+      };
+
+    } catch (error) {
+      logger.error('Failed to fetch A/B test results', {
+        campaignId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * List all A/B tests from App Store Connect
+   *
+   * API Endpoint: GET /apps/{appId}/appStoreVersionExperiments
+   */
+  async listABTests(appId = null) {
+    logger.info('Listing A/B tests from App Store Connect', { appId });
+
+    if (!this.isConfigured()) {
+      logger.warn('App Store Connect API not configured, returning mock A/B test list');
+      return this.getMockABTestList();
+    }
+
+    try {
+      // TODO: Implement actual API call
+      // GET https://api.appstoreconnect.apple.com/v1/apps/{appId}/appStoreVersionExperiments
+
+      logger.info('A/B test list API not yet implemented, returning mock response');
+      return this.getMockABTestList();
+
+    } catch (error) {
+      logger.error('Failed to list A/B tests', {
+        appId,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock A/B test list
+   */
+  getMockABTestList() {
+    return {
+      tests: [
+        {
+          id: 'exp_001',
+          name: 'Icon Test - Romantic vs Minimalist',
+          status: 'COMPLETE',
+          type: 'icon',
+          startDate: '2024-01-01T00:00:00Z',
+          endDate: '2024-01-14T00:00:00Z',
+          winner: 'variantB'
+        },
+        {
+          id: 'exp_002',
+          name: 'Subtitle Test - Keyword Focus',
+          status: 'IN_REVIEW',
+          type: 'subtitle',
+          startDate: '2024-01-10T00:00:00Z',
+          endDate: null,
+          winner: null
+        }
+      ],
+      total: 2,
+      source: 'mock'
+    };
+  }
 }
 
 // Create singleton instance

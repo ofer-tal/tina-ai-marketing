@@ -30,6 +30,7 @@ import appstoreRouter from "./api/appstore.js";
 import asoRouter from "./api/aso.js";
 import conversionMetricsRouter from "./api/conversionMetrics.js";
 import reportsRouter from "./api/reports.js";
+import experimentsRouter from "./api/experiments.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -197,6 +198,7 @@ app.use("/api/appstore", appstoreRouter);
 app.use("/api/aso", asoRouter);
 app.use("/api/conversion", conversionMetricsRouter);
 app.use("/api/reports", reportsRouter);
+app.use("/api/experiments", experimentsRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {

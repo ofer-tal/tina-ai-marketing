@@ -2998,7 +2998,240 @@ const EmptyReportState = styled.div`
   }
 `;
 
+// A/B Testing Components
+const ExperimentsContainer = styled(ChartContainer)`
+  margin-bottom: 2rem;
+`;
 
+const ExperimentsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const ExperimentsTitle = styled.h3`
+  font-size: 1.5rem;
+  color: #eaeaea;
+  margin: 0;
+`;
+
+const ExperimentsStats = styled.div`
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+`;
+
+const ExperimentStatBadge = styled.div`
+  background: ${props => props.color || '#16213e'};
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ExperimentStatLabel = styled.span`
+  color: #a0a0a0;
+`;
+
+const ExperimentStatValue = styled.span`
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const ExperimentsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 1.5rem;
+`;
+
+const ExperimentCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1.5rem;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    box-shadow: 0 4px 20px rgba(233, 69, 96, 0.1);
+    transform: translateY(-2px);
+  }
+`;
+
+const ExperimentCardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+`;
+
+const ExperimentTitle = styled.h4`
+  font-size: 1.125rem;
+  color: #eaeaea;
+  margin: 0 0 0.5rem 0;
+`;
+
+const ExperimentType = styled.div`
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+`;
+
+const ExperimentStatusBadge = styled.div`
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+
+  ${props => {
+    switch (props.status) {
+      case 'running':
+        return `
+          background: rgba(0, 210, 106, 0.2);
+          color: #00d26a;
+        `;
+      case 'completed':
+        return `
+          background: rgba(123, 44, 191, 0.2);
+          color: #7b2cbf;
+        `;
+      case 'draft':
+        return `
+          background: rgba(255, 149, 0, 0.2);
+          color: #ff9500;
+        `;
+      default:
+        return `
+          background: rgba(107, 114, 128, 0.2);
+          color: #6b7280;
+        `;
+    }
+  }}
+`;
+
+const ExperimentMetrics = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-radius: 8px;
+`;
+
+const ExperimentVariant = styled.div`
+  text-align: center;
+`;
+
+const ExperimentVariantLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const ExperimentVariantValue = styled.div`
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: ${props => props.$winner ? '#00d26a' : '#eaeaea'};
+`;
+
+const ExperimentWinner = styled.div`
+  background: ${props => props.winner === 'variantB'
+    ? 'rgba(0, 210, 106, 0.1)'
+    : 'rgba(123, 44, 191, 0.1)'};
+  border-left: 3px solid ${props => props.winner === 'variantB'
+    ? '#00d26a'
+    : '#7b2cbf'};
+  padding: 0.75rem;
+  border-radius: 4px;
+  margin-top: 1rem;
+`;
+
+const ExperimentWinnerLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const ExperimentWinnerValue = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const ExperimentProgress = styled.div`
+  margin-top: 1rem;
+`;
+
+const ExperimentProgressBar = styled.div`
+  height: 6px;
+  background: #1a1a2e;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+`;
+
+const ExperimentProgressFill = styled.div`
+  height: 100%;
+  background: linear-gradient(90deg, #e94560 0%, #7b2cbf 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+  width: ${props => props.$percentage}%;
+`;
+
+const ExperimentProgressLabel = styled.div`
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.75rem;
+  color: #a0a0a0;
+`;
+
+const CreateExperimentButton = styled.button`
+  background: linear-gradient(135deg, #e94560, #7b2cbf);
+  border: none;
+  color: #eaeaea;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+  }
+`;
+
+const EmptyExperiments = styled.div`
+  text-align: center;
+  padding: 3rem;
+  background: #16213e;
+  border-radius: 12px;
+  border: 1px dashed #2d3561;
+
+  div {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+
+  h4 {
+    color: #eaeaea;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    color: #a0a0a0;
+    font-size: 0.875rem;
+  }
+`;
 
 function StrategicDashboard() {
   const navigate = useNavigate();
@@ -3025,6 +3258,8 @@ function StrategicDashboard() {
   const [competitorMonitoring, setCompetitorMonitoring] = useState(null);
   const [asoScore, setAsoscore] = useState(null);
   const [weeklyReport, setWeeklyReport] = useState(null);
+  const [experiments, setExperiments] = useState(null);
+  const [experimentStats, setExperimentStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -3047,6 +3282,8 @@ function StrategicDashboard() {
     fetchCompetitorMonitoring();
     fetchASOScore();
     fetchWeeklyReport();
+    fetchExperiments();
+    fetchExperimentStats();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -3951,6 +4188,150 @@ function StrategicDashboard() {
         keywordRankings: { totalTracked: 16, inTop10: 2, inTop25: 5, inTop50: 11, averageRanking: 38 },
         highlights: [],
         recommendations: []
+      });
+    }
+  };
+
+  const fetchExperiments = async () => {
+    try {
+      const response = await fetch('http://localhost:3003/api/experiments');
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setExperiments(result.data);
+      } else {
+        // Set mock data if no experiments exist yet
+        setExperiments([
+          {
+            _id: 'exp_mock_1',
+            name: 'Icon Test - Romantic vs Minimalist',
+            type: 'icon',
+            status: 'completed',
+            startDate: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+            endDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+            duration: 14,
+            metric: 'conversionRate',
+            variantA: {
+              name: 'Control',
+              iconUrl: '/mock-icons/control-icon.png',
+              description: 'Current romantic-style icon with couple illustration'
+            },
+            variantB: {
+              name: 'Treatment',
+              iconUrl: '/mock-icons/treatment-icon.png',
+              description: 'Minimalist icon with heart silhouette'
+            },
+            variantAConversions: 456,
+            variantBConversions: 523,
+            variantAViews: 12500,
+            variantBViews: 12450,
+            variantAConversionRate: 3.65,
+            variantBConversionRate: 4.20,
+            winner: 'variantB',
+            significance: 0.02,
+            confidence: 98,
+            lift: 15.1,
+            conclusion: 'The minimalist icon performed significantly better with 15.1% lift in conversion rate.',
+            createdAt: new Date(Date.now() - 35 * 24 * 60 * 60 * 1000)
+          },
+          {
+            _id: 'exp_mock_2',
+            name: 'Subtitle Test - Keyword Focus',
+            type: 'subtitle',
+            status: 'running',
+            startDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            duration: 14,
+            metric: 'conversionRate',
+            variantA: {
+              name: 'Control',
+              subtitle: 'Romantic Stories',
+              description: 'Current subtitle emphasizing story genre'
+            },
+            variantB: {
+              name: 'Treatment',
+              subtitle: 'Interactive Romance',
+              description: 'New subtitle emphasizing interactive gameplay'
+            },
+            variantAConversions: 89,
+            variantBConversions: 102,
+            variantAViews: 3200,
+            variantBViews: 3150,
+            variantAConversionRate: 2.78,
+            variantBConversionRate: 3.24,
+            winner: 'pending',
+            significance: 0.15,
+            confidence: 85,
+            lift: 0,
+            automaticallyStarted: true,
+            createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+          },
+          {
+            _id: 'exp_mock_3',
+            name: 'Screenshot Test - Character Focus',
+            type: 'screenshots',
+            status: 'draft',
+            duration: 14,
+            metric: 'conversionRate',
+            variantA: {
+              name: 'Control',
+              screenshotUrls: ['/mock/ss/control-1.png', '/mock/ss/control-2.png'],
+              description: 'Current screenshots showing story interface'
+            },
+            variantB: {
+              name: 'Treatment',
+              screenshotUrls: ['/mock/ss/treatment-1.png', '/mock/ss/treatment-2.png'],
+              description: 'New screenshots emphasizing character emotions'
+            },
+            variantAConversions: 0,
+            variantBConversions: 0,
+            variantAViews: 0,
+            variantBViews: 0,
+            winner: 'pending',
+            createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000)
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error fetching experiments:', error);
+      // Set mock data on error
+      setExperiments([]);
+    }
+  };
+
+  const fetchExperimentStats = async () => {
+    try {
+      const response = await fetch('http://localhost:3003/api/experiments/stats');
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setExperimentStats(result.data);
+      } else {
+        // Set mock stats
+        setExperimentStats({
+          total: 3,
+          draft: 1,
+          running: 1,
+          completed: 1,
+          cancelled: 0,
+          averageLift: '15.1%',
+          byType: {
+            icon: 1,
+            screenshots: 1,
+            subtitle: 1
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching experiment stats:', error);
+      // Set mock stats on error
+      setExperimentStats({
+        total: 3,
+        draft: 1,
+        running: 1,
+        completed: 1,
+        cancelled: 0,
+        averageLift: '15.1%',
+        byType: {}
       });
     }
   };
@@ -6645,6 +7026,123 @@ ${(weeklyReport.recommendations || []).slice(0, 2).map(r => r.title).join('\n')}
                 </ReportRecommendationsSection>
               )}
             </WeeklyReportContainer>
+          )}
+
+          {/* A/B Testing Section */}
+          {experiments && experimentStats && (
+            <ExperimentsContainer>
+              <ExperimentsHeader>
+                <ExperimentsTitle>🧪 A/B Testing</ExperimentsTitle>
+                <ExperimentsStats>
+                  <ExperimentStatBadge color="#16213e">
+                    <ExperimentStatLabel>Total:</ExperimentStatLabel>
+                    <ExperimentStatValue>{experimentStats.total}</ExperimentStatValue>
+                  </ExperimentStatBadge>
+                  <ExperimentStatBadge color="rgba(0, 210, 106, 0.2)">
+                    <ExperimentStatLabel>Running:</ExperimentStatLabel>
+                    <ExperimentStatValue>{experimentStats.running}</ExperimentStatValue>
+                  </ExperimentStatBadge>
+                  <ExperimentStatBadge color="rgba(123, 44, 191, 0.2)">
+                    <ExperimentStatLabel>Completed:</ExperimentStatLabel>
+                    <ExperimentStatValue>{experimentStats.completed}</ExperimentStatValue>
+                  </ExperimentStatBadge>
+                  <ExperimentStatBadge color="rgba(255, 149, 0, 0.2)">
+                    <ExperimentStatLabel>Avg Lift:</ExperimentStatLabel>
+                    <ExperimentStatValue>{experimentStats.averageLift}</ExperimentStatValue>
+                  </ExperimentStatBadge>
+                </ExperimentsStats>
+              </ExperimentsHeader>
+
+              {experiments.length > 0 ? (
+                <ExperimentsGrid>
+                  {experiments.map((experiment) => (
+                    <ExperimentCard key={experiment._id}>
+                      <ExperimentCardHeader>
+                        <div>
+                          <ExperimentTitle>{experiment.name}</ExperimentTitle>
+                          <ExperimentType>{experiment.type}</ExperimentType>
+                        </div>
+                        <ExperimentStatusBadge status={experiment.status}>
+                          {experiment.status}
+                        </ExperimentStatusBadge>
+                      </ExperimentCardHeader>
+
+                      {experiment.status === 'completed' ? (
+                        <>
+                          <ExperimentMetrics>
+                            <ExperimentVariant>
+                              <ExperimentVariantLabel>Control</ExperimentVariantLabel>
+                              <ExperimentVariantValue $winner={experiment.winner === 'variantA'}>
+                                {experiment.variantAConversionRate.toFixed(2)}%
+                              </ExperimentVariantValue>
+                            </ExperimentVariant>
+                            <ExperimentVariant>
+                              <ExperimentVariantLabel>Treatment</ExperimentVariantLabel>
+                              <ExperimentVariantValue $winner={experiment.winner === 'variantB'}>
+                                {experiment.variantBConversionRate.toFixed(2)}%
+                              </ExperimentVariantValue>
+                            </ExperimentVariant>
+                          </ExperimentMetrics>
+
+                          {experiment.winner && experiment.winner !== 'pending' && experiment.winner !== 'inconclusive' && (
+                            <ExperimentWinner winner={experiment.winner}>
+                              <ExperimentWinnerLabel>Winner</ExperimentWinnerLabel>
+                              <ExperimentWinnerValue>
+                                {experiment.winner === 'variantB' ? experiment.variantB.name : experiment.variantA.name}
+                                {' '}with {experiment.lift.toFixed(1)}% lift
+                              </ExperimentWinnerValue>
+                            </ExperimentWinner>
+                          )}
+                        </>
+                      ) : experiment.status === 'running' ? (
+                        <>
+                          <ExperimentMetrics>
+                            <ExperimentVariant>
+                              <ExperimentVariantLabel>Control</ExperimentVariantLabel>
+                              <ExperimentVariantValue>
+                                {experiment.variantAConversionRate.toFixed(2)}%
+                              </ExperimentVariantValue>
+                            </ExperimentVariant>
+                            <ExperimentVariant>
+                              <ExperimentVariantLabel>Treatment</ExperimentVariantLabel>
+                              <ExperimentVariantValue>
+                                {experiment.variantBConversionRate.toFixed(2)}%
+                              </ExperimentVariantValue>
+                            </ExperimentVariant>
+                          </ExperimentMetrics>
+
+                          <ExperimentProgress>
+                            <ExperimentProgressBar>
+                              <ExperimentProgressFill
+                                $percentage={
+                                  Math.min(((Date.now() - new Date(experiment.startDate).getTime()) / (experiment.duration * 24 * 60 * 60 * 1000)) * 100, 100)
+                                }
+                              />
+                            </ExperimentProgressBar>
+                            <ExperimentProgressLabel>
+                              <span>{experiment.duration} days</span>
+                              <span>
+                                {Math.min(Math.round(((Date.now() - new Date(experiment.startDate).getTime()) / (experiment.duration * 24 * 60 * 60 * 1000)) * 100), 100)}% complete
+                              </span>
+                            </ExperimentProgressLabel>
+                          </ExperimentProgress>
+                        </>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '1rem', color: '#a0a0a0' }}>
+                          Draft - Not started yet
+                        </div>
+                      )}
+                    </ExperimentCard>
+                  ))}
+                </ExperimentsGrid>
+              ) : (
+                <EmptyExperiments>
+                  <div>🧪</div>
+                  <h4>No A/B tests yet</h4>
+                  <p>Create your first A/B test to optimize your App Store presence</p>
+                </EmptyExperiments>
+              )}
+            </ExperimentsContainer>
           )}
 
           {/* Keyword History Modal */}
