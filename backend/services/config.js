@@ -161,6 +161,43 @@ const configSchema = {
     errorMessage: 'Must be a valid URL'
   },
 
+  // YouTube Data API v3
+  YOUTUBE_API_KEY: {
+    required: false,
+    description: 'YouTube Data API v3 API Key',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  YOUTUBE_CLIENT_ID: {
+    required: false,
+    description: 'YouTube OAuth Client ID',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  YOUTUBE_CLIENT_SECRET: {
+    required: false,
+    description: 'YouTube OAuth Client Secret',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  YOUTUBE_REDIRECT_URI: {
+    required: false,
+    description: 'YouTube OAuth Redirect URI',
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        new URL(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    errorMessage: 'Must be a valid URL'
+  },
+
   // Google Analytics API
   GOOGLE_ANALYTICS_VIEW_ID: {
     required: false,
