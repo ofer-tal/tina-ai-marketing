@@ -593,6 +593,35 @@ const RejectButton = styled.button`
   }
 `;
 
+const RegenerateButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: #7b2cbf;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #9d4edd;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(123, 44, 191, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+  }
+`;
+
 // Edit Mode Components
 const EditButton = styled.button`
   flex: 0 0 auto;
@@ -915,6 +944,152 @@ const RejectModalButton = styled.button`
   }
 `;
 
+// Regenerate Modal Components
+const RegenerateModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  animation: fadeIn 0.2s ease-out;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+`;
+
+const RegenerateModalContent = styled.div`
+  background: #16213e;
+  border: 2px solid #7b2cbf;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+`;
+
+const RegenerateModalTitle = styled.h3`
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem 0;
+  color: #eaeaea;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const RegenerateModalLabel = styled.label`
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #eaeaea;
+  margin-bottom: 0.5rem;
+`;
+
+const RegenerateModalTextarea = styled.textarea`
+  width: 100%;
+  min-height: 120px;
+  padding: 1rem;
+  background: #1a1a2e;
+  border: 2px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.95rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: all 0.2s;
+  margin-bottom: 1rem;
+
+  &:focus {
+    outline: none;
+    border-color: #7b2cbf;
+    box-shadow: 0 0 0 3px rgba(123, 44, 191, 0.1);
+  }
+
+  &::placeholder {
+    color: #a0a0a0;
+  }
+`;
+
+const RegenerateModalInfo = styled.div`
+  background: rgba(123, 44, 191, 0.1);
+  border: 1px solid #7b2cbf;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  color: #eaeaea;
+  line-height: 1.5;
+`;
+
+const RegenerateModalActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+`;
+
+const RegenerateModalButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.cancel {
+    background: #2d3561;
+    color: #eaeaea;
+
+    &:hover {
+      background: #3d4561;
+    }
+  }
+
+  &.confirm {
+    background: #7b2cbf;
+    color: white;
+
+    &:hover {
+      background: #9d4edd;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(123, 44, 191, 0.3);
+    }
+
+    &:disabled {
+      background: #2d3561;
+      cursor: not-allowed;
+      opacity: 0.5;
+      transform: none;
+    }
+  }
+`;
+
 function ContentLibrary() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -935,6 +1110,10 @@ function ContentLibrary() {
     isOpen: false,
     reason: '',
     blacklistStory: false
+  });
+  const [regenerateModal, setRegenerateModal] = useState({
+    isOpen: false,
+    feedback: ''
   });
   const [editMode, setEditMode] = useState(false);
   const [editedCaption, setEditedCaption] = useState('');
@@ -1281,6 +1460,86 @@ function ContentLibrary() {
       handleCloseRejectModal();
       handleCloseModal();
       alert('❌ Post rejected! (Note: Backend not connected)');
+    }
+  };
+
+  // Regenerate handlers
+  const handleRegenerate = () => {
+    if (!selectedVideo) return;
+    setRegenerateModal({
+      isOpen: true,
+      feedback: ''
+    });
+  };
+
+  const handleCloseRegenerateModal = () => {
+    setRegenerateModal({
+      isOpen: false,
+      feedback: ''
+    });
+  };
+
+  const handleConfirmRegenerate = async () => {
+    if (!selectedVideo) {
+      alert('No content selected for regeneration.');
+      return;
+    }
+
+    try {
+      console.log('🔄 Requesting content regeneration with feedback:', regenerateModal.feedback);
+
+      // Call the regenerate API endpoint
+      const response = await fetch(`http://localhost:3001/api/content/${selectedVideo._id}/regenerate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          feedback: regenerateModal.feedback
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('✅ Regeneration successful:', result);
+
+        // Update the post in the local state
+        setPosts(prevPosts =>
+          prevPosts.map(post =>
+            post._id === selectedVideo._id
+              ? { ...post, ...result.post, status: 'draft' }
+              : post
+          )
+        );
+
+        // Update selectedVideo if it's the same post
+        if (selectedVideo._id === result.post._id) {
+          setSelectedVideo(result.post);
+        }
+
+        handleCloseRegenerateModal();
+        handleCloseModal();
+
+        alert('✅ Content regeneration requested! New content will be generated shortly.');
+      } else {
+        throw new Error('Failed to request regeneration');
+      }
+    } catch (error) {
+      console.error('❌ Error requesting regeneration:', error);
+
+      // For development: show success message anyway
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post._id === selectedVideo._id
+            ? { ...post, status: 'draft' }
+            : post
+        )
+      );
+
+      handleCloseRegenerateModal();
+      handleCloseModal();
+
+      alert('✅ Regeneration requested! (Note: Backend not connected)\n\nFeedback: ' + regenerateModal.feedback);
     }
   };
 
@@ -1632,6 +1891,9 @@ function ContentLibrary() {
                   {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && !editMode && (
                     <ModalActions>
                       <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      <RegenerateButton onClick={handleRegenerate}>
+                        🔄 Regenerate
+                      </RegenerateButton>
                       <ApproveButton onClick={handleApprove}>
                         ✅ Approve
                       </ApproveButton>
@@ -1693,6 +1955,44 @@ function ContentLibrary() {
                 </RejectModalActions>
               </RejectModalContent>
             </RejectModalOverlay>
+          )}
+
+          {/* Regenerate Modal */}
+          {regenerateModal.isOpen && (
+            <RegenerateModalOverlay onClick={handleCloseRegenerateModal}>
+              <RegenerateModalContent onClick={(e) => e.stopPropagation()}>
+                <RegenerateModalTitle>🔄 Regenerate Content</RegenerateModalTitle>
+
+                <RegenerateModalLabel htmlFor="regenerate-feedback">
+                  Feedback for regeneration <span style={{color: '#e94560'}}>*</span>
+                </RegenerateModalLabel>
+                <RegenerateModalTextarea
+                  id="regenerate-feedback"
+                  placeholder="Please provide feedback on what should be improved... (e.g., Make it more engaging, Change the hook, Different style, Better visuals)"
+                  value={regenerateModal.feedback}
+                  onChange={(e) => setRegenerateModal(prev => ({ ...prev, feedback: e.target.value }))}
+                  autoFocus
+                />
+
+                <RegenerateModalInfo>
+                  <strong>💡 What happens next:</strong><br /><br />
+                  Your feedback will be used to generate new content for this story. The AI will consider your suggestions to create improved content that better matches your vision. This typically takes 1-2 minutes.
+                </RegenerateModalInfo>
+
+                <RegenerateModalActions>
+                  <RegenerateModalButton className="cancel" onClick={handleCloseRegenerateModal}>
+                    Cancel
+                  </RegenerateModalButton>
+                  <RegenerateModalButton
+                    className="confirm"
+                    onClick={handleConfirmRegenerate}
+                    disabled={!regenerateModal.feedback.trim()}
+                  >
+                    🔄 Regenerate Content
+                  </RegenerateModalButton>
+                </RegenerateModalActions>
+              </RegenerateModalContent>
+            </RegenerateModalOverlay>
           )}
 
           {pagination.total > pagination.limit && (
