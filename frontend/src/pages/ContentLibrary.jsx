@@ -815,6 +815,19 @@ const ImagePreview = styled.img`
   object-fit: contain;
 `;
 
+const VideoPlaceholder = styled.div`
+  padding: 4rem 2rem;
+  text-align: center;
+  color: #888;
+  font-size: 1.2rem;
+  background: #1a1a2e;
+  border-radius: 12px;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
 const CloseButton = styled.button`
   position: absolute;
   top: -40px;
@@ -2076,11 +2089,9 @@ function ContentLibrary() {
   }, [selectedVideo]);
 
     const handleVideoPreview = (post) => {
-    if (post.contentType === 'video' && post.videoPath) {
-      setSelectedVideo(post);
-    } else if (post.contentType === 'image' && post.imagePath) {
-      setSelectedVideo(post);
-    }
+    // Open modal for any post to show details, caption, and hashtags
+    // Video/image will display if path exists, otherwise shows placeholder
+    setSelectedVideo(post);
   };
 
   const handleCloseModal = () => {
@@ -2782,28 +2793,44 @@ function ContentLibrary() {
               <ModalContent onClick={(e) => e.stopPropagation()}>
                 <CloseButton onClick={handleCloseModal}>✕ Close</CloseButton>
                 {selectedVideo.contentType === 'video' ? (
-                  <VideoContainer>
-                    <VideoPlayer
-                      src={selectedVideo.videoPath}
-                      controls
-                      autoPlay
-                      onError={(e) => {
-                        console.error('Video error:', e);
-                        alert('Failed to load video. The video file may not exist yet.');
-                      }}
-                    />
-                  </VideoContainer>
+                  selectedVideo.videoPath ? (
+                    <VideoContainer>
+                      <VideoPlayer
+                        src={selectedVideo.videoPath}
+                        controls
+                        autoPlay
+                        onError={(e) => {
+                          console.error('Video error:', e);
+                          alert('Failed to load video. The video file may not exist yet.');
+                        }}
+                      />
+                    </VideoContainer>
+                  ) : (
+                    <VideoContainer>
+                      <VideoPlaceholder>
+                        🎬 Video not generated yet
+                      </VideoPlaceholder>
+                    </VideoContainer>
+                  )
                 ) : (
-                  <ImageContainer>
-                    <ImagePreview
-                      src={selectedVideo.imagePath}
-                      alt={selectedVideo.title || 'Content preview'}
-                      onError={(e) => {
-                        console.error('Image error:', e);
-                        alert('Failed to load image. The image file may not exist yet.');
-                      }}
-                    />
-                  </ImageContainer>
+                  selectedVideo.imagePath ? (
+                    <ImageContainer>
+                      <ImagePreview
+                        src={selectedVideo.imagePath}
+                        alt={selectedVideo.title || 'Content preview'}
+                        onError={(e) => {
+                          console.error('Image error:', e);
+                          alert('Failed to load image. The image file may not exist yet.');
+                        }}
+                      />
+                    </ImageContainer>
+                  ) : (
+                    <ImageContainer>
+                      <VideoPlaceholder>
+                        📷 Image not generated yet
+                      </VideoPlaceholder>
+                    </ImageContainer>
+                  )
                 )}
                 <ModalInfo>
                   <ModalTitle>{selectedVideo.title}</ModalTitle>
