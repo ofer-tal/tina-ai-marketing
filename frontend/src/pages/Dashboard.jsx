@@ -1682,7 +1682,7 @@ function Dashboard() {
 
       <KeywordsGrid>
         {mockKeywordData.map((keyword) => (
-          <KeywordCard key={keyword.keyword} onClick={() => window.location.href = '/aso'}>
+          <KeywordCard key={keyword.keyword}>
             <KeywordHeader>
               <KeywordName>{keyword.keyword}</KeywordName>
               <RankBadge $rank={keyword.ranking}>
