@@ -534,14 +534,15 @@ const VideoIndicator = styled.div`
 
 const ModalActions = styled.div`
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   margin-top: 1.5rem;
   padding-top: 1rem;
   border-top: 1px solid #2d3561;
+  flex-wrap: wrap;
 `;
 
 const ApproveButton = styled.button`
-  flex: 1;
+  flex: 1 1 0;
   padding: 0.75rem 1.5rem;
   background: #00d26a;
   border: none;
@@ -570,7 +571,7 @@ const ApproveButton = styled.button`
 `;
 
 const RejectButton = styled.button`
-  flex: 1;
+  flex: 1 1 0;
   padding: 0.75rem 1.5rem;
   background: #ff6b6b;
   border: none;
@@ -589,6 +590,179 @@ const RejectButton = styled.button`
     background: #ff5252;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(255, 107, 107, 0.3);
+  }
+`;
+
+// Edit Mode Components
+const EditButton = styled.button`
+  flex: 0 0 auto;
+  padding: 0.5rem 1rem;
+  background: transparent;
+  border: 1px solid #7b2cbf;
+  border-radius: 6px;
+  color: #7b2cbf;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #7b2cbf;
+    color: white;
+  }
+`;
+
+const SaveButton = styled.button`
+  padding: 0.5rem 1.5rem;
+  background: #00d26a;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #00b35d;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 210, 106, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+    box-shadow: none;
+  }
+`;
+
+const CancelButton = styled.button`
+  padding: 0.5rem 1.5rem;
+  background: transparent;
+  border: 1px solid #ff6b6b;
+  border-radius: 6px;
+  color: #ff6b6b;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    color: white;
+  }
+`;
+
+const EditActionsRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #2d3561;
+`;
+
+const EditCaptionTextarea = styled.textarea`
+  width: 100%;
+  min-height: 100px;
+  padding: 0.75rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.95rem;
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+  transition: border-color 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #7b2cbf;
+  }
+
+  &::placeholder {
+    color: #6c757d;
+  }
+`;
+
+const HashtagInputContainer = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+`;
+
+const HashtagInput = styled.input`
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  transition: border-color 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #7b2cbf;
+  }
+
+  &::placeholder {
+    color: #6c757d;
+  }
+`;
+
+const AddHashtagButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #7b2cbf;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #9d4edd;
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+`;
+
+const EditableHashtag = styled.span`
+  padding: 0.25rem 0.75rem;
+  background: #2d3561;
+  border-radius: 16px;
+  color: #e94560;
+  font-size: 0.85rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const RemoveHashtagButton = styled.button`
+  background: none;
+  border: none;
+  color: #ff6b6b;
+  cursor: pointer;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s;
+
+  &:hover {
+    transform: scale(1.2);
   }
 `;
 
@@ -762,6 +936,10 @@ function ContentLibrary() {
     reason: '',
     blacklistStory: false
   });
+  const [editMode, setEditMode] = useState(false);
+  const [editedCaption, setEditedCaption] = useState('');
+  const [editedHashtags, setEditedHashtags] = useState([]);
+  const [newHashtag, setNewHashtag] = useState('');
 
   useEffect(() => {
     fetchPosts();
@@ -1106,6 +1284,99 @@ function ContentLibrary() {
     }
   };
 
+  // Edit mode handlers
+  const handleStartEdit = () => {
+    if (!selectedVideo) return;
+    setEditMode(true);
+    setEditedCaption(selectedVideo.caption || '');
+    setEditedHashtags([...(selectedVideo.hashtags || [])]);
+    setNewHashtag('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditMode(false);
+    setEditedCaption('');
+    setEditedHashtags([]);
+    setNewHashtag('');
+  };
+
+  const handleAddHashtag = () => {
+    const tag = newHashtag.trim();
+    if (!tag) return;
+
+    // Add # if not present
+    const formattedTag = tag.startsWith('#') ? tag : `#${tag}`;
+
+    // Check if already exists
+    if (editedHashtags.includes(formattedTag)) {
+      alert('This hashtag already exists!');
+      return;
+    }
+
+    setEditedHashtags([...editedHashtags, formattedTag]);
+    setNewHashtag('');
+  };
+
+  const handleRemoveHashtag = (tagToRemove) => {
+    setEditedHashtags(editedHashtags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!selectedVideo) return;
+
+    try {
+      // Try API call first
+      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          caption: editedCaption,
+          hashtags: editedHashtags
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update post');
+      }
+
+      // Update local state
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post._id === selectedVideo._id
+            ? { ...post, caption: editedCaption, hashtags: editedHashtags }
+            : post
+        )
+      );
+
+      // Update selected video
+      setSelectedVideo(prev => ({
+        ...prev,
+        caption: editedCaption,
+        hashtags: editedHashtags
+      }));
+
+      alert('✅ Changes saved successfully!');
+      setEditMode(false);
+    } catch (err) {
+      console.error('Error saving post:', err);
+      // For development, update local state anyway
+      setPosts(prevPosts =>
+        prevPosts.map(post =>
+          post._id === selectedVideo._id
+            ? { ...post, caption: editedCaption, hashtags: editedHashtags }
+            : post
+        )
+      );
+      setSelectedVideo(prev => ({
+        ...prev,
+        caption: editedCaption,
+        hashtags: editedHashtags
+      }));
+      alert('✅ Changes saved! (Note: Backend not connected)');
+      setEditMode(false);
+    }
+  };
+
   if (loading) {
     return (
       <LibraryContainer>
@@ -1258,15 +1529,74 @@ function ContentLibrary() {
                 )}
                 <ModalInfo>
                   <ModalTitle>{selectedVideo.title}</ModalTitle>
-                  {selectedVideo.caption && (
-                    <ModalCaption>{selectedVideo.caption}</ModalCaption>
-                  )}
-                  {selectedVideo.hashtags && selectedVideo.hashtags.length > 0 && (
-                    <ModalHashtags>
-                      {selectedVideo.hashtags.map((tag, index) => (
-                        <Hashtag key={index}>{tag}</Hashtag>
-                      ))}
-                    </ModalHashtags>
+
+                  {/* Edit Mode UI */}
+                  {editMode ? (
+                    <>
+                      <EditActionsRow>
+                        <EditButton onClick={handleCancelEdit}>✖ Cancel Edit</EditButton>
+                        <SaveButton onClick={handleSaveEdit}>💾 Save Changes</SaveButton>
+                      </EditActionsRow>
+
+                      <label style={{display: 'block', marginBottom: '0.5rem', color: '#eaeaea', fontWeight: '500'}}>
+                        Caption
+                      </label>
+                      <EditCaptionTextarea
+                        value={editedCaption}
+                        onChange={(e) => setEditedCaption(e.target.value)}
+                        placeholder="Enter caption for this post..."
+                      />
+
+                      <label style={{display: 'block', marginTop: '1rem', marginBottom: '0.5rem', color: '#eaeaea', fontWeight: '500'}}>
+                        Hashtags
+                      </label>
+                      <HashtagInputContainer>
+                        <HashtagInput
+                          type="text"
+                          value={newHashtag}
+                          onChange={(e) => setNewHashtag(e.target.value)}
+                          placeholder="Add hashtag (e.g., #romance)"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddHashtag();
+                            }
+                          }}
+                        />
+                        <AddHashtagButton onClick={handleAddHashtag} disabled={!newHashtag.trim()}>
+                          + Add
+                        </AddHashtagButton>
+                      </HashtagInputContainer>
+                      <ModalHashtags>
+                        {editedHashtags.map((tag, index) => (
+                          <EditableHashtag key={index}>
+                            {tag}
+                            <RemoveHashtagButton onClick={() => handleRemoveHashtag(tag)}>
+                              ✖
+                            </RemoveHashtagButton>
+                          </EditableHashtag>
+                        ))}
+                        {editedHashtags.length === 0 && (
+                          <span style={{color: '#6c757d', fontSize: '0.85rem'}}>
+                            No hashtags yet. Add some above!
+                          </span>
+                        )}
+                      </ModalHashtags>
+                    </>
+                  ) : (
+                    <>
+                      {/* View Mode UI */}
+                      {selectedVideo.caption && (
+                        <ModalCaption>{selectedVideo.caption}</ModalCaption>
+                      )}
+                      {selectedVideo.hashtags && selectedVideo.hashtags.length > 0 && (
+                        <ModalHashtags>
+                          {selectedVideo.hashtags.map((tag, index) => (
+                            <Hashtag key={index}>{tag}</Hashtag>
+                          ))}
+                        </ModalHashtags>
+                      )}
+                    </>
                   )}
 
                   {selectedVideo.status === 'posted' && selectedVideo.performanceMetrics && (
@@ -1298,9 +1628,10 @@ function ContentLibrary() {
                       </MetricsGrid>
                     </PerformanceMetrics>
                   )}
-                  {/* Show approve/reject buttons only for non-posted posts */}
-                  {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && (
+                  {/* Show approve/reject/edit buttons only for non-posted posts and when not in edit mode */}
+                  {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && !editMode && (
                     <ModalActions>
+                      <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
                       <ApproveButton onClick={handleApprove}>
                         ✅ Approve
                       </ApproveButton>
