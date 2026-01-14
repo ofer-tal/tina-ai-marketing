@@ -1,1 +1,1 @@
-130167
+ echo Frontend starting... sleep 8 curl -s http://localhost:5173

@@ -481,7 +481,7 @@ class TikTokPostingService extends BaseApiClient {
    * Initialize video upload
    * Returns upload URL for the video
    */
-  async initializeVideoUpload(videoInfo) {
+  async initializeVideoUpload(videoInfo, onProgress = null) {
     try {
       logger.info('Initializing video upload...', {
         title: videoInfo.title,
@@ -490,6 +490,11 @@ class TikTokPostingService extends BaseApiClient {
 
       if (!this.accessToken) {
         throw new Error('Not authenticated');
+      }
+
+      // Report progress: initializing (10%)
+      if (onProgress) {
+        onProgress({ status: 'initializing', progress: 10, stage: 'Initializing upload' });
       }
 
       const response = await this.post(this.endpoints.video.initialize, {
@@ -529,21 +534,41 @@ class TikTokPostingService extends BaseApiClient {
   }
 
   /**
-   * Upload video file to TikTok
+   * Upload video file to TikTok with progress tracking
    */
-  async uploadVideo(publishId, videoBuffer) {
+  async uploadVideo(publishId, videoBuffer, onProgress = null) {
     try {
       logger.info('Uploading video file...', {
         publishId,
         size: videoBuffer.length,
       });
 
+      // Report progress: starting upload (30%)
+      if (onProgress) {
+        onProgress({ status: 'uploading', progress: 30, stage: 'Uploading video file' });
+      }
+
       // For TikTok, we need to upload to the upload URL from initialize step
-      // This is typically a PUT request with the video file
       const uploadUrl = `https://open.tiktokapis.com/v2/video/upload/?publish_id=${publishId}`;
 
       const formData = new FormData();
       formData.append('video', new Blob([videoBuffer]), 'video.mp4');
+
+      // Simulate upload progress (since fetch doesn't support progress natively)
+      // In a real implementation, you'd use XMLHttpRequest or a library like axios with progress tracking
+      let progress = 30;
+      const progressInterval = setInterval(() => {
+        if (progress < 70) {
+          progress += 10;
+          if (onProgress) {
+            onProgress({
+              status: 'uploading',
+              progress: progress,
+              stage: 'Uploading video file'
+            });
+          }
+        }
+      }, 500);
 
       const response = await fetch(uploadUrl, {
         method: 'POST',
@@ -553,11 +578,18 @@ class TikTokPostingService extends BaseApiClient {
         body: formData,
       });
 
+      clearInterval(progressInterval);
+
       if (!response.ok) {
         throw new Error(`Upload failed: ${response.statusText}`);
       }
 
       const result = await response.json();
+
+      // Report progress: upload complete (70%)
+      if (onProgress) {
+        onProgress({ status: 'uploading', progress: 70, stage: 'Upload complete' });
+      }
 
       logger.info('Video uploaded successfully', {
         publishId,
@@ -584,11 +616,16 @@ class TikTokPostingService extends BaseApiClient {
   /**
    * Publish video to TikTok
    */
-  async publishVideo(publishId) {
+  async publishVideo(publishId, onProgress = null) {
     try {
       logger.info('Publishing video...', {
         publishId,
       });
+
+      // Report progress: publishing (80%)
+      if (onProgress) {
+        onProgress({ status: 'publishing', progress: 80, stage: 'Publishing to TikTok' });
+      }
 
       const response = await this.post(this.endpoints.video.publish, {
         publish_id: publishId,
@@ -597,6 +634,11 @@ class TikTokPostingService extends BaseApiClient {
           'Authorization': `Bearer ${this.accessToken}`,
         },
       });
+
+      // Report progress: complete (100%)
+      if (onProgress) {
+        onProgress({ status: 'completed', progress: 100, stage: 'Successfully posted' });
+      }
 
       logger.info('Video published successfully', {
         publishId,
@@ -626,7 +668,7 @@ class TikTokPostingService extends BaseApiClient {
   /**
    * Complete workflow: Initialize, upload, and publish video
    */
-  async postVideo(videoPath, caption, hashtags = []) {
+  async postVideo(videoPath, caption, hashtags = [], onProgress = null) {
     try {
       logger.info('Starting complete video post workflow...', {
         videoPath,
@@ -644,26 +686,36 @@ class TikTokPostingService extends BaseApiClient {
         video_size: videoStats.size,
         caption,
         hashtags,
-      });
+      }, onProgress);
 
       if (!initResult.success) {
+        if (onProgress) {
+          onProgress({ status: 'failed', progress: 0, stage: 'Initialization failed', error: initResult.error });
+        }
         return initResult;
       }
 
       // Step 2: Upload video
       const uploadResult = await this.uploadVideo(
         initResult.publishId,
-        videoBuffer
+        videoBuffer,
+        onProgress
       );
 
       if (!uploadResult.success) {
+        if (onProgress) {
+          onProgress({ status: 'failed', progress: 70, stage: 'Upload failed', error: uploadResult.error });
+        }
         return uploadResult;
       }
 
       // Step 3: Publish video
-      const publishResult = await this.publishVideo(initResult.publishId);
+      const publishResult = await this.publishVideo(initResult.publishId, onProgress);
 
       if (!publishResult.success) {
+        if (onProgress) {
+          onProgress({ status: 'failed', progress: 80, stage: 'Publish failed', error: publishResult.error });
+        }
         return publishResult;
       }
 
@@ -684,6 +736,10 @@ class TikTokPostingService extends BaseApiClient {
         error: error.message,
         stack: error.stack,
       });
+
+      if (onProgress) {
+        onProgress({ status: 'failed', progress: 0, stage: 'Error', error: error.message });
+      }
 
       return {
         success: false,

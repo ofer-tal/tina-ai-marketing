@@ -199,6 +199,39 @@ const marketingPostSchema = new mongoose.Schema({
     trim: true
   },
 
+  // Upload progress tracking
+  uploadProgress: {
+    status: {
+      type: String,
+      enum: ['idle', 'initializing', 'uploading', 'publishing', 'completed', 'failed'],
+      default: 'idle'
+    },
+    progress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
+    stage: {
+      type: String,
+      trim: true
+    },
+    publishId: {
+      type: String,
+      trim: true
+    },
+    startedAt: {
+      type: Date
+    },
+    completedAt: {
+      type: Date
+    },
+    errorMessage: {
+      type: String,
+      trim: true
+    }
+  },
+
   // Error tracking for failed posts
   error: {
     type: String,
@@ -388,6 +421,33 @@ marketingPostSchema.methods.regenerateWithFeedback = function(feedback, userId =
 marketingPostSchema.methods.markAsPosted = function() {
   this.status = 'posted';
   this.postedAt = new Date();
+  return this.save();
+};
+
+// Method to update upload progress
+marketingPostSchema.methods.updateUploadProgress = function(status, progress = 0, stage = null, publishId = null, errorMessage = null) {
+  this.uploadProgress = this.uploadProgress || {};
+  this.uploadProgress.status = status;
+  this.uploadProgress.progress = progress;
+
+  if (stage) {
+    this.uploadProgress.stage = stage;
+  }
+  if (publishId) {
+    this.uploadProgress.publishId = publishId;
+  }
+  if (errorMessage) {
+    this.uploadProgress.errorMessage = errorMessage;
+  }
+
+  // Set timestamps
+  if (status === 'initializing' && !this.uploadProgress.startedAt) {
+    this.uploadProgress.startedAt = new Date();
+  }
+  if (status === 'completed' || status === 'failed') {
+    this.uploadProgress.completedAt = new Date();
+  }
+
   return this.save();
 };
 

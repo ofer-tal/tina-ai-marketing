@@ -750,6 +750,124 @@ const CloseButton = styled.button`
   }
 `;
 
+// Upload Progress Components
+const UploadProgressContainer = styled.div`
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #16213e;
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const UploadProgressHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const UploadProgressTitle = styled.h4`
+  margin: 0;
+  font-size: 1rem;
+  color: #eaeaea;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const UploadProgressStatus = styled.div`
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+
+  ${props => {
+    switch (props.$status) {
+      case 'uploading':
+      case 'publishing':
+        return `
+          background: #e94560;
+          color: white;
+        `;
+      case 'completed':
+        return `
+          background: #00d26a;
+          color: white;
+        `;
+      case 'failed':
+        return `
+          background: #ff4757;
+          color: white;
+        `;
+      default:
+        return `
+          background: #2d3561;
+          color: #a0a0a0;
+        `;
+    }
+  }}
+`;
+
+const UploadProgressBar = styled.div`
+  width: 100%;
+  height: 8px;
+  background: #1a1a2e;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+`;
+
+const UploadProgressFill = styled.div`
+  height: 100%;
+  background: linear-gradient(90deg, #e94560, #7b2cbf);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  width: ${props => props.$progress}%;
+`;
+
+const UploadProgressStage = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const UploadProgressPercentage = styled.div`
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #e94560;
+`;
+
+const PostToTikTokButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
 const PlayButton = styled.button`
   position: absolute;
   top: 50%;
@@ -1391,10 +1509,19 @@ function ContentLibrary() {
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [newScheduledTime, setNewScheduledTime] = useState('');
   const [countdown, setCountdown] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(null);
+  const [progressPollInterval, setProgressPollInterval] = useState(null);
 
   useEffect(() => {
     fetchPosts();
   }, [filters, pagination.page]);
+
+  // Cleanup: stop polling when component unmounts or modal closes
+  useEffect(() => {
+    return () => {
+      stopPollingUploadProgress();
+    };
+  }, []);
 
   const fetchPosts = async () => {
     try {
@@ -1786,11 +1913,95 @@ function ContentLibrary() {
 
   const handleCloseModal = () => {
     setSelectedVideo(null);
+    setUploadProgress(null);
+    stopPollingUploadProgress();
   };
 
   const handleThumbnailClick = (post) => {
     if (post.contentType === 'video' || post.contentType === 'image') {
       handleVideoPreview(post);
+    }
+  };
+
+  // Upload progress handlers
+  const startPollingUploadProgress = (postId) => {
+    // Clear any existing interval
+    if (progressPollInterval) {
+      clearInterval(progressPollInterval);
+    }
+
+    // Poll every 500ms for progress updates
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`http://localhost:3003/api/tiktok/upload-progress/${postId}`);
+        const data = await response.json();
+
+        if (data.success) {
+          setUploadProgress(data.data.uploadProgress);
+
+          // Stop polling if upload is complete or failed
+          if (data.data.uploadProgress.status === 'completed' ||
+              data.data.uploadProgress.status === 'failed') {
+            clearInterval(interval);
+            setProgressPollInterval(null);
+
+            // Refresh posts to get updated status
+            fetchPosts();
+          }
+        }
+      } catch (err) {
+        console.error('Error polling upload progress:', err);
+      }
+    }, 500);
+
+    setProgressPollInterval(interval);
+  };
+
+  const stopPollingUploadProgress = () => {
+    if (progressPollInterval) {
+      clearInterval(progressPollInterval);
+      setProgressPollInterval(null);
+    }
+  };
+
+  const handlePostToTikTok = async () => {
+    if (!selectedVideo || selectedVideo.status !== 'approved') {
+      alert('Please approve the post first');
+      return;
+    }
+
+    try {
+      // Initialize upload progress
+      setUploadProgress({
+        status: 'initializing',
+        progress: 0,
+        stage: 'Starting upload...'
+      });
+
+      // Start the upload
+      const response = await fetch(`http://localhost:3003/api/tiktok/post/${selectedVideo._id}`, {
+        method: 'POST'
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to post to TikTok');
+      }
+
+      // Start polling for progress updates
+      startPollingUploadProgress(selectedVideo._id);
+
+      alert('✅ Posting to TikTok started! Check progress below.');
+    } catch (err) {
+      console.error('Error posting to TikTok:', err);
+      setUploadProgress({
+        status: 'failed',
+        progress: 0,
+        stage: 'Upload failed',
+        errorMessage: err.message
+      });
+      alert(`❌ Error posting to TikTok: ${err.message}`);
     }
   };
 
@@ -2450,17 +2661,68 @@ function ContentLibrary() {
                   {/* Show approve/reject/edit buttons only for non-posted posts and when not in edit mode */}
                   {selectedVideo.status !== 'posted' && selectedVideo.status !== 'rejected' && !editMode && (
                     <ModalActions>
-                      <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                      <RegenerateButton onClick={handleRegenerate}>
-                        🔄 Regenerate
-                      </RegenerateButton>
-                      <ApproveButton onClick={handleApprove}>
-                        ✅ Approve
-                      </ApproveButton>
-                      <RejectButton onClick={handleReject}>
-                        ❌ Reject
-                      </RejectButton>
+                      {selectedVideo.status === 'approved' && selectedVideo.platform === 'tiktok' ? (
+                        <>
+                          {/* Show Post to TikTok button for approved TikTok posts */}
+                          <PostToTikTokButton
+                            onClick={handlePostToTikTok}
+                            disabled={uploadProgress && uploadProgress.status === 'uploading'}
+                          >
+                            {uploadProgress && uploadProgress.status === 'uploading'
+                              ? '📤 Posting...'
+                              : '📤 Post to TikTok'}
+                          </PostToTikTokButton>
+                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                          <RegenerateButton onClick={handleRegenerate}>
+                            🔄 Regenerate
+                          </RegenerateButton>
+                        </>
+                      ) : (
+                        <>
+                          {/* Show approve/reject for non-approved posts */}
+                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                          <RegenerateButton onClick={handleRegenerate}>
+                            🔄 Regenerate
+                          </RegenerateButton>
+                          <ApproveButton onClick={handleApprove}>
+                            ✅ Approve
+                          </ApproveButton>
+                          <RejectButton onClick={handleReject}>
+                            ❌ Reject
+                          </RejectButton>
+                        </>
+                      )}
                     </ModalActions>
+                  )}
+
+                  {/* Upload Progress Display */}
+                  {uploadProgress && (
+                    <UploadProgressContainer>
+                      <UploadProgressHeader>
+                        <UploadProgressTitle>
+                          📤 Upload to TikTok
+                        </UploadProgressTitle>
+                        <UploadProgressPercentage>
+                          {uploadProgress.progress}%
+                        </UploadProgressPercentage>
+                      </UploadProgressHeader>
+                      <UploadProgressBar>
+                        <UploadProgressFill $progress={uploadProgress.progress} />
+                      </UploadProgressBar>
+                      <UploadProgressStage>
+                        {uploadProgress.stage || 'Initializing...'}
+                      </UploadProgressStage>
+                      {uploadProgress.status === 'completed' && (
+                        <div style={{color: '#00d26a', marginTop: '0.5rem', fontSize: '0.9rem'}}>
+                          ✅ Successfully posted to TikTok!
+                        </div>
+                      )}
+                      {uploadProgress.status === 'failed' && (
+                        <div style={{color: '#ff4757', marginTop: '0.5rem', fontSize: '0.9rem'}}>
+                          ❌ Upload failed: {uploadProgress.errorMessage || 'Unknown error'}
+                        </div>
+                      )}
+                    </UploadProgressContainer>
                   )}
                 </ModalInfo>
               </ModalContent>

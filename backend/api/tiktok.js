@@ -285,11 +285,39 @@ router.post('/post/:postId', async (req, res) => {
     const caption = post.caption;
     const hashtags = post.hashtags || [];
 
-    // Post to TikTok
+    // Initialize upload progress tracking
+    await post.updateUploadProgress('initializing', 0, 'Starting upload');
+
+    // Progress callback to update database
+    const onProgress = async (progressData) => {
+      try {
+        logger.info('Upload progress update', {
+          postId,
+          progress: progressData.progress,
+          stage: progressData.stage,
+          status: progressData.status,
+        });
+
+        await post.updateUploadProgress(
+          progressData.status,
+          progressData.progress,
+          progressData.stage,
+          progressData.status === 'initializing' ? null : post.uploadProgress?.publishId,
+          progressData.error
+        );
+      } catch (error) {
+        logger.error('Failed to update upload progress', {
+          error: error.message,
+        });
+      }
+    };
+
+    // Post to TikTok with progress tracking
     const result = await tiktokPostingService.postVideo(
       post.videoPath,
       caption,
-      hashtags
+      hashtags,
+      onProgress
     );
 
     if (result.success) {
@@ -298,6 +326,10 @@ router.post('/post/:postId', async (req, res) => {
       post.postedAt = new Date();
       post.tiktokVideoId = result.videoId;
       post.tiktokShareUrl = result.shareUrl;
+
+      // Update progress to completed
+      await post.updateUploadProgress('completed', 100, 'Successfully posted', result.publishId);
+
       await post.save();
 
       logger.info('Successfully posted to TikTok', {
@@ -322,6 +354,10 @@ router.post('/post/:postId', async (req, res) => {
       // Update post status to failed
       post.status = 'failed';
       post.error = result.error;
+
+      // Update progress to failed
+      await post.updateUploadProgress('failed', post.uploadProgress?.progress || 0, 'Upload failed', null, result.error);
+
       await post.save();
 
       logger.error('Failed to post to TikTok', {
@@ -339,6 +375,46 @@ router.post('/post/:postId', async (req, res) => {
     logger.error('TikTok post failed', {
       error: error.message,
       stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/tiktok/upload-progress/:postId
+ * Get upload progress for a specific post
+ */
+router.get('/upload-progress/:postId', async (req, res) => {
+  try {
+    const { postId } = req.params;
+
+    const post = await MarketingPost.findById(postId);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        postId: post._id,
+        uploadProgress: post.uploadProgress || {
+          status: 'idle',
+          progress: 0
+        },
+        postStatus: post.status,
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to get upload progress', {
+      error: error.message,
     });
 
     res.status(500).json({
