@@ -535,6 +535,13 @@ const KeywordItem = styled.div`
   padding: 0.5rem;
   background: #16213e;
   border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+    transform: translateX(4px);
+  }
 `;
 
 const KeywordName = styled.div`
@@ -710,6 +717,148 @@ const NoSuggestions = styled.div`
   font-size: 0.95rem;
 `;
 
+// Keyword History Modal
+const KeywordModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1500;
+  animation: fadeIn 0.2s ease-out;
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+`;
+
+const KeywordModalContent = styled.div`
+  background: #16213e;
+  border: 2px solid #e94560;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 800px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const KeywordModalHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #2d3561;
+`;
+
+const KeywordModalTitle = styled.h3`
+  margin: 0;
+  font-size: 1.5rem;
+  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
+const KeywordModalClose = styled.button`
+  background: transparent;
+  border: none;
+  color: #a0a0a0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: all 0.2s;
+
+  &:hover {
+    color: #e94560;
+    transform: rotate(90deg);
+  }
+`;
+
+const KeywordModalStats = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const KeywordModalStat = styled.div`
+  background: #1a1a2e;
+  padding: 1rem;
+  border-radius: 8px;
+  border: 1px solid #2d3561;
+`;
+
+const KeywordModalStatLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+`;
+
+const KeywordModalStatValue = styled.div`
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const KeywordModalChart = styled.div`
+  background: #1a1a2e;
+  border-radius: 8px;
+  padding: 1.5rem;
+  border: 1px solid #2d3561;
+  min-height: 300px;
+`;
+
+const KeywordHistoryEmpty = styled.div`
+  text-align: center;
+  padding: 3rem;
+  color: #a0a0a0;
+`;
+
+const DateRangeFilter = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+`;
+
+const DateFilterButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: ${props => props.$active ? '#e94560' : 'transparent'};
+  border: 1px solid #2d3561;
+  border-radius: 4px;
+  color: ${props => props.$active ? '#ffffff' : '#a0a0a0'};
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${props => props.$active ? '#e94560' : '#2d3561'};
+    border-color: #e94560;
+  }
+`;
+
 
 
 function StrategicDashboard() {
@@ -725,6 +874,7 @@ function StrategicDashboard() {
   const [selectedFunnelStage, setSelectedFunnelStage] = useState(null);
   const [competitivenessData, setCompetitivenessData] = useState(null);
   const [suggestionsData, setSuggestionsData] = useState(null);
+  const [keywordModal, setKeywordModal] = useState({ isOpen: false, keyword: null, history: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -1441,6 +1591,48 @@ function StrategicDashboard() {
       console.error('Failed to add keyword:', error);
       alert(`Failed to add keyword: ${error.message}`);
     }
+  };
+
+  const handleKeywordClick = async (keyword) => {
+    try {
+      // Find the keyword in competitiveness data to get its full details
+      const allKeywords = Object.values(competitivenessData.byLevel || {})
+        .flatMap(level => level.keywords || []);
+
+      const keywordData = allKeywords.find(kw => kw.keyword === keyword);
+
+      if (!keywordData) {
+        console.error('Keyword not found:', keyword);
+        return;
+      }
+
+      // Fetch ranking history from API
+      const response = await fetch(`/api/aso/keywords/history/${encodeURIComponent(keyword)}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      setKeywordModal({
+        isOpen: true,
+        keyword: keywordData,
+        history: result.data.history || []
+      });
+    } catch (error) {
+      console.error('Failed to fetch keyword history:', error);
+      // If API fails, show modal with empty history
+      setKeywordModal({
+        isOpen: true,
+        keyword: { keyword, difficulty: 50, volume: 0, ranking: null },
+        history: []
+      });
+    }
+  };
+
+  const handleCloseKeywordModal = () => {
+    setKeywordModal({ isOpen: false, keyword: null, history: null });
   };
 
 
@@ -2175,7 +2367,7 @@ function StrategicDashboard() {
                       {data.keywords.length > 0 && (
                         <KeywordList>
                           {data.keywords.slice(0, 5).map((kw, idx) => (
-                            <KeywordItem key={idx}>
+                            <KeywordItem key={idx} onClick={() => handleKeywordClick(kw.keyword)} style={{ cursor: 'pointer' }}>
                               <KeywordName>{kw.keyword}</KeywordName>
                               <KeywordDifficulty $difficulty={kw.difficulty}>
                                 {kw.difficulty}/100
@@ -2439,6 +2631,95 @@ function StrategicDashboard() {
                 </FunnelContainer>
               </ChartContainer>
             </>
+          )}
+
+          {/* Keyword History Modal */}
+          {keywordModal.isOpen && keywordModal.keyword && (
+            <KeywordModalOverlay onClick={handleCloseKeywordModal}>
+              <KeywordModalContent onClick={(e) => e.stopPropagation()}>
+                <KeywordModalHeader>
+                  <KeywordModalTitle>
+                    📊 {keywordModal.keyword.keyword}
+                  </KeywordModalTitle>
+                  <KeywordModalClose onClick={handleCloseKeywordModal}>✕</KeywordModalClose>
+                </KeywordModalHeader>
+
+                <KeywordModalStats>
+                  <KeywordModalStat>
+                    <KeywordModalStatLabel>Current Ranking</KeywordModalStatLabel>
+                    <KeywordModalStatValue>
+                      {keywordModal.keyword.ranking ? `#${keywordModal.keyword.ranking}` : 'N/A'}
+                    </KeywordModalStatValue>
+                  </KeywordModalStat>
+                  <KeywordModalStat>
+                    <KeywordModalStatLabel>Difficulty</KeywordModalStatLabel>
+                    <KeywordModalStatValue>{keywordModal.keyword.difficulty}/100</KeywordModalStatValue>
+                  </KeywordModalStat>
+                  <KeywordModalStat>
+                    <KeywordModalStatLabel>Search Volume</KeywordModalStatLabel>
+                    <KeywordModalStatValue>{formatNumber(keywordModal.keyword.volume || 0)}</KeywordModalStatValue>
+                  </KeywordModalStat>
+                  <KeywordModalStat>
+                    <KeywordModalStatLabel>History Points</KeywordModalStatLabel>
+                    <KeywordModalStatValue>{keywordModal.history?.length || 0}</KeywordModalStatValue>
+                  </KeywordModalStat>
+                </KeywordModalStats>
+
+                <KeywordModalChart>
+                  {keywordModal.history && keywordModal.history.length > 0 ? (
+                    <>
+                      <DateRangeFilter>
+                        <DateFilterButton $active={true}>All Time</DateFilterButton>
+                      </DateRangeFilter>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={keywordModal.history.map(h => ({
+                          date: new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+                          ranking: h.ranking
+                        }))}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#2d3561" />
+                          <XAxis
+                            dataKey="date"
+                            stroke="#a0a0a0"
+                            style={{ fontSize: '12px' }}
+                          />
+                          <YAxis
+                            reversed={true}
+                            stroke="#a0a0a0"
+                            style={{ fontSize: '12px' }}
+                            label={{ value: 'Ranking', angle: -90, position: 'insideLeft', fill: '#a0a0a0' }}
+                          />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: '#16213e',
+                              border: '1px solid #e94560',
+                              borderRadius: '8px',
+                              color: '#eaeaea'
+                            }}
+                            formatter={(value) => [`#${value}`, 'Ranking']}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="ranking"
+                            stroke="#e94560"
+                            strokeWidth={2}
+                            dot={{ fill: '#e94560', r: 4 }}
+                            activeDot={{ r: 6, stroke: '#7b2cbf', strokeWidth: 2 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </>
+                  ) : (
+                    <KeywordHistoryEmpty>
+                      <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📈</div>
+                      <div>No ranking history available yet</div>
+                      <div style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
+                        History will be populated as rankings are tracked over time
+                      </div>
+                    </KeywordHistoryEmpty>
+                  )}
+                </KeywordModalChart>
+              </KeywordModalContent>
+            </KeywordModalOverlay>
           )}
         </>
       )}

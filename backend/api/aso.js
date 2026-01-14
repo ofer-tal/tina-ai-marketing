@@ -292,6 +292,41 @@ router.get('/competitiveness', async (req, res) => {
 });
 
 /**
+ * GET /api/aso/keywords/history/:keyword
+ * Get ranking history for a specific keyword
+ */
+router.get('/keywords/history/:keyword', async (req, res) => {
+  try {
+    const ASOKeyword = (await import('../models/ASOKeyword.js')).default;
+    const keyword = req.params.keyword;
+
+    const keywordData = await ASOKeyword.findOne({ keyword });
+
+    if (!keywordData) {
+      return res.status(404).json({
+        success: false,
+        error: 'Keyword not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        keyword: keywordData.keyword,
+        currentRanking: keywordData.ranking,
+        history: keywordData.rankingHistory || []
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching keyword history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * GET /api/aso/suggestions
  * Get new keyword opportunity suggestions
  * Returns keywords not currently tracked that have high potential
