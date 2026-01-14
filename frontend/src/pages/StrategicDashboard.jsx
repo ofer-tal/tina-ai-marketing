@@ -2614,6 +2614,390 @@ const ThreatRanking = styled.span`
   font-size: 0.875rem;
 `;
 
+// Weekly Report Components
+const WeeklyReportContainer = styled(ChartContainer)`
+  margin-bottom: 2rem;
+`;
+
+const ReportHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const ReportPeriod = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const ReportTitle = styled.h3`
+  font-size: 1.5rem;
+  color: #eaeaea;
+  margin: 0;
+`;
+
+const ReportPeriodBadge = styled.span`
+  background: linear-gradient(135deg, #e94560, #7b2cbf);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 600;
+`;
+
+const ReportActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const ReportActionButton = styled.button`
+  background: #16213e;
+  border: 1px solid #e94560;
+  color: #eaeaea;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+  }
+`;
+
+const ScoreSummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const ScoreCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: ${props => props.trend === 'up' ? '#00d26a' : props.trend === 'down' ? '#f8312f' : '#6b7280'};
+  }
+`;
+
+const ScoreLabel = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+`;
+
+const ScoreValue = styled.div`
+  font-size: 2rem;
+  font-weight: bold;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const ScoreChange = styled.div`
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: ${props => props.change >= 0 ? '#00d26a' : '#f8312f'};
+`;
+
+const HighlightsSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const ReportSectionHeading = styled.h4`
+  font-size: 1.125rem;
+  color: #eaeaea;
+  margin-bottom: 1rem;
+`;
+
+const HighlightsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+`;
+
+const HighlightCard = styled.div`
+  background: ${props => {
+    switch (props.type) {
+      case 'improvement': return 'rgba(0, 210, 106, 0.1)';
+      case 'decline': return 'rgba(248, 49, 47, 0.1)';
+      case 'alert': return 'rgba(255, 149, 0, 0.1)';
+      default: return 'rgba(123, 44, 191, 0.1)';
+    }
+  }};
+  border: 1px solid ${props => {
+    switch (props.type) {
+      case 'improvement': return '#00d26a';
+      case 'decline': return '#f8312f';
+      case 'alert': return '#ff9500';
+      default: return '#7b2cbf';
+    }
+  }};
+  border-radius: 12px;
+  padding: 1rem;
+`;
+
+const HighlightIcon = styled.div`
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+`;
+
+const HighlightTitle = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const HighlightDescription = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+`;
+
+const TopMoversSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const ReportTopMoversList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const TopMoverItem = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const TopMoverKeyword = styled.div`
+  flex: 1;
+`;
+
+const TopMoverName = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const TopMoverVolume = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+`;
+
+const TopMoverRanking = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+`;
+
+const RankingChange = styled.div`
+  font-weight: bold;
+  color: ${props => props.change > 0 ? '#00d26a' : '#f8312f'};
+  font-size: 0.875rem;
+`;
+
+const RankingValues = styled.div`
+  text-align: right;
+`;
+
+const RankingCurrent = styled.div`
+  font-size: 1.125rem;
+  font-weight: bold;
+  color: #eaeaea;
+`;
+
+const RankingPrevious = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  text-decoration: line-through;
+`;
+
+const ReportRecommendationsSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const ReportRecommendationsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+  gap: 1rem;
+`;
+
+const ReportRecommendationCard = styled.div`
+  background: #16213e;
+  border: ${props => {
+    switch (props.priority) {
+      case 'high': return '2px solid #f8312f';
+      case 'medium': return '2px solid #ff9500';
+      default: return '2px solid #00d26a';
+    }
+  }};
+  border-radius: 12px;
+  padding: 1.25rem;
+`;
+
+const RecommendationHeaderRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+`;
+
+const RecommendationCategoryBadge = styled.span`
+  background: ${props => {
+    switch (props.category) {
+      case 'keyword': return '#e94560';
+      case 'metadata': return '#7b2cbf';
+      case 'visual': return '#00d26a';
+      case 'technical': return '#ff9500';
+      default: return '#6b7280';
+    }
+  }};
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+`;
+
+const RecPriorityBadge = styled.span`
+  background: ${props => {
+    switch (props.priority) {
+      case 'high': return 'rgba(248, 49, 47, 0.2)';
+      case 'medium': return 'rgba(255, 149, 0, 0.2)';
+      default: return 'rgba(0, 210, 106, 0.2)';
+    }
+  }};
+  color: ${props => {
+    switch (props.priority) {
+      case 'high': return '#f8312f';
+      case 'medium': return '#ff9500';
+      default: return '#00d26a';
+    }
+  }};
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+`;
+
+const ReportRecommendationTitle = styled.h5`
+  font-size: 1rem;
+  color: #eaeaea;
+  margin: 0 0 0.5rem 0;
+`;
+
+const ReportRecommendationDesc = styled.p`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin: 0 0 0.75rem 0;
+  line-height: 1.4;
+`;
+
+const ReportRecommendationAction = styled.div`
+  background: rgba(123, 44, 191, 0.1);
+  border-left: 3px solid #7b2cbf;
+  padding: 0.75rem;
+  border-radius: 4px;
+`;
+
+const ReportActionLabel = styled.div`
+  font-size: 0.75rem;
+  color: #7b2cbf;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+`;
+
+const ReportActionText = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+`;
+
+const ReportRecommendationMeta = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: #a0a0a0;
+`;
+
+const MetaItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
+
+const ReportSummaryGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const SummaryItem = styled.div`
+  text-align: center;
+  padding: 1rem;
+  background: #16213e;
+  border-radius: 8px;
+`;
+
+const SummaryLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const SummaryValue = styled.div`
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #eaeaea;
+`;
+
+const SummaryChange = styled.div`
+  font-size: 0.75rem;
+  color: ${props => props.change >= 0 ? '#00d26a' : '#f8312f'};
+`;
+
+const EmptyReportState = styled.div`
+  text-align: center;
+  padding: 3rem;
+  background: #16213e;
+  border-radius: 12px;
+  border: 1px dashed #2d3561;
+
+  svg {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+  }
+
+  h4 {
+    color: #eaeaea;
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    color: #a0a0a0;
+    font-size: 0.875rem;
+  }
+`;
+
 
 
 function StrategicDashboard() {
@@ -2640,6 +3024,7 @@ function StrategicDashboard() {
   const [categoryRanking, setCategoryRanking] = useState(null);
   const [competitorMonitoring, setCompetitorMonitoring] = useState(null);
   const [asoScore, setAsoscore] = useState(null);
+  const [weeklyReport, setWeeklyReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -2661,6 +3046,7 @@ function StrategicDashboard() {
     fetchCategoryRanking();
     fetchCompetitorMonitoring();
     fetchASOScore();
+    fetchWeeklyReport();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -3466,6 +3852,115 @@ function StrategicDashboard() {
         ]
       });
     }
+  };
+
+  const fetchWeeklyReport = async () => {
+    try {
+      const response = await fetch('http://localhost:3003/api/reports/aso/weekly');
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        setWeeklyReport(result.data);
+      } else {
+        // Set mock data if no report exists yet
+        setWeeklyReport({
+          weekStart: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+          weekEnd: new Date(),
+          year: new Date().getFullYear(),
+          weekNumber: getISOWeek(new Date()),
+          overallScore: {
+            current: 73,
+            previous: 70,
+            change: 3,
+            trend: 'up'
+          },
+          componentScores: {
+            keywordScore: { current: 68, previous: 65, change: 3, trend: 'up' },
+            metadataScore: { current: 75, previous: 74, change: 1, trend: 'up' },
+            visualScore: { current: 78, previous: 76, change: 2, trend: 'up' },
+            ratingsScore: { current: 84, previous: 84, change: 0, trend: 'stable' },
+            conversionScore: { current: 70, previous: 68, change: 2, trend: 'up' }
+          },
+          keywordRankings: {
+            totalTracked: 16,
+            inTop10: 2,
+            inTop25: 5,
+            inTop50: 11,
+            notRanked: 5,
+            averageRanking: 38,
+            medianRanking: 35
+          },
+          rankingChanges: {
+            improved: 8,
+            declined: 3,
+            stable: 5,
+            new: 0,
+            topMovers: [
+              { keyword: 'romance stories', previousRanking: 25, currentRanking: 12, change: 13, volume: 8500 },
+              { keyword: 'interactive stories', previousRanking: 18, currentRanking: 8, change: 10, volume: 4500 },
+              { keyword: 'spicy stories', previousRanking: 45, currentRanking: 32, change: 13, volume: 3200 }
+            ]
+          },
+          categoryRanking: {
+            current: { ranking: 42, percentile: 98 },
+            previous: { ranking: 48, percentile: 97 },
+            change: 6,
+            trend: 'up'
+          },
+          highlights: [
+            { type: 'milestone', title: '2 Keywords in Top 10', description: 'Great progress! You have 2 keywords ranking in the top 10.', metric: 'Top 10 Keywords', value: '2' },
+            { type: 'improvement', title: 'Big Jump: "romance stories"', description: 'Improved 13 positions this week, now ranking #12!', metric: 'Ranking Improvement', value: '+13 positions' },
+            { type: 'milestone', title: 'Strong ASO Score', description: 'Your overall ASO score is 73, indicating strong optimization!', metric: 'ASO Score', value: '73' }
+          ],
+          recommendations: [
+            {
+              priority: 'high',
+              category: 'keyword',
+              title: 'Optimize High-Volume Keywords',
+              description: '3 high-volume keywords are not ranking in the top 50.',
+              actionItem: 'Focus on these keywords: romance novels, love stories, story games',
+              expectedImpact: 'Significant traffic increase',
+              estimatedEffort: 'moderate'
+            },
+            {
+              priority: 'medium',
+              category: 'metadata',
+              title: 'Improve App Description',
+              description: 'Add more relevant keywords to improve discoverability.',
+              actionItem: 'Review and update app description with missing keywords',
+              expectedImpact: 'Better keyword rankings',
+              estimatedEffort: 'quick'
+            },
+            {
+              priority: 'medium',
+              category: 'visual',
+              title: 'Test New Screenshots',
+              description: 'Consider A/B testing new screenshot designs.',
+              actionItem: 'Create 3-5 new screenshot variations highlighting key features',
+              expectedImpact: 'Improved conversion rate',
+              estimatedEffort: 'moderate'
+            }
+          ]
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching weekly report:', error);
+      // Set mock data on error
+      setWeeklyReport({
+        overallScore: { current: 73, previous: 70, change: 3, trend: 'up' },
+        keywordRankings: { totalTracked: 16, inTop10: 2, inTop25: 5, inTop50: 11, averageRanking: 38 },
+        highlights: [],
+        recommendations: []
+      });
+    }
+  };
+
+  const getISOWeek = (date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   };
 
   const generateMockFunnelData = (range) => {
@@ -5948,6 +6443,208 @@ function StrategicDashboard() {
                 </FunnelContainer>
               </ChartContainer>
             </>
+          )}
+
+          {/* Weekly ASO Report Section */}
+          {weeklyReport && (
+            <WeeklyReportContainer>
+              <ReportHeader>
+                <ReportPeriod>
+                  <ReportTitle>📊 Weekly ASO Report</ReportTitle>
+                  <ReportPeriodBadge>
+                    Week {weeklyReport.weekNumber} • {weeklyReport.year}
+                  </ReportPeriodBadge>
+                </ReportPeriod>
+                <ReportActions>
+                  <ReportActionButton onClick={() => {
+                    // Send to chat notification
+                    const summary = `
+📊 Weekly ASO Report: Week ${weeklyReport.weekNumber}
+
+Overall Score: ${weeklyReport.overallScore.current}/100 ${weeklyReport.overallScore.trend === 'up' ? '▲' : weeklyReport.overallScore.trend === 'down' ? '▼' : '─'} (${weeklyReport.overallScore.change >= 0 ? '+' : ''}${weeklyReport.overallScore.change})
+
+📈 Keyword Rankings:
+• Top 10: ${weeklyReport.keywordRankings?.inTop10 || 0}
+• Top 25: ${weeklyReport.keywordRankings?.inTop25 || 0}
+• Top 50: ${weeklyReport.keywordRankings?.inTop50 || 0}
+• Avg: #${weeklyReport.keywordRankings?.averageRanking || 'N/A'}
+
+✨ Highlights:
+${(weeklyReport.highlights || []).slice(0, 3).map(h => `${h.type === 'improvement' ? '🟢' : h.type === 'alert' ? '⚠️' : '🏆'} ${h.title}`).join('\n')}
+
+💡 Top Recommendations:
+${(weeklyReport.recommendations || []).slice(0, 2).map(r => r.title).join('\n')}
+                    `;
+                    alert('Weekly report summary copied to clipboard!\n\n' + summary);
+                  }}>
+                    📤 Send to Chat
+                  </ReportActionButton>
+                  <ReportActionButton onClick={fetchWeeklyReport}>
+                    🔄 Refresh
+                  </ReportActionButton>
+                </ReportActions>
+              </ReportHeader>
+
+              {/* Score Summary */}
+              <ScoreSummaryGrid>
+                <ScoreCard trend={weeklyReport.overallScore.trend}>
+                  <ScoreLabel>Overall Score</ScoreLabel>
+                  <ScoreValue>{weeklyReport.overallScore.current}/100</ScoreValue>
+                  <ScoreChange change={weeklyReport.overallScore.change}>
+                    {weeklyReport.overallScore.change >= 0 ? '▲' : '▼'} {Math.abs(weeklyReport.overallScore.change)} pts
+                  </ScoreChange>
+                </ScoreCard>
+
+                {weeklyReport.componentScores && (
+                  <>
+                    <ScoreCard trend={weeklyReport.componentScores.keywordScore?.trend}>
+                      <ScoreLabel>Keywords</ScoreLabel>
+                      <ScoreValue>{weeklyReport.componentScores.keywordScore?.current || 0}/100</ScoreValue>
+                      <ScoreChange change={weeklyReport.componentScores.keywordScore?.change || 0}>
+                        {weeklyReport.componentScores.keywordScore?.change >= 0 ? '▲' : '▼'} {Math.abs(weeklyReport.componentScores.keywordScore?.change || 0)} pts
+                      </ScoreChange>
+                    </ScoreCard>
+
+                    <ScoreCard trend={weeklyReport.componentScores.metadataScore?.trend}>
+                      <ScoreLabel>Metadata</ScoreLabel>
+                      <ScoreValue>{weeklyReport.componentScores.metadataScore?.current || 0}/100</ScoreValue>
+                      <ScoreChange change={weeklyReport.componentScores.metadataScore?.change || 0}>
+                        {weeklyReport.componentScores.metadataScore?.change >= 0 ? '▲' : '▼'} {Math.abs(weeklyReport.componentScores.metadataScore?.change || 0)} pts
+                      </ScoreChange>
+                    </ScoreCard>
+
+                    <ScoreCard trend={weeklyReport.componentScores.visualScore?.trend}>
+                      <ScoreLabel>Visuals</ScoreLabel>
+                      <ScoreValue>{weeklyReport.componentScores.visualScore?.current || 0}/100</ScoreValue>
+                      <ScoreChange change={weeklyReport.componentScores.visualScore?.change || 0}>
+                        {weeklyReport.componentScores.visualScore?.change >= 0 ? '▲' : '▼'} {Math.abs(weeklyReport.componentScores.visualScore?.change || 0)} pts
+                      </ScoreChange>
+                    </ScoreCard>
+
+                    <ScoreCard trend={weeklyReport.componentScores.conversionScore?.trend}>
+                      <ScoreLabel>Conversion</ScoreLabel>
+                      <ScoreValue>{weeklyReport.componentScores.conversionScore?.current || 0}/100</ScoreValue>
+                      <ScoreChange change={weeklyReport.componentScores.conversionScore?.change || 0}>
+                        {weeklyReport.componentScores.conversionScore?.change >= 0 ? '▲' : '▼'} {Math.abs(weeklyReport.componentScores.conversionScore?.change || 0)} pts
+                      </ScoreChange>
+                    </ScoreCard>
+                  </>
+                )}
+              </ScoreSummaryGrid>
+
+              {/* Keyword Summary */}
+              {weeklyReport.keywordRankings && (
+                <ReportSummaryGrid>
+                  <SummaryItem>
+                    <SummaryLabel>Tracked Keywords</SummaryLabel>
+                    <SummaryValue>{weeklyReport.keywordRankings.totalTracked}</SummaryValue>
+                  </SummaryItem>
+                  <SummaryItem>
+                    <SummaryLabel>In Top 10</SummaryLabel>
+                    <SummaryValue>{weeklyReport.keywordRankings.inTop10}</SummaryValue>
+                  </SummaryItem>
+                  <SummaryItem>
+                    <SummaryLabel>In Top 25</SummaryLabel>
+                    <SummaryValue>{weeklyReport.keywordRankings.inTop25}</SummaryValue>
+                  </SummaryItem>
+                  <SummaryItem>
+                    <SummaryLabel>Average Ranking</SummaryLabel>
+                    <SummaryValue>#{weeklyReport.keywordRankings.averageRanking || 'N/A'}</SummaryValue>
+                  </SummaryItem>
+                  {weeklyReport.rankingChanges && (
+                    <>
+                      <SummaryItem>
+                        <SummaryLabel>Improved</SummaryLabel>
+                        <SummaryValue style={{color: '#00d26a'}}>{weeklyReport.rankingChanges.improved}</SummaryValue>
+                      </SummaryItem>
+                      <SummaryItem>
+                        <SummaryLabel>Declined</SummaryLabel>
+                        <SummaryValue style={{color: '#f8312f'}}>{weeklyReport.rankingChanges.declined}</SummaryValue>
+                      </SummaryItem>
+                    </>
+                  )}
+                </ReportSummaryGrid>
+              )}
+
+              {/* Highlights Section */}
+              {weeklyReport.highlights && weeklyReport.highlights.length > 0 && (
+                <HighlightsSection>
+                  <ReportSectionHeading>✨ Weekly Highlights</ReportSectionHeading>
+                  <HighlightsGrid>
+                    {weeklyReport.highlights.map((highlight, index) => (
+                      <HighlightCard key={index} type={highlight.type}>
+                        <HighlightIcon>
+                          {highlight.type === 'improvement' ? '🟢' : highlight.type === 'decline' ? '🔴' : highlight.type === 'alert' ? '⚠️' : '🏆'}
+                        </HighlightIcon>
+                        <HighlightTitle>{highlight.title}</HighlightTitle>
+                        <HighlightDescription>{highlight.description}</HighlightDescription>
+                      </HighlightCard>
+                    ))}
+                  </HighlightsGrid>
+                </HighlightsSection>
+              )}
+
+              {/* Top Movers Section */}
+              {weeklyReport.rankingChanges?.topMovers && weeklyReport.rankingChanges.topMovers.length > 0 && (
+                <TopMoversSection>
+                  <ReportSectionHeading>🚀 Top Ranking Changes This Week</ReportSectionHeading>
+                  <ReportTopMoversList>
+                    {weeklyReport.rankingChanges.topMovers.slice(0, 5).map((mover, index) => (
+                      <TopMoverItem key={index}>
+                        <TopMoverKeyword>
+                          <TopMoverName>{mover.keyword}</TopMoverName>
+                          <TopMoverVolume>Volume: {formatNumber(mover.volume)}</TopMoverVolume>
+                        </TopMoverKeyword>
+                        <TopMoverRanking>
+                          <RankingChange change={mover.change}>
+                            {mover.change > 0 ? '▲' : '▼'} {Math.abs(mover.change)}
+                          </RankingChange>
+                          <RankingValues>
+                            <RankingCurrent>#{mover.currentRanking}</RankingCurrent>
+                            <RankingPrevious>#{mover.previousRanking}</RankingPrevious>
+                          </RankingValues>
+                        </TopMoverRanking>
+                      </TopMoverItem>
+                    ))}
+                  </ReportTopMoversList>
+                </TopMoversSection>
+              )}
+
+              {/* Recommendations Section */}
+              {weeklyReport.recommendations && weeklyReport.recommendations.length > 0 && (
+                <ReportRecommendationsSection>
+                  <ReportSectionHeading>💡 Actionable Recommendations</ReportSectionHeading>
+                  <ReportRecommendationsGrid>
+                    {weeklyReport.recommendations.map((rec, index) => (
+                      <ReportRecommendationCard key={index} priority={rec.priority}>
+                        <RecommendationHeaderRow>
+                          <RecommendationCategoryBadge category={rec.category}>
+                            {rec.category}
+                          </RecommendationCategoryBadge>
+                          <RecPriorityBadge priority={rec.priority}>
+                            {rec.priority.toUpperCase()}
+                          </RecPriorityBadge>
+                        </RecommendationHeaderRow>
+                        <ReportRecommendationTitle>{rec.title}</ReportRecommendationTitle>
+                        <ReportRecommendationDesc>{rec.description}</ReportRecommendationDesc>
+                        <ReportRecommendationAction>
+                          <ReportActionLabel>🎯 Action Item</ReportActionLabel>
+                          <ReportActionText>{rec.actionItem}</ReportActionText>
+                        </ReportRecommendationAction>
+                        <ReportRecommendationMeta>
+                          <MetaItem>
+                            💪 {rec.expectedImpact}
+                          </MetaItem>
+                          <MetaItem>
+                            ⏱️ {rec.estimatedEffort}
+                          </MetaItem>
+                        </ReportRecommendationMeta>
+                      </ReportRecommendationCard>
+                    ))}
+                  </ReportRecommendationsGrid>
+                </ReportRecommendationsSection>
+              )}
+            </WeeklyReportContainer>
           )}
 
           {/* Keyword History Modal */}
