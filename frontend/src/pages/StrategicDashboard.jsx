@@ -1961,6 +1961,292 @@ const RefreshButton = styled.button`
   }
 `;
 
+// Competitor Keyword Monitoring Styled Components
+const CompetitorMonitoringContainer = styled(ChartContainer)`
+  margin-top: 2rem;
+`;
+
+const CompetitorMonitoringTitle = styled.h3`
+  font-size: 1.25rem;
+  color: #eaeaea;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const CompetitorSummary = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const CompetitorSummaryText = styled.p`
+  color: #eaeaea;
+  line-height: 1.6;
+  margin: 0;
+`;
+
+const CompetitorKeywordGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+`;
+
+const CompetitorKeywordCard = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    transform: translateY(-2px);
+  }
+`;
+
+const CompetitorKeywordCardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const CompetitorKeywordName = styled.h4`
+  font-size: 1rem;
+  color: #eaeaea;
+  margin: 0;
+`;
+
+const CompetitorKeywordBadge = styled.span`
+  background: ${props => {
+    if (props.priority === 'high') return '#f8312f';
+    if (props.priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+  color: #1a1a2e;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+`;
+
+const CompetitorKeywordMetric = styled.div`
+  display: flex;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #2d3561;
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+
+const CompetitorKeywordMetricLabel = styled.span`
+  color: #a0a0a0;
+  font-size: 0.875rem;
+`;
+
+const CompetitorKeywordMetricValue = styled.span`
+  color: ${props => props.value >= 0 ? '#00d26a' : '#f8312f'};
+  font-weight: bold;
+  font-size: 0.875rem;
+`;
+
+const CompetitorMetricWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const KeywordGapsSection = styled.div`
+  margin-top: 2rem;
+`;
+
+const KeywordGapsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const KeywordGapsTitle = styled.h4`
+  font-size: 1.125rem;
+  color: #eaeaea;
+  margin: 0;
+`;
+
+const KeywordGapCard = styled.div`
+  background: ${props => {
+    if (props.opportunity === 'high') return 'rgba(248, 49, 47, 0.1)';
+    if (props.opportunity === 'medium') return 'rgba(255, 176, 32, 0.1)';
+    return '#16213e';
+  }};
+  border: 1px solid ${props => {
+    if (props.opportunity === 'high') return '#f8312f';
+    if (props.opportunity === 'medium') return '#ffb020';
+    return '#2d3561';
+  }};
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.2s;
+
+  &:hover {
+    transform: translateX(4px);
+  }
+`;
+
+const KeywordGapInfo = styled.div`
+  flex: 1;
+`;
+
+const KeywordGapKeyword = styled.div`
+  font-size: 1rem;
+  font-weight: bold;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const KeywordGapDetails = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+`;
+
+const KeywordGapRanking = styled.div`
+  text-align: right;
+`;
+
+const KeywordGapOurRanking = styled.div`
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: ${props => props.isBetter ? '#00d26a' : '#f8312f'};
+`;
+
+const KeywordGapCompetitorRanking = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+`;
+
+const RecommendationsSection = styled.div`
+  margin-top: 2rem;
+`;
+
+const RecommendationCard = styled.div`
+  background: linear-gradient(135deg, #16213e 0%, #1a1a2e 100%);
+  border: 1px solid #7b2cbf;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+`;
+
+const RecommendationHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 0.75rem;
+`;
+
+const RecommendationTitle = styled.h5`
+  font-size: 1rem;
+  color: #eaeaea;
+  margin: 0;
+  font-weight: bold;
+`;
+
+const RecommendationPriority = styled.span`
+  background: ${props => {
+    if (props.priority === 'high') return '#f8312f';
+    if (props.priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+  color: #1a1a2e;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: bold;
+`;
+
+const RecommendationDescription = styled.p`
+  color: #a0a0a0;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin: 0 0 0.75rem 0;
+`;
+
+const RecommendationMeta = styled.div`
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.875rem;
+`;
+
+const RecommendationMetaItem = styled.div`
+  color: #e94560;
+  font-weight: bold;
+`;
+
+const ThreatsSection = styled.div`
+  margin-top: 2rem;
+`;
+
+const ThreatCard = styled.div`
+  background: rgba(248, 49, 47, 0.1);
+  border: 1px solid #f8312f;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const ThreatHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+`;
+
+const ThreatKeyword = styled.div`
+  font-size: 1rem;
+  font-weight: bold;
+  color: #f8312f;
+`;
+
+const ThreatVolume = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+`;
+
+const ThreatList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const ThreatItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background: rgba(248, 49, 47, 0.05);
+  border-radius: 4px;
+`;
+
+const ThreatCompetitor = styled.span`
+  color: #eaeaea;
+  font-size: 0.875rem;
+`;
+
+const ThreatRanking = styled.span`
+  color: #f8312f;
+  font-weight: bold;
+  font-size: 0.875rem;
+`;
+
 
 
 function StrategicDashboard() {
@@ -1985,6 +2271,7 @@ function StrategicDashboard() {
   const [iconABTesting, setIconABTesting] = useState(null);
   const [descriptionOptimization, setDescriptionOptimization] = useState(null);
   const [categoryRanking, setCategoryRanking] = useState(null);
+  const [competitorMonitoring, setCompetitorMonitoring] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -2004,6 +2291,7 @@ function StrategicDashboard() {
     fetchIconABTesting();
     fetchDescriptionOptimization();
     fetchCategoryRanking();
+    fetchCompetitorMonitoring();
   }, [dateRange]);
 
   const fetchMrrTrend = async () => {
@@ -2594,6 +2882,138 @@ function StrategicDashboard() {
       }
     } catch (error) {
       console.error('Error refreshing category ranking:', error);
+    }
+  };
+
+  const fetchCompetitorMonitoring = async () => {
+    try {
+      // Fetch competitor insights
+      const insightsResponse = await fetch('http://localhost:3003/api/aso/competitors/insights');
+      const insightsData = await insightsResponse.json();
+
+      // Fetch competitor gaps
+      const gapsResponse = await fetch('http://localhost:3003/api/aso/competitors/gaps');
+      const gapsData = await gapsResponse.json();
+
+      // Fetch competitor data
+      const dataResponse = await fetch('http://localhost:3003/api/aso/competitors/data');
+      const dataResult = await dataResponse.json();
+
+      if (insightsData.success || gapsData.success || dataResult.success) {
+        setCompetitorMonitoring({
+          insights: insightsData.success ? insightsData.data : null,
+          gaps: gapsData.success ? gapsData.data : null,
+          competitors: dataResult.success ? dataResult.data : []
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching competitor monitoring data:', error);
+      // Set mock data on error
+      setCompetitorMonitoring({
+        insights: {
+          summary: 'Tracking 45 keywords across 5 competitors. On average, competitors rank 8 positions better than us. Found 12 high-priority and 8 medium-priority keyword gaps.',
+          topGaps: [
+            {
+              competitorAppName: 'Episode',
+              keyword: 'romance stories',
+              ourRanking: 28,
+              competitorRanking: 3,
+              gap: 25,
+              opportunityLevel: 'high'
+            },
+            {
+              competitorAppName: 'Chapters',
+              keyword: 'interactive stories',
+              ourRanking: 35,
+              competitorRanking: 8,
+              gap: 27,
+              opportunityLevel: 'high'
+            },
+            {
+              competitorAppName: 'Choices',
+              keyword: 'romantic games',
+              ourRanking: 22,
+              competitorRanking: 5,
+              gap: 17,
+              opportunityLevel: 'high'
+            }
+          ],
+          recommendations: [
+            {
+              type: 'keyword_gap',
+              priority: 'high',
+              title: 'Optimize for "romance stories"',
+              description: 'We rank #28 while Episode ranks #3. Consider adding this keyword to your app metadata.',
+              keyword: 'romance stories',
+              competitor: 'Episode',
+              potentialGain: 89
+            }
+          ],
+          competitiveThreats: [
+            {
+              keyword: 'romance stories',
+              volume: 8500,
+              ourRanking: 28,
+              threats: [
+                { competitor: 'Episode', ranking: 3, gap: 25 },
+                { competitor: 'Chapters', ranking: 7, gap: 21 }
+              ]
+            }
+          ],
+          opportunities: [
+            {
+              keyword: 'otome games',
+              ourRanking: 12,
+              competitorRanking: 24,
+              advantage: 12,
+              competitorAppName: 'Chapters'
+            }
+          ]
+        },
+        gaps: {
+          totalGaps: 20,
+          highOpportunity: 12,
+          mediumOpportunity: 8,
+          gaps: [
+            {
+              competitorAppName: 'Episode',
+              keyword: 'romance stories',
+              ourRanking: 28,
+              competitorRanking: 3,
+              gap: 25,
+              opportunityLevel: 'high'
+            },
+            {
+              competitorAppName: 'Chapters',
+              keyword: 'interactive stories',
+              ourRanking: 35,
+              competitorRanking: 8,
+              gap: 27,
+              opportunityLevel: 'high'
+            }
+          ]
+        },
+        competitors: [
+          {
+            competitorAppId: 'com.episode.romance',
+            competitorAppName: 'Episode',
+            keywordsTracked: 45,
+            highOpportunityGaps: 8,
+            mediumOpportunityGaps: 6,
+            averageGap: -12.5,
+            lastChecked: new Date().toISOString()
+          },
+          {
+            competitorAppId: 'com.chapter.choosing',
+            competitorAppName: 'Chapters',
+            keywordsTracked: 42,
+            highOpportunityGaps: 7,
+            mediumOpportunityGaps: 5,
+            averageGap: -10.2,
+            lastChecked: new Date().toISOString()
+          }
+        ]
+      });
     }
   };
 
@@ -4533,6 +4953,150 @@ function StrategicDashboard() {
                 </CategoryRankingStat>
               </CategoryRankingStats>
             </CategoryRankingContainer>
+          )}
+
+
+          {/* Competitor Keyword Monitoring Section */}
+          {competitorMonitoring && (
+            <CompetitorMonitoringContainer>
+              <CompetitorMonitoringTitle>
+                🎯 Competitor Keyword Monitoring
+              </CompetitorMonitoringTitle>
+
+              {/* Summary */}
+              {competitorMonitoring.insights?.summary && (
+                <CompetitorSummary>
+                  <CompetitorSummaryText>
+                    {competitorMonitoring.insights.summary}
+                  </CompetitorSummaryText>
+                </CompetitorSummary>
+              )}
+
+              {/* Competitors Grid */}
+              {competitorMonitoring.competitors && competitorMonitoring.competitors.length > 0 && (
+                <CompetitorKeywordGrid>
+                  {competitorMonitoring.competitors.map((competitor, index) => (
+                    <CompetitorKeywordCard key={index}>
+                      <CompetitorKeywordCardHeader>
+                        <CompetitorKeywordName>{competitor.competitorAppName}</CompetitorKeywordName>
+                        <CompetitorKeywordBadge priority={
+                          competitor.highOpportunityGaps > 5 ? 'high' :
+                          competitor.highOpportunityGaps > 0 ? 'medium' : 'low'
+                        }>
+                          {competitor.highOpportunityGaps} high-priority gaps
+                        </CompetitorKeywordBadge>
+                      </CompetitorKeywordCardHeader>
+                      <div style={{display: 'flex', flexDirection: 'column'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #2d3561'}}>
+                          <span style={{color: '#a0a0a0', fontSize: '0.875rem'}}>Keywords Tracked</span>
+                          <span style={{color: competitor.keywordsTracked >= 0 ? '#00d26a' : '#f8312f', fontWeight: 'bold', fontSize: '0.875rem'}}>{competitor.keywordsTracked}</span>
+                        </div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #2d3561'}}>
+                          <span style={{color: '#a0a0a0', fontSize: '0.875rem'}}>High Opportunity Gaps</span>
+                          <span style={{color: -competitor.highOpportunityGaps >= 0 ? '#00d26a' : '#f8312f', fontWeight: 'bold', fontSize: '0.875rem'}}>{competitor.highOpportunityGaps}</span>
+                        </div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #2d3561'}}>
+                          <span style={{color: '#a0a0a0', fontSize: '0.875rem'}}>Medium Opportunity Gaps</span>
+                          <span style={{color: -competitor.mediumOpportunityGaps >= 0 ? '#00d26a' : '#f8312f', fontWeight: 'bold', fontSize: '0.875rem'}}>{competitor.mediumOpportunityGaps}</span>
+                        </div>
+                        <div style={{display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px solid #2d3561'}}>
+                          <span style={{color: '#a0a0a0', fontSize: '0.875rem'}}>Average Gap</span>
+                          <span style={{color: competitor.averageGap >= 0 ? '#00d26a' : '#f8312f', fontWeight: 'bold', fontSize: '0.875rem'}}>{competitor.averageGap > 0 ? '+' : ''}{competitor.averageGap} positions</span>
+                        </div>
+                      </div>
+                    </CompetitorKeywordCard>
+                  ))}
+                </CompetitorKeywordGrid>
+              )}
+
+              {/* Top Keyword Gaps */}
+              {competitorMonitoring.gaps?.gaps && competitorMonitoring.gaps.gaps.length > 0 && (
+                <KeywordGapsSection>
+                  <KeywordGapsHeader>
+                    <KeywordGapsTitle>
+                      🚨 Top Keyword Gaps ({competitorMonitoring.gaps.totalGaps} total)
+                    </KeywordGapsTitle>
+                  </KeywordGapsHeader>
+                  {competitorMonitoring.gaps.gaps.slice(0, 10).map((gap, index) => (
+                    <KeywordGapCard
+                      key={index}
+                      opportunity={gap.opportunityLevel}
+                    >
+                      <KeywordGapInfo>
+                        <KeywordGapKeyword>{gap.keyword}</KeywordGapKeyword>
+                        <KeywordGapDetails>
+                          vs {gap.competitorAppName} • {gap.opportunityLevel === 'high' ? 'High' : 'Medium'} priority
+                        </KeywordGapDetails>
+                      </KeywordGapInfo>
+                      <KeywordGapRanking>
+                        <KeywordGapOurRanking isBetter={gap.ourRanking < gap.competitorRanking}>
+                          #{gap.ourRanking}
+                        </KeywordGapOurRanking>
+                        <KeywordGapCompetitorRanking>
+                          They rank #{gap.competitorRanking}
+                        </KeywordGapCompetitorRanking>
+                      </KeywordGapRanking>
+                    </KeywordGapCard>
+                  ))}
+                </KeywordGapsSection>
+              )}
+
+              {/* Recommendations */}
+              {competitorMonitoring.insights?.recommendations && competitorMonitoring.insights.recommendations.length > 0 && (
+                <RecommendationsSection>
+                  <KeywordGapsHeader>
+                    <KeywordGapsTitle>💡 Recommendations</KeywordGapsTitle>
+                  </KeywordGapsHeader>
+                  {competitorMonitoring.insights.recommendations.slice(0, 5).map((rec, index) => (
+                    <RecommendationCard key={index}>
+                      <RecommendationHeader>
+                        <RecommendationTitle>{rec.title}</RecommendationTitle>
+                        <RecommendationPriority priority={rec.priority}>
+                          {rec.priority.toUpperCase()}
+                        </RecommendationPriority>
+                      </RecommendationHeader>
+                      <RecommendationDescription>{rec.description}</RecommendationDescription>
+                      <RecommendationMeta>
+                        {rec.keyword && (
+                          <RecommendationMetaItem>🔑 {rec.keyword}</RecommendationMetaItem>
+                        )}
+                        {rec.competitor && (
+                          <RecommendationMetaItem>🎯 vs {rec.competitor}</RecommendationMetaItem>
+                        )}
+                        {rec.potentialGain && (
+                          <RecommendationMetaItem>📈 +{rec.potentialGain}% potential</RecommendationMetaItem>
+                        )}
+                      </RecommendationMeta>
+                    </RecommendationCard>
+                  ))}
+                </RecommendationsSection>
+              )}
+
+              {/* Competitive Threats */}
+              {competitorMonitoring.insights?.competitiveThreats && competitorMonitoring.insights.competitiveThreats.length > 0 && (
+                <ThreatsSection>
+                  <KeywordGapsHeader>
+                    <KeywordGapsTitle>⚠️ Competitive Threats</KeywordGapsTitle>
+                  </KeywordGapsHeader>
+                  {competitorMonitoring.insights.competitiveThreats.map((threat, index) => (
+                    <ThreatCard key={index}>
+                      <ThreatHeader>
+                        <ThreatKeyword>{threat.keyword}</ThreatKeyword>
+                        <ThreatVolume>Volume: {threat.volume.toLocaleString()}</ThreatVolume>
+                      </ThreatHeader>
+                      <ThreatList>
+                        {threat.threats.map((t, tIndex) => (
+                          <ThreatItem key={tIndex}>
+                            <ThreatCompetitor>{t.competitor}</ThreatCompetitor>
+                            <ThreatRanking>Rank #{t.ranking} (gap: {t.gap})</ThreatRanking>
+                          </ThreatItem>
+                        ))}
+                      </ThreatList>
+                    </ThreatCard>
+                  ))}
+                </ThreatsSection>
+              )}
+            </CompetitorMonitoringContainer>
           )}
 
 

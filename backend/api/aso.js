@@ -440,4 +440,171 @@ router.post('/category/sync', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/aso/competitors
+ * Get list of identified competitor apps
+ */
+router.get('/competitors', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const competitors = await competitorKeywordService.identifyCompetitors();
+
+    res.json({
+      success: true,
+      data: competitors
+    });
+  } catch (error) {
+    console.error('Error fetching competitors:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/competitors/data
+ * Get competitor keyword tracking data
+ */
+router.get('/competitors/data', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const data = await competitorKeywordService.getCompetitorKeywordData();
+
+    res.json({
+      success: true,
+      data: data
+    });
+  } catch (error) {
+    console.error('Error fetching competitor data:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/competitors/strategy/:appId
+ * Analyze competitor keyword strategy
+ */
+router.get('/competitors/strategy/:appId', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const strategy = await competitorKeywordService.analyzeCompetitorStrategy(req.params.appId);
+
+    res.json({
+      success: true,
+      data: strategy
+    });
+  } catch (error) {
+    console.error('Error analyzing competitor strategy:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/competitors/track/:appId
+ * Track keyword rankings for a specific competitor
+ */
+router.post('/competitors/track/:appId', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const result = await competitorKeywordService.trackCompetitorKeywords(req.params.appId);
+
+    res.json({
+      success: true,
+      message: `Tracking ${result.keywordsTracked} keywords for competitor`,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error tracking competitor keywords:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/competitors/gaps
+ * Identify keyword gaps where competitors outrank us
+ */
+router.get('/competitors/gaps', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const gaps = await competitorKeywordService.identifyKeywordGaps();
+
+    res.json({
+      success: true,
+      data: gaps
+    });
+  } catch (error) {
+    console.error('Error identifying keyword gaps:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/competitors/insights
+ * Generate competitive insights and recommendations
+ */
+router.get('/competitors/insights', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const insights = await competitorKeywordService.generateCompetitiveInsights();
+
+    res.json({
+      success: true,
+      data: insights
+    });
+  } catch (error) {
+    console.error('Error generating competitive insights:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/competitors/history/:appId/:keyword
+ * Get keyword ranking history for a competitor
+ */
+router.get('/competitors/history/:appId/:keyword', async (req, res) => {
+  try {
+    const competitorKeywordService = (await import('../services/competitorKeywordService.js')).default;
+    const days = parseInt(req.query.days) || 30;
+    const history = await competitorKeywordService.getCompetitorKeywordHistory(
+      req.params.appId,
+      decodeURIComponent(req.params.keyword),
+      days
+    );
+
+    if (!history) {
+      return res.status(404).json({
+        success: false,
+        error: 'Keyword history not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: history
+    });
+  } catch (error) {
+    console.error('Error fetching competitor keyword history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
