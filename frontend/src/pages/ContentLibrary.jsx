@@ -298,6 +298,167 @@ const PageInfo = styled.div`
   font-size: 0.9rem;
 `;
 
+const ModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+`;
+
+const ModalContent = styled.div`
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const ModalInfo = styled.div`
+  background: #16213e;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 600px;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0 0 0.75rem 0;
+  color: #eaeaea;
+  font-size: 1.2rem;
+`;
+
+const ModalCaption = styled.p`
+  margin: 0 0 1rem 0;
+  color: #c0c0c0;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+`;
+
+const ModalHashtags = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const Hashtag = styled.span`
+  padding: 0.25rem 0.75rem;
+  background: #2d3561;
+  border-radius: 16px;
+  color: #e94560;
+  font-size: 0.85rem;
+  font-weight: 500;
+`;
+
+const VideoContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+`;
+
+const VideoPlayer = styled.video`
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+`;
+
+const ImageContainer = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #1a1a2e;
+  border-radius: 12px;
+  overflow: hidden;
+`;
+
+const ImagePreview = styled.img`
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+`;
+
+const CloseButton = styled.button`
+  position: absolute;
+  top: -40px;
+  right: 0;
+  padding: 0.5rem 1rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: scale(1.05);
+  }
+`;
+
+const PlayButton = styled.button`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 64px;
+  height: 64px;
+  background: rgba(233, 69, 96, 0.9);
+  border: 3px solid white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s;
+  opacity: 0;
+  pointer-events: none;
+
+  ${ThumbnailContainer}:hover & {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  &:hover {
+    background: rgba(233, 69, 96, 1);
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+
+  &::after {
+    content: '▶';
+    color: white;
+    font-size: 1.5rem;
+    margin-left: 4px;
+  }
+`;
+
+const VideoIndicator = styled.div`
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 0.25rem 0.5rem;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 4px;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
+
 function ContentLibrary() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -313,6 +474,7 @@ function ContentLibrary() {
     total: 0,
     hasMore: false
   });
+  const [selectedVideo, setSelectedVideo] = useState(null);
 
   useEffect(() => {
     fetchPosts();
@@ -394,18 +556,23 @@ function ContentLibrary() {
       'Summer Romance in Paris'
     ];
 
-    return Array.from({ length: 8 }, (_, i) => ({
-      _id: `mock_${i}`,
-      title: `${stories[i % stories.length]} - Part ${Math.floor(i / 5) + 1}`,
-      platform: platforms[i % platforms.length],
-      status: statuses[i % statuses.length],
-      contentType: 'video',
-      scheduledAt: new Date(Date.now() + i * 3600000).toISOString(),
-      storyName: stories[i % stories.length],
-      storyCategory: 'Romance',
-      caption: 'Amazing story you need to read! 📚❤️ #romance #books',
-      hashtags: ['#romance', '#books', '#reading', '#lovestory']
-    }));
+    return Array.from({ length: 8 }, (_, i) => {
+      const isImage = i % 3 === 2; // Every 3rd post is an image
+      return {
+        _id: `mock_${i}`,
+        title: `${stories[i % stories.length]} - Part ${Math.floor(i / 5) + 1}`,
+        platform: platforms[i % platforms.length],
+        status: statuses[i % statuses.length],
+        contentType: isImage ? 'image' : 'video',
+        videoPath: !isImage && i % 2 === 0 ? 'https://www.w3schools.com/html/mov_bbb.mp4' : null,
+        imagePath: isImage ? 'https://images.unsplash.com/photo-1518676590629-3dcbd9c5a5c9?w=800&h=1200&fit=crop' : null, // Sample image for testing
+        scheduledAt: new Date(Date.now() + i * 3600000).toISOString(),
+        storyName: stories[i % stories.length],
+        storyCategory: 'Romance',
+        caption: 'Amazing story you need to read! 📚❤️ #romance #books',
+        hashtags: ['#romance', '#books', '#reading', '#lovestory']
+      };
+    });
   };
 
   const handleFilterChange = (key, value) => {
@@ -445,6 +612,24 @@ function ContentLibrary() {
       youtube_shorts: '▶️'
     };
     return emojis[platform] || '📱';
+  };
+
+  const handleVideoPreview = (post) => {
+    if (post.contentType === 'video' && post.videoPath) {
+      setSelectedVideo(post);
+    } else if (post.contentType === 'image' && post.imagePath) {
+      setSelectedVideo(post);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setSelectedVideo(null);
+  };
+
+  const handleThumbnailClick = (post) => {
+    if (post.contentType === 'video' || post.contentType === 'image') {
+      handleVideoPreview(post);
+    }
   };
 
   if (loading) {
@@ -522,7 +707,7 @@ function ContentLibrary() {
           <ContentGrid>
             {posts.map(post => (
               <ContentCard key={post._id}>
-                <ThumbnailContainer>
+                <ThumbnailContainer onClick={() => handleThumbnailClick(post)}>
                   <Thumbnail platform={post.platform}>
                     {getPlatformEmoji(post.platform)}
                   </Thumbnail>
@@ -532,6 +717,15 @@ function ContentLibrary() {
                   <PlatformIcon>
                     {getPlatformEmoji(post.platform)}
                   </PlatformIcon>
+                  {post.contentType === 'video' && (
+                    <>
+                      <VideoIndicator>🎬 Video</VideoIndicator>
+                      <PlayButton />
+                    </>
+                  )}
+                  {post.contentType === 'image' && (
+                    <VideoIndicator>🖼️ Image</VideoIndicator>
+                  )}
                 </ThumbnailContainer>
 
                 <CardContent>
@@ -550,13 +744,60 @@ function ContentLibrary() {
                   </CardMeta>
 
                   <CardActions>
-                    <ActionButton>View</ActionButton>
+                    <ActionButton onClick={() => handleThumbnailClick(post)}>
+                      {post.contentType === 'video' ? '▶ Play' : 'View'}
+                    </ActionButton>
                     <ActionButton>Edit</ActionButton>
                   </CardActions>
                 </CardContent>
               </ContentCard>
             ))}
           </ContentGrid>
+
+          {selectedVideo && (
+            <ModalOverlay onClick={handleCloseModal}>
+              <ModalContent onClick={(e) => e.stopPropagation()}>
+                <CloseButton onClick={handleCloseModal}>✕ Close</CloseButton>
+                {selectedVideo.contentType === 'video' ? (
+                  <VideoContainer>
+                    <VideoPlayer
+                      src={selectedVideo.videoPath}
+                      controls
+                      autoPlay
+                      onError={(e) => {
+                        console.error('Video error:', e);
+                        alert('Failed to load video. The video file may not exist yet.');
+                      }}
+                    />
+                  </VideoContainer>
+                ) : (
+                  <ImageContainer>
+                    <ImagePreview
+                      src={selectedVideo.imagePath}
+                      alt={selectedVideo.title || 'Content preview'}
+                      onError={(e) => {
+                        console.error('Image error:', e);
+                        alert('Failed to load image. The image file may not exist yet.');
+                      }}
+                    />
+                  </ImageContainer>
+                )}
+                <ModalInfo>
+                  <ModalTitle>{selectedVideo.title}</ModalTitle>
+                  {selectedVideo.caption && (
+                    <ModalCaption>{selectedVideo.caption}</ModalCaption>
+                  )}
+                  {selectedVideo.hashtags && selectedVideo.hashtags.length > 0 && (
+                    <ModalHashtags>
+                      {selectedVideo.hashtags.map((tag, index) => (
+                        <Hashtag key={index}>{tag}</Hashtag>
+                      ))}
+                    </ModalHashtags>
+                  )}
+                </ModalInfo>
+              </ModalContent>
+            </ModalOverlay>
+          )}
 
           {pagination.total > pagination.limit && (
             <Pagination>
