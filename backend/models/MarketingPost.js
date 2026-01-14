@@ -189,6 +189,22 @@ const marketingPostSchema = new mongoose.Schema({
     }
   },
 
+  // Platform-specific data
+  tiktokVideoId: {
+    type: String,
+    trim: true
+  },
+  tiktokShareUrl: {
+    type: String,
+    trim: true
+  },
+
+  // Error tracking for failed posts
+  error: {
+    type: String,
+    trim: true
+  },
+
   // Metadata
   createdAt: {
     type: Date,

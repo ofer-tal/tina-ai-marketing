@@ -1,5 +1,6 @@
 import express from "express";
 import databaseService from "../services/database.js";
+import mongoose from "mongoose";
 
 const router = express.Router();
 
@@ -81,7 +82,6 @@ router.get("/", async (req, res) => {
       });
     }
 
-    const mongoose = await import('mongoose');
     const todos = await mongoose.connection
       .collection("marketing_tasks")
       .find({})
@@ -136,7 +136,6 @@ router.post("/", async (req, res) => {
 
     if (status.isConnected && status.readyState === 1) {
       try {
-        const mongoose = await import('mongoose');
         const todo = {
           title,
           description: description || "",
@@ -210,7 +209,6 @@ router.post("/:id/complete", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      const mongoose = await import('mongoose');
       await mongoose.connection.collection("marketing_tasks").updateOne(
         { _id: id },
         {
@@ -245,7 +243,6 @@ router.post("/:id/snooze", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      const mongoose = await import('mongoose');
       await mongoose.connection.collection("marketing_tasks").updateOne(
         { _id: id },
         {
@@ -280,7 +277,6 @@ router.put("/:id", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      const mongoose = await import('mongoose');
       await mongoose.connection.collection("marketing_tasks").updateOne(
         { _id: id },
         {
@@ -313,7 +309,6 @@ router.delete("/:id", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      const mongoose = await import('mongoose');
       await mongoose.connection.collection("marketing_tasks").deleteOne({ _id: id });
     }
 

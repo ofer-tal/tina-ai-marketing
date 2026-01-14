@@ -18,6 +18,7 @@ import imageRouter from "./api/image.js";
 import audioRouter from "./api/audio.js";
 import hooksRouter from "./api/hooks.js";
 import blacklistRouter from "./api/blacklist.js";
+import tiktokRouter from "./api/tiktok.js";
 import storageService from "./services/storage.js";
 
 dotenv.config();
@@ -160,6 +161,7 @@ app.use("/api/image", imageRouter);
 app.use("/api/audio", audioRouter);
 app.use("/api/hooks", hooksRouter);
 app.use("/api/blacklist", blacklistRouter);
+app.use("/api/tiktok", tiktokRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
