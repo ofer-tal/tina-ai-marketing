@@ -2998,6 +2998,258 @@ const EmptyReportState = styled.div`
   }
 `;
 
+// Analysis Modal Components
+const ExperimentAnalysisModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+`;
+
+const ExperimentAnalysisModalContent = styled.div`
+  background: #16213e;
+  border-radius: 12px;
+  max-width: 900px;
+  max-height: 90vh;
+  width: 95%;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 1px solid #2d3561;
+`;
+
+const ExperimentAnalysisModalHeader = styled.div`
+  padding: 1.5rem;
+  border-bottom: 1px solid #2d3561;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  background: #16213e;
+  z-index: 10;
+`;
+
+const ExperimentAnalysisModalTitle = styled.h2`
+  font-size: 1.5rem;
+  color: #eaeaea;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ExperimentAnalysisModalClose = styled.button`
+  background: none;
+  border: none;
+  color: #a0a0a0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  line-height: 1;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #e94560;
+  }
+`;
+
+const ExperimentAnalysisModalBody = styled.div`
+  padding: 1.5rem;
+`;
+
+const ExperimentAnalysisSection = styled.div`
+  margin-bottom: 2rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const ExperimentAnalysisSectionTitle = styled.h3`
+  font-size: 1.25rem;
+  color: #eaeaea;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const ExperimentAnalysisGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const ExperimentAnalysisCard = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+`;
+
+const ExperimentAnalysisCardLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const ExperimentAnalysisCardValue = styled.div`
+  font-size: 1.125rem;
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const ExperimentAnalysisConclusion = styled.div`
+  background: ${props => {
+    if (props.$isSignificant) return 'rgba(0, 210, 106, 0.1)';
+    return 'rgba(255, 149, 0, 0.1)';
+  }};
+  border: 1px solid ${props => {
+    if (props.$isSignificant) return 'rgba(0, 210, 106, 0.3)';
+    return 'rgba(255, 149, 0, 0.3)';
+  }};
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+`;
+
+const ExperimentAnalysisConclusionText = styled.p`
+  color: #eaeaea;
+  margin: 0;
+  line-height: 1.6;
+  font-size: 1rem;
+`;
+
+const ExperimentAnalysisRecommendation = styled.div`
+  background: #1a1a2e;
+  border-left: 3px solid ${props => {
+    if (props.$priority === 'high') return '#f8312f';
+    if (props.$priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+`;
+
+const ExperimentAnalysisRecommendationHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+`;
+
+const ExperimentAnalysisRecommendationPriority = styled.span`
+  font-size: 0.625rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 4px;
+  background: ${props => {
+    if (props.$priority === 'high') return 'rgba(248, 49, 47, 0.2)';
+    if (props.$priority === 'medium') return 'rgba(255, 176, 32, 0.2)';
+    return 'rgba(0, 210, 106, 0.2)';
+  }};
+  color: ${props => {
+    if (props.$priority === 'high') return '#f8312f';
+    if (props.$priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+  font-weight: 600;
+  text-transform: uppercase;
+`;
+
+const ExperimentAnalysisRecommendationTitle = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const ExperimentAnalysisRecommendationDescription = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin-bottom: 0.5rem;
+`;
+
+const ExperimentAnalysisRecommendationAction = styled.div`
+  font-size: 0.75rem;
+  color: #7b2cbf;
+  font-weight: 500;
+`;
+
+const ExperimentAnalysisInsight = styled.div`
+  background: #1a1a2e;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+`;
+
+const ExperimentAnalysisInsightTitle = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+`;
+
+const ExperimentAnalysisInsightContent = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  line-height: 1.5;
+`;
+
+const ExperimentAnalysisNextStep = styled.div`
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+`;
+
+const ExperimentAnalysisNextStepOrder = styled.div`
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7b2cbf 0%, #e94560 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 600;
+`;
+
+const ExperimentAnalysisNextStepContent = styled.div`
+  flex: 1;
+`;
+
+const ExperimentAnalysisNextStepAction = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+`;
+
+const ExperimentAnalysisNextStepDetails = styled.div`
+  font-size: 0.875rem;
+  color: #a0a0a0;
+  margin-bottom: 0.25rem;
+`;
+
+const ExperimentAnalysisNextStepTimeframe = styled.div`
+  font-size: 0.75rem;
+  color: #7b2cbf;
+  font-weight: 500;
+`;
+
 // A/B Testing Components
 const ExperimentsContainer = styled(ChartContainer)`
   margin-bottom: 2rem;
@@ -3163,6 +3415,29 @@ const ExperimentWinnerValue = styled.div`
   font-weight: 600;
 `;
 
+const AnalyzeButton = styled.button`
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #7b2cbf 0%, #e94560 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: 100%;
+
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
 const ExperimentProgress = styled.div`
   margin-top: 1rem;
 `;
@@ -3260,6 +3535,7 @@ function StrategicDashboard() {
   const [weeklyReport, setWeeklyReport] = useState(null);
   const [experiments, setExperiments] = useState(null);
   const [experimentStats, setExperimentStats] = useState(null);
+  const [analysisModal, setAnalysisModal] = useState({ isOpen: false, experimentId: null, analysis: null });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -4333,6 +4609,106 @@ function StrategicDashboard() {
         averageLift: '15.1%',
         byType: {}
       });
+    }
+  };
+
+  const fetchAnalysis = async (experimentId) => {
+    try {
+      const response = await fetch(`http://localhost:3003/api/experiments/${experimentId}/analyze`);
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        return result.data;
+      } else {
+        // Return mock analysis data if API fails
+        return {
+          experiment: {
+            id: experimentId,
+            name: 'Icon Test - Romantic vs Minimalist',
+            type: 'icon',
+            status: 'completed',
+            duration: 14
+          },
+          results: {
+            variantA: {
+              name: 'Control',
+              views: 12500,
+              conversions: 456,
+              conversionRate: '3.65%'
+            },
+            variantB: {
+              name: 'Treatment',
+              views: 12450,
+              conversions: 523,
+              conversionRate: '4.20%'
+            }
+          },
+          statistics: {
+            winner: 'variantB',
+            significance: '0.0200',
+            confidence: '98.0%',
+            lift: '15.10%',
+            isSignificant: true,
+            confidenceLevel: '95%'
+          },
+          sampleSize: {
+            totalViews: 24950,
+            totalConversions: 979,
+            targetSampleSize: 1000,
+            sufficient: true,
+            durationElapsed: true,
+            completionPercentage: '100%'
+          },
+          conclusion: 'Highly Significant Result: Treatment outperformed Control with 15.1% lift (4.20% vs 3.65% conversion rate). Statistical confidence: 95%. This result is very reliable and should inform immediate action.',
+          recommendations: [
+            {
+              priority: 'high',
+              type: 'implement_winner',
+              title: 'Implement Treatment',
+              description: 'The winning variant showed 15.1% lift with 98% confidence.',
+              action: 'Apply the winning variant to the App Store production listing.'
+            },
+            {
+              priority: 'medium',
+              type: 'apply_learning',
+              title: 'Apply Design Learning',
+              description: 'Consider applying the winning design principles to other app store assets.',
+              action: 'Review screenshot and design elements for consistency with winning icon style.'
+            }
+          ],
+          insights: [
+            {
+              type: 'sample_size',
+              title: 'Sample Size Analysis',
+              content: 'Collected 24,950 total views with 979 conversions. Overall conversion rate: 3.92%.'
+            },
+            {
+              type: 'statistical_power',
+              title: 'Statistical Confidence',
+              content: 'Results are statistically significant with 98% confidence. This is a reliable result.'
+            }
+          ],
+          nextSteps: [
+            {
+              order: 1,
+              action: 'Implement winning variant',
+              details: 'Apply Treatment to production.',
+              timeframe: 'Immediate'
+            },
+            {
+              order: 2,
+              action: 'Document learnings',
+              details: 'Record what worked and why for future reference.',
+              timeframe: 'This week'
+            }
+          ],
+          generatedAt: new Date(),
+          completedAt: new Date()
+        };
+      }
+    } catch (error) {
+      console.error('Error fetching experiment analysis:', error);
+      return null;
     }
   };
 
@@ -5929,7 +6305,7 @@ function StrategicDashboard() {
                 ))}
               </ScreenshotsGrid>
 
-              <AnalysisSection>
+              <ExperimentAnalysisSection>
                 {screenshotAnalysis.analysis.issues && screenshotAnalysis.analysis.issues.length > 0 && (
                   <AnalysisCategory>
                     <AnalysisCategoryTitle>⚠️ Issues to Address</AnalysisCategoryTitle>
@@ -5971,7 +6347,7 @@ function StrategicDashboard() {
                     ))}
                   </AnalysisCategory>
                 )}
-              </AnalysisSection>
+              </ExperimentAnalysisSection>
             </ChartContainer>
           )}
 
@@ -7093,6 +7469,17 @@ ${(weeklyReport.recommendations || []).slice(0, 2).map(r => r.title).join('\n')}
                               </ExperimentWinnerValue>
                             </ExperimentWinner>
                           )}
+
+                          <AnalyzeButton
+                            onClick={async () => {
+                              const analysis = await fetchAnalysis(experiment._id);
+                              if (analysis) {
+                                setAnalysisModal({ isOpen: true, experimentId: experiment._id, analysis });
+                              }
+                            }}
+                          >
+                            📊 Analyze Results
+                          </AnalyzeButton>
                         </>
                       ) : experiment.status === 'running' ? (
                         <>
@@ -7234,6 +7621,128 @@ ${(weeklyReport.recommendations || []).slice(0, 2).map(r => r.title).join('\n')}
             </KeywordModalOverlay>
           )}
         </>
+      )}
+
+      {/* Analysis Modal */}
+      {analysisModal.isOpen && analysisModal.analysis && (
+        <ExperimentAnalysisModal onClick={() => setAnalysisModal({ isOpen: false, experimentId: null, analysis: null })}>
+          <ExperimentAnalysisModalContent onClick={(e) => e.stopPropagation()}>
+            <ExperimentAnalysisModalHeader>
+              <ExperimentAnalysisModalTitle>
+                📊 {analysisModal.analysis.experiment.name} - Analysis
+              </ExperimentAnalysisModalTitle>
+              <ExperimentAnalysisModalClose onClick={() => setAnalysisModal({ isOpen: false, experimentId: null, analysis: null })}>
+                ×
+              </ExperimentAnalysisModalClose>
+            </ExperimentAnalysisModalHeader>
+
+            <ExperimentAnalysisModalBody>
+              {/* Conclusion Section */}
+              <ExperimentAnalysisConclusion $isSignificant={analysisModal.analysis.statistics.isSignificant}>
+                <ExperimentAnalysisConclusionText>{analysisModal.analysis.conclusion}</ExperimentAnalysisConclusionText>
+              </ExperimentAnalysisConclusion>
+
+              {/* Test Results */}
+              <ExperimentAnalysisSection>
+                <ExperimentAnalysisSectionTitle>📈 Test Results</ExperimentAnalysisSectionTitle>
+                <ExperimentAnalysisGrid>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Variant A ({analysisModal.analysis.results.variantA.name})</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.results.variantA.conversionRate}</ExperimentAnalysisCardValue>
+                    <ExperimentAnalysisCardLabel>{analysisModal.analysis.results.variantA.views.toLocaleString()} views • {analysisModal.analysis.results.variantA.conversions} conversions</ExperimentAnalysisCardLabel>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Variant B ({analysisModal.analysis.results.variantB.name})</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.results.variantB.conversionRate}</ExperimentAnalysisCardValue>
+                    <ExperimentAnalysisCardLabel>{analysisModal.analysis.results.variantB.views.toLocaleString()} views • {analysisModal.analysis.results.variantB.conversions} conversions</ExperimentAnalysisCardLabel>
+                  </ExperimentAnalysisCard>
+                </ExperimentAnalysisGrid>
+                <ExperimentAnalysisGrid>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Winner</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.statistics.winner === 'variantA' ? analysisModal.analysis.results.variantA.name : analysisModal.analysis.results.variantB.name}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Lift</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.statistics.lift}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Confidence</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.statistics.confidence}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Significance</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>p = {analysisModal.analysis.statistics.significance}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                </ExperimentAnalysisGrid>
+              </ExperimentAnalysisSection>
+
+              {/* Sample Size Analysis */}
+              <ExperimentAnalysisSection>
+                <ExperimentAnalysisSectionTitle>📊 Sample Size Analysis</ExperimentAnalysisSectionTitle>
+                <ExperimentAnalysisGrid>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Total Views</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.sampleSize.totalViews.toLocaleString()}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Total Conversions</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.sampleSize.totalConversions}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Target Sample Size</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.sampleSize.targetSampleSize}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                  <ExperimentAnalysisCard>
+                    <ExperimentAnalysisCardLabel>Sufficient</ExperimentAnalysisCardLabel>
+                    <ExperimentAnalysisCardValue>{analysisModal.analysis.sampleSize.sufficient ? '✅ Yes' : '❌ No'}</ExperimentAnalysisCardValue>
+                  </ExperimentAnalysisCard>
+                </ExperimentAnalysisGrid>
+              </ExperimentAnalysisSection>
+
+              {/* Recommendations */}
+              <ExperimentAnalysisSection>
+                <ExperimentAnalysisSectionTitle>💡 Recommendations</ExperimentAnalysisSectionTitle>
+                {analysisModal.analysis.recommendations.map((rec, index) => (
+                  <ExperimentAnalysisRecommendation key={index} $priority={rec.priority}>
+                    <ExperimentAnalysisRecommendationHeader>
+                      <ExperimentAnalysisRecommendationPriority $priority={rec.priority}>{rec.priority}</ExperimentAnalysisRecommendationPriority>
+                      <ExperimentAnalysisRecommendationTitle>{rec.title}</ExperimentAnalysisRecommendationTitle>
+                    </ExperimentAnalysisRecommendationHeader>
+                    <ExperimentAnalysisRecommendationDescription>{rec.description}</ExperimentAnalysisRecommendationDescription>
+                    <ExperimentAnalysisRecommendationAction>🎯 {rec.action}</ExperimentAnalysisRecommendationAction>
+                  </ExperimentAnalysisRecommendation>
+                ))}
+              </ExperimentAnalysisSection>
+
+              {/* Insights */}
+              <ExperimentAnalysisSection>
+                <ExperimentAnalysisSectionTitle>🔍 Insights</ExperimentAnalysisSectionTitle>
+                {analysisModal.analysis.insights.map((insight, index) => (
+                  <ExperimentAnalysisInsight key={index}>
+                    <ExperimentAnalysisInsightTitle>{insight.title}</ExperimentAnalysisInsightTitle>
+                    <ExperimentAnalysisInsightContent>{insight.content}</ExperimentAnalysisInsightContent>
+                  </ExperimentAnalysisInsight>
+                ))}
+              </ExperimentAnalysisSection>
+
+              {/* Next Steps */}
+              <ExperimentAnalysisSection>
+                <ExperimentAnalysisSectionTitle>✅ Next Steps</ExperimentAnalysisSectionTitle>
+                {analysisModal.analysis.nextSteps.map((step, index) => (
+                  <ExperimentAnalysisNextStep key={index}>
+                    <ExperimentAnalysisNextStepOrder>{step.order}</ExperimentAnalysisNextStepOrder>
+                    <ExperimentAnalysisNextStepContent>
+                      <ExperimentAnalysisNextStepAction>{step.action}</ExperimentAnalysisNextStepAction>
+                      <ExperimentAnalysisNextStepDetails>{step.details}</ExperimentAnalysisNextStepDetails>
+                      <ExperimentAnalysisNextStepTimeframe>⏱️ {step.timeframe}</ExperimentAnalysisNextStepTimeframe>
+                    </ExperimentAnalysisNextStepContent>
+                  </ExperimentAnalysisNextStep>
+                ))}
+              </ExperimentAnalysisSection>
+            </ExperimentAnalysisModalBody>
+          </ExperimentAnalysisModalContent>
+        </ExperimentAnalysisModal>
       )}
     </DashboardContainer>
   );

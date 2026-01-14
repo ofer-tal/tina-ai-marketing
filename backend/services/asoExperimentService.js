@@ -558,6 +558,349 @@ export async function cancelExperiment(experimentId) {
 }
 
 /**
+ * Analyze A/B test results and generate comprehensive conclusion report
+ */
+export async function analyzeResults(experimentId) {
+  try {
+    const experiment = await ASOExperiment.findById(experimentId);
+
+    if (!experiment) {
+      throw new Error('Experiment not found');
+    }
+
+    // Ensure we have fresh calculations
+    experiment.calculateConversionRates();
+    experiment.determineWinner();
+
+    // Generate comprehensive analysis report
+    const analysis = {
+      experiment: {
+        id: experiment._id,
+        name: experiment.name,
+        type: experiment.type,
+        status: experiment.status,
+        duration: experiment.duration,
+        startDate: experiment.startDate,
+        endDate: experiment.endDate,
+        metric: experiment.metric
+      },
+
+      // Test results
+      results: {
+        variantA: {
+          name: experiment.variantA.name,
+          views: experiment.variantAViews,
+          conversions: experiment.variantAConversions,
+          conversionRate: experiment.variantAConversionRate.toFixed(2) + '%'
+        },
+        variantB: {
+          name: experiment.variantB.name,
+          views: experiment.variantBViews,
+          conversions: experiment.variantBConversions,
+          conversionRate: experiment.variantBConversionRate.toFixed(2) + '%'
+        }
+      },
+
+      // Statistical analysis
+      statistics: {
+        winner: experiment.winner,
+        significance: experiment.significance.toFixed(4),
+        confidence: experiment.confidence.toFixed(1) + '%',
+        lift: experiment.lift.toFixed(2) + '%',
+        isSignificant: experiment.significance < 0.05,
+        confidenceLevel: experiment.significance < 0.01 ? '99%' :
+                        experiment.significance < 0.05 ? '95%' :
+                        experiment.significance < 0.10 ? '90%' : 'Not significant'
+      },
+
+      // Sample size analysis
+      sampleSize: {
+        totalViews: experiment.variantAViews + experiment.variantBViews,
+        totalConversions: experiment.variantAConversions + experiment.variantBConversions,
+        targetSampleSize: experiment.targetSampleSize,
+        sufficient: experiment.hasSufficientSampleSize(),
+        durationElapsed: experiment.hasTestDurationElapsed(),
+        completionPercentage: experiment.getCompletionPercentage() + '%'
+      },
+
+      // Conclusion
+      conclusion: generateAnalysisConclusion(experiment),
+
+      // Recommendations
+      recommendations: generateAnalysisRecommendations(experiment),
+
+      // Insights
+      insights: generateAnalysisInsights(experiment),
+
+      // Next steps
+      nextSteps: generateAnalysisNextSteps(experiment),
+
+      // Metadata
+      generatedAt: new Date(),
+      completedAt: experiment.completedAt
+    };
+
+    console.log(`📊 Analyzed A/B test results: ${experiment.name}`);
+    return analysis;
+  } catch (error) {
+    console.error('Error analyzing experiment results:', error);
+    throw new Error(`Failed to analyze results: ${error.message}`);
+  }
+}
+
+/**
+ * Generate detailed conclusion based on test results for analysis report
+ */
+function generateAnalysisConclusion(experiment) {
+  const { winner, significance, lift, variantAConversionRate, variantBConversionRate } = experiment;
+
+  if (!experiment.hasSufficientSampleSize()) {
+    return `Inconclusive: Insufficient sample size (${experiment.variantAConversions + experiment.variantBConversions} conversions, target: ${experiment.targetSampleSize}). Continue running the test to gather more data.`;
+  }
+
+  if (winner === 'inconclusive') {
+    if (Math.abs(variantBConversionRate - variantAConversionRate) < 0.05) {
+      return `Inconclusive: No meaningful difference detected between variants (${variantAConversionRate.toFixed(2)}% vs ${variantBConversionRate.toFixed(2)}%). Both variants perform similarly.`;
+    }
+    return `Inconclusive: Difference not statistically significant (p=${significance.toFixed(4)}). Need larger sample size or longer duration.`;
+  }
+
+  const winnerName = winner === 'variantA' ? experiment.variantA.name : experiment.variantB.name;
+  const loserName = winner === 'variantA' ? experiment.variantB.name : experiment.variantA.name;
+  const winnerRate = winner === 'variantA' ? variantAConversionRate : variantBConversionRate;
+  const loserRate = winner === 'variantA' ? variantBConversionRate : variantAConversionRate;
+
+  if (significance < 0.01) {
+    return `Highly Significant Result: ${winnerName} outperformed ${loserName} with ${lift.toFixed(1)}% lift (${winnerRate.toFixed(2)}% vs ${loserRate.toFixed(2)}% conversion rate). Statistical confidence: 99%. This result is very reliable and should inform immediate action.`;
+  } else if (significance < 0.05) {
+    return `Significant Result: ${winnerName} outperformed ${loserName} with ${lift.toFixed(1)}% lift (${winnerRate.toFixed(2)}% vs ${loserRate.toFixed(2)}% conversion rate). Statistical confidence: 95%. This result is reliable enough for informed decisions.`;
+  } else {
+    return `Preliminary Result: ${winnerName} shows ${lift.toFixed(1)}% lift over ${loserName} (${winnerRate.toFixed(2)}% vs ${loserRate.toFixed(2)}%), but results are not yet statistically significant (p=${significance.toFixed(4)}). Consider extending the test duration.`;
+  }
+}
+
+/**
+ * Generate detailed actionable recommendations based on test results for analysis report
+ */
+function generateAnalysisRecommendations(experiment) {
+  const recommendations = [];
+  const { winner, significance, lift, type } = experiment;
+
+  if (winner === 'inconclusive') {
+    recommendations.push({
+      priority: 'high',
+      type: 'continue_testing',
+      title: 'Extend Test Duration',
+      description: 'Increase test duration to gather more data and reach statistical significance.',
+      action: 'Run test for another 7-14 days or until target sample size is reached.'
+    });
+
+    if (experiment.variantAConversions + experiment.variantBConversions < 500) {
+      recommendations.push({
+        priority: 'medium',
+        type: 'sample_size',
+        title: 'Increase Sample Size',
+        description: `Current sample size (${experiment.variantAConversions + experiment.variantBConversions} conversions) may be too small.`,
+        action: 'Continue running until at least 1000 total conversions are recorded.'
+      });
+    }
+
+    recommendations.push({
+      priority: 'low',
+      type: 'redesign',
+      title: 'Consider Test Redesign',
+      description: 'If extending the test doesn\'t help, consider testing more different variants.',
+      action: 'Design new variants with more significant differences to test.'
+    });
+
+    return recommendations;
+  }
+
+  // Winner determined
+  if (significance < 0.05) {
+    recommendations.push({
+      priority: 'high',
+      type: 'implement_winner',
+      title: `Implement ${winner === 'variantA' ? experiment.variantA.name : experiment.variantB.name}`,
+      description: `The winning variant showed ${lift.toFixed(1)}% lift with ${experiment.confidence.toFixed(0)}% confidence.`,
+      action: 'Apply the winning variant to the App Store production listing.'
+    });
+
+    // Type-specific recommendations
+    if (type === 'icon') {
+      recommendations.push({
+        priority: 'medium',
+        type: 'apply_learning',
+        title: 'Apply Design Learning',
+        description: 'Consider applying the winning design principles to other app store assets.',
+        action: 'Review screenshot and design elements for consistency with winning icon style.'
+      });
+    } else if (type === 'screenshots') {
+      recommendations.push({
+        priority: 'medium',
+        type: 'test_more',
+        title: 'Test Additional Screenshots',
+        description: 'Continue testing with more screenshot variations.',
+        action: 'Run follow-up tests with different screenshot orders or captions.'
+      });
+    } else if (type === 'subtitle' || type === 'description') {
+      recommendations.push({
+        priority: 'medium',
+        type: 'keyword_optimization',
+        title: 'Optimize Keywords',
+        description: 'Use the winning text insights to optimize other metadata.',
+        action: 'Review and update keywords based on successful messaging.'
+      });
+    } else if (type === 'keywords') {
+      recommendations.push({
+        priority: 'medium',
+        type: 'expand_keywords',
+        title: 'Expand Keyword Strategy',
+        description: 'Build on the winning keyword set.',
+        action: 'Test additional related keywords that performed well.'
+      });
+    }
+  }
+
+  if (lift > 20) {
+    recommendations.push({
+      priority: 'high',
+      type: 'document_learnings',
+      title: 'Document Significant Win',
+      description: `A ${lift.toFixed(1)}% lift is exceptional. Document the learnings for future reference.`,
+      action: 'Create a case study and share with the team for knowledge sharing.'
+    });
+  }
+
+  recommendations.push({
+    priority: 'low',
+    type: 'monitor',
+    title: 'Monitor Post-Implementation Performance',
+    description: 'Track performance after implementing the winner to validate results.',
+    action: 'Monitor conversion rates for 2-4 weeks after implementation.'
+  });
+
+  return recommendations;
+}
+
+/**
+ * Generate detailed insights from test results for analysis report
+ */
+function generateAnalysisInsights(experiment) {
+  const insights = [];
+  const { variantAViews, variantBViews, variantAConversions, variantBConversions, lift, winner } = experiment;
+
+  // Sample size insight
+  const totalViews = variantAViews + variantBViews;
+  const totalConversions = variantAConversions + variantBConversions;
+  const overallRate = (totalConversions / totalViews * 100).toFixed(2);
+
+  insights.push({
+    type: 'sample_size',
+    title: 'Sample Size Analysis',
+    content: `Collected ${totalViews.toLocaleString()} total views with ${totalConversions} conversions. Overall conversion rate: ${overallRate}%.`
+  });
+
+  // Duration insight
+  if (experiment.startDate) {
+    const daysRunning = Math.ceil((Date.now() - experiment.startDate.getTime()) / (24 * 60 * 60 * 1000));
+    insights.push({
+      type: 'duration',
+      title: 'Test Duration',
+      content: `Test ran for ${daysRunning} days. Target duration: ${experiment.duration} days.`
+    });
+  }
+
+  // Statistical power insight
+  if (experiment.significance < 0.05) {
+    insights.push({
+      type: 'statistical_power',
+      title: 'Statistical Confidence',
+      content: `Results are statistically significant with ${experiment.confidence.toFixed(0)}% confidence. This is a reliable result.`
+    });
+  } else if (experiment.significance < 0.10) {
+    insights.push({
+      type: 'statistical_power',
+      title: 'Approaching Significance',
+      content: `Results are approaching significance (p=${experiment.significance.toFixed(4)}). Consider extending the test duration.`
+    });
+  }
+
+  // Lift insight
+  if (winner !== 'inconclusive' && lift !== 0) {
+    insights.push({
+      type: 'lift',
+      title: 'Performance Impact',
+      content: winner === 'variantB'
+        ? `Variant B (Treatment) showed ${lift.toFixed(1)}% ${lift > 0 ? 'improvement' : 'decline'} over Variant A (Control).`
+        : `Variant A (Control) outperformed Variant B (Treatment) by ${Math.abs(lift).toFixed(1)}%.`
+    });
+  }
+
+  // Traffic balance insight
+  const trafficRatio = (variantAViews / variantBViews * 100).toFixed(1);
+  if (Math.abs(100 - trafficRatio) > 10) {
+    insights.push({
+      type: 'traffic_balance',
+      title: 'Traffic Distribution',
+      content: `Traffic was not evenly split: ${trafficRatio}% / ${(100 - trafficRatio).toFixed(1)}%. This may affect reliability.`,
+      recommendation: 'Aim for 50/50 traffic split in future tests for optimal statistical power.'
+    });
+  }
+
+  return insights;
+}
+
+/**
+ * Generate detailed next steps based on test results for analysis report
+ */
+function generateAnalysisNextSteps(experiment) {
+  const nextSteps = [];
+
+  if (experiment.winner === 'inconclusive') {
+    nextSteps.push({
+      order: 1,
+      action: 'Extend test duration',
+      details: `Continue running for another 7-14 days to reach statistical significance.`,
+      timeframe: 'Immediate'
+    });
+    nextSteps.push({
+      order: 2,
+      action: 'Monitor sample size',
+      details: `Track conversions until reaching ${experiment.targetSampleSize} total conversions.`,
+      timeframe: 'Ongoing'
+    });
+  } else if (experiment.significance < 0.05) {
+    nextSteps.push({
+      order: 1,
+      action: 'Implement winning variant',
+      details: `Apply ${experiment.winner === 'variantA' ? experiment.variantA.name : experiment.variantB.name} to production.`,
+      timeframe: 'Immediate'
+    });
+    nextSteps.push({
+      order: 2,
+      action: 'Document learnings',
+      details: 'Record what worked and why for future reference.',
+      timeframe: 'This week'
+    });
+    nextSteps.push({
+      order: 3,
+      action: 'Monitor performance',
+      details: 'Track conversion rates for 2-4 weeks post-implementation.',
+      timeframe: 'Next 2-4 weeks'
+    });
+    nextSteps.push({
+      order: 4,
+      action: 'Plan next test',
+      details: 'Identify next hypothesis to test based on learnings.',
+      timeframe: 'Next month'
+    });
+  }
+
+  return nextSteps;
+}
+
+/**
  * Get mock experiment data for testing
  */
 export async function getMockExperiments() {
@@ -670,5 +1013,6 @@ export default {
   getExperimentStatistics,
   deleteExperiment,
   cancelExperiment,
-  getMockExperiments
+  getMockExperiments,
+  analyzeResults
 };

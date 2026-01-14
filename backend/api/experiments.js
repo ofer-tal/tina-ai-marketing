@@ -373,4 +373,67 @@ router.get('/:id/summary', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/experiments/:id/analyze
+ * Analyze A/B test results and generate comprehensive conclusion report
+ */
+router.get('/:id/analyze', async (req, res) => {
+  try {
+    const analysis = await asoExperimentService.analyzeResults(req.params.id);
+
+    res.json({
+      success: true,
+      data: analysis
+    });
+  } catch (error) {
+    console.error('Error analyzing experiment results:', error);
+
+    const statusCode = error.message.includes('not found') ? 404 : 500;
+    res.status(statusCode).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/experiments/:id/save-conclusion
+ * Save conclusion and recommendations to experiment
+ */
+router.post('/:id/save-conclusion', async (req, res) => {
+  try {
+    const { conclusion, recommendations, learned } = req.body;
+
+    const experiment = await asoExperimentService.getExperiment(req.params.id);
+
+    if (conclusion) {
+      experiment.conclusion = conclusion;
+    }
+
+    if (recommendations) {
+      experiment.recommendations = recommendations;
+    }
+
+    if (learned) {
+      experiment.learned = learned;
+    }
+
+    await experiment.save();
+
+    res.json({
+      success: true,
+      data: experiment,
+      message: 'Conclusion saved successfully'
+    });
+  } catch (error) {
+    console.error('Error saving conclusion:', error);
+
+    const statusCode = error.message.includes('not found') ? 404 : 500;
+    res.status(statusCode).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
