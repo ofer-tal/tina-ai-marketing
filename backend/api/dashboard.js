@@ -936,46 +936,64 @@ router.get('/engagement', async (req, res) => {
 
     // Calculate time range based on period
     const days = period === '24h' ? 1 : period === '7d' ? 7 : 30;
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
 
-    // TODO: In production, fetch from MongoDB marketing_posts collection
-    // For now, generate mock engagement data by platform
-
+    // Platform metadata
     const platforms = [
       { id: 'tiktok', name: 'TikTok', icon: '🎵', color: '#000000' },
       { id: 'instagram', name: 'Instagram', icon: '📸', color: '#E4405F' },
       { id: 'youtube_shorts', name: 'YouTube Shorts', icon: '📺', color: '#FF0000' }
     ];
 
-    // Generate platform-specific engagement data
+    // Fetch real data from MongoDB marketing_posts collection
+    const MarketingPost = (await import('../models/MarketingPost.js')).default;
+
+    // Fetch posted posts within the time period
+    const posts = await MarketingPost.find({
+      status: 'posted',
+      postedAt: { $gte: startDate }
+    });
+
+    console.log(`Found ${posts.length} posted posts in period: ${period}`);
+
+    // Debug: Log sample of posts with/without metrics
+    const postsWithMetrics = posts.filter(p => p.performanceMetrics && p.performanceMetrics.views > 0);
+    const postsWithoutMetrics = posts.length - postsWithMetrics.length;
+    console.log(`  Posts with metrics: ${postsWithMetrics.length}, without metrics: ${postsWithoutMetrics}`);
+
+    if (postsWithMetrics.length > 0) {
+      console.log(`  Sample metrics:`, JSON.stringify(postsWithMetrics[0].performanceMetrics));
+    }
+
+    // Debug: Log post IDs and platforms
+    if (posts.length > 0) {
+      console.log(`  Sample posts (first 3):`);
+      posts.slice(0, 3).forEach(p => {
+        console.log(`    - ${p._id} | ${p.platform} | postedAt: ${p.postedAt} | metrics: ${p.performanceMetrics?.views || 0} views`);
+      });
+    }
+
+    // Aggregate metrics by platform
     const platformData = platforms.map(platform => {
-      // Base values scaled by period
-      const multiplier = days === 1 ? 1 : days === 7 ? 5 : 15;
+      const platformPosts = posts.filter(p => p.platform === platform.id);
 
-      let views, likes, comments, shares;
+      // Sum up metrics from all posts
+      const totals = platformPosts.reduce((acc, post) => {
+        const metrics = post.performanceMetrics || { views: 0, likes: 0, comments: 0, shares: 0, engagementRate: 0 };
+        return {
+          views: acc.views + (metrics.views || 0),
+          likes: acc.likes + (metrics.likes || 0),
+          comments: acc.comments + (metrics.comments || 0),
+          shares: acc.shares + (metrics.shares || 0),
+          posts: acc.posts + 1
+        };
+      }, { views: 0, likes: 0, comments: 0, shares: 0, posts: 0 });
 
-      // Platform-specific engagement patterns
-      if (platform.id === 'tiktok') {
-        // TikTok: High views, moderate engagement
-        views = Math.round((150000 + Math.random() * 50000) * multiplier);
-        likes = Math.round(views * (0.08 + Math.random() * 0.04)); // 8-12%
-        comments = Math.round(likes * 0.02); // ~2% of likes
-        shares = Math.round(likes * 0.03); // ~3% of likes
-      } else if (platform.id === 'instagram') {
-        // Instagram: Moderate views, high engagement
-        views = Math.round((80000 + Math.random() * 40000) * multiplier);
-        likes = Math.round(views * (0.10 + Math.random() * 0.05)); // 10-15%
-        comments = Math.round(likes * 0.025); // ~2.5% of likes
-        shares = Math.round(likes * 0.04); // ~4% of likes
-      } else {
-        // YouTube Shorts: Lower views, lower engagement
-        views = Math.round((100000 + Math.random() * 60000) * multiplier);
-        likes = Math.round(views * (0.05 + Math.random() * 0.03)); // 5-8%
-        comments = Math.round(likes * 0.015); // ~1.5% of likes
-        shares = Math.round(likes * 0.02); // ~2% of likes
-      }
-
-      const engagementRate = ((likes + comments + shares) / views * 100);
-      const posts = Math.round((5 + Math.random() * 10) * multiplier);
+      // Calculate engagement rate
+      const engagementRate = totals.views > 0
+        ? ((totals.likes + totals.comments + totals.shares) / totals.views) * 100
+        : 0;
 
       return {
         id: platform.id,
@@ -983,14 +1001,14 @@ router.get('/engagement', async (req, res) => {
         icon: platform.icon,
         color: platform.color,
         metrics: {
-          posts: posts,
-          views: views,
-          likes: likes,
-          comments: comments,
-          shares: shares,
+          posts: totals.posts,
+          views: totals.views,
+          likes: totals.likes,
+          comments: totals.comments,
+          shares: totals.shares,
           engagementRate: parseFloat(engagementRate.toFixed(2)),
-          avgViewsPerPost: Math.round(views / posts),
-          avgEngagementPerPost: parseFloat((engagementRate / posts).toFixed(2))
+          avgViewsPerPost: totals.posts > 0 ? Math.round(totals.views / totals.posts) : 0,
+          avgEngagementPerPost: totals.posts > 0 ? parseFloat((engagementRate / totals.posts).toFixed(2)) : 0
         }
       };
     });
@@ -1003,13 +1021,41 @@ router.get('/engagement', async (req, res) => {
     const totalShares = platformData.reduce((sum, p) => sum + p.metrics.shares, 0);
     const avgEngagementRate = platformData.reduce((sum, p) => sum + p.metrics.engagementRate, 0) / platformData.length;
 
-    // Calculate previous period for comparison
-    const previousMultiplier = 0.75; // Previous period had 75% of current
-    const previousViews = Math.round(totalViews * previousMultiplier);
-    const previousLikes = Math.round(totalLikes * previousMultiplier);
-    const previousComments = Math.round(totalComments * previousMultiplier);
-    const previousShares = Math.round(totalShares * previousMultiplier);
-    const previousEngagementRate = avgEngagementRate - 1.2; // Previous was 1.2% lower
+    // Calculate previous period for comparison (fetch real data)
+    const previousStartDate = new Date(startDate);
+    previousStartDate.setDate(previousStartDate.getDate() - days);
+
+    const previousEndDate = new Date(startDate);
+
+    const previousPosts = await MarketingPost.find({
+      status: 'posted',
+      postedAt: { $gte: previousStartDate, $lt: previousEndDate }
+    });
+
+    console.log(`Found ${previousPosts.length} posted posts in previous period`);
+
+    // Aggregate previous period metrics by platform
+    const previousPlatformData = platforms.map(platform => {
+      const platformPosts = previousPosts.filter(p => p.platform === platform.id);
+
+      return platformPosts.reduce((acc, post) => {
+        const metrics = post.performanceMetrics || { views: 0, likes: 0, comments: 0, shares: 0 };
+        return {
+          views: acc.views + (metrics.views || 0),
+          likes: acc.likes + (metrics.likes || 0),
+          comments: acc.comments + (metrics.comments || 0),
+          shares: acc.shares + (metrics.shares || 0)
+        };
+      }, { views: 0, likes: 0, comments: 0, shares: 0 });
+    });
+
+    const previousViews = previousPlatformData.reduce((sum, p) => sum + p.views, 0);
+    const previousLikes = previousPlatformData.reduce((sum, p) => sum + p.likes, 0);
+    const previousComments = previousPlatformData.reduce((sum, p) => sum + p.comments, 0);
+    const previousShares = previousPlatformData.reduce((sum, p) => sum + p.shares, 0);
+    const previousEngagementRate = previousViews > 0
+      ? ((previousLikes + previousComments + previousShares) / previousViews) * 100
+      : 0;
 
     const engagementData = {
       period: period,
@@ -1021,7 +1067,7 @@ router.get('/engagement', async (req, res) => {
         totalComments: totalComments,
         totalShares: totalShares,
         avgEngagementRate: parseFloat(avgEngagementRate.toFixed(2)),
-        avgViewsPerPost: Math.round(totalViews / totalPosts),
+        avgViewsPerPost: totalPosts > 0 ? Math.round(totalViews / totalPosts) : 0,
         previous: {
           views: previousViews,
           likes: previousLikes,
@@ -1030,10 +1076,10 @@ router.get('/engagement', async (req, res) => {
           engagementRate: parseFloat(previousEngagementRate.toFixed(2))
         },
         changes: {
-          views: parseFloat(((totalViews - previousViews) / previousViews * 100).toFixed(1)),
-          likes: parseFloat(((totalLikes - previousLikes) / previousLikes * 100).toFixed(1)),
-          comments: parseFloat(((totalComments - previousComments) / previousComments * 100).toFixed(1)),
-          shares: parseFloat(((totalShares - previousShares) / previousShares * 100).toFixed(1)),
+          views: previousViews > 0 ? parseFloat(((totalViews - previousViews) / previousViews * 100).toFixed(1)) : 0,
+          likes: previousLikes > 0 ? parseFloat(((totalLikes - previousLikes) / previousLikes * 100).toFixed(1)) : 0,
+          comments: previousComments > 0 ? parseFloat(((totalComments - previousComments) / previousComments * 100).toFixed(1)) : 0,
+          shares: previousShares > 0 ? parseFloat(((totalShares - previousShares) / previousShares * 100).toFixed(1)) : 0,
           engagementRate: parseFloat((avgEngagementRate - previousEngagementRate).toFixed(2))
         }
       }
