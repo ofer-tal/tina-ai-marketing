@@ -350,12 +350,33 @@ function ContentLibrary() {
       setError(err.message);
 
       // Use mock data if API fails (for development)
-      const mockPosts = generateMockPosts();
-      setPosts(mockPosts);
+      let mockPosts = generateMockPosts();
+
+      // Apply filters to mock data
+      if (filters.platform !== 'all') {
+        mockPosts = mockPosts.filter(post => post.platform === filters.platform);
+      }
+      if (filters.status !== 'all') {
+        mockPosts = mockPosts.filter(post => post.status === filters.status);
+      }
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase();
+        mockPosts = mockPosts.filter(post =>
+          post.title.toLowerCase().includes(searchLower) ||
+          post.storyName.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Apply pagination to mock data
+      const startIndex = (pagination.page - 1) * pagination.limit;
+      const endIndex = startIndex + pagination.limit;
+      const paginatedPosts = mockPosts.slice(startIndex, endIndex);
+
+      setPosts(paginatedPosts);
       setPagination(prev => ({
         ...prev,
         total: mockPosts.length,
-        hasMore: false
+        hasMore: endIndex < mockPosts.length
       }));
     } finally {
       setLoading(false);
@@ -485,7 +506,7 @@ function ContentLibrary() {
           background: 'rgba(220, 53, 69, 0.1)',
           border: '1px solid #dc3545',
           borderRadius: '6px',
-          color: #ff6b6b'
+          color: '#ff6b6b'
         }}>
           ⚠️ Using mock data - Backend disconnected: {error}
         </div>
