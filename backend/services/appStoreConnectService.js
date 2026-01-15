@@ -1622,6 +1622,283 @@ class AppStoreConnectService {
   }
 
   /**
+   * Get Finance Reports (Sales and Transactions)
+   *
+   * Fetches financial reports from App Store Connect
+   * API: https://api.appstoreconnect.apple.com/v1/salesReports
+   *
+   * @param {Object} options - Query options
+   * @param {string} options.frequency - Report frequency (DAILY, WEEKLY, MONTHLY, YEARLY)
+   * @param {string} options.reportType - Type of report (SALES, SUBSCRIPTION_EVENT, SUBSCRIPTION)
+   * @param {string} options.reportSubType - Report sub-type (SUMMARY, DETAILED, etc.)
+   * @param {string} options.reportDate - Date in YYYY-MM format for monthly, YYYY-MM-DD for daily
+   * @param {string} options.vendorNumber - Vendor number (optional)
+   * @returns {Promise<Object>} Financial reports data
+   */
+  async getFinanceReports(options = {}) {
+    try {
+      const {
+        frequency = 'DAILY',
+        reportType = 'SALES',
+        reportSubType = 'SUMMARY',
+        reportDate = null,
+        vendorNumber = null
+      } = options;
+
+      logger.info('Fetching finance reports', {
+        frequency,
+        reportType,
+        reportSubType,
+        reportDate
+      });
+
+      // Generate report date if not provided (yesterday for daily reports)
+      let date = reportDate;
+      if (!date) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        date = frequency === 'DAILY'
+          ? yesterday.toISOString().split('T')[0]
+          : yesterday.toISOString().slice(0, 7);
+      }
+
+      // Build API endpoint
+      // App Store Connect Finance Reports API
+      const endpoint = `/v1/salesReports?filter[frequency]=${frequency}&filter[reportType]=${reportType}&filter[reportSubType]=${reportSubType}&filter[reportDate]=${date}`;
+
+      if (vendorNumber) {
+        endpoint += `&filter[vendorNumber]=${vendorNumber}`;
+      }
+
+      const authHeader = this.getAuthToken();
+
+      // TODO: Implement actual API call
+      // const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      //   method: 'GET',
+      //   headers: {
+      //     'Authorization': authHeader,
+      //     'Content-Type': 'application/json'
+      //   }
+      // });
+
+      logger.info('Finance reports API not yet fully implemented, returning mock data');
+      return this.getMockFinanceReports(date, frequency);
+
+    } catch (error) {
+      logger.error('Failed to fetch finance reports', {
+        error: error.message,
+        options
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get Subscription Events
+   *
+   * Fetches subscription lifecycle events (renewals, cancellations, etc.)
+   * API: https://api.appstoreconnect.apple.com/v1/subscriptionReports
+   *
+   * @param {Object} options - Query options
+   * @param {string} options.startDate - Start date in YYYY-MM-DD format
+   * @param {string} options.endDate - End date in YYYY-MM-DD format
+   * @param {string} options.productId - Product bundle ID (optional)
+   * @returns {Promise<Object>} Subscription events data
+   */
+  async getSubscriptionEvents(options = {}) {
+    try {
+      const {
+        startDate = null,
+        endDate = null,
+        productId = null
+      } = options;
+
+      // Default to last 30 days
+      const end = endDate ? new Date(endDate) : new Date();
+      const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+      logger.info('Fetching subscription events', {
+        startDate: start.toISOString().split('T')[0],
+        endDate: end.toISOString().split('T')[0],
+        productId
+      });
+
+      // TODO: Implement actual API call
+      // GET https://api.appstoreconnect.apple.com/v1/subscriptionReports?filter[subscriptionReportType]=SUBSCRIPTION_EVENT&filter[reportDate]=...
+
+      logger.info('Subscription events API not yet fully implemented, returning mock data');
+      return this.getMockSubscriptionEvents(start, end);
+
+    } catch (error) {
+      logger.error('Failed to fetch subscription events', {
+        error: error.message,
+        options
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get mock finance reports
+   */
+  getMockFinanceReports(reportDate, frequency = 'DAILY') {
+    const date = new Date(reportDate);
+
+    // Generate mock transaction data
+    const transactions = [];
+    const numTransactions = Math.floor(Math.random() * 50) + 20; // 20-70 transactions per day
+
+    for (let i = 0; i < numTransactions; i++) {
+      const isSubscription = Math.random() > 0.3; // 70% subscriptions, 30% one-time
+      const isRenewal = isSubscription && Math.random() > 0.4; // 60% of subscriptions are renewals
+      const isNew = !isRenewal;
+
+      const grossAmount = isSubscription
+        ? (Math.random() > 0.5 ? 9.99 : 19.99) // Monthly or annual subscription
+        : (Math.random() > 0.5 ? 4.99 : 9.99); // One-time purchase tiers
+
+      const appleFeeRate = 0.15; // 15% Apple fee
+      const appleFeeAmount = grossAmount * appleFeeRate;
+      const netAmount = grossAmount - appleFeeAmount;
+
+      transactions.push({
+        transactionId: `trans_${Date.now()}_${i}`,
+        transactionDate: date.toISOString(),
+        grossAmount: parseFloat(grossAmount.toFixed(2)),
+        appleFeeRate: appleFeeRate,
+        appleFeeAmount: parseFloat(appleFeeAmount.toFixed(2)),
+        netAmount: parseFloat(netAmount.toFixed(2)),
+        currency: 'USD',
+        productType: isSubscription ? 'subscription' : 'in-app-purchase',
+        productId: isSubscription
+          ? (grossAmount > 15 ? 'com.blush.annual' : 'com.blush.monthly')
+          : 'com.blush.premium',
+        quantity: 1,
+        isNewCustomer: isNew,
+        isRenewal: isRenewal,
+        isTrial: false,
+        countryCode: 'US',
+        region: 'AMERICAS',
+        deviceType: Math.random() > 0.5 ? 'iPhone' : 'iPad',
+        appVersion: '1.2.0'
+      });
+    }
+
+    // Calculate totals
+    const totals = transactions.reduce((acc, tx) => {
+      acc.grossRevenue += tx.grossAmount;
+      acc.appleFees += tx.appleFeeAmount;
+      acc.netRevenue += tx.netAmount;
+      acc.transactionCount += 1;
+      if (tx.isNewCustomer) {
+        acc.newCustomerCount += 1;
+        acc.newCustomerRevenue += tx.netAmount;
+      }
+      if (tx.isSubscription) {
+        acc.subscriptionCount += 1;
+        acc.subscriptionRevenue += tx.netAmount;
+      } else {
+        acc.oneTimePurchaseCount += 1;
+        acc.oneTimePurchaseRevenue += tx.netAmount;
+      }
+      return acc;
+    }, {
+      grossRevenue: 0,
+      appleFees: 0,
+      netRevenue: 0,
+      transactionCount: 0,
+      newCustomerCount: 0,
+      newCustomerRevenue: 0,
+      subscriptionCount: 0,
+      subscriptionRevenue: 0,
+      oneTimePurchaseCount: 0,
+      oneTimePurchaseRevenue: 0
+    });
+
+    return {
+      reportDate: reportDate,
+      frequency: frequency,
+      transactions: transactions,
+      totals: {
+        grossRevenue: parseFloat(totals.grossRevenue.toFixed(2)),
+        appleFees: parseFloat(totals.appleFees.toFixed(2)),
+        netRevenue: parseFloat(totals.netRevenue.toFixed(2)),
+        transactionCount: totals.transactionCount,
+        newCustomerCount: totals.newCustomerCount,
+        newCustomerRevenue: parseFloat(totals.newCustomerRevenue.toFixed(2)),
+        subscriptionCount: totals.subscriptionCount,
+        subscriptionRevenue: parseFloat(totals.subscriptionRevenue.toFixed(2)),
+        oneTimePurchaseCount: totals.oneTimePurchaseCount,
+        oneTimePurchaseRevenue: parseFloat(totals.oneTimePurchaseRevenue.toFixed(2)),
+        averageRevenuePerTransaction: parseFloat((totals.netRevenue / totals.transactionCount).toFixed(2))
+      },
+      source: 'mock',
+      generatedAt: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Get mock subscription events
+   */
+  getMockSubscriptionEvents(startDate, endDate) {
+    const events = [];
+    const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+
+    for (let day = 0; day < daysDiff; day++) {
+      const currentDate = new Date(startDate);
+      currentDate.setDate(startDate.getDate() + day);
+
+      // Generate 5-15 events per day
+      const numEvents = Math.floor(Math.random() * 10) + 5;
+
+      for (let i = 0; i < numEvents; i++) {
+        const eventTypes = ['RENEW', 'CANCEL', 'DID_FAIL_TO_RENEW', 'PRICE_INCREASE', 'REFUND'];
+        const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
+
+        events.push({
+          eventId: `sub_event_${Date.now()}_${day}_${i}`,
+          eventDate: currentDate.toISOString(),
+          eventType: eventType,
+          productId: Math.random() > 0.5 ? 'com.blush.monthly' : 'com.blush.annual',
+          transactionId: `trans_${Date.now()}_${day}_${i}`,
+          originalTransactionId: `orig_trans_${Math.floor(Math.random() * 10000)}`,
+          originalPurchaseDate: new Date(currentDate.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+          expirationDate: new Date(currentDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          webOrderLineItemId: Math.floor(Math.random() * 1000000),
+          trialPeriod: false,
+          countryCode: 'US'
+        });
+      }
+    }
+
+    // Summary statistics
+    const summary = events.reduce((acc, event) => {
+      acc.totalEvents += 1;
+      acc.renewals += event.eventType === 'RENEW' ? 1 : 0;
+      acc.cancellations += event.eventType === 'CANCEL' ? 1 : 0;
+      acc.failedRenewals += event.eventType === 'DID_FAIL_TO_RENEW' ? 1 : 0;
+      acc.refunds += event.eventType === 'REFUND' ? 1 : 0;
+      return acc;
+    }, {
+      totalEvents: 0,
+      renewals: 0,
+      cancellations: 0,
+      failedRenewals: 0,
+      refunds: 0
+    });
+
+    return {
+      startDate: startDate.toISOString().split('T')[0],
+      endDate: endDate.toISOString().split('T')[0],
+      totalEvents: events.length,
+      events: events,
+      summary: summary,
+      source: 'mock',
+      generatedAt: new Date().toISOString()
+    };
+  }
+
+  /**
    * Get mock A/B test list
    */
   getMockABTestList() {

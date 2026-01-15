@@ -2773,3 +2773,81 @@ NEXT SESSION PRIORITIES
 Continue with next feature in priority order (feature #150+).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION START - 2026-01-15 06:57 UTC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**CRITICAL REGRESSION BUGS FIXED**
+
+**Bug #1: API Port Mismatch (3010 → 3001)**
+- Location: frontend/src/pages/BatchApprovalQueue.jsx
+- Issue: Page making requests to wrong port (3010 instead of 3001)
+- Impact: All approval/reject requests failing with ERR_CONNECTION_REFUSED
+- Fix: Replaced all 5 occurrences of localhost:3010 with localhost:3001
+- Lines affected: 305, 384, 414, 438, 456
+
+**Bug #2: Wrong HTTP Method for Approve/Reject**
+- Location: frontend/src/pages/BatchApprovalQueue.jsx  
+- Issue: Using PATCH to /posts/:id instead of POST to /posts/:id/approve
+- Impact: 404 errors when clicking approve/reject buttons
+- Fix: Updated handleQuickApprove() to POST to /posts/:id/approve
+- Fix: Updated handleQuickReject() to POST to /posts/:id/reject
+- Lines affected: 436-448, 450-466
+
+**Bug #3: Post ID Field Mismatch**
+- Location: frontend/src/pages/BatchApprovalQueue.jsx
+- Issue: Using post.id (undefined) instead of post._id (MongoDB ObjectId)
+- Impact: API requests to /posts/undefined/approve causing 500 errors
+- Fix: Replaced all post.id and p.id references with post._id and p._id
+- Lines affected: Multiple occurrences throughout file
+
+**REGRESSION TESTING COMPLETED**
+
+Feature #91: Approve button for content approval ✅
+
+All 5 verification steps completed:
+✅ Step 1: Open content review interface - Navigated to /content/approval
+✅ Step 2: Review content details - Page loads with 5 posts displayed
+✅ Step 3: Click approve button - Clicked ✅ Approve on Instagram post
+✅ Step 4: Verify status changes to 'approved' - Status updated in UI
+✅ Step 5: Confirm post updated in database - Verified via API:
+   - Status: "approved"
+   - approvedAt: "2026-01-15T06:55:13.809Z"
+   - Approval history tracked
+   - No console errors
+
+Screenshot: verification/approval-button-test.png
+
+**Git Commit:** 76b034d
+
+**Progress:** 144/338 (42.6%)
+
+**Session Achievements:**
+- Fixed 3 critical regression bugs from previous session
+- Restored approve/reject functionality
+- Verified end-to-end workflow working
+- Database updates confirmed
+- No console errors
+
+**Technical Details:**
+- All API endpoints now use correct port (3001)
+- HTTP methods match backend routes (POST for approve/reject)
+- MongoDB ObjectId references fixed (_id not id)
+- Approval workflow fully functional
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEXT: CONTINUE WITH FEATURE #151
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Feature #151: App Store transactions API integration
+Status: in_progress
+Category: Revenue_and_Financial_Tracking
+
+Implementation steps:
+1. Configure App Store Connect API
+2. Fetch transactions endpoint
+3. Test data retrieval
+4. Verify transaction fields
+5. Store in marketing_revenue collection
+
+

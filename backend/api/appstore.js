@@ -520,4 +520,227 @@ router.get('/category/:appId?', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/appstore/transactions
+ *
+ * Fetch transactions from App Store Connect
+ * Query params:
+ * - frequency: Report frequency (DAILY, WEEKLY, MONTHLY, YEARLY)
+ * - reportDate: Date in YYYY-MM-DD format (optional, defaults to yesterday)
+ * - reportType: Type of report (SALES, SUBSCRIPTION_EVENT, SUBSCRIPTION)
+ * - reportSubType: Report sub-type (SUMMARY, DETAILED, etc.)
+ */
+router.get('/transactions', async (req, res) => {
+  try {
+    const { frequency, reportDate, reportType, reportSubType } = req.query;
+
+    logger.info('Fetching transactions', {
+      frequency,
+      reportDate,
+      reportType,
+      reportSubType
+    });
+
+    const options = {};
+    if (frequency) options.frequency = frequency;
+    if (reportDate) options.reportDate = reportDate;
+    if (reportType) options.reportType = reportType;
+    if (reportSubType) options.reportSubType = reportSubType;
+
+    const financeData = await appStoreConnectService.getFinanceReports(options);
+
+    res.json({
+      success: true,
+      data: financeData,
+      fetchedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Failed to fetch transactions', {
+      error: error.message,
+      query: req.query
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/appstore/transactions/sync
+ *
+ * Fetch transactions and store in marketing_revenue collection
+ * Body params:
+ * - frequency: Report frequency (DAILY, WEEKLY, MONTHLY)
+ * - reportDate: Date in YYYY-MM-DD format (optional)
+ */
+router.post('/transactions/sync', async (req, res) => {
+  try {
+    const { frequency = 'DAILY', reportDate } = req.body;
+
+    logger.info('Syncing transactions to marketing_revenue', {
+      frequency,
+      reportDate
+    });
+
+    // Fetch transactions from App Store Connect
+    const financeData = await appStoreConnectService.getFinanceReports({
+      frequency,
+      reportDate
+    });
+
+    if (!financeData.transactions || financeData.transactions.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No transactions to sync',
+        synced: 0,
+        skipped: 0
+      });
+    }
+
+    // Import MarketingRevenue model
+    const MarketingRevenue = (await import('../models/MarketingRevenue.js')).default;
+
+    // Store each transaction
+    let synced = 0;
+    let skipped = 0;
+    const errors = [];
+
+    for (const tx of financeData.transactions) {
+      try {
+        // Check if transaction already exists
+        const existing = await MarketingRevenue.findOne({ transactionId: tx.transactionId });
+
+        if (existing) {
+          skipped++;
+          logger.debug('Transaction already exists, skipping', { transactionId: tx.transactionId });
+          continue;
+        }
+
+        // Map transaction data to MarketingRevenue schema
+        const revenueRecord = new MarketingRevenue({
+          transactionId: tx.transactionId,
+          attributedTo: {
+            channel: 'organic', // Default to organic, attribution happens separately
+            campaignId: null,
+            campaignName: null
+          },
+          revenue: {
+            grossAmount: tx.grossAmount,
+            appleFee: tx.appleFeeRate,
+            appleFeeAmount: tx.appleFeeAmount,
+            netAmount: tx.netAmount,
+            currency: tx.currency || 'USD'
+          },
+          transactionDate: new Date(tx.transactionDate),
+          attributionWindow: 7,
+          touchpointDate: null, // Will be set by attribution service
+          customer: {
+            new: tx.isNewCustomer || !tx.isRenewal,
+            subscriptionType: tx.productType === 'subscription'
+              ? (tx.productId.includes('annual') ? 'annual' : 'monthly')
+              : null,
+            subscriptionId: tx.productId
+          },
+          attributionConfidence: 100, // Direct from App Store
+          metadata: {
+            source: 'app_store_connect',
+            appVersion: tx.appVersion,
+            region: tx.region,
+            deviceType: tx.deviceType,
+            productId: tx.productId,
+            productType: tx.productType,
+            countryCode: tx.countryCode,
+            isRenewal: tx.isRenewal,
+            isTrial: tx.isTrial
+          }
+        });
+
+        await revenueRecord.save();
+        synced++;
+        logger.info('Transaction synced', { transactionId: tx.transactionId });
+
+      } catch (err) {
+        logger.error('Failed to sync transaction', {
+          transactionId: tx.transactionId,
+          error: err.message
+        });
+        errors.push({
+          transactionId: tx.transactionId,
+          error: err.message
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Synced ${synced} transactions, skipped ${skipped} existing`,
+      data: {
+        synced,
+        skipped,
+        total: financeData.transactions.length,
+        errors: errors.length > 0 ? errors : undefined
+      },
+      reportDate: financeData.reportDate,
+      totals: financeData.totals,
+      syncedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Failed to sync transactions', {
+      error: error.message,
+      body: req.body
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/appstore/subscriptions/events
+ *
+ * Fetch subscription events from App Store Connect
+ * Query params:
+ * - startDate: Start date in YYYY-MM-DD format (optional)
+ * - endDate: End date in YYYY-MM-DD format (optional)
+ * - productId: Product bundle ID (optional)
+ */
+router.get('/subscriptions/events', async (req, res) => {
+  try {
+    const { startDate, endDate, productId } = req.query;
+
+    logger.info('Fetching subscription events', {
+      startDate,
+      endDate,
+      productId
+    });
+
+    const options = {};
+    if (startDate) options.startDate = startDate;
+    if (endDate) options.endDate = endDate;
+    if (productId) options.productId = productId;
+
+    const eventsData = await appStoreConnectService.getSubscriptionEvents(options);
+
+    res.json({
+      success: true,
+      data: eventsData,
+      fetchedAt: new Date().toISOString()
+    });
+
+  } catch (error) {
+    logger.error('Failed to fetch subscription events', {
+      error: error.message,
+      query: req.query
+    });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
