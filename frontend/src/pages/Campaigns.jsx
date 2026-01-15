@@ -94,7 +94,7 @@ const CampaignsTable = styled.div`
 
 const TableHeader = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   background: #1a1a2e;
@@ -105,7 +105,7 @@ const TableHeader = styled.div`
 
 const TableRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid #2d3561;
@@ -177,6 +177,41 @@ const MetricValue = styled.div`
 const MetricLabel = styled.div`
   font-size: 0.75rem;
   color: #a0a0a0;
+`;
+
+// Feature #140: ROI display components
+const ROIValue = styled.div`
+  font-weight: 600;
+  color: ${props => {
+    if (props.roi > 0) return '#00d26a'; // Green for positive ROI
+    if (props.roi < 0) return '#ff4757'; // Red for negative ROI
+    return '#a0a0a0'; // Gray for zero ROI
+  }};
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+`;
+
+const ROILabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+`;
+
+const ROIBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: ${props => {
+    if (props.roi > 0) return '#00d26a33';
+    if (props.roi < 0) return '#ff475733';
+    return '#2d3561';
+  }};
+  color: ${props => {
+    if (props.roi > 0) return '#00d26a';
+    if (props.roi < 0) return '#ff4757';
+    return '#a0a0a0;
+  }};
 `;
 
 const LoadingState = styled.div`
@@ -718,8 +753,12 @@ function Campaigns() {
   const [dailySpendLoading, setDailySpendLoading] = useState(false);
   const [showDailySpend, setShowDailySpend] = useState(false);
 
+  // Feature #140: ROI calculation per campaign
+  const [campaignROI, setCampaignROI] = useState({});
+
   useEffect(() => {
     fetchCampaigns();
+    fetchCampaignROI();
   }, []);
 
   const fetchCampaigns = async () => {
@@ -755,6 +794,46 @@ function Campaigns() {
     setRefreshing(true);
     await fetchCampaigns();
     setRefreshing(false);
+  };
+
+  // Feature #140: Fetch ROI data for all campaigns
+  const fetchCampaignROI = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/revenue/attribution/campaigns');
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data) {
+        // Create a map of campaignId -> ROI data
+        const roiMap = {};
+        data.data.forEach(item => {
+          roiMap[item.campaignId] = {
+            revenue: item.revenue || 0,
+            spend: item.spend || 0,
+            roi: calculateROI(item.revenue || 0, item.spend || 0),
+            transactions: item.transactions || 0
+          };
+        });
+        setCampaignROI(roiMap);
+      } else {
+        // Use mock ROI data
+        setCampaignROI(getMockCampaignROI());
+      }
+    } catch (err) {
+      console.error('Error fetching campaign ROI:', err);
+      // Fall back to mock data
+      setCampaignROI(getMockCampaignROI());
+    }
+  };
+
+  // Calculate ROI percentage
+  const calculateROI = (revenue, spend) => {
+    if (spend === 0) return 0;
+    return ((revenue - spend) / spend) * 100;
   };
 
   const handleViewAdGroups = async (campaign) => {
@@ -1181,6 +1260,36 @@ function Campaigns() {
     ];
   };
 
+  // Feature #140: Mock ROI data for campaigns
+  const getMockCampaignROI = () => {
+    return {
+      '123456789': {
+        revenue: 1260.15,
+        spend: 850.00,
+        roi: 48.25,
+        transactions: 90
+      },
+      '123456790': {
+        revenue: 540.30,
+        spend: 625.00,
+        roi: -13.55,
+        transactions: 36
+      },
+      '123456791': {
+        revenue: 180.45,
+        spend: 425.00,
+        roi: -57.54,
+        transactions: 12
+      },
+      '123456792': {
+        revenue: 95.20,
+        spend: 125.00,
+        roi: -23.84,
+        transactions: 6
+      }
+    };
+  };
+
   const filteredCampaigns = campaigns.filter(campaign => {
     if (statusFilter === 'all') return true;
     return campaign.status.toLowerCase() === statusFilter.toLowerCase();
@@ -1278,6 +1387,7 @@ function Campaigns() {
           <div>Ad Groups</div>
           <div>Keywords</div>
           <div>Daily Spend</div>
+          <div>ROI</div>
         </TableHeader>
 
         {filteredCampaigns.length === 0 ? (
@@ -1334,6 +1444,25 @@ function Campaigns() {
                 <ViewDailySpendButton onClick={handleViewDailySpend}>
                   💰 Daily Spend
                 </ViewDailySpendButton>
+              </div>
+              <div>
+                {/* Feature #140: ROI calculation display */}
+                {campaignROI[campaign.id] ? (
+                  <>
+                    <ROIValue roi={campaignROI[campaign.id].roi}>
+                      {campaignROI[campaign.id].roi > 0 ? '▲' : campaignROI[campaign.id].roi < 0 ? '▼' : '─'}
+                      {Math.abs(campaignROI[campaign.id].roi).toFixed(1)}%
+                    </ROIValue>
+                    <ROILabel>
+                      {formatCurrency(campaignROI[campaign.id].revenue)} / {formatCurrency(campaignROI[campaign.id].spend)}
+                    </ROILabel>
+                  </>
+                ) : (
+                  <>
+                    <MetricValue>--</MetricValue>
+                    <MetricLabel>No data</MetricLabel>
+                  </>
+                )}
               </div>
             </TableRow>
           ))
