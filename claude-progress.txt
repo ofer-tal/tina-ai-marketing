@@ -122,3 +122,4 @@ Fixed code uses: { _id: new ObjectId(id) }
 Progress: 152/338 features passing (45.0%)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION COMPLETE - Feature #181: Overdue todo highlighting - 153/338 passing (45.3%)

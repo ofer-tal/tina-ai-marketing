@@ -43,6 +43,7 @@ const FilterBar = styled.div`
   gap: 1rem;
   margin-bottom: 1.5rem;
   flex-wrap: wrap;
+  align-items: center;
 `;
 
 const FilterSelect = styled.select`
@@ -57,6 +58,26 @@ const FilterSelect = styled.select`
   &:focus {
     outline: none;
     border-color: #e94560;
+  }
+`;
+
+const SearchInput = styled.input`
+  padding: 0.5rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  min-width: 250px;
+  flex: 1;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+  }
+
+  &::placeholder {
+    color: #a0a0a0;
   }
 `;
 
@@ -412,6 +433,7 @@ function Todos() {
     category: 'all',
     priority: 'all'
   });
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -426,7 +448,7 @@ function Todos() {
 
   useEffect(() => {
     applyFilters();
-  }, [todos, filters]);
+  }, [todos, filters, searchQuery]);
 
   const fetchTodos = async () => {
     try {
@@ -453,6 +475,16 @@ function Todos() {
     }
     if (filters.priority !== 'all') {
       filtered = filtered.filter(todo => todo.priority === filters.priority);
+    }
+
+    // Search by title or description
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(todo => {
+        const titleMatch = todo.title && todo.title.toLowerCase().includes(query);
+        const descriptionMatch = todo.description && todo.description.toLowerCase().includes(query);
+        return titleMatch || descriptionMatch;
+      });
     }
 
     filtered.sort((a, b) => {
@@ -581,6 +613,12 @@ function Todos() {
       </Header>
 
       <FilterBar>
+        <SearchInput
+          type="text"
+          placeholder="🔍 Search todos by title or description..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
         <FilterSelect
           value={filters.status}
           onChange={(e) => setFilters({ ...filters, status: e.target.value })}
