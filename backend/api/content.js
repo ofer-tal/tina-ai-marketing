@@ -163,6 +163,81 @@ router.get('/status', async (req, res) => {
 });
 
 /**
+ * POST /api/content/posts/create
+ * Create a new marketing post (for testing purposes)
+ */
+router.post('/posts/create', async (req, res) => {
+  try {
+    logger.info('Creating marketing post via API', { body: req.body });
+
+    const {
+      title,
+      description,
+      platform,
+      contentType,
+      status = 'draft',
+      caption,
+      hashtags,
+      scheduledAt,
+      storyId,
+      storyName,
+      storyCategory,
+      storySpiciness,
+      generatedAt,
+      generationSource,
+      imagePath
+    } = req.body;
+
+    // Validate required fields
+    if (!platform || !contentType) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: platform, contentType'
+      });
+    }
+
+    // Create the post
+    const post = new MarketingPost({
+      title: title || 'Test Post',
+      description,
+      platform,
+      contentType,
+      status,
+      caption: caption || '',
+      hashtags: hashtags || [],
+      scheduledAt: scheduledAt ? new Date(scheduledAt) : new Date(Date.now() + 86400000),
+      storyId: storyId || '000000000000000000000001',
+      storyName: storyName || 'Test Story',
+      storyCategory: storyCategory || 'Contemporary',
+      storySpiciness: storySpiciness || 1,
+      imagePath,
+      generatedAt: generatedAt ? new Date(generatedAt) : new Date(),
+      generationSource: generationSource || 'api'
+    });
+
+    await post.save();
+
+    logger.info('Marketing post created', { id: post._id, status });
+
+    res.json({
+      success: true,
+      data: post
+    });
+
+  } catch (error) {
+    logger.error('Create marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/content/schedule/start
  * Start scheduled content generation
  */
