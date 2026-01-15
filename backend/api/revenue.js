@@ -204,7 +204,84 @@ router.get('/summary', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
-      data: { totalRevenue: 0, transactionCount: 0 }
+      data: { grossRevenue: 0, appleFees: 0, netRevenue: 0, transactionCount: 0 }
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/monthly/:year/:month
+ * Get net revenue for a specific month
+ */
+router.get('/monthly/:year/:month', async (req, res) => {
+  try {
+    const { year, month } = req.params;
+    const yearNum = parseInt(year);
+    const monthNum = parseInt(month);
+
+    if (isNaN(yearNum) || isNaN(monthNum) || monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid year or month. Month must be between 1 and 12.'
+      });
+    }
+
+    const monthlyRevenue = await MarketingRevenue.getMonthlyNetRevenue(yearNum, monthNum);
+
+    res.json({
+      success: true,
+      data: monthlyRevenue[0] || {
+        year: yearNum,
+        month: monthNum,
+        grossRevenue: 0,
+        appleFees: 0,
+        netRevenue: 0,
+        transactionCount: 0,
+        newCustomerCount: 0,
+        returningCustomerCount: 0,
+        subscriptionRevenue: 0,
+        oneTimePurchaseRevenue: 0,
+        averageRevenuePerTransaction: 0
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching monthly net revenue:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: {
+        year: parseInt(req.params.year),
+        month: parseInt(req.params.month),
+        grossRevenue: 0,
+        appleFees: 0,
+        netRevenue: 0,
+        transactionCount: 0
+      }
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/monthly/history
+ * Get monthly net revenue history
+ */
+router.get('/monthly/history', async (req, res) => {
+  try {
+    const { months } = req.query;
+    const monthsCount = months ? parseInt(months) : 12;
+
+    const monthlyHistory = await MarketingRevenue.getMonthlyNetRevenueHistory(monthsCount);
+
+    res.json({
+      success: true,
+      data: monthlyHistory
+    });
+  } catch (error) {
+    console.error('Error fetching monthly revenue history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: []
     });
   }
 });

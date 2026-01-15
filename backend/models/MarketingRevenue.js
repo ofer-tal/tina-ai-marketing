@@ -33,7 +33,19 @@ const marketingRevenueSchema = new mongoose.Schema({
 
   // Revenue details
   revenue: {
-    amount: {
+    grossAmount: {
+      type: Number,
+      required: true
+    },
+    appleFee: {
+      type: Number,
+      default: 0.15 // 15% Apple fee
+    },
+    appleFeeAmount: {
+      type: Number,
+      required: true
+    },
+    netAmount: {
       type: Number,
       required: true
     },
@@ -123,13 +135,15 @@ marketingRevenueSchema.statics.getTotalRevenue = async function(startDate, endDa
     {
       $group: {
         _id: null,
-        totalRevenue: { $sum: '$revenue.amount' },
+        grossRevenue: { $sum: '$revenue.grossAmount' },
+        appleFees: { $sum: '$revenue.appleFeeAmount' },
+        netRevenue: { $sum: '$revenue.netAmount' },
         transactionCount: { $sum: 1 }
       }
     }
   ]);
 
-  return result[0] || { totalRevenue: 0, transactionCount: 0 };
+  return result[0] || { grossRevenue: 0, appleFees: 0, netRevenue: 0, transactionCount: 0 };
 };
 
 marketingRevenueSchema.statics.getRevenueByCampaign = async function(startDate, endDate) {
@@ -146,11 +160,13 @@ marketingRevenueSchema.statics.getRevenueByCampaign = async function(startDate, 
           campaignId: '$attributedTo.campaignId',
           campaignName: '$attributedTo.campaignName'
         },
-        totalRevenue: { $sum: '$revenue.amount' },
+        grossRevenue: { $sum: '$revenue.grossAmount' },
+        appleFees: { $sum: '$revenue.appleFeeAmount' },
+        netRevenue: { $sum: '$revenue.netAmount' },
         transactionCount: { $sum: 1 },
         newCustomerRevenue: {
           $sum: {
-            $cond: ['$customer.new', '$revenue.amount', 0]
+            $cond: ['$customer.new', '$revenue.netAmount', 0]
           }
         }
       }
@@ -171,11 +187,13 @@ marketingRevenueSchema.statics.getRevenueByChannel = async function(startDate, e
     {
       $group: {
         _id: '$attributedTo.channel',
-        totalRevenue: { $sum: '$revenue.amount' },
+        grossRevenue: { $sum: '$revenue.grossAmount' },
+        appleFees: { $sum: '$revenue.appleFeeAmount' },
+        netRevenue: { $sum: '$revenue.netAmount' },
         transactionCount: { $sum: 1 },
         newCustomerRevenue: {
           $sum: {
-            $cond: ['$customer.new', '$revenue.amount', 0]
+            $cond: ['$customer.new', '$revenue.netAmount', 0]
           }
         }
       }
@@ -202,7 +220,9 @@ marketingRevenueSchema.statics.getDailyRevenue = async function(startDate, endDa
         _id: {
           $dateToString: { format: '%Y-%m-%d', date: '$transactionDate' }
         },
-        totalRevenue: { $sum: '$revenue.amount' },
+        grossRevenue: { $sum: '$revenue.grossAmount' },
+        appleFees: { $sum: '$revenue.appleFeeAmount' },
+        netRevenue: { $sum: '$revenue.netAmount' },
         transactionCount: { $sum: 1 },
         newCustomerCount: {
           $sum: {
@@ -227,27 +247,144 @@ marketingRevenueSchema.statics.getRevenueROI = async function(campaignId) {
     {
       $group: {
         _id: '$attributedTo.campaignId',
-        attributedRevenue: { $sum: '$revenue.amount' },
+        attributedGrossRevenue: { $sum: '$revenue.grossAmount' },
+        attributedNetRevenue: { $sum: '$revenue.netAmount' },
         conversions: { $sum: 1 }
       }
     }
   ]);
 
   if (revenueData.length === 0) {
-    return { attributedRevenue: 0, conversions: 0, roi: null };
+    return { attributedGrossRevenue: 0, attributedNetRevenue: 0, conversions: 0, roi: null };
   }
 
   // Note: Spend needs to be fetched from campaign data
   return {
-    attributedRevenue: revenueData[0].attributedRevenue,
+    attributedGrossRevenue: revenueData[0].attributedGrossRevenue,
+    attributedNetRevenue: revenueData[0].attributedNetRevenue,
     conversions: revenueData[0].conversions
   };
+};
+
+marketingRevenueSchema.statics.getMonthlyNetRevenue = async function(year, month) {
+  // Create date range for the specified month
+  const startDate = new Date(year, month - 1, 1); // month is 1-indexed (1 = January)
+  const endDate = new Date(year, month, 1); // First day of next month
+
+  return this.aggregate([
+    {
+      $match: {
+        transactionDate: { $gte: startDate, $lt: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$transactionDate' },
+          month: { $month: '$transactionDate' }
+        },
+        grossRevenue: { $sum: '$revenue.grossAmount' },
+        appleFees: { $sum: '$revenue.appleFeeAmount' },
+        netRevenue: { $sum: '$revenue.netAmount' },
+        transactionCount: { $sum: 1 },
+        newCustomerCount: {
+          $sum: {
+            $cond: ['$customer.new', 1, 0]
+          }
+        },
+        returningCustomerCount: {
+          $sum: {
+            $cond: ['$customer.new', 0, 1]
+          }
+        },
+        subscriptionRevenue: {
+          $sum: {
+            $cond: [
+              { $in: ['$customer.subscriptionType', ['monthly', 'annual', 'lifetime']] },
+              '$revenue.netAmount',
+              0
+            ]
+          }
+        },
+        oneTimePurchaseRevenue: {
+          $sum: {
+            $cond: [
+              { $eq: ['$customer.subscriptionType', 'trial'] },
+              '$revenue.netAmount',
+              0
+            ]
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        year: '$_id.year',
+        month: '$_id.month',
+        grossRevenue: 1,
+        appleFees: 1,
+        netRevenue: 1,
+        transactionCount: 1,
+        newCustomerCount: 1,
+        returningCustomerCount: 1,
+        subscriptionRevenue: 1,
+        oneTimePurchaseRevenue: 1,
+        averageRevenuePerTransaction: { $divide: ['$netRevenue', '$transactionCount'] }
+      }
+    }
+  ]);
+};
+
+marketingRevenueSchema.statics.getMonthlyNetRevenueHistory = async function(months = 12) {
+  const startDate = new Date();
+  startDate.setMonth(startDate.getMonth() - months);
+
+  return this.aggregate([
+    {
+      $match: {
+        transactionDate: { $gte: startDate }
+      }
+    },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$transactionDate' },
+          month: { $month: '$transactionDate' }
+        },
+        grossRevenue: { $sum: '$revenue.grossAmount' },
+        appleFees: { $sum: '$revenue.appleFeeAmount' },
+        netRevenue: { $sum: '$revenue.netAmount' },
+        transactionCount: { $sum: 1 },
+        newCustomerCount: {
+          $sum: {
+            $cond: ['$customer.new', 1, 0]
+          }
+        }
+      }
+    },
+    {
+      $project: {
+        _id: 0,
+        year: '$_id.year',
+        month: '$_id.month',
+        grossRevenue: 1,
+        appleFees: 1,
+        netRevenue: 1,
+        transactionCount: 1,
+        newCustomerCount: 1
+      }
+    },
+    {
+      $sort: { year: 1, month: 1 }
+    }
+  ]);
 };
 
 // Instance method to calculate ROAS
 marketingRevenueSchema.methods.calculateROAS = function(spend) {
   if (!spend || spend === 0) return null;
-  return (this.revenue.amount / spend).toFixed(2);
+  return (this.revenue.netAmount / spend).toFixed(2);
 };
 
 // Update timestamp on save

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import MonthlyRevenue from '../components/MonthlyRevenue.jsx';
 
 const DashboardContainer = styled.div`
   width: 100%;
@@ -1675,6 +1676,8 @@ function Dashboard() {
           </BudgetContainer>
         </BudgetSection>
       )}
+
+      <MonthlyRevenue />
 
       <DashboardHeader>
         <Title>App Store Keyword Rankings</Title>
