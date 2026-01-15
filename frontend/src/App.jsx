@@ -1,5 +1,5 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import Settings from './pages/Settings';
 import Dashboard from './pages/Dashboard';
@@ -31,17 +31,29 @@ const MainLayout = styled.div`
 `;
 
 const SidebarNav = styled.nav`
-  width: 200px;
+  width: ${props => props.$collapsed ? '60px' : '200px'};
   background: ${cssVar('--color-surface')};
   border-right: 1px solid ${cssVar('--color-border')};
-  padding: ${cssVar('--spacing-md')};
+  padding: ${props => props.$collapsed ? cssVar('--spacing-sm') : cssVar('--spacing-md')};
   display: flex;
   flex-direction: column;
   gap: ${cssVar('--spacing-sm')};
+  transition: width ${cssVar('--transition-base')};
+  position: relative;
+
+  @media (max-width: 768px) {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: ${cssVar('--z-index-fixed')};
+    transform: translateX(${props => props.$collapsed ? '-100%' : '0'});
+    transition: transform ${cssVar('--transition-base')};
+  }
 `;
 
 const SidebarNavLink = styled(Link)`
-  padding: 0.75rem 1rem;
+  padding: ${props => props.$collapsed ? '0.75rem' : '0.75rem 1rem'};
   background: transparent;
   border: 1px solid transparent;
   border-radius: ${cssVar('--radius-md')};
@@ -51,17 +63,25 @@ const SidebarNavLink = styled(Link)`
   transition: all ${cssVar('--transition-base')};
   display: flex;
   align-items: center;
+  justify-content: ${props => props.$collapsed ? 'center' : 'flex-start'};
   gap: ${cssVar('--spacing-sm')};
+  white-space: nowrap;
+  overflow: hidden;
 
   &:hover {
     background: ${cssVar('--color-primary')};
     border-color: ${cssVar('--color-primary')};
-    transform: translateX(4px);
+    transform: ${props => props.$collapsed ? 'none' : 'translateX(4px)'};
   }
 
   &.active {
     background: ${cssVar('--color-primary')};
     border-color: ${cssVar('--color-primary')};
+  }
+
+  span {
+    opacity: ${props => props.$collapsed ? '0' : '1'};
+    transition: opacity ${cssVar('--transition-base')};
   }
 `;
 
@@ -75,7 +95,11 @@ const PageContent = styled.div`
   flex: 1;
   padding: ${cssVar('--spacing-xl')};
   overflow-y: auto;
-  max-width: calc(100vw - 520px); // Subtract sidebar and todo sidebar
+  max-width: calc(100vw - ${props => props.$sidebarCollapsed ? '380px' : '520px'}); // Subtract sidebar and todo sidebar
+
+  @media (max-width: 768px) {
+    max-width: 100vw;
+  }
 `;
 
 const Header = styled.header`
@@ -84,6 +108,34 @@ const Header = styled.header`
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid ${cssVar('--color-border')};
+`;
+
+const SidebarToggle = styled.button`
+  position: fixed;
+  left: ${props => props.$collapsed ? '60px' : '200px'};
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  background: ${cssVar('--color-primary')};
+  border: none;
+  border-radius: 0 ${cssVar('--radius-md')} ${cssVar('--radius-md')} 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: left ${cssVar('--transition-base')};
+  z-index: ${cssVar('--z-index-sticky')};
+  color: white;
+  font-size: 1.2rem;
+
+  &:hover {
+    background: ${cssVar('--color-primary-hover')};
+  }
+
+  @media (max-width: 768px) {
+    display: none;
+  }
 `;
 
 const HeaderLeft = styled.div`
@@ -207,7 +259,65 @@ function HomePage() {
   );
 }
 
+// Sidebar component with collapse functionality
+function Sidebar({ collapsed, onToggle }) {
+  const location = useLocation();
+
+  const menuItems = [
+    { path: '/', icon: '🏠', label: 'Home' },
+    { path: '/dashboard', icon: '📊', label: 'Dashboard' },
+    { path: '/dashboard/strategic', icon: '📈', label: 'Strategic' },
+    { path: '/content/library', icon: '📝', label: 'Content' },
+    { path: '/content/approval', icon: '✅', label: 'Approvals' },
+    { path: '/chat', icon: '🤖', label: 'AI Chat' },
+    { path: '/ads/campaigns', icon: '📢', label: 'Campaigns' },
+    { path: '/ads/revenue-test', icon: '💰', label: 'Revenue' },
+    { path: '/revenue/weekly', icon: '📅', label: 'Weekly' },
+    { path: '/settings', icon: '⚙️', label: 'Settings' },
+  ];
+
+  return (
+    <>
+      <SidebarNav $collapsed={collapsed}>
+        {menuItems.map(item => (
+          <SidebarNavLink
+            key={item.path}
+            to={item.path}
+            $collapsed={collapsed}
+            className={location.pathname === item.path ? 'active' : ''}
+          >
+            {item.icon}
+            <span>{item.label}</span>
+          </SidebarNavLink>
+        ))}
+      </SidebarNav>
+      <SidebarToggle
+        $collapsed={collapsed}
+        onClick={onToggle}
+        aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {collapsed ? '▶' : '◀'}
+      </SidebarToggle>
+    </>
+  );
+}
+
 function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    // Load from localStorage on mount
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Persist sidebar state to localStorage
+  useEffect(() => {
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(prev => !prev);
+  };
+
   return (
     <Router>
       <AppContainer>
@@ -219,21 +329,10 @@ function App() {
         </Header>
 
         <MainLayout>
-          <SidebarNav>
-            <SidebarNavLink to="/">🏠 Home</SidebarNavLink>
-            <SidebarNavLink to="/dashboard">📊 Dashboard</SidebarNavLink>
-            <SidebarNavLink to="/dashboard/strategic">📈 Strategic</SidebarNavLink>
-            <SidebarNavLink to="/content/library">📝 Content</SidebarNavLink>
-            <SidebarNavLink to="/content/approval">✅ Approvals</SidebarNavLink>
-            <SidebarNavLink to="/chat">🤖 AI Chat</SidebarNavLink>
-            <SidebarNavLink to="/ads/campaigns">📢 Campaigns</SidebarNavLink>
-            <SidebarNavLink to="/ads/revenue-test">💰 Revenue</SidebarNavLink>
-            <SidebarNavLink to="/revenue/weekly">📅 Weekly</SidebarNavLink>
-            <SidebarNavLink to="/settings">⚙️ Settings</SidebarNavLink>
-          </SidebarNav>
+          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
 
           <MainContentArea>
-            <PageContent>
+            <PageContent $sidebarCollapsed={sidebarCollapsed}>
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/dashboard" element={<Dashboard />} />
