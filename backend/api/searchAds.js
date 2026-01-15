@@ -445,4 +445,94 @@ router.get('/campaigns/:campaignId/keywords/:keywordId/report', async (req, res)
   }
 });
 
+/**
+ * Feature #138: Daily spend aggregation
+ * GET /api/searchAds/daily-spend
+ * Step 1 & 2: Fetch campaign spend data and aggregate by date
+ * Get aggregated daily spend for a date range
+ */
+router.get('/daily-spend', async (req, res) => {
+  try {
+    const { startDate, endDate, campaignId } = req.query;
+
+    // Default to last 30 days if not specified
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const result = await appleSearchAdsService.getAggregatedDailySpend(start, end);
+
+    res.json({
+      success: true,
+      data: result.data || [],
+      mock: result.mock || false,
+    });
+  } catch (error) {
+    console.error('Error fetching daily spend:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Feature #138: Spend summary
+ * GET /api/searchAds/daily-spend/summary
+ * Get spend summary statistics for a date range
+ */
+router.get('/daily-spend/summary', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Default to last 30 days if not specified
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const result = await appleSearchAdsService.getSpendSummary(start, end);
+
+    res.json({
+      success: true,
+      data: result.summary,
+    });
+  } catch (error) {
+    console.error('Error fetching spend summary:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Feature #138: Over-budget days
+ * GET /api/searchAds/daily-spend/over-budget
+ * Get days that exceeded budget
+ */
+router.get('/daily-spend/over-budget', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Default to last 30 days if not specified
+    const end = endDate || new Date().toISOString().split('T')[0];
+    const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    const result = await appleSearchAdsService.getAggregatedDailySpend(start, end);
+
+    // Filter for over-budget days
+    const overBudgetDays = (result.data || []).filter(day => day.overBudget);
+
+    res.json({
+      success: true,
+      data: overBudgetDays,
+      count: overBudgetDays.length,
+    });
+  } catch (error) {
+    console.error('Error fetching over-budget days:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
