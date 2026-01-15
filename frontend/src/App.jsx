@@ -10,6 +10,7 @@ import BatchApprovalQueue from './pages/BatchApprovalQueue';
 import Campaigns from './pages/Campaigns';
 import RevenueAttributionTest from './pages/RevenueAttributionTest';
 import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
+import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 
 const AppContainer = styled.div`
@@ -243,6 +244,7 @@ function App() {
                 <Route path="/ads/campaigns" element={<Campaigns />} />
                 <Route path="/ads/revenue-test" element={<RevenueAttributionTest />} />
                 <Route path="/revenue/weekly" element={<WeeklyRevenueAggregates />} />
+                <Route path="/todos" element={<Todos />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
             </PageContent>

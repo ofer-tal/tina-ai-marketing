@@ -3271,3 +3271,42 @@ Frontend UI:
 **Estimated Time to Complete:** 10-15 minutes (server restart + verification)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION COMPLETE - 2026-01-15 09:55 UTC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**FEATURE #173: TODO DETAILS INCLUDE ASSOCIATED RESOURCES** ✅
+
+All 5 verification steps completed and verified with real database data:
+
+✅ Step 1: Expand todo details - Modal opens on todo click
+✅ Step 2: Verify resources section displays - 'Associated Resources' heading shown
+✅ Step 3: Check video links playable - Video resource with 🎥 icon, clickable external URL
+✅ Step 4: Test text resources readable - Document resource with 📄 icon, readable description
+✅ Step 5: Confirm external links clickable - All resources clickable, navigation works
+
+Implementation Details:
+- Resources already implemented in TodoSidebar.jsx (lines 639-667)
+- Modal displays resources with type-specific icons (link 🔗, document 📄, video 🎥)
+- Resources stored in MongoDB marketing_tasks collection
+- API endpoint: POST /api/todos creates todos with resources array
+
+Test Results:
+- Created test todo with 3 resources (link, video, document)
+- Verified resources display in modal with proper styling
+- Tested link navigation: /content/library → Content Library page
+- Tested video navigation: https://example.com/tutorial → external site
+- All resource types render correctly with appropriate icons
+- Dark theme styling matches brand (purple section heading)
+
+Regression Testing:
+✅ Feature #138 (Daily spend aggregation) - Modal opens, displays chart
+✅ Feature #31 (Alert notifications) - Dismiss works, count updates
+
+Progress: 148/338 (43.8%) → 149/338 (44.1%) +1 feature
+
+Git Commit: 6dc51c4
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
