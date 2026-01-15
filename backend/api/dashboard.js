@@ -1370,6 +1370,14 @@ router.get('/budget-utilization', async (req, res) => {
         remaining: remainingBudget,
         projected: projectedSpend
       },
+      variance: {
+        amount: monthlyBudget - totalSpend, // Positive = under budget, Negative = over budget
+        percent: ((monthlyBudget - totalSpend) / monthlyBudget) * 100,
+        status: (monthlyBudget - totalSpend) >= 0 ? 'under' : 'over', // under or over budget
+        description: (monthlyBudget - totalSpend) >= 0
+          ? `${Math.round(((monthlyBudget - totalSpend) / monthlyBudget) * 100)}% under budget`
+          : `${Math.round(((totalSpend - monthlyBudget) / monthlyBudget) * 100)}% over budget`
+      },
       utilization: {
         percent: Math.round(utilizationPercent * 10) / 10, // Round to 1 decimal
         amount: totalSpend,
@@ -1395,17 +1403,29 @@ router.get('/budget-utilization', async (req, res) => {
         apple_search_ads: {
           spent: Math.round(totalSpend * 0.42),
           budget: Math.round(monthlyBudget * 0.50),
-          percent: Math.round((totalSpend * 0.42) / (monthlyBudget * 0.50) * 100)
+          percent: Math.round((totalSpend * 0.42) / (monthlyBudget * 0.50) * 100),
+          variance: {
+            amount: Math.round(monthlyBudget * 0.50) - Math.round(totalSpend * 0.42),
+            percent: ((Math.round(monthlyBudget * 0.50) - Math.round(totalSpend * 0.42)) / Math.round(monthlyBudget * 0.50)) * 100
+          }
         },
         tiktok_ads: {
           spent: Math.round(totalSpend * 0.32),
           budget: Math.round(monthlyBudget * 0.30),
-          percent: Math.round((totalSpend * 0.32) / (monthlyBudget * 0.30) * 100)
+          percent: Math.round((totalSpend * 0.32) / (monthlyBudget * 0.30) * 100),
+          variance: {
+            amount: Math.round(monthlyBudget * 0.30) - Math.round(totalSpend * 0.32),
+            percent: ((Math.round(monthlyBudget * 0.30) - Math.round(totalSpend * 0.32)) / Math.round(monthlyBudget * 0.30)) * 100
+          }
         },
         instagram_ads: {
           spent: Math.round(totalSpend * 0.26),
           budget: Math.round(monthlyBudget * 0.20),
-          percent: Math.round((totalSpend * 0.26) / (monthlyBudget * 0.20) * 100)
+          percent: Math.round((totalSpend * 0.26) / (monthlyBudget * 0.20) * 100),
+          variance: {
+            amount: Math.round(monthlyBudget * 0.20) - Math.round(totalSpend * 0.26),
+            percent: ((Math.round(monthlyBudget * 0.20) - Math.round(totalSpend * 0.26)) / Math.round(monthlyBudget * 0.20)) * 100
+          }
         }
       }
     };
