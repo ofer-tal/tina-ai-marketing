@@ -83,7 +83,7 @@ const CampaignsTable = styled.div`
 
 const TableHeader = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   background: #1a1a2e;
@@ -94,7 +94,7 @@ const TableHeader = styled.div`
 
 const TableRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid #2d3561;
@@ -373,6 +373,171 @@ const ViewAdGroupsButton = styled.button`
   }
 `;
 
+// Feature #137: Keyword-level spend tracking styled components
+const KeywordsSection = styled.div`
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+`;
+
+const KeywordsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const KeywordsTitle = styled.h3`
+  font-size: 1.5rem;
+  margin: 0;
+  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
+const CloseKeywordsButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #2d3561;
+  border: 1px solid #3d4571;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+    border-color: #e94560;
+  }
+`;
+
+const SortControls = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+`;
+
+const SortButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: ${props => props.active ? '#e94560' : '#16213e'};
+  border: 1px solid ${props => props.active ? '#e94560' : '#2d3561'};
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #e94560;
+    border-color: #e94560;
+  }
+`;
+
+const KeywordsTable = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  overflow-x: auto;
+`;
+
+const KeywordsTableHeader = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border-bottom: 1px solid #2d3561;
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 0.85rem;
+`;
+
+const KeywordsTableRow = styled.div`
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  border-bottom: 1px solid #2d3561;
+  align-items: center;
+  transition: background 0.2s;
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &:hover {
+    background: #1f1f3a;
+  }
+`;
+
+const KeywordText = styled.div`
+  font-weight: 500;
+  color: #eaeaea;
+`;
+
+const MatchTypeBadge = styled.span`
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: ${props => {
+    switch (props.matchType) {
+      case 'EXACT': return '#00d26a33';
+      case 'BROAD': return '#e9456033';
+      case 'PHRASE': return '#ffa50033';
+      default: return '#2d3561';
+    }
+  }};
+  color: ${props => {
+    switch (props.matchType) {
+      case 'EXACT': return '#00d26a';
+      case 'BROAD': return '#e94560';
+      case 'PHRASE': return '#ffa500';
+      default: return '#a0a0a0';
+    }
+  }};
+`;
+
+const MetricCell = styled.div`
+  text-align: right;
+  color: #eaeaea;
+`;
+
+const MetricLabelSmall = styled.div`
+  font-size: 0.7rem;
+  color: #a0a0a0;
+`;
+
+const MetricValueSmall = styled.div`
+  font-weight: 600;
+  color: ${props => props.color || '#eaeaea'};
+`;
+
+const ViewKeywordsButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: #7b2cbf;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #9d4edd;
+    transform: scale(1.05);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 function Campaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -383,6 +548,12 @@ function Campaigns() {
   const [adGroups, setAdGroups] = useState([]);
   const [adGroupsLoading, setAdGroupsLoading] = useState(false);
   const [showAdGroups, setShowAdGroups] = useState(false);
+
+  // Feature #137: Keyword-level spend tracking
+  const [keywords, setKeywords] = useState([]);
+  const [keywordsLoading, setKeywordsLoading] = useState(false);
+  const [showKeywords, setShowKeywords] = useState(false);
+  const [keywordSortBy, setKeywordSortBy] = useState('spend'); // Step 5: Enable sorting by spend
 
   useEffect(() => {
     fetchCampaigns();
@@ -456,6 +627,130 @@ function Campaigns() {
     setShowAdGroups(false);
     setSelectedCampaign(null);
     setAdGroups([]);
+  };
+
+  // Feature #137: Keyword-level spend tracking handlers
+  const handleViewKeywords = async (campaign) => {
+    setSelectedCampaign(campaign);
+    setShowKeywords(true);
+    setKeywordsLoading(true);
+
+    try {
+      const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/keywords`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data && data.data.keywords) {
+        setKeywords(data.data.keywords);
+      } else {
+        // Use mock data
+        setKeywords(getMockKeywords(campaign.id));
+      }
+    } catch (err) {
+      console.error('Error fetching keywords:', err);
+      // Fall back to mock data
+      setKeywords(getMockKeywords(campaign.id));
+    } finally {
+      setKeywordsLoading(false);
+    }
+  };
+
+  const handleCloseKeywords = () => {
+    setShowKeywords(false);
+    setSelectedCampaign(null);
+    setKeywords([]);
+  };
+
+  const handleSortBySpend = () => {
+    const sorted = [...keywords].sort((a, b) => b.totalSpend - a.totalSpend);
+    setKeywords(sorted);
+    setKeywordSortBy('spend');
+  };
+
+  const handleSortByCPA = () => {
+    const sorted = [...keywords].sort((a, b) => a.avgCPA - b.avgCPA);
+    setKeywords(sorted);
+    setKeywordSortBy('cpa');
+  };
+
+  const handleSortByConversions = () => {
+    const sorted = [...keywords].sort((a, b) => b.totalConversions - a.totalConversions);
+    setKeywords(sorted);
+    setKeywordSortBy('conversions');
+  };
+
+  const getMockKeywords = (campaignId) => {
+    return [
+      {
+        keywordText: 'romance stories',
+        keywordId: `${campaignId}-kw-001`,
+        matchType: 'BROAD',
+        totalImpressions: 12500,
+        totalClicks: 842,
+        totalConversions: 67,
+        totalSpend: 234.50,
+        avgCTR: 6.74,
+        avgConversionRate: 7.96,
+        avgROAS: 2.86,
+        avgCPA: 3.50,
+      },
+      {
+        keywordText: 'spicy stories',
+        keywordId: `${campaignId}-kw-002`,
+        matchType: 'EXACT',
+        totalImpressions: 8900,
+        totalClicks: 654,
+        totalConversions: 42,
+        totalSpend: 189.80,
+        avgCTR: 7.35,
+        avgConversionRate: 6.42,
+        avgROAS: 2.21,
+        avgCPA: 4.52,
+      },
+      {
+        keywordText: 'interactive fiction',
+        keywordId: `${campaignId}-kw-003`,
+        matchType: 'PHRASE',
+        totalImpressions: 6200,
+        totalClicks: 423,
+        totalConversions: 28,
+        totalSpend: 145.20,
+        avgCTR: 6.82,
+        avgConversionRate: 6.62,
+        avgROAS: 1.93,
+        avgCPA: 5.19,
+      },
+      {
+        keywordText: 'love stories',
+        keywordId: `${campaignId}-kw-004`,
+        matchType: 'BROAD',
+        totalImpressions: 9800,
+        totalClicks: 587,
+        totalConversions: 51,
+        totalSpend: 167.40,
+        avgCTR: 5.99,
+        avgConversionRate: 8.69,
+        avgROAS: 3.05,
+        avgCPA: 3.28,
+      },
+      {
+        keywordText: 'romantic games',
+        keywordId: `${campaignId}-kw-005`,
+        matchType: 'EXACT',
+        totalImpressions: 5400,
+        totalClicks: 398,
+        totalConversions: 35,
+        totalSpend: 128.60,
+        avgCTR: 7.37,
+        avgConversionRate: 8.79,
+        avgROAS: 2.72,
+        avgCPA: 3.67,
+      },
+    ];
   };
 
   const getMockAdGroups = (campaignId) => {
@@ -741,7 +1036,8 @@ function Campaigns() {
           <div>Serving Status</div>
           <div>Start Date</div>
           <div>Appraisal</div>
-          <div>Actions</div>
+          <div>Ad Groups</div>
+          <div>Keywords</div>
         </TableHeader>
 
         {filteredCampaigns.length === 0 ? (
@@ -788,6 +1084,11 @@ function Campaigns() {
                 <ViewAdGroupsButton onClick={() => handleViewAdGroups(campaign)}>
                   View Ad Groups
                 </ViewAdGroupsButton>
+              </div>
+              <div>
+                <ViewKeywordsButton onClick={() => handleViewKeywords(campaign)}>
+                  View Keywords
+                </ViewKeywordsButton>
               </div>
             </TableRow>
           ))
@@ -887,6 +1188,92 @@ function Campaigns() {
             </AdGroupsGrid>
           )}
         </AdGroupsSection>
+      )}
+
+      {/* Feature #137: Keyword-level spend tracking */}
+      {showKeywords && selectedCampaign && (
+        <KeywordsSection>
+          <KeywordsHeader>
+            <KeywordsTitle>
+              🔑 Keywords: {selectedCampaign.name}
+            </KeywordsTitle>
+            <CloseKeywordsButton onClick={handleCloseKeywords}>
+              ✕ Close
+            </CloseKeywordsButton>
+          </KeywordsHeader>
+
+          {keywordsLoading ? (
+            <LoadingState>Loading keywords...</LoadingState>
+          ) : keywords.length === 0 ? (
+            <EmptyState>No keywords found for this campaign.</EmptyState>
+          ) : (
+            <>
+              <SortControls>
+                <SortButton
+                  active={keywordSortBy === 'spend'}
+                  onClick={handleSortBySpend}
+                >
+                  Sort by Spend
+                </SortButton>
+                <SortButton
+                  active={keywordSortBy === 'cpa'}
+                  onClick={handleSortByCPA}
+                >
+                  Sort by CPA
+                </SortButton>
+                <SortButton
+                  active={keywordSortBy === 'conversions'}
+                  onClick={handleSortByConversions}
+                >
+                  Sort by Conversions
+                </SortButton>
+              </SortControls>
+
+              <KeywordsTable>
+                <KeywordsTableHeader>
+                  <div>Keyword</div>
+                  <div>Match Type</div>
+                  <div>Spend</div>
+                  <div>Clicks</div>
+                  <div>Conversions</div>
+                  <div>CPA</div>
+                  <div>CTR</div>
+                  <div>Conv. Rate</div>
+                </KeywordsTableHeader>
+                {keywords.map((keyword) => (
+                  <KeywordsTableRow key={keyword.keywordId}>
+                    <KeywordText>{keyword.keywordText}</KeywordText>
+                    <MatchTypeBadge matchType={keyword.matchType}>
+                      {keyword.matchType}
+                    </MatchTypeBadge>
+                    <MetricCell>
+                      <MetricValueSmall>${keyword.totalSpend.toFixed(2)}</MetricValueSmall>
+                    </MetricCell>
+                    <MetricCell>
+                      <MetricValueSmall>{keyword.totalClicks.toLocaleString()}</MetricValueSmall>
+                    </MetricCell>
+                    <MetricCell>
+                      <MetricValueSmall color="#00d26a">
+                        {keyword.totalConversions}
+                      </MetricValueSmall>
+                    </MetricCell>
+                    <MetricCell>
+                      <MetricValueSmall color={keyword.avgCPA < 4 ? '#00d26a' : keyword.avgCPA < 6 ? '#ffa500' : '#ff4757'}>
+                        ${keyword.avgCPA.toFixed(2)}
+                      </MetricValueSmall>
+                    </MetricCell>
+                    <MetricCell>
+                      <MetricValueSmall>{keyword.avgCTR.toFixed(2)}%</MetricValueSmall>
+                    </MetricCell>
+                    <MetricCell>
+                      <MetricValueSmall>{keyword.avgConversionRate.toFixed(2)}%</MetricValueSmall>
+                    </MetricCell>
+                  </KeywordsTableRow>
+                ))}
+              </KeywordsTable>
+            </>
+          )}
+        </KeywordsSection>
       )}
     </PageContainer>
   );

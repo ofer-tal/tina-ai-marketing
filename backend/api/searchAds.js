@@ -364,4 +364,85 @@ router.put('/campaigns/:campaignId/adgroups/:adGroupId/status', async (req, res)
   }
 });
 
+/**
+ * Feature #137: Keyword-level spend tracking
+ * GET /api/searchAds/campaigns/:campaignId/keywords
+ * Step 1: Fetch campaign keyword data with spend aggregation
+ */
+router.get('/campaigns/:campaignId/keywords', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const result = await appleSearchAdsService.getKeywordsWithSpend(campaignId, startDate, endDate);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching keywords with spend:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Feature #137: Keyword statistics
+ * GET /api/searchAds/campaigns/:campaignId/keywords/stats
+ * Get aggregated keyword statistics for a campaign
+ */
+router.get('/campaigns/:campaignId/keywords/stats', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+
+    const result = await appleSearchAdsService.getKeywordStats(campaignId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching keyword stats:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * Feature #137: Keyword-level report
+ * GET /api/searchAds/campaigns/:campaignId/keywords/:keywordId/report
+ * Get detailed performance report for a specific keyword
+ */
+router.get('/campaigns/:campaignId/keywords/:keywordId/report', async (req, res) => {
+  try {
+    const { campaignId, keywordId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate query parameters are required',
+      });
+    }
+
+    const result = await appleSearchAdsService.getKeywordReport(campaignId, keywordId, startDate, endDate);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching keyword report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
