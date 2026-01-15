@@ -404,7 +404,7 @@ function TodoSidebar() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3003/api/todos');
+      const response = await fetch('http://localhost:3001/api/todos');
 
       if (!response.ok) {
         throw new Error('Failed to fetch todos');
@@ -511,7 +511,7 @@ function TodoSidebar() {
     if (!selectedTodo) return;
 
     try {
-      const response = await fetch(`http://localhost:3003/api/todos/${selectedTodo._id || selectedTodo.id}/complete`, {
+      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}/complete`, {
         method: 'POST'
       });
 

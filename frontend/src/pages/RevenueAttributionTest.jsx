@@ -175,7 +175,7 @@ function RevenueAttributionTest() {
       const startDate = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
       const response = await fetch(
-        `http://localhost:3003/api/revenue/attribution/campaigns?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
+        `http://localhost:3001/api/revenue/attribution/campaigns?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
       );
 
       if (!response.ok) {

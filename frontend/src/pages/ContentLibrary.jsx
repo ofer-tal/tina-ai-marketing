@@ -1825,7 +1825,7 @@ function ContentLibrary() {
       params.append('skip', (pagination.page - 1) * pagination.limit);
 
       // Try to fetch from API
-      const response = await fetch(`http://localhost:3003/api/content/posts?${params}`);
+      const response = await fetch(`http://localhost:3001/api/content/posts?${params}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch posts');
@@ -2007,7 +2007,7 @@ function ContentLibrary() {
     if (!newScheduledTime) return;
 
     try {
-      const response = await fetch('http://localhost:3003/api/content/posts/' + selectedVideo._id, {
+      const response = await fetch('http://localhost:3001/api/content/posts/' + selectedVideo._id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledAt: new Date(newScheduledTime).toISOString() })
@@ -2048,7 +2048,7 @@ function ContentLibrary() {
 
     try {
       // First approve the post
-      const approveResponse = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}/approve`, {
+      const approveResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/approve`, {
         method: 'POST'
       });
 
@@ -2057,7 +2057,7 @@ function ContentLibrary() {
       }
 
       // Then schedule it
-      const scheduleResponse = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}/schedule`, {
+      const scheduleResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledAt: new Date(scheduledTimeForApproval).toISOString() })
@@ -2144,7 +2144,7 @@ function ContentLibrary() {
     // Poll every 500ms for progress updates
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:3003/api/tiktok/upload-progress/${postId}`);
+        const response = await fetch(`http://localhost:3001/api/tiktok/upload-progress/${postId}`);
         const data = await response.json();
 
         if (data.success) {
@@ -2190,7 +2190,7 @@ function ContentLibrary() {
       });
 
       // Start the upload
-      const response = await fetch(`http://localhost:3003/api/tiktok/post/${selectedVideo._id}`, {
+      const response = await fetch(`http://localhost:3001/api/tiktok/post/${selectedVideo._id}`, {
         method: 'POST'
       });
 
@@ -2231,7 +2231,7 @@ function ContentLibrary() {
       });
 
       // Start the upload using EventSource for SSE
-      const eventSource = new EventSource(`http://localhost:3003/api/instagram/post/${selectedVideo._id}`);
+      const eventSource = new EventSource(`http://localhost:3001/api/instagram/post/${selectedVideo._id}`);
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -2392,7 +2392,7 @@ function ContentLibrary() {
 
     try {
       // Try API call first
-      const response = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}/approve`, {
+      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/approve`, {
         method: 'POST'
       });
 
@@ -2454,7 +2454,7 @@ function ContentLibrary() {
 
     try {
       // Try API call first for rejection
-      const rejectResponse = await fetch(`http://localhost:3003/api/content/posts/${selectedVideo._id}/reject`, {
+      const rejectResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectModal.reason })
@@ -2467,7 +2467,7 @@ function ContentLibrary() {
       // If blacklist is checked, call blacklist API
       if (rejectModal.blacklistStory && selectedVideo.storyId) {
         try {
-          const blacklistResponse = await fetch('http://localhost:3003/api/blacklist', {
+          const blacklistResponse = await fetch('http://localhost:3001/api/blacklist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -2547,7 +2547,7 @@ function ContentLibrary() {
       console.log('🔄 Requesting content regeneration with feedback:', regenerateModal.feedback);
 
       // Call the regenerate API endpoint
-      const response = await fetch(`http://localhost:3003/api/content/${selectedVideo._id}/regenerate`, {
+      const response = await fetch(`http://localhost:3001/api/content/${selectedVideo._id}/regenerate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

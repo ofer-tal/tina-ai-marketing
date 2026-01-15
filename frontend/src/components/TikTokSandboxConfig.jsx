@@ -188,7 +188,7 @@ function TikTokSandboxConfig() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3003/api/tiktok/sandbox-status');
+      const response = await fetch('http://localhost:3001/api/tiktok/sandbox-status');
       const data = await response.json();
 
       if (data.success) {
@@ -212,7 +212,7 @@ function TikTokSandboxConfig() {
       setError(null);
       setConnectionStatus('testing');
 
-      const response = await fetch('http://localhost:3003/api/tiktok/test-connection');
+      const response = await fetch('http://localhost:3001/api/tiktok/test-connection');
       const data = await response.json();
 
       if (data.success) {
@@ -320,7 +320,7 @@ function TikTokSandboxConfig() {
           </InstructionItem>
           <InstructionItem>
             <strong>Configure Redirect URIs:</strong>{' '}
-            Add <CodeBlock>http://localhost:3003/api/tiktok/callback</CodeBlock> to your app's redirect URIs.
+            Add <CodeBlock>http://localhost:3001/api/tiktok/callback</CodeBlock> to your app's redirect URIs.
           </InstructionItem>
           <InstructionItem>
             <strong>Get Credentials:</strong>{' '}

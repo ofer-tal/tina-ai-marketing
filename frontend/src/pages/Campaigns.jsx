@@ -1440,7 +1440,7 @@ function Campaigns() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3003/api/searchAds/campaigns?limit=50');
+      const response = await fetch('http://localhost:3001/api/searchAds/campaigns?limit=50');
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1552,7 +1552,7 @@ function Campaigns() {
         // Feature #144 Step 4: Automatically pause campaign at 90%
         try {
           // Call auto-pause API endpoint
-          const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/auto-pause`, {
+          const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/auto-pause`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -1677,7 +1677,7 @@ function Campaigns() {
 
     try {
       // Step 4: Verify campaign paused via API
-      const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/status`, {
+      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -1722,7 +1722,7 @@ function Campaigns() {
 
     try {
       // Step 5: Test resume functionality - verify campaign resumed via API
-      const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/status`, {
+      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -1768,7 +1768,7 @@ function Campaigns() {
     setAdGroupsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/adgroups`);
+      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/adgroups`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1804,7 +1804,7 @@ function Campaigns() {
     setKeywordsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/keywords`);
+      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/keywords`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

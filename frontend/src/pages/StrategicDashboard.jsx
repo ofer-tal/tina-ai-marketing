@@ -4113,7 +4113,7 @@ function StrategicDashboard() {
 
   const fetchCategoryRanking = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/aso/category/stats');
+      const response = await fetch('http://localhost:3001/api/aso/category/stats');
       const data = await response.json();
 
       if (data.success) {
@@ -4140,7 +4140,7 @@ function StrategicDashboard() {
 
   const handleRefreshRanking = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/aso/category/sync', {
+      const response = await fetch('http://localhost:3001/api/aso/category/sync', {
         method: 'POST'
       });
       const data = await response.json();
@@ -4156,15 +4156,15 @@ function StrategicDashboard() {
   const fetchCompetitorMonitoring = async () => {
     try {
       // Fetch competitor insights
-      const insightsResponse = await fetch('http://localhost:3003/api/aso/competitors/insights');
+      const insightsResponse = await fetch('http://localhost:3001/api/aso/competitors/insights');
       const insightsData = await insightsResponse.json();
 
       // Fetch competitor gaps
-      const gapsResponse = await fetch('http://localhost:3003/api/aso/competitors/gaps');
+      const gapsResponse = await fetch('http://localhost:3001/api/aso/competitors/gaps');
       const gapsData = await gapsResponse.json();
 
       // Fetch competitor data
-      const dataResponse = await fetch('http://localhost:3003/api/aso/competitors/data');
+      const dataResponse = await fetch('http://localhost:3001/api/aso/competitors/data');
       const dataResult = await dataResponse.json();
 
       if (insightsData.success || gapsData.success || dataResult.success) {
@@ -4287,7 +4287,7 @@ function StrategicDashboard() {
 
   const fetchASOScore = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/aso/score');
+      const response = await fetch('http://localhost:3001/api/aso/score');
       const result = await response.json();
 
       if (result.success) {
@@ -4369,7 +4369,7 @@ function StrategicDashboard() {
 
   const fetchWeeklyReport = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/reports/aso/weekly');
+      const response = await fetch('http://localhost:3001/api/reports/aso/weekly');
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -4470,7 +4470,7 @@ function StrategicDashboard() {
 
   const fetchExperiments = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/experiments');
+      const response = await fetch('http://localhost:3001/api/experiments');
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -4576,7 +4576,7 @@ function StrategicDashboard() {
 
   const fetchExperimentStats = async () => {
     try {
-      const response = await fetch('http://localhost:3003/api/experiments/stats');
+      const response = await fetch('http://localhost:3001/api/experiments/stats');
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -4614,7 +4614,7 @@ function StrategicDashboard() {
 
   const fetchAnalysis = async (experimentId) => {
     try {
-      const response = await fetch(`http://localhost:3003/api/experiments/${experimentId}/analyze`);
+      const response = await fetch(`http://localhost:3001/api/experiments/${experimentId}/analyze`);
       const result = await response.json();
 
       if (result.success && result.data) {
@@ -6667,7 +6667,7 @@ function StrategicDashboard() {
                   📊 ASO Score
                 </ASOScoreTitle>
                 <ASOScoreRefreshButton onClick={() => {
-                  fetch('http://localhost:3003/api/aso/score/calculate', { method: 'POST' })
+                  fetch('http://localhost:3001/api/aso/score/calculate', { method: 'POST' })
                     .then(res => res.json())
                     .then(result => {
                       if (result.success) {
