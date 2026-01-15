@@ -83,7 +83,7 @@ const CampaignsTable = styled.div`
 
 const TableHeader = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   background: #1a1a2e;
@@ -94,7 +94,7 @@ const TableHeader = styled.div`
 
 const TableRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid #2d3561;
@@ -222,12 +222,167 @@ const InfoDescription = styled.div`
   color: #a0a0a0;
 `;
 
+const AdGroupsSection = styled.div`
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+`;
+
+const AdGroupsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const AdGroupsTitle = styled.h3`
+  font-size: 1.5rem;
+  margin: 0;
+  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
+const CloseAdGroupsButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: #2d3561;
+  border: 1px solid #3d4571;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #3d4571;
+  }
+`;
+
+const AdGroupsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 1rem;
+`;
+
+const AdGroupCard = styled.div`
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1.25rem;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    transform: translateY(-2px);
+  }
+`;
+
+const AdGroupHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+`;
+
+const AdGroupName = styled.div`
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const AdGroupId = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+`;
+
+const AdGroupMetrics = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const AdGroupMetric = styled.div`
+  display: flex;
+  flex-direction: column;
+`;
+
+const AdGroupMetricValue = styled.div`
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #eaeaea;
+`;
+
+const AdGroupMetricLabel = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-top: 0.25rem;
+`;
+
+const TrendIndicator = styled.span`
+  font-size: 0.85rem;
+  margin-left: 0.5rem;
+  color: ${props => {
+    if (props.trend === 'up') return '#00d26a';
+    if (props.trend === 'down') return '#ff4757';
+    return '#a0a0a0';
+  }};
+`;
+
+const AdGroupBudget = styled.div`
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #2d3561;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const AdGroupBudgetLabel = styled.span`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+`;
+
+const AdGroupBudgetValue = styled.span`
+  font-weight: 600;
+  color: #eaeaea;
+`;
+
+const ViewAdGroupsButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: scale(1.05);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
 function Campaigns() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedCampaign, setSelectedCampaign] = useState(null);
+  const [adGroups, setAdGroups] = useState([]);
+  const [adGroupsLoading, setAdGroupsLoading] = useState(false);
+  const [showAdGroups, setShowAdGroups] = useState(false);
 
   useEffect(() => {
     fetchCampaigns();
@@ -238,7 +393,7 @@ function Campaigns() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/searchAds/campaigns?limit=50');
+      const response = await fetch('http://localhost:3003/api/searchAds/campaigns?limit=50');
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -266,6 +421,169 @@ function Campaigns() {
     setRefreshing(true);
     await fetchCampaigns();
     setRefreshing(false);
+  };
+
+  const handleViewAdGroups = async (campaign) => {
+    setSelectedCampaign(campaign);
+    setShowAdGroups(true);
+    setAdGroupsLoading(true);
+
+    try {
+      const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/adgroups`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.data && data.data.adGroups) {
+        setAdGroups(data.data.adGroups);
+      } else {
+        // Use mock data
+        setAdGroups(getMockAdGroups(campaign.id));
+      }
+    } catch (err) {
+      console.error('Error fetching ad groups:', err);
+      // Fall back to mock data
+      setAdGroups(getMockAdGroups(campaign.id));
+    } finally {
+      setAdGroupsLoading(false);
+    }
+  };
+
+  const handleCloseAdGroups = () => {
+    setShowAdGroups(false);
+    setSelectedCampaign(null);
+    setAdGroups([]);
+  };
+
+  const getMockAdGroups = (campaignId) => {
+    return [
+      {
+        adGroupId: `${campaignId}-ag-1`,
+        name: 'Romance Stories - Exact Match',
+        status: 'ENABLED',
+        servingStatus: 'RUNNING',
+        dailyBudget: 30,
+        impressions: 45230,
+        clicks: 892,
+        conversions: 67,
+        spend: 234.50,
+        ctr: 1.97,
+        conversionRate: 7.51,
+        averageCpa: 3.50,
+        roas: 2.86,
+        trend: {
+          clicks: 'up',
+          conversions: 'up',
+          ctr: 'stable',
+          roas: 'up',
+        },
+        change: {
+          clicks: 12.5,
+          conversions: 8.3,
+          ctr: -0.5,
+          roas: 15.2,
+        },
+      },
+      {
+        adGroupId: `${campaignId}-ag-2`,
+        name: 'Spicy Stories - Broad Match',
+        status: 'ENABLED',
+        servingStatus: 'RUNNING',
+        dailyBudget: 25,
+        impressions: 38450,
+        clicks: 654,
+        conversions: 42,
+        spend: 189.75,
+        ctr: 1.70,
+        conversionRate: 6.42,
+        averageCpa: 4.52,
+        roas: 2.21,
+        trend: {
+          clicks: 'stable',
+          conversions: 'down',
+          ctr: 'down',
+          roas: 'down',
+        },
+        change: {
+          clicks: 1.2,
+          conversions: -12.5,
+          ctr: -3.2,
+          roas: -8.7,
+        },
+      },
+      {
+        adGroupId: `${campaignId}-ag-3`,
+        name: 'Interactive Stories - Phrase Match',
+        status: 'PAUSED',
+        servingStatus: 'PAUSED',
+        dailyBudget: 20,
+        impressions: 28930,
+        clicks: 423,
+        conversions: 28,
+        spend: 145.20,
+        ctr: 1.46,
+        conversionRate: 6.62,
+        averageCpa: 5.19,
+        roas: 1.93,
+        trend: {
+          clicks: 'down',
+          conversions: 'down',
+          ctr: 'stable',
+          roas: 'down',
+        },
+        change: {
+          clicks: -15.3,
+          conversions: -18.2,
+          ctr: -1.5,
+          roas: -22.1,
+        },
+      },
+      {
+        adGroupId: `${campaignId}-ag-4`,
+        name: 'Love Stories - Exact Match',
+        status: 'ENABLED',
+        servingStatus: 'RUNNING',
+        dailyBudget: 15,
+        impressions: 31280,
+        clicks: 587,
+        conversions: 51,
+        spend: 167.40,
+        ctr: 1.88,
+        conversionRate: 8.69,
+        averageCpa: 3.28,
+        roas: 3.05,
+        trend: {
+          clicks: 'up',
+          conversions: 'up',
+          ctr: 'up',
+          roas: 'up',
+        },
+        change: {
+          clicks: 18.7,
+          conversions: 22.5,
+          ctr: 4.3,
+          roas: 25.8,
+        },
+      },
+    ];
+  };
+
+  const getTrendIcon = (trend) => {
+    switch (trend) {
+      case 'up': return '▲';
+      case 'down': return '▼';
+      case 'stable': return '─';
+      default: return '•';
+    }
+  };
+
+  const formatPercentage = (value) => {
+    if (value === 0) return '0%';
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${value.toFixed(1)}%`;
   };
 
   const getMockCampaigns = () => {
@@ -423,6 +741,7 @@ function Campaigns() {
           <div>Serving Status</div>
           <div>Start Date</div>
           <div>Appraisal</div>
+          <div>Actions</div>
         </TableHeader>
 
         {filteredCampaigns.length === 0 ? (
@@ -465,10 +784,110 @@ function Campaigns() {
                   {campaign.appraisal?.reasons?.[0] || 'N/A'}
                 </MetricLabel>
               </div>
+              <div>
+                <ViewAdGroupsButton onClick={() => handleViewAdGroups(campaign)}>
+                  View Ad Groups
+                </ViewAdGroupsButton>
+              </div>
             </TableRow>
           ))
         )}
       </CampaignsTable>
+
+      {showAdGroups && selectedCampaign && (
+        <AdGroupsSection>
+          <AdGroupsHeader>
+            <AdGroupsTitle>
+              📊 Ad Groups: {selectedCampaign.name}
+            </AdGroupsTitle>
+            <CloseAdGroupsButton onClick={handleCloseAdGroups}>
+              ✕ Close
+            </CloseAdGroupsButton>
+          </AdGroupsHeader>
+
+          {adGroupsLoading ? (
+            <LoadingState>Loading ad groups...</LoadingState>
+          ) : adGroups.length === 0 ? (
+            <EmptyState>No ad groups found for this campaign.</EmptyState>
+          ) : (
+            <AdGroupsGrid>
+              {adGroups.map((adGroup) => (
+                <AdGroupCard key={adGroup.adGroupId}>
+                  <AdGroupHeader>
+                    <div>
+                      <AdGroupName>{adGroup.name}</AdGroupName>
+                      <AdGroupId>ID: {adGroup.adGroupId}</AdGroupId>
+                    </div>
+                    <StatusBadge status={adGroup.status.toLowerCase()}>
+                      {adGroup.status}
+                    </StatusBadge>
+                  </AdGroupHeader>
+
+                  <AdGroupMetrics>
+                    <AdGroupMetric>
+                      <AdGroupMetricValue>
+                        {adGroup.impressions?.toLocaleString() || 0}
+                      </AdGroupMetricValue>
+                      <AdGroupMetricLabel>Impressions</AdGroupMetricLabel>
+                    </AdGroupMetric>
+
+                    <AdGroupMetric>
+                      <AdGroupMetricValue>
+                        {adGroup.clicks?.toLocaleString() || 0}
+                        <TrendIndicator trend={adGroup.trend?.clicks}>
+                          {getTrendIcon(adGroup.trend?.clicks)} {formatPercentage(adGroup.change?.clicks || 0)}
+                        </TrendIndicator>
+                      </AdGroupMetricValue>
+                      <AdGroupMetricLabel>Clicks</AdGroupMetricLabel>
+                    </AdGroupMetric>
+
+                    <AdGroupMetric>
+                      <AdGroupMetricValue>
+                        {adGroup.conversions?.toLocaleString() || 0}
+                        <TrendIndicator trend={adGroup.trend?.conversions}>
+                          {getTrendIcon(adGroup.trend?.conversions)} {formatPercentage(adGroup.change?.conversions || 0)}
+                        </TrendIndicator>
+                      </AdGroupMetricValue>
+                      <AdGroupMetricLabel>Conversions</AdGroupMetricLabel>
+                    </AdGroupMetric>
+
+                    <AdGroupMetric>
+                      <AdGroupMetricValue>
+                        {adGroup.ctr?.toFixed(2) || 0}%
+                      </AdGroupMetricValue>
+                      <AdGroupMetricLabel>CTR</AdGroupMetricLabel>
+                    </AdGroupMetric>
+
+                    <AdGroupMetric>
+                      <AdGroupMetricValue>
+                        ${adGroup.averageCpa?.toFixed(2) || '0.00'}
+                      </AdGroupMetricValue>
+                      <AdGroupMetricLabel>CPA</AdGroupMetricLabel>
+                    </AdGroupMetric>
+
+                    <AdGroupMetric>
+                      <AdGroupMetricValue>
+                        {adGroup.roas?.toFixed(2) || '0.00'}x
+                        <TrendIndicator trend={adGroup.trend?.roas}>
+                          {getTrendIcon(adGroup.trend?.roas)} {formatPercentage(adGroup.change?.roas || 0)}
+                        </TrendIndicator>
+                      </AdGroupMetricValue>
+                      <AdGroupMetricLabel>ROAS</AdGroupMetricLabel>
+                    </AdGroupMetric>
+                  </AdGroupMetrics>
+
+                  <AdGroupBudget>
+                    <AdGroupBudgetLabel>Daily Budget:</AdGroupBudgetLabel>
+                    <AdGroupBudgetValue>
+                      {formatCurrency(adGroup.dailyBudget || 0)}
+                    </AdGroupBudgetValue>
+                  </AdGroupBudget>
+                </AdGroupCard>
+              ))}
+            </AdGroupsGrid>
+          )}
+        </AdGroupsSection>
+      )}
     </PageContainer>
   );
 }

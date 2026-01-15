@@ -216,4 +216,152 @@ router.put('/campaigns/:campaignId/status', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/searchAds/campaigns/:campaignId/adgroups
+ * Feature #136: Ad group performance monitoring - Step 1 & 2
+ * Get all ad groups for a campaign
+ */
+router.get('/campaigns/:campaignId/adgroups', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const result = await appleSearchAdsService.getAdGroupsWithMetrics(campaignId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching ad groups:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/campaigns/:campaignId/adgroups/:adGroupId
+ * Feature #136: Ad group performance monitoring - Step 3
+ * Get detailed ad group metrics
+ */
+router.get('/campaigns/:campaignId/adgroups/:adGroupId', async (req, res) => {
+  try {
+    const { campaignId, adGroupId } = req.params;
+    const result = await appleSearchAdsService.getAdGroupMetrics(campaignId, adGroupId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching ad group metrics:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/campaigns/:campaignId/adgroups/:adGroupId/report
+ * Feature #136: Ad group performance monitoring - Step 5
+ * Get ad group performance report with trends
+ */
+router.get('/campaigns/:campaignId/adgroups/:adGroupId/report', async (req, res) => {
+  try {
+    const { campaignId, adGroupId } = req.params;
+    const { startDate, endDate, granularity } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate query parameters are required',
+      });
+    }
+
+    const result = await appleSearchAdsService.getAdGroupReport(
+      campaignId,
+      adGroupId,
+      startDate,
+      endDate,
+      granularity || 'DAILY'
+    );
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching ad group report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/searchAds/campaigns/:campaignId/adgroups/:adGroupId/budget
+ * Update ad group daily budget
+ */
+router.put('/campaigns/:campaignId/adgroups/:adGroupId/budget', async (req, res) => {
+  try {
+    const { campaignId, adGroupId } = req.params;
+    const { dailyBudget } = req.body;
+
+    if (!dailyBudget || isNaN(dailyBudget)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid dailyBudget is required',
+      });
+    }
+
+    const result = await appleSearchAdsService.updateAdGroupBudget(campaignId, adGroupId, dailyBudget);
+
+    res.json({
+      success: true,
+      data: result,
+      message: `Ad group budget updated to $${dailyBudget}/day`,
+    });
+  } catch (error) {
+    console.error('Error updating ad group budget:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/searchAds/campaigns/:campaignId/adgroups/:adGroupId/status
+ * Pause or resume ad group
+ */
+router.put('/campaigns/:campaignId/adgroups/:adGroupId/status', async (req, res) => {
+  try {
+    const { campaignId, adGroupId } = req.params;
+    const { paused } = req.body;
+
+    if (typeof paused !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'paused boolean field is required',
+      });
+    }
+
+    const result = await appleSearchAdsService.setAdGroupStatus(campaignId, adGroupId, paused);
+
+    res.json({
+      success: true,
+      data: result,
+      message: paused ? 'Ad group paused' : 'Ad group resumed',
+    });
+  } catch (error) {
+    console.error('Error updating ad group status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;
