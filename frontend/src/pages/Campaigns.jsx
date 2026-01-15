@@ -740,6 +740,161 @@ const ConfirmOverlay = styled.div`
   z-index: 999;
 `;
 
+// Feature #148: Bid suggestions styled components
+const BidSuggestionsButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: ${props => props.active ? '#7b2cbf' : '#16213e'};
+  border: 1px solid ${props => props.active ? '#7b2cbf' : '#2d3561'};
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${props => props.active ? '#9d4edd' : '#7b2cbf'};
+    border-color: #7b2cbf;
+  }
+`;
+
+const BidSuggestionsSection = styled.div`
+  margin-top: 1.5rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 1.5rem;
+`;
+
+const BidSuggestionsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+`;
+
+const BidSuggestionsTitle = styled.h3`
+  margin: 0;
+  font-size: 1.2rem;
+  color: #eaeaea;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const BidSuggestionsCount = styled.span`
+  padding: 0.2rem 0.6rem;
+  background: #7b2cbf;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+`;
+
+const BidSuggestionCard = styled.div`
+  background: ${props => {
+    if (props.priority === 'high') return 'rgba(255, 71, 87, 0.1)';
+    if (props.priority === 'medium') return 'rgba(255, 176, 32, 0.1)';
+    return 'rgba(0, 210, 106, 0.1)';
+  }};
+  border: 1px solid ${props => {
+    if (props.priority === 'high') return '#ff4757';
+    if (props.priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 2fr;
+  gap: 1rem;
+  align-items: center;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+`;
+
+const SuggestionKeywordText = styled.div`
+  font-weight: 500;
+  color: #eaeaea;
+`;
+
+const SuggestionKeywordId = styled.div`
+  font-size: 0.75rem;
+  color: #a0a0a0;
+  margin-top: 0.25rem;
+`;
+
+const SuggestionBidInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const SuggestionCurrentBid = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+`;
+
+const SuggestionNewBid = styled.div`
+  font-size: 1rem;
+  font-weight: 600;
+  color: ${props => {
+    if (props.action === 'increase') return '#00d26a';
+    if (props.action === 'decrease') return '#ff4757';
+    return '#a0a0a0';
+  }};
+`;
+
+const SuggestionAdjustment = styled.div`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: ${props => {
+    if (props.adjustment > 0) return '#00d26a33';
+    if (props.adjustment < 0) return '#ff475733';
+    return '#2d3561';
+  }};
+  color: ${props => {
+    if (props.adjustment > 0) return '#00d26a';
+    if (props.adjustment < 0) return '#ff4757';
+    return '#a0a0a0';
+  }};
+  text-align: center;
+`;
+
+const SuggestionReason = styled.div`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  line-height: 1.4;
+`;
+
+const SuggestionPriority = styled.div`
+  padding: 0.25rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  background: ${props => {
+    if (props.priority === 'high') return '#ff475733';
+    if (props.priority === 'medium') return '#ffb02033';
+    return '#00d26a33';
+  }};
+  color: ${props => {
+    if (props.priority === 'high') return '#ff4757';
+    if (props.priority === 'medium') return '#ffb020';
+    return '#00d26a';
+  }};
+`;
+
+const EmptySuggestions = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #a0a0a0;
+  font-style: italic;
+`;
+
 // Feature #138: Daily spend aggregation styled components
 const DailySpendSection = styled.div`
   margin-top: 2rem;
@@ -1090,6 +1245,10 @@ function Campaigns() {
   // Feature #147: Campaign pause/resume functionality
   const [confirmDialog, setConfirmDialog] = useState(null);
 
+  // Feature #148: Bid adjustment suggestions
+  const [bidSuggestions, setBidSuggestions] = useState({});
+  const [showBidSuggestions, setShowBidSuggestions] = useState(false);
+
   useEffect(() => {
     fetchCampaigns();
     fetchCampaignROI();
@@ -1100,6 +1259,14 @@ function Campaigns() {
   useEffect(() => {
     checkBudgetAlerts();
   }, [budgetUtilization]);
+
+  // Feature #148: Generate bid suggestions when keywords and ROI are loaded
+  useEffect(() => {
+    if (selectedCampaign && keywords.length > 0 && Object.keys(keywordROI).length > 0) {
+      console.log('[Bid Suggestions] Generating via useEffect for campaign:', selectedCampaign.id);
+      generateBidSuggestions(selectedCampaign.id);
+    }
+  }, [keywords, keywordROI, selectedCampaign]);
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -1494,6 +1661,7 @@ function Campaigns() {
 
     // Feature #141: Fetch keyword ROI data
     fetchKeywordROI(campaign.id);
+    // Feature #148: Bid suggestions will be generated automatically via useEffect when keywords and ROI are loaded
   };
 
   const handleCloseKeywords = () => {
@@ -1587,6 +1755,7 @@ function Campaigns() {
         avgConversionRate: 7.96,
         avgROAS: 2.86,
         avgCPA: 3.50,
+        bid: 1.85, // Feature #148: Add bid amount
       },
       {
         keywordText: 'spicy stories',
@@ -1600,6 +1769,7 @@ function Campaigns() {
         avgConversionRate: 6.42,
         avgROAS: 2.21,
         avgCPA: 4.52,
+        bid: 2.10,
       },
       {
         keywordText: 'interactive fiction',
@@ -1613,6 +1783,7 @@ function Campaigns() {
         avgConversionRate: 6.62,
         avgROAS: 1.93,
         avgCPA: 5.19,
+        bid: 2.45,
       },
       {
         keywordText: 'love stories',
@@ -1626,6 +1797,7 @@ function Campaigns() {
         avgConversionRate: 8.69,
         avgROAS: 3.05,
         avgCPA: 3.28,
+        bid: 1.65,
       },
       {
         keywordText: 'romantic games',
@@ -1639,6 +1811,7 @@ function Campaigns() {
         avgConversionRate: 8.79,
         avgROAS: 2.72,
         avgCPA: 3.67,
+        bid: 1.75,
       },
     ];
   };
@@ -1677,6 +1850,134 @@ function Campaigns() {
         transactions: 14
       }
     };
+  };
+
+  // Feature #148: Generate bid adjustment suggestions based on keyword performance
+  const generateBidSuggestions = (campaignId) => {
+    console.log('[Bid Suggestions] Generating for campaign:', campaignId);
+    console.log('[Bid Suggestions] Keywords count:', keywords.length);
+    console.log('[Bid Suggestions] ROI data keys:', Object.keys(keywordROI));
+
+    const campaignKeywords = keywords;
+    const roiData = keywordROI;
+    const suggestions = [];
+
+    campaignKeywords.forEach(keyword => {
+      const kwId = keyword.keywordId;
+      const roi = roiData[kwId]?.roi || 0;
+      const cpa = keyword.avgCPA;
+      const ctr = keyword.avgCTR;
+      const conversionRate = keyword.avgConversionRate;
+      const currentBid = keyword.bid || 1.50; // Default bid if not set
+
+      let suggestion = {
+        keywordId: kwId,
+        keywordText: keyword.keywordText,
+        currentBid: currentBid,
+        action: null, // 'increase', 'decrease', 'maintain'
+        newBid: currentBid,
+        adjustment: 0,
+        reason: [],
+        priority: 'low' // 'high', 'medium', 'low'
+      };
+
+      // Analyze performance and generate suggestions
+      const metrics = {
+        highROI: roi > 50,
+        positiveROI: roi > 0,
+        negativeROI: roi < 0,
+        veryNegativeROI: roi < -20,
+        lowCPA: cpa < 4,
+        highCPA: cpa > 6,
+        veryHighCPA: cpa > 8,
+        highCTR: ctr > 2,
+        lowCTR: ctr < 1,
+        highConvRate: conversionRate > 8,
+        lowConvRate: conversionRate < 5
+      };
+
+      // Strong increase signals (high priority)
+      if (metrics.highROI && metrics.lowCPA && metrics.highCTR) {
+        suggestion.action = 'increase';
+        suggestion.adjustment = 30; // +30%
+        suggestion.newBid = currentBid * 1.30;
+        suggestion.reason = `Excellent performance: High ROI (+${roi.toFixed(1)}%), low CPA ($${cpa.toFixed(2)}), high CTR (${ctr.toFixed(2)}%)`;
+        suggestion.priority = 'high';
+      }
+      // Moderate increase signals (medium priority)
+      else if (metrics.positiveROI && (metrics.lowCPA || metrics.highCTR || metrics.highConvRate)) {
+        suggestion.action = 'increase';
+        suggestion.adjustment = 15; // +15%
+        suggestion.newBid = currentBid * 1.15;
+        const reasonPart = metrics.lowCPA ? 'low CPA' : metrics.highCTR ? 'high CTR' : 'high conversion rate';
+                suggestion.reason = `Good performance: Positive ROI (+${roi.toFixed(1)}%), ${reasonPart}`;
+        suggestion.priority = 'medium';
+      }
+      // Strong decrease signals (high priority)
+      else if (metrics.veryNegativeROI && metrics.veryHighCPA) {
+        suggestion.action = 'decrease';
+        suggestion.adjustment = -40; // -40%
+        suggestion.newBid = currentBid * 0.60;
+        suggestion.reason = `Poor performance: Very negative ROI (${roi.toFixed(1)}%), very high CPA ($${cpa.toFixed(2)})`;
+        suggestion.priority = 'high';
+      }
+      // Moderate decrease signals (medium priority)
+      else if ((metrics.negativeROI || metrics.highCPA) && metrics.lowCTR) {
+        suggestion.action = 'decrease';
+        suggestion.adjustment = -25; // -25%
+        suggestion.newBid = currentBid * 0.75;
+        const roiOrCpa = metrics.negativeROI ? 'Negative ROI' : 'High CPA';
+        suggestion.reason = `Underperforming: ${roiOrCpa}, low CTR (${ctr.toFixed(2)}%)`;
+        suggestion.priority = 'medium';
+      }
+      // Slight decrease signals (low priority)
+      else if (metrics.negativeROI || metrics.veryHighCPA) {
+        suggestion.action = 'decrease';
+        suggestion.adjustment = -15; // -15%
+        suggestion.newBid = currentBid * 0.85;
+        suggestion.reason = metrics.negativeROI
+                  ? `Concerning: Negative ROI (${roi.toFixed(1)}%)`
+                  : `Concerning: Very high CPA ($${cpa.toFixed(2)})`;
+        suggestion.priority = 'low';
+      }
+      // No change needed
+      else {
+        suggestion.action = 'maintain';
+        suggestion.reason = `Performance is acceptable: ROI ${roi.toFixed(1)}%, CPA $${cpa.toFixed(2)}`;
+        suggestion.priority = 'low';
+      }
+
+      suggestions.push(suggestion);
+    });
+
+    // Sort by priority (high first) and action
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    suggestions.sort((a, b) => {
+      if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }
+      // For same priority, increase actions come first
+      if (a.action === 'increase' && b.action !== 'increase') return -1;
+      if (a.action === 'decrease' && b.action !== 'decrease') return 1;
+      return 0;
+    });
+
+    setBidSuggestions({ [campaignId]: suggestions });
+    return suggestions;
+  };
+
+  // Feature #148: Fetch bid suggestions from API (or generate locally)
+  const fetchBidSuggestions = async (campaignId) => {
+    try {
+      // In production, this would call an API endpoint
+      // const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaignId}/bid-suggestions`);
+      // For now, generate suggestions locally
+      const suggestions = generateBidSuggestions(campaignId);
+      return suggestions;
+    } catch (err) {
+      console.error('Error fetching bid suggestions:', err);
+      return generateBidSuggestions(campaignId);
+    }
   };
 
   const getMockAdGroups = (campaignId) => {
@@ -2402,6 +2703,12 @@ function Campaigns() {
                 >
                   Sort by ROI
                 </SortButton>
+                <BidSuggestionsButton
+                  active={showBidSuggestions}
+                  onClick={() => setShowBidSuggestions(!showBidSuggestions)}
+                >
+                  💡 Bid Suggestions
+                </BidSuggestionsButton>
               </SortControls>
 
               <KeywordsTable>
@@ -2457,6 +2764,66 @@ function Campaigns() {
                   </KeywordsTableRow>
                 ))}
               </KeywordsTable>
+
+              {/* Feature #148: Bid suggestions display */}
+              {showBidSuggestions && bidSuggestions[selectedCampaign?.id] && (
+                <BidSuggestionsSection>
+                  <BidSuggestionsHeader>
+                    <BidSuggestionsTitle>
+                      💡 Bid Adjustment Suggestions
+                      <BidSuggestionsCount>
+                        {bidSuggestions[selectedCampaign.id].length}
+                      </BidSuggestionsCount>
+                    </BidSuggestionsTitle>
+                  </BidSuggestionsHeader>
+
+                  {bidSuggestions[selectedCampaign.id].length === 0 ? (
+                    <EmptySuggestions>
+                      No bid suggestions available for this campaign.
+                    </EmptySuggestions>
+                  ) : (
+                    bidSuggestions[selectedCampaign.id].map((suggestion, index) => (
+                      <BidSuggestionCard
+                        key={`${suggestion.keywordId}-${index}`}
+                        priority={suggestion.priority}
+                      >
+                        <div>
+                          <SuggestionKeywordText>
+                            {suggestion.keywordText}
+                          </SuggestionKeywordText>
+                          <SuggestionKeywordId>
+                            {suggestion.keywordId}
+                          </SuggestionKeywordId>
+                        </div>
+
+                        <SuggestionBidInfo>
+                          <SuggestionCurrentBid>
+                            Current: ${suggestion.currentBid.toFixed(2)}
+                          </SuggestionCurrentBid>
+                          <SuggestionNewBid action={suggestion.action}>
+                            {suggestion.action === 'increase' && '↗ '}
+                            {suggestion.action === 'decrease' && '↘ '}
+                            ${suggestion.newBid.toFixed(2)}
+                          </SuggestionNewBid>
+                        </SuggestionBidInfo>
+
+                        <SuggestionAdjustment adjustment={suggestion.adjustment}>
+                          {suggestion.adjustment > 0 ? '+' : ''}{suggestion.adjustment}%
+                        </SuggestionAdjustment>
+
+                        <div>
+                          <SuggestionReason>
+                            {suggestion.reason}
+                          </SuggestionReason>
+                          <SuggestionPriority priority={suggestion.priority}>
+                            {suggestion.priority} Priority
+                          </SuggestionPriority>
+                        </div>
+                      </BidSuggestionCard>
+                    ))
+                  )}
+                </BidSuggestionsSection>
+              )}
             </>
           )}
         </KeywordsSection>
