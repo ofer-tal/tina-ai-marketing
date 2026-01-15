@@ -12,14 +12,13 @@ import RevenueAttributionTest from './pages/RevenueAttributionTest';
 import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
+import { cssVar } from './themeUtils';
 
 const AppContainer = styled.div`
   min-height: 100vh;
-  background: #1a1a2e;
-  color: #eaeaea;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  background: ${cssVar('--color-background')};
+  color: ${cssVar('--color-text')};
+  font-family: ${cssVar('--font-family-sans')};
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   display: flex;
@@ -33,36 +32,36 @@ const MainLayout = styled.div`
 
 const SidebarNav = styled.nav`
   width: 200px;
-  background: #16213e;
-  border-right: 1px solid #2d3561;
-  padding: 1rem;
+  background: ${cssVar('--color-surface')};
+  border-right: 1px solid ${cssVar('--color-border')};
+  padding: ${cssVar('--spacing-md')};
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: ${cssVar('--spacing-sm')};
 `;
 
 const SidebarNavLink = styled(Link)`
   padding: 0.75rem 1rem;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 8px;
-  color: #eaeaea;
+  border-radius: ${cssVar('--radius-md')};
+  color: ${cssVar('--color-text')};
   text-decoration: none;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all ${cssVar('--transition-base')};
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: ${cssVar('--spacing-sm')};
 
   &:hover {
-    background: #e94560;
-    border-color: #e94560;
+    background: ${cssVar('--color-primary')};
+    border-color: ${cssVar('--color-primary')};
     transform: translateX(4px);
   }
 
   &.active {
-    background: #e94560;
-    border-color: #e94560;
+    background: ${cssVar('--color-primary')};
+    border-color: ${cssVar('--color-primary')};
   }
 `;
 
@@ -74,17 +73,17 @@ const MainContentArea = styled.main`
 
 const PageContent = styled.div`
   flex: 1;
-  padding: 2rem;
+  padding: ${cssVar('--spacing-xl')};
   overflow-y: auto;
   max-width: calc(100vw - 520px); // Subtract sidebar and todo sidebar
 `;
 
 const Header = styled.header`
-  padding: 2rem;
+  padding: ${cssVar('--spacing-xl')};
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #2d3561;
+  border-bottom: 1px solid ${cssVar('--color-border')};
 `;
 
 const HeaderLeft = styled.div`
@@ -94,57 +93,58 @@ const HeaderLeft = styled.div`
 const Title = styled.h1`
   font-size: 2.5rem;
   margin: 0 0 0.5rem 0;
-  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  background: ${cssVar('--gradient-primary')};
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 `;
 
 const Subtitle = styled.p`
-  color: #a0a0a0;
+  color: ${cssVar('--color-text-secondary')};
   font-size: 1.1rem;
   margin: 0;
 `;
 
 const Nav = styled.nav`
   display: flex;
-  gap: 1rem;
+  gap: ${cssVar('--spacing-md')};
 `;
 
 const NavLink = styled(Link)`
   padding: 0.75rem 1.5rem;
-  background: #16213e;
-  border: 1px solid #2d3561;
-  border-radius: 8px;
-  color: #eaeaea;
+  background: ${cssVar('--color-surface')};
+  border: 1px solid ${cssVar('--color-border')};
+  border-radius: ${cssVar('--radius-md')};
+  color: ${cssVar('--color-text')};
   text-decoration: none;
   font-weight: 500;
-  transition: all 0.2s;
+  transition: all ${cssVar('--transition-base')};
 
   &:hover {
-    background: #e94560;
-    border-color: #e94560;
+    background: ${cssVar('--color-primary')};
+    border-color: ${cssVar('--color-primary')};
     transform: translateY(-2px);
   }
 
   &.active {
-    background: #e94560;
-    border-color: #e94560;
+    background: ${cssVar('--color-primary')};
+    border-color: ${cssVar('--color-primary')};
   }
 `;
 
 const Content = styled.main`
-  padding: 2rem;
+  padding: ${cssVar('--spacing-xl')};
   max-width: 1200px;
   margin: 0 auto;
 `;
 
 const WelcomeCard = styled.div`
-  background: #16213e;
-  border: 1px solid #2d3561;
-  border-radius: 12px;
-  padding: 2rem;
-  margin-bottom: 2rem;
+  background: ${cssVar('--color-surface')};
+  border: 1px solid ${cssVar('--color-border')};
+  border-radius: ${cssVar('--radius-lg')};
+  padding: ${cssVar('--spacing-xl')};
+  margin-bottom: ${cssVar('--spacing-xl')};
+  transition: box-shadow ${cssVar('--transition-base')};
 
   &:hover {
     box-shadow: 0 4px 20px rgba(233, 69, 96, 0.1);
@@ -152,32 +152,32 @@ const WelcomeCard = styled.div`
 `;
 
 const CardTitle = styled.h2`
-  font-size: 1.5rem;
-  margin: 0 0 1rem 0;
-  color: #e94560;
+  font-size: ${cssVar('--font-size-2xl')};
+  margin: 0 0 ${cssVar('--spacing-md')} 0;
+  color: ${cssVar('--color-primary')};
 `;
 
 const CardText = styled.p`
   line-height: 1.6;
-  color: #eaeaea;
-  margin-bottom: 1rem;
+  color: ${cssVar('--color-text')};
+  margin-bottom: ${cssVar('--spacing-md')};
 `;
 
 const StatusList = styled.ul`
   list-style: none;
   padding: 0;
-  margin: 1rem 0 0 0;
+  margin: ${cssVar('--spacing-md')} 0 0 0;
 `;
 
 const StatusItem = styled.li`
-  padding: 0.5rem 0;
-  color: #a0a0a0;
+  padding: ${cssVar('--spacing-sm')} 0;
+  color: ${cssVar('--color-text-secondary')};
 
   &::before {
     content: '✓ ';
-    color: #00d26a;
+    color: ${cssVar('--color-success')};
     font-weight: bold;
-    margin-right: 0.5rem;
+    margin-right: ${cssVar('--spacing-sm')};
   }
 `;
 
