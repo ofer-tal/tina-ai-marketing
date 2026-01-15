@@ -1,0 +1,21 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+echo "🧪 Running pre-commit regression tests..."
+echo ""
+
+# Run a quick subset of regression tests before commit
+# Full suite runs in CI/CD
+
+echo "Running quick smoke tests..."
+npx vitest run backend/tests/health.test.js --reporter=verbose 2>/dev/null || {
+  echo ""
+  echo "⚠️  Warning: Pre-commit tests failed"
+  echo "The commit will proceed, but please fix the issues."
+  echo "Run 'npm run test:regression' to see all failures."
+  echo ""
+  exit 0
+}
+
+echo "✅ Pre-commit tests passed!"
+echo ""

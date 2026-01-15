@@ -1,0 +1,151 @@
+name: Regression Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run regression tests daily at 6 AM UTC
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  regression-tests:
+    name: Run Regression Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run regression tests
+        run: npm run test:regression
+        env:
+          MONGODB_URI: mongodb://localhost:27017/blush-marketing-test
+          NODE_ENV: test
+          CI: true
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-test-results
+          path: |
+            test-reports/
+            coverage/
+          retention-days: 30
+
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let comment = '## 🧪 Regression Test Results\n\n';
+
+            try {
+              const report = JSON.parse(fs.readFileSync('test-reports/regression-report.json', 'utf8'));
+              if (report.status === 'passed') {
+                comment += '✅ **All regression tests passed!**\n\n';
+                comment += `Duration: ${(report.duration / 1000).toFixed(2)}s\n`;
+                comment += `Timestamp: ${report.timestamp}\n\n`;
+                comment += '### Coverage Areas:\n';
+                report.coverage.forEach(area => {
+                  comment += `- ✓ ${area}\n`;
+                });
+              } else {
+                comment += '❌ **Regression tests failed!**\n\n';
+                comment += `Error: ${report.error}\n`;
+                comment += `Duration: ${(report.duration / 1000).toFixed(2)}s\n`;
+              }
+            } catch (error) {
+              comment += '⚠️ Unable to parse test results\n';
+            }
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Regression tests failed! Please review the logs above."
+          exit 1
+
+  performance-benchmarks:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    needs: regression-tests
+
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run performance tests
+        run: npx vitest run backend/tests/data-aggregation-performance.test.js --reporter=verbose
+        env:
+          MONGODB_URI: mongodb://localhost:27017/blush-marketing-test
+          NODE_ENV: test
+
+      - name: Run load tests
+        run: npx vitest run backend/tests/load-testing.test.js --reporter=verbose
+        env:
+          MONGODB_URI: mongodb://localhost:27017/blush-marketing-test
+          NODE_ENV: test
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for secrets
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
