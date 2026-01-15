@@ -1,14 +1,15 @@
 import express from 'express';
+import { cacheMiddleware } from '../middleware/cache.js';
 
 const router = express.Router();
 
 /**
  * GET /api/dashboard/metrics
- * Get dashboard metrics for a specified time period
+ * Get dashboard metrics for a specified time period (cached for 1 minute)
  * Query params:
  *   - period: '24h', '7d', '30d' (default: '24h')
  */
-router.get('/metrics', async (req, res) => {
+router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => {
   try {
     const { period = '24h' } = req.query;
 

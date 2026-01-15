@@ -37,6 +37,7 @@ import dashboardTestRouter from "./api/dashboard-test.js";
 import testDbAccessRouter from "./api/testDbAccess.js";
 import googleAnalyticsRouter from "./api/googleAnalytics.js";
 import glmRouter from "./api/glm.js";
+import cacheRouter from "./api/cache.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -212,6 +213,7 @@ app.use("/api/dashboard/test", dashboardTestRouter);
 app.use("/api/test-db-access", testDbAccessRouter);
 app.use("/api/googleAnalytics", googleAnalyticsRouter);
 app.use("/api/glm", glmRouter);
+app.use("/api/cache", cacheRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {

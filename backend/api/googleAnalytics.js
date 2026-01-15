@@ -12,6 +12,7 @@
 
 import express from 'express';
 import googleAnalyticsService from '../services/googleAnalyticsService.js';
+import { cacheMiddleware } from '../middleware/cache.js';
 
 const router = express.Router();
 
@@ -81,7 +82,7 @@ router.post('/test-connection', async (req, res) => {
  * - startDate: YYYY-MM-DD format (default: 7 days ago)
  * - endDate: YYYY-MM-DD format (default: today)
  */
-router.get('/pageviews', async (req, res) => {
+router.get('/pageviews', cacheMiddleware('analyticsPageViews'), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
 

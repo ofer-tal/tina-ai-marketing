@@ -1,13 +1,15 @@
 import express from 'express';
 import asoRankingService from '../services/asoRankingService.js';
+import cacheService from '../services/cacheService.js';
+import { cacheMiddleware, invalidateCache } from '../middleware/cache.js';
 
 const router = express.Router();
 
 /**
  * GET /api/aso/keywords
- * Get all tracked keywords
+ * Get all tracked keywords (cached for 30 minutes)
  */
-router.get('/keywords', async (req, res) => {
+router.get('/keywords', cacheMiddleware('asoRankings'), async (req, res) => {
   try {
     const keywords = await asoRankingService.getCurrentRankings();
     res.json({
@@ -25,9 +27,9 @@ router.get('/keywords', async (req, res) => {
 
 /**
  * GET /api/aso/keywords/:id
- * Get specific keyword details
+ * Get specific keyword details (cached for 30 minutes)
  */
-router.get('/keywords/:id', async (req, res) => {
+router.get('/keywords/:id', cacheMiddleware('asoRankings'), async (req, res) => {
   try {
     const trends = await asoRankingService.getKeywordTrends(req.params.id);
     res.json({
@@ -45,9 +47,9 @@ router.get('/keywords/:id', async (req, res) => {
 
 /**
  * POST /api/aso/keywords
- * Add a new keyword to track
+ * Add a new keyword to track (invalidates cache)
  */
-router.post('/keywords', async (req, res) => {
+router.post('/keywords', invalidateCache('/api/aso/keywords'), async (req, res) => {
   try {
     const keyword = await asoRankingService.addKeyword(req.body);
     res.status(201).json({
@@ -65,9 +67,9 @@ router.post('/keywords', async (req, res) => {
 
 /**
  * PUT /api/aso/keywords/:id
- * Update keyword details
+ * Update keyword details (invalidates cache)
  */
-router.put('/keywords/:id', async (req, res) => {
+router.put('/keywords/:id', invalidateCache('/api/aso/keywords'), async (req, res) => {
   try {
     const keyword = await asoRankingService.updateKeyword(req.params.id, req.body);
     res.json({

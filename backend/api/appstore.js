@@ -11,6 +11,7 @@
 import express from 'express';
 import winston from 'winston';
 import appStoreConnectService from '../services/appStoreConnectService.js';
+import { cacheMiddleware } from '../middleware/cache.js';
 
 const router = express.Router();
 
@@ -112,9 +113,9 @@ router.post('/test-connection', async (req, res) => {
 /**
  * GET /api/appstore/apps
  *
- * List all apps available in App Store Connect
+ * List all apps available in App Store Connect (cached for 10 minutes)
  */
-router.get('/apps', async (req, res) => {
+router.get('/apps', cacheMiddleware('appStoreCampaigns'), async (req, res) => {
   try {
     logger.info('Fetching apps list');
 
