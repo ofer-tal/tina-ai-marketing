@@ -4,9 +4,9 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['backend/tests/external-api-integration.test.js', 'backend/tests/data-aggregation-performance.test.js'],
-    testTimeout: 30000,
-    hookTimeout: 60000,
+    include: ['backend/tests/external-api-integration.test.js', 'backend/tests/data-aggregation-performance.test.js', 'backend/tests/load-testing.test.js'],
+    testTimeout: 120000, // 2 minutes for load tests
+    hookTimeout: 120000, // 2 minutes for setup/teardown
     setupFiles: ['./backend/tests/setup.js'],
   },
 });
