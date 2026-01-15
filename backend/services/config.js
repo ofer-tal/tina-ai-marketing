@@ -201,9 +201,16 @@ const configSchema = {
   // Google Analytics API
   GOOGLE_ANALYTICS_VIEW_ID: {
     required: false,
-    description: 'Google Analytics View ID',
+    description: 'Google Analytics View ID (Universal Analytics)',
     validate: (value) => !value || /^\d+$/.test(value),
     errorMessage: 'Must be a numeric View ID'
+  },
+
+  GOOGLE_ANALYTICS_PROPERTY_ID: {
+    required: false,
+    description: 'Google Analytics 4 Property ID',
+    validate: (value) => !value || /^\d+$/.test(value),
+    errorMessage: 'Must be a numeric Property ID'
   },
 
   GOOGLE_ANALYTICS_CREDENTIALS: {

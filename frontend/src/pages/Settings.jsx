@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
+import GoogleAnalyticsConfig from '../components/GoogleAnalyticsConfig';
 
 const SettingsContainer = styled.div`
   padding: 2rem;
@@ -363,6 +364,9 @@ function Settings() {
 
       {/* TikTok Sandbox Configuration */}
       <TikTokSandboxConfig />
+
+      {/* Google Analytics Configuration */}
+      <GoogleAnalyticsConfig />
 
       <Grid>
         {schema && Object.entries(schema).map(([category, keys]) => (

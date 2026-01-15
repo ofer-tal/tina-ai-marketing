@@ -35,6 +35,7 @@ import searchAdsRouter from "./api/searchAds.js";
 import revenueRouter from "./api/revenue.js";
 import dashboardTestRouter from "./api/dashboard-test.js";
 import testDbAccessRouter from "./api/testDbAccess.js";
+import googleAnalyticsRouter from "./api/googleAnalytics.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -106,8 +107,9 @@ app.get("/api/health", async (req, res) => {
         clientIdConfigured: !!process.env.YOUTUBE_CLIENT_ID,
       },
       googleAnalytics: {
-        configured: !!process.env.GA_VIEW_ID,
-        viewIdConfigured: !!process.env.GA_VIEW_ID,
+        configured: !!(process.env.GOOGLE_ANALYTICS_VIEW_ID || process.env.GOOGLE_ANALYTICS_PROPERTY_ID),
+        viewIdConfigured: !!process.env.GOOGLE_ANALYTICS_VIEW_ID,
+        propertyIdConfigured: !!process.env.GOOGLE_ANALYTICS_PROPERTY_ID,
       },
       ai: {
         falAi: !!process.env.FAL_AI_API_KEY,
@@ -207,6 +209,7 @@ app.use("/api/searchAds", searchAdsRouter);
 app.use("/api/revenue", revenueRouter);
 app.use("/api/dashboard/test", dashboardTestRouter);
 app.use("/api/test-db-access", testDbAccessRouter);
+app.use("/api/googleAnalytics", googleAnalyticsRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -380,3 +383,4 @@ startServer();
 
 export default app;
 
+// Trigger reload
