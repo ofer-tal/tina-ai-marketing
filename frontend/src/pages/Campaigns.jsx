@@ -210,7 +210,7 @@ const ROIBadge = styled.span`
   color: ${props => {
     if (props.roi > 0) return '#00d26a';
     if (props.roi < 0) return '#ff4757';
-    return '#a0a0a0;
+    return '#a0a0a0';
   }};
 `;
 
@@ -616,7 +616,7 @@ const KeywordsTable = styled.div`
 
 const KeywordsTableHeader = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   background: #1a1a2e;
@@ -628,7 +628,7 @@ const KeywordsTableHeader = styled.div`
 
 const KeywordsTableRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid #2d3561;
@@ -755,6 +755,9 @@ function Campaigns() {
 
   // Feature #140: ROI calculation per campaign
   const [campaignROI, setCampaignROI] = useState({});
+
+  // Feature #141: ROI calculation per keyword
+  const [keywordROI, setKeywordROI] = useState({});
 
   useEffect(() => {
     fetchCampaigns();
@@ -899,6 +902,9 @@ function Campaigns() {
     } finally {
       setKeywordsLoading(false);
     }
+
+    // Feature #141: Fetch keyword ROI data
+    fetchKeywordROI(campaign.id);
   };
 
   const handleCloseKeywords = () => {
@@ -923,6 +929,31 @@ function Campaigns() {
     const sorted = [...keywords].sort((a, b) => b.totalConversions - a.totalConversions);
     setKeywords(sorted);
     setKeywordSortBy('conversions');
+  };
+
+  // Feature #141: Handle sorting keywords by ROI
+  const handleSortByROI = () => {
+    const sorted = [...keywords].sort((a, b) => {
+      const aROI = keywordROI[a.keywordId]?.roi || 0;
+      const bROI = keywordROI[b.keywordId]?.roi || 0;
+      return bROI - aROI;
+    });
+    setKeywords(sorted);
+    setKeywordSortBy('roi');
+  };
+
+  // Feature #141: Fetch ROI data for keywords
+  const fetchKeywordROI = async (campaignId) => {
+    try {
+      // In production, this would call a keyword-level ROI endpoint
+      // For now, generate mock ROI data for keywords
+      const mockKeywordROI = getMockKeywordROI(campaignId);
+      setKeywordROI(mockKeywordROI);
+    } catch (err) {
+      console.error('Error fetching keyword ROI:', err);
+      // Fall back to mock data
+      setKeywordROI(getMockKeywordROI(campaignId));
+    }
   };
 
   const getMockKeywords = (campaignId) => {
@@ -993,6 +1024,42 @@ function Campaigns() {
         avgCPA: 3.67,
       },
     ];
+  };
+
+  // Feature #141: Mock ROI data for keywords
+  const getMockKeywordROI = (campaignId) => {
+    return {
+      [`${campaignId}-kw-001`]: {
+        revenue: 315.00,
+        spend: 185.50,
+        roi: 69.81,
+        transactions: 21
+      },
+      [`${campaignId}-kw-002`]: {
+        revenue: 245.40,
+        spend: 203.70,
+        roi: 20.47,
+        transactions: 16
+      },
+      [`${campaignId}-kw-003`]: {
+        revenue: 198.60,
+        spend: 225.30,
+        roi: -11.85,
+        transactions: 13
+      },
+      [`${campaignId}-kw-004`]: {
+        revenue: 153.00,
+        spend: 167.40,
+        roi: -8.60,
+        transactions: 10
+      },
+      [`${campaignId}-kw-005`]: {
+        revenue: 210.00,
+        spend: 128.60,
+        roi: 63.30,
+        transactions: 14
+      }
+    };
   };
 
   const getMockAdGroups = (campaignId) => {
@@ -1601,6 +1668,12 @@ function Campaigns() {
                 >
                   Sort by Conversions
                 </SortButton>
+                <SortButton
+                  active={keywordSortBy === 'roi'}
+                  onClick={handleSortByROI}
+                >
+                  Sort by ROI
+                </SortButton>
               </SortControls>
 
               <KeywordsTable>
@@ -1613,6 +1686,7 @@ function Campaigns() {
                   <div>CPA</div>
                   <div>CTR</div>
                   <div>Conv. Rate</div>
+                  <div>ROI</div>
                 </KeywordsTableHeader>
                 {keywords.map((keyword) => (
                   <KeywordsTableRow key={keyword.keywordId}>
@@ -1641,6 +1715,16 @@ function Campaigns() {
                     </MetricCell>
                     <MetricCell>
                       <MetricValueSmall>{keyword.avgConversionRate.toFixed(2)}%</MetricValueSmall>
+                    </MetricCell>
+                    <MetricCell>
+                      {keywordROI[keyword.keywordId] ? (
+                        <ROIValue roi={keywordROI[keyword.keywordId].roi}>
+                          {keywordROI[keyword.keywordId].roi > 0 ? '▲' : keywordROI[keyword.keywordId].roi < 0 ? '▼' : '─'}
+                          {Math.abs(keywordROI[keyword.keywordId].roi).toFixed(1)}%
+                        </ROIValue>
+                      ) : (
+                        <MetricValueSmall>--</MetricValueSmall>
+                      )}
                     </MetricCell>
                   </KeywordsTableRow>
                 ))}
