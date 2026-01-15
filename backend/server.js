@@ -34,6 +34,7 @@ import experimentsRouter from "./api/experiments.js";
 import searchAdsRouter from "./api/searchAds.js";
 import revenueRouter from "./api/revenue.js";
 import dashboardTestRouter from "./api/dashboard-test.js";
+import testDbAccessRouter from "./api/testDbAccess.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -205,6 +206,7 @@ app.use("/api/experiments", experimentsRouter);
 app.use("/api/searchAds", searchAdsRouter);
 app.use("/api/revenue", revenueRouter);
 app.use("/api/dashboard/test", dashboardTestRouter);
+app.use("/api/test-db-access", testDbAccessRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
