@@ -33,6 +33,7 @@ import reportsRouter from "./api/reports.js";
 import experimentsRouter from "./api/experiments.js";
 import searchAdsRouter from "./api/searchAds.js";
 import revenueRouter from "./api/revenue.js";
+import dashboardTestRouter from "./api/dashboard-test.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -203,6 +204,7 @@ app.use("/api/reports", reportsRouter);
 app.use("/api/experiments", experimentsRouter);
 app.use("/api/searchAds", searchAdsRouter);
 app.use("/api/revenue", revenueRouter);
+app.use("/api/dashboard/test", dashboardTestRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
