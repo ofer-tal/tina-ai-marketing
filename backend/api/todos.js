@@ -218,8 +218,9 @@ router.post("/:id/complete", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
+      const { ObjectId } = require('mongodb');
       await mongoose.connection.collection("marketing_tasks").updateOne(
-        { _id: id },
+        { _id: new ObjectId(id) },
         {
           $set: {
             status: "completed",
@@ -301,14 +302,24 @@ router.put("/:id", async (req, res) => {
 
       console.log(`[PUT] Found document:`, existingDoc.title, `current status:`, existingDoc.status);
 
+      // If status is being changed to completed, add completedAt timestamp
+      const updateData = {
+        ...updates,
+        updatedAt: new Date()
+      };
+
+      if (updates.status === 'completed') {
+        updateData.completedAt = new Date();
+      } else if (updates.status === 'pending' || updates.status === 'in_progress') {
+        // Clear completedAt if reverting from completed
+        updateData.completedAt = null;
+      }
+
       // Update the document
       const result = await mongoose.connection.collection("marketing_tasks").updateOne(
         { _id: new ObjectId(id) },
         {
-          $set: {
-            ...updates,
-            updatedAt: new Date()
-          }
+          $set: updateData
         }
       );
 
