@@ -374,6 +374,18 @@ const AlertCampaign = styled.div`
   margin-top: 0.25rem;
 `;
 
+// Feature #144: Auto-pause badge
+const AutoPausedBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #ff475733;
+  color: #ff4757;
+  margin-left: 0.5rem;
+  text-transform: uppercase;
+`;
+
 const AlertActions = styled.div`
   display: flex;
   gap: 0.5rem;
@@ -1047,18 +1059,19 @@ function Campaigns() {
   };
 
   // Feature #143: Check for budget alerts (70% and 90% thresholds)
-  const checkBudgetAlerts = () => {
+  // Feature #144: Auto-pause campaigns at 90% budget threshold
+  const checkBudgetAlerts = async () => {
     const alerts = [];
 
-    campaigns.forEach(campaign => {
+    for (const campaign of campaigns) {
       const utilization = budgetUtilization[campaign.id];
-      if (!utilization) return;
+      if (!utilization) continue;
 
       const { percentage, spend, budget } = utilization;
       const alertKey = `budget-${campaign.id}`;
 
       // Skip if alert was already dismissed
-      if (dismissedAlerts.has(alertKey)) return;
+      if (dismissedAlerts.has(alertKey)) continue;
 
       // Check if budget reached warning threshold (70%)
       if (percentage >= 70 && percentage < 90) {
@@ -1076,8 +1089,41 @@ function Campaigns() {
         });
       }
 
-      // Check if budget reached critical threshold (90%)
+      // Feature #144: Check if budget reached critical threshold (90%)
       if (percentage >= 90) {
+        // Feature #144 Step 4: Automatically pause campaign at 90%
+        try {
+          // Call auto-pause API endpoint
+          const response = await fetch(`http://localhost:3003/api/searchAds/campaigns/${campaign.id}/auto-pause`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              reason: `Automatic pause: ${percentage.toFixed(1)}% of daily budget used`,
+              budgetPercentage: percentage,
+              spendAmount: spend,
+              budgetAmount: budget
+            })
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            console.log(`[AUTO-PAUSE] Campaign ${campaign.id} automatically paused:`, result.data.pauseReason);
+
+            // Update campaign status locally
+            const updatedCampaigns = campaigns.map(c =>
+              c.id === campaign.id
+                ? { ...c, status: 'PAUSED', autoPaused: true, pauseReason: result.data.pauseReason }
+                : c
+            );
+            setCampaigns(updatedCampaigns);
+          }
+        } catch (error) {
+          console.error(`[AUTO-PAUSE] Failed to auto-pause campaign ${campaign.id}:`, error);
+        }
+
+        // Feature #144 Step 3: Trigger critical alert
         alerts.push({
           id: alertKey,
           severity: 'critical',
@@ -1087,15 +1133,17 @@ function Campaigns() {
           spend: spend.toFixed(2),
           budget: budget.toFixed(2),
           remaining: (budget - spend).toFixed(2),
-          message: `${percentage.toFixed(1)}% of daily budget used - CRITICAL`,
+          message: `${percentage.toFixed(1)}% of daily budget used - CRITICAL - AUTO-PAUSED`,
+          autoPaused: true,
           timestamp: new Date().toISOString()
         });
       }
-    });
+    }
 
     setBudgetAlerts(alerts);
 
-    // Step 5: Send notification for new alerts (simulated via console)
+    // Feature #143 Step 5: Send notification for new alerts
+    // Feature #144 Step 3: Trigger critical alert notifications
     if (alerts.length > 0) {
       console.log(`[Budget Alerts] ${alerts.length} new budget alert(s):`, alerts);
       // In production, this would trigger real notifications:
@@ -1105,6 +1153,9 @@ function Campaigns() {
       // - In-app notification
       alerts.forEach(alert => {
         console.log(`[Budget Alert] ${alert.severity.toUpperCase()}: ${alert.campaignName} - ${alert.message}`);
+        if (alert.autoPaused) {
+          console.log(`[AUTO-PAUSE] ${alert.campaignName} was automatically paused to prevent overspending`);
+        }
       });
     }
   };
@@ -1788,6 +1839,7 @@ function Campaigns() {
       </AlertSummary>
 
       {/* Feature #143: Budget Alert Details */}
+      {/* Feature #144: Auto-pause alert display */}
       {budgetAlerts.length > 0 && (
         <AlertsContainer>
           {budgetAlerts.map(alert => (
@@ -1798,6 +1850,7 @@ function Campaigns() {
               <AlertContent>
                 <AlertTitle severity={alert.severity}>
                   {alert.severity === 'critical' ? 'Critical Budget Alert' : 'Budget Warning'}
+                  {alert.autoPaused && <AutoPausedBadge>Auto-Paused</AutoPausedBadge>}
                 </AlertTitle>
                 <AlertMessage>
                   {alert.message}
@@ -1809,9 +1862,16 @@ function Campaigns() {
                   Spent: ${alert.spend} of ${alert.budget} daily budget
                   {alert.remaining > 0 ? ` ($${alert.remaining} remaining)` : ' (budget exceeded)'}
                 </AlertMessage>
+                {alert.autoPaused && (
+                  <AlertMessage style={{ color: '#ff6b8a', marginTop: '0.5rem' }}>
+                    ⚠️ This campaign was automatically paused to prevent overspending.
+                    Check the logs for details.
+                  </AlertMessage>
+                )}
               </AlertContent>
               <AlertActions>
-                {alert.severity === 'critical' && (
+                {/* Feature #144: Hide pause button for auto-paused campaigns */}
+                {!alert.autoPaused && alert.severity === 'critical' && (
                   <AlertButton
                     severity={alert.severity}
                     onClick={() => handlePauseCampaign(alert.campaignId)}
