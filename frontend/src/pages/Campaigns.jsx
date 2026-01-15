@@ -1057,6 +1057,231 @@ const EmptyNegativeKeywords = styled.div`
   font-style: italic;
 `;
 
+// Feature #150: Campaign creation modal styled components
+const CreateCampaignButton = styled.button`
+  padding: 0.5rem 1.5rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(233, 69, 96, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const CreateCampaignModal = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+`;
+
+const CreateCampaignOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+`;
+
+const CreateCampaignContent = styled.div`
+  position: relative;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+`;
+
+const CreateCampaignHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const CreateCampaignTitle = styled.h2`
+  font-size: 1.5rem;
+  margin: 0;
+  background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+`;
+
+const CloseModalButton = styled.button`
+  background: none;
+  border: none;
+  color: #a0a0a0;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2d3561;
+    color: #eaeaea;
+  }
+`;
+
+const FormGroup = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const FormLabel = styled.label`
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #eaeaea;
+  font-weight: 500;
+  font-size: 0.9rem;
+`;
+
+const FormInput = styled.input`
+  width: 100%;
+  padding: 0.75rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const FormSelect = styled.select`
+  width: 100%;
+  padding: 0.75rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+const FormRow = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+`;
+
+const FormSection = styled.div`
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+`;
+
+const FormSectionTitle = styled.h4`
+  margin: 0 0 1rem 0;
+  color: #7b2cbf;
+  font-size: 1rem;
+`;
+
+const FormHelpText = styled.p`
+  margin: 0.5rem 0 0 0;
+  color: #a0a0a0;
+  font-size: 0.85rem;
+  font-style: italic;
+`;
+
+const CreateCampaignActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+`;
+
+const PrimaryButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: ${props => props.disabled ? '#2d3561' : '#e94560'};
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: ${props => props.disabled ? '#2d3561' : '#ff6b6b'};
+    transform: ${props => props.disabled ? 'none' : 'translateY(-2px)'};
+    box-shadow: ${props => props.disabled ? 'none' : '0 4px 12px rgba(233, 69, 96, 0.3)'};
+  }
+`;
+
+const SecondaryButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #1f1f3a;
+    border-color: #e94560;
+  }
+`;
+
 // Feature #138: Daily spend aggregation styled components
 const DailySpendSection = styled.div`
   margin-top: 2rem;
@@ -1415,6 +1640,23 @@ function Campaigns() {
   const [negativeKeywords, setNegativeKeywords] = useState({});
   const [showNegativeKeywords, setShowNegativeKeywords] = useState(false);
   const [newNegativeKeyword, setNewNegativeKeyword] = useState('');
+
+  // Feature #150: Campaign creation and editing (Phase 2)
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newCampaign, setNewCampaign] = useState({
+    name: '',
+    dailyBudget: '',
+    startDate: '',
+    endDate: '',
+    status: 'ENABLED',
+    targeting: {
+      countries: ['US'],
+      languages: ['en-US'],
+      ageGroups: [],
+      genders: []
+    }
+  });
+  const [creatingCampaign, setCreatingCampaign] = useState(false);
 
   useEffect(() => {
     fetchCampaigns();
@@ -2230,6 +2472,113 @@ function Campaigns() {
     }
   };
 
+  // Feature #150: Campaign creation and editing handlers
+  const handleOpenCreateModal = () => {
+    setShowCreateModal(true);
+  };
+
+  const handleCloseCreateModal = () => {
+    setShowCreateModal(false);
+    setNewCampaign({
+      name: '',
+      dailyBudget: '',
+      startDate: '',
+      endDate: '',
+      status: 'ENABLED',
+      targeting: {
+        countries: ['US'],
+        languages: ['en-US'],
+        ageGroups: [],
+        genders: []
+      }
+    });
+  };
+
+  const handleCreateCampaignChange = (field, value) => {
+    setNewCampaign(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleTargetingChange = (field, value) => {
+    setNewCampaign(prev => ({
+      ...prev,
+      targeting: {
+        ...prev.targeting,
+        [field]: value
+      }
+    }));
+  };
+
+  const handleCreateCampaign = async () => {
+    // Validation
+    if (!newCampaign.name.trim()) {
+      alert('Please enter a campaign name');
+      return;
+    }
+    if (!newCampaign.dailyBudget || parseFloat(newCampaign.dailyBudget) <= 0) {
+      alert('Please enter a valid daily budget');
+      return;
+    }
+    if (!newCampaign.startDate) {
+      alert('Please select a start date');
+      return;
+    }
+
+    setCreatingCampaign(true);
+
+    try {
+      console.log('[Campaign Creation] Creating campaign:', newCampaign);
+
+      // In production, this would call the Apple Search Ads API
+      // const response = await fetch('http://localhost:3001/api/searchAds/campaigns', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     name: newCampaign.name,
+      //     dailyBudget: parseFloat(newCampaign.dailyBudget),
+      //     startDate: newCampaign.startDate,
+      //     endDate: newCampaign.endDate || null,
+      //     status: newCampaign.status,
+      //     targeting: newCampaign.targeting
+      //   })
+      // });
+      //
+      // if (!response.ok) throw new Error('Failed to create campaign');
+      // const data = await response.json();
+
+      // For now, create a mock campaign
+      const mockCampaign = {
+        id: `NEW-${Date.now()}`,
+        name: newCampaign.name,
+        status: newCampaign.status,
+ servingStatus: 'NOT_RUNNING',
+        lifecycleStatus: 'PAUSED',
+        dailyBudget: parseFloat(newCampaign.dailyBudget),
+        actualSpend: 0,
+        budgetUtilization: 0,
+        startDate: newCampaign.startDate,
+        endDate: newCampaign.endDate || null,
+        appraisal: 'PENDING',
+        adGroupCount: 0,
+        keywordCount: 0,
+        createdAt: new Date().toISOString()
+      };
+
+      setCampaigns(prev => [mockCampaign, ...prev]);
+      console.log('[Campaign Creation] Created successfully:', mockCampaign);
+
+      handleCloseCreateModal();
+      alert(`✅ Campaign "${newCampaign.name}" created successfully!`);
+    } catch (err) {
+      console.error('Error creating campaign:', err);
+      alert('Failed to create campaign. Please try again.');
+    } finally {
+      setCreatingCampaign(false);
+    }
+  };
+
   const getMockAdGroups = (campaignId) => {
     return [
       {
@@ -2681,6 +3030,10 @@ function Campaigns() {
         >
           Disabled ({campaigns.filter(c => c.status === 'DISABLED').length})
         </FilterButton>
+
+        <CreateCampaignButton onClick={handleOpenCreateModal}>
+          ➕ Create Campaign
+        </CreateCampaignButton>
 
         <RefreshButton onClick={handleRefresh} disabled={refreshing}>
           {refreshing ? '🔄' : '🔄'} Refresh
@@ -3324,6 +3677,132 @@ function Campaigns() {
             </ConfirmDialogActions>
           </ConfirmDialog>
         </>
+      )}
+
+      {/* Feature #150: Campaign Creation Modal */}
+      {showCreateModal && (
+        <CreateCampaignModal>
+          <CreateCampaignOverlay onClick={handleCloseCreateModal} />
+          <CreateCampaignContent>
+            <CreateCampaignHeader>
+              <CreateCampaignTitle>➕ Create New Campaign</CreateCampaignTitle>
+              <CloseModalButton onClick={handleCloseCreateModal}>×</CloseModalButton>
+            </CreateCampaignHeader>
+
+            <FormGroup>
+              <FormLabel>Campaign Name *</FormLabel>
+              <FormInput
+                type="text"
+                value={newCampaign.name}
+                onChange={(e) => handleCreateCampaignChange('name', e.target.value)}
+                placeholder="e.g., US Romance Stories - Exact Match"
+                disabled={creatingCampaign}
+              />
+            </FormGroup>
+
+            <FormRow>
+              <FormGroup>
+                <FormLabel>Daily Budget (USD) *</FormLabel>
+                <FormInput
+                  type="number"
+                  value={newCampaign.dailyBudget}
+                  onChange={(e) => handleCreateCampaignChange('dailyBudget', e.target.value)}
+                  placeholder="50.00"
+                  min="1"
+                  step="0.01"
+                  disabled={creatingCampaign}
+                />
+              </FormGroup>
+
+              <FormGroup>
+                <FormLabel>Status</FormLabel>
+                <FormSelect
+                  value={newCampaign.status}
+                  onChange={(e) => handleCreateCampaignChange('status', e.target.value)}
+                  disabled={creatingCampaign}
+                >
+                  <option value="ENABLED">Enabled</option>
+                  <option value="PAUSED">Paused</option>
+                </FormSelect>
+              </FormGroup>
+            </FormRow>
+
+            <FormRow>
+              <FormGroup>
+                <FormLabel>Start Date *</FormLabel>
+                <FormInput
+                  type="date"
+                  value={newCampaign.startDate}
+                  onChange={(e) => handleCreateCampaignChange('startDate', e.target.value)}
+                  disabled={creatingCampaign}
+                />
+              </FormGroup>
+
+              <FormGroup>
+                <FormLabel>End Date (Optional)</FormLabel>
+                <FormInput
+                  type="date"
+                  value={newCampaign.endDate}
+                  onChange={(e) => handleCreateCampaignChange('endDate', e.target.value)}
+                  min={newCampaign.startDate}
+                  disabled={creatingCampaign}
+                />
+                <FormHelpText>Leave empty for ongoing campaign</FormHelpText>
+              </FormGroup>
+            </FormRow>
+
+            <FormSection>
+              <FormSectionTitle>🎯 Targeting</FormSectionTitle>
+              <FormRow>
+                <FormGroup>
+                  <FormLabel>Countries/Regions</FormLabel>
+                  <FormSelect
+                    multiple
+                    value={newCampaign.targeting.countries}
+                    onChange={(e) => handleTargetingChange('countries', Array.from(e.target.selectedOptions, opt => opt.value))}
+                    disabled={creatingCampaign}
+                  >
+                    <option value="US">United States</option>
+                    <option value="UK">United Kingdom</option>
+                    <option value="CA">Canada</option>
+                    <option value="AU">Australia</option>
+                    <option value="DE">Germany</option>
+                    <option value="FR">France</option>
+                  </FormSelect>
+                  <FormHelpText>Hold Ctrl/Cmd to select multiple</FormHelpText>
+                </FormGroup>
+
+                <FormGroup>
+                  <FormLabel>Languages</FormLabel>
+                  <FormSelect
+                    multiple
+                    value={newCampaign.targeting.languages}
+                    onChange={(e) => handleTargetingChange('languages', Array.from(e.target.selectedOptions, opt => opt.value))}
+                    disabled={creatingCampaign}
+                  >
+                    <option value="en-US">English (US)</option>
+                    <option value="en-GB">English (UK)</option>
+                    <option value="es-ES">Spanish</option>
+                    <option value="fr-FR">French</option>
+                    <option value="de-DE">German</option>
+                  </FormSelect>
+                  <FormHelpText>Hold Ctrl/Cmd to select multiple</FormHelpText>
+                </FormGroup>
+              </FormRow>
+            </FormSection>
+
+            <FormHelpText>* Required fields</FormHelpText>
+
+            <CreateCampaignActions>
+              <SecondaryButton onClick={handleCloseCreateModal} disabled={creatingCampaign}>
+                Cancel
+              </SecondaryButton>
+              <PrimaryButton onClick={handleCreateCampaign} disabled={creatingCampaign || !newCampaign.name || !newCampaign.dailyBudget || !newCampaign.startDate}>
+                {creatingCampaign ? 'Creating...' : 'Create Campaign'}
+              </PrimaryButton>
+            </CreateCampaignActions>
+          </CreateCampaignContent>
+        </CreateCampaignModal>
       )}
     </PageContainer>
   );
