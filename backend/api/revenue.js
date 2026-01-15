@@ -2,6 +2,7 @@ import express from 'express';
 import revenueAttributionService from '../services/revenueAttributionService.js';
 import MarketingRevenue from '../models/MarketingRevenue.js';
 import DailyRevenueAggregate from '../models/DailyRevenueAggregate.js';
+import WeeklyRevenueAggregate from '../models/WeeklyRevenueAggregate.js';
 
 const router = express.Router();
 
@@ -462,5 +463,178 @@ router.get('/daily/aggregates/channels', async (req, res) => {
     });
   }
 });
+
+// ============================================================
+// WEEKLY REVENUE AGGREGATION ENDPOINTS
+// ============================================================
+
+/**
+ * POST /api/revenue/weekly/aggregate
+ * Manually trigger weekly aggregation for a specific week
+ * Body params:
+ * - year: Year (optional, defaults to current year)
+ * - weekNumber: Week number 1-53 (optional, defaults to current week)
+ */
+router.post('/weekly/aggregate', async (req, res) => {
+  try {
+    const { year, weekNumber } = req.body;
+
+    // Default to current week if not provided
+    const now = new Date();
+    const targetYear = year || now.getFullYear();
+    const targetWeekNumber = weekNumber || getISOWeek(now).weekNumber;
+
+    console.log(`Aggregating revenue for week ${targetWeekNumber} of ${targetYear}`);
+
+    const aggregate = await WeeklyRevenueAggregate.aggregateForWeek(targetYear, targetWeekNumber);
+
+    if (!aggregate) {
+      return res.json({
+        success: true,
+        message: 'No transactions found for this week',
+        data: null
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Weekly aggregation completed successfully',
+      data: aggregate
+    });
+  } catch (error) {
+    console.error('Error aggregating weekly revenue:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/weekly/aggregates
+ * Get weekly aggregates for a date range
+ * Query params:
+ * - startDate: ISO date string
+ * - endDate: ISO date string
+ */
+router.get('/weekly/aggregates', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 12 * 7 * 24 * 60 * 60 * 1000); // Default to 12 weeks
+
+    const aggregates = await WeeklyRevenueAggregate.getForDateRange(start, end);
+
+    res.json({
+      success: true,
+      data: aggregates
+    });
+  } catch (error) {
+    console.error('Error fetching weekly aggregates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: []
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/weekly/aggregate/:year/:weekNumber
+ * Get weekly aggregate for a specific week
+ * Path params:
+ * - year: Year
+ * - weekNumber: Week number (1-53)
+ */
+router.get('/weekly/aggregate/:year/:weekNumber', async (req, res) => {
+  try {
+    const { year, weekNumber } = req.params;
+
+    const aggregate = await WeeklyRevenueAggregate.findOne({
+      year: parseInt(year),
+      weekNumber: parseInt(weekNumber)
+    });
+
+    if (!aggregate) {
+      return res.status(404).json({
+        success: false,
+        error: 'No aggregate found for this week'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: aggregate
+    });
+  } catch (error) {
+    console.error('Error fetching weekly aggregate:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/weekly/:year/:weekNumber/transactions
+ * Get all transactions for a specific week (drill-down)
+ * Path params:
+ * - year: Year
+ * - weekNumber: Week number (1-53)
+ */
+router.get('/weekly/:year/:weekNumber/transactions', async (req, res) => {
+  try {
+    const { year, weekNumber } = req.params;
+
+    const weeklyAggregate = await WeeklyRevenueAggregate.findOne({
+      year: parseInt(year),
+      weekNumber: parseInt(weekNumber)
+    });
+
+    if (!weeklyAggregate) {
+      return res.status(404).json({
+        success: false,
+        error: 'No aggregate found for this week'
+      });
+    }
+
+    // Fetch transactions for this week
+    const transactions = await MarketingRevenue.find({
+      transactionDate: {
+        $gte: weeklyAggregate.weekStart,
+        $lte: weeklyAggregate.weekEnd
+      }
+    }).sort({ transactionDate: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        weeklyAggregate,
+        transactions,
+        count: transactions.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching weekly transactions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: { transactions: [], count: 0 }
+    });
+  }
+});
+
+/**
+ * Helper function to get ISO week number
+ */
+function getISOWeek(date) {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const dayNum = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+  return { year: d.getUTCFullYear(), weekNumber: weekNo };
+}
 
 export default router;

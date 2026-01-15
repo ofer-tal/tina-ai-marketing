@@ -9,6 +9,7 @@ import ContentLibrary from './pages/ContentLibrary';
 import BatchApprovalQueue from './pages/BatchApprovalQueue';
 import Campaigns from './pages/Campaigns';
 import RevenueAttributionTest from './pages/RevenueAttributionTest';
+import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
 import TodoSidebar from './components/TodoSidebar';
 
 const AppContainer = styled.div`
@@ -226,6 +227,7 @@ function App() {
             <SidebarNavLink to="/chat">🤖 AI Chat</SidebarNavLink>
             <SidebarNavLink to="/ads/campaigns">📢 Campaigns</SidebarNavLink>
             <SidebarNavLink to="/ads/revenue-test">💰 Revenue</SidebarNavLink>
+            <SidebarNavLink to="/revenue/weekly">📅 Weekly</SidebarNavLink>
             <SidebarNavLink to="/settings">⚙️ Settings</SidebarNavLink>
           </SidebarNav>
 
@@ -240,6 +242,7 @@ function App() {
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/ads/campaigns" element={<Campaigns />} />
                 <Route path="/ads/revenue-test" element={<RevenueAttributionTest />} />
+                <Route path="/revenue/weekly" element={<WeeklyRevenueAggregates />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
             </PageContent>
