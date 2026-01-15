@@ -344,7 +344,7 @@ const Button = styled.button`
   cursor: pointer;
   transition: all 0.2s;
 
-  ${props => props.primary ? `
+  ${props => props.$primary ? `
     background: #e94560;
     color: #eaeaea;
 
@@ -693,7 +693,7 @@ function Todos() {
                 <Button type="button" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" primary>
+                <Button type="submit" $primary>
                   Create Todo
                 </Button>
               </ButtonGroup>
@@ -790,7 +790,146 @@ function Todos() {
               </FormGroup>
             )}
 
+            <FormGroup>
+              <Label htmlFor="status">Change Status</Label>
+              <Select
+                id="status"
+                value={selectedTodo.status}
+                onChange={async (e) => {
+                  const newStatus = e.target.value;
+                  try {
+                    const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ status: newStatus })
+                    });
+                    if (response.ok) {
+                      // Update local state
+                      setSelectedTodo({ ...selectedTodo, status: newStatus });
+                      // Refresh todos list
+                      fetchTodos();
+                    }
+                  } catch (error) {
+                    console.error('Error updating status:', error);
+                  }
+                }}
+              >
+                <option value="pending">Pending</option>
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+                <option value="snoozed">Snoozed</option>
+              </Select>
+            </FormGroup>
+
             <ButtonGroup>
+              {selectedTodo.status === 'pending' && (
+                <>
+                  <Button
+                    $primary
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'in_progress' })
+                        });
+                        if (response.ok) {
+                          setSelectedTodo({ ...selectedTodo, status: 'in_progress' });
+                          fetchTodos();
+                        }
+                      } catch (error) {
+                        console.error('Error starting todo:', error);
+                      }
+                    }}
+                  >
+                    ▶️ Start Task
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'cancelled' })
+                        });
+                        if (response.ok) {
+                          setSelectedTodo({ ...selectedTodo, status: 'cancelled' });
+                          fetchTodos();
+                        }
+                      } catch (error) {
+                        console.error('Error cancelling todo:', error);
+                      }
+                    }}
+                  >
+                    ❌ Cancel
+                  </Button>
+                </>
+              )}
+              {selectedTodo.status === 'in_progress' && (
+                <>
+                  <Button
+                    $primary
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'completed' })
+                        });
+                        if (response.ok) {
+                          setSelectedTodo({ ...selectedTodo, status: 'completed' });
+                          fetchTodos();
+                        }
+                      } catch (error) {
+                        console.error('Error completing todo:', error);
+                      }
+                    }}
+                  >
+                    ✅ Complete
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ status: 'pending' })
+                        });
+                        if (response.ok) {
+                          setSelectedTodo({ ...selectedTodo, status: 'pending' });
+                          fetchTodos();
+                        }
+                      } catch (error) {
+                        console.error('Error pausing todo:', error);
+                      }
+                    }}
+                  >
+                    ⏸️ Pause
+                  </Button>
+                </>
+              )}
+              {selectedTodo.status === 'completed' && (
+                <Button
+                  onClick={async () => {
+                    try {
+                      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status: 'pending' })
+                      });
+                      if (response.ok) {
+                        setSelectedTodo({ ...selectedTodo, status: 'pending' });
+                        fetchTodos();
+                      }
+                    } catch (error) {
+                      console.error('Error reopening todo:', error);
+                    }
+                  }}
+                >
+                  🔄 Reopen
+                </Button>
+              )}
               <Button onClick={() => setShowDetailModal(false)}>
                 Close
               </Button>
