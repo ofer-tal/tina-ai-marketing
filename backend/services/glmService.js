@@ -1,4 +1,5 @@
 import winston from 'winston';
+import rateLimiterService from './rateLimiter.js';
 
 // Create logger for GLM service
 const logger = winston.createLogger({
@@ -280,7 +281,8 @@ class GLMService {
     });
 
     try {
-      const response = await fetch(url, {
+      // Use rate limiter for all GLM API requests
+      const response = await rateLimiterService.fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -345,7 +347,8 @@ class GLMService {
     });
 
     try {
-      const response = await fetch(url, {
+      // Use rate limiter for all GLM API requests
+      const response = await rateLimiterService.fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,

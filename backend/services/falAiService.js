@@ -1,6 +1,7 @@
 import winston from 'winston';
 import videoMetadataUtil from '../utils/videoMetadata.js';
 import videoWatermarkUtil from '../utils/videoWatermark.js';
+import rateLimiterService from './rateLimiter.js';
 
 // Create logger for Fal.ai service
 const logger = winston.createLogger({
@@ -146,8 +147,8 @@ class FalAiService {
     });
 
     try {
-      // Using flux-schnell model for fast image generation
-      const response = await fetch(`${this.baseUrl}/flux-schnell`, {
+      // Using flux-schnell model for fast image generation with rate limiting
+      const response = await rateLimiterService.fetch(`${this.baseUrl}/flux-schnell`, {
         method: 'POST',
         headers: {
           'Authorization': `Key ${this.apiKey}`,
@@ -198,8 +199,8 @@ class FalAiService {
     logger.info('Calling Fal.ai video generation', { imageUrl, duration });
 
     try {
-      // Initiate video generation request
-      const response = await fetch(`${this.baseUrl}/stable-video-diffusion-img2vid-xs`, {
+      // Initiate video generation request with rate limiting
+      const response = await rateLimiterService.fetch(`${this.baseUrl}/stable-video-diffusion-img2vid-xs`, {
         method: 'POST',
         headers: {
           'Authorization': `Key ${this.apiKey}`,
@@ -258,7 +259,8 @@ class FalAiService {
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       try {
-        const response = await fetch(`${this.baseUrl}/stable-video-diffusion-img2vid-xs/requests/${requestId}/status`, {
+        // Check status with rate limiting
+        const response = await rateLimiterService.fetch(`${this.baseUrl}/stable-video-diffusion-img2vid-xs/requests/${requestId}/status`, {
           method: 'GET',
           headers: {
             'Authorization': `Key ${this.apiKey}`,
@@ -316,8 +318,8 @@ class FalAiService {
     logger.info('Downloading video', { videoUrl });
 
     try {
-      // Download video
-      const response = await fetch(videoUrl);
+      // Download video with rate limiting
+      const response = await rateLimiterService.fetch(videoUrl);
       if (!response.ok) {
         throw new Error(`Failed to download video: ${response.status}`);
       }
@@ -649,8 +651,8 @@ class FalAiService {
     }
 
     try {
-      // Try to reach the Fal.ai API (simple health check)
-      const response = await fetch(`${this.baseUrl}/flux-schnell`, {
+      // Try to reach the Fal.ai API (simple health check with rate limiting)
+      const response = await rateLimiterService.fetch(`${this.baseUrl}/flux-schnell`, {
         method: 'POST',
         headers: {
           'Authorization': `Key ${this.apiKey}`,

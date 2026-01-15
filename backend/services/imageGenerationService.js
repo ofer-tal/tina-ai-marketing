@@ -2,6 +2,7 @@ import winston from 'winston';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimiterService from './rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -214,7 +215,8 @@ class ImageGenerationService {
     };
 
     try {
-      const response = await fetch(this.endpoint, {
+      // Use rate limiter for API calls
+      const response = await rateLimiterService.fetch(this.endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -271,7 +273,8 @@ class ImageGenerationService {
       }
 
       try {
-        const response = await fetch(`${this.endpoint}/status/${requestId}`, {
+        // Check status with rate limiting
+        const response = await rateLimiterService.fetch(`${this.endpoint}/status/${requestId}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
@@ -348,8 +351,8 @@ class ImageGenerationService {
 
       logger.info('Downloading image', { imageUrl });
 
-      // Download image
-      const response = await fetch(imageUrl);
+      // Download image with rate limiting
+      const response = await rateLimiterService.fetch(imageUrl);
       if (!response.ok) {
         throw new Error(`Failed to download image: ${response.status}`);
       }
@@ -474,8 +477,8 @@ class ImageGenerationService {
     }
 
     try {
-      // Try to reach the endpoint (won't actually generate, just check connectivity)
-      const response = await fetch(this.endpoint, {
+      // Try to reach the endpoint with rate limiting (won't actually generate, just check connectivity)
+      const response = await rateLimiterService.fetch(this.endpoint, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,

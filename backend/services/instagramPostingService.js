@@ -14,6 +14,7 @@
 
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
+import rateLimiterService from './rateLimiter.js';
 
 const logger = getLogger('services', 'instagram-posting');
 
@@ -217,7 +218,7 @@ class InstagramPostingService extends BaseApiClient {
 
       // Debug token info to check permissions
       const debugUrl = `${this.baseURL}/debug_token?input_token=${this.accessToken}`;
-      const response = await fetch(debugUrl, {
+      const response = await rateLimiterService.fetch(debugUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -396,7 +397,7 @@ class InstagramPostingService extends BaseApiClient {
 
       const url = `${this.endpoints.oauth.refresh}?grant_type=fb_exchange_token&client_id=${this.appId}&client_secret=${this.appSecret}&fb_exchange_token=${this.refreshToken}`;
 
-      const response = await fetch(url, {
+      const response = await rateLimiterService.fetch(url, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -465,7 +466,7 @@ class InstagramPostingService extends BaseApiClient {
         redirect_uri: this.redirectUri,
       });
 
-      const response = await fetch(`${this.endpoints.oauth.token}?${params}`, {
+      const response = await rateLimiterService.fetch(`${this.endpoints.oauth.token}?${params}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -539,7 +540,7 @@ class InstagramPostingService extends BaseApiClient {
         media_type: 'REELS',
       });
 
-      const response = await fetch(`${this.baseURL}${endpoint}?${params}`, {
+      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}?${params}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -590,7 +591,7 @@ class InstagramPostingService extends BaseApiClient {
 
       const endpoint = this.endpoints.media.status.replace('{container_id}', containerId);
 
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -654,7 +655,7 @@ class InstagramPostingService extends BaseApiClient {
         creation_id: containerId,
       });
 
-      const response = await fetch(`${this.baseURL}${endpoint}?${params}`, {
+      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}?${params}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

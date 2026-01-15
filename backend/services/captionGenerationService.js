@@ -1,5 +1,6 @@
 import winston from 'winston';
 import databaseService from './database.js';
+import rateLimiterService from './rateLimiter.js';
 
 // Create logger for caption generation service
 const logger = winston.createLogger({
@@ -393,7 +394,8 @@ class CaptionGenerationService {
     const userPrompt = this._buildUserPrompt(story, analysis, platform, options);
 
     try {
-      const response = await fetch(this.apiEndpoint, {
+      // Use rate limiter for GLM API calls
+      const response = await rateLimiterService.fetch(this.apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import winston from 'winston';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimiterService from './rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -198,7 +199,8 @@ class RunPodService {
         seed: -1 // Random seed
       };
 
-      const response = await fetch(this.endpoint, {
+      // Use rate limiter for API request
+      const response = await rateLimiterService.fetch(this.endpoint, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
@@ -255,7 +257,8 @@ class RunPodService {
       }
 
       try {
-        const response = await fetch(`${this.endpoint}/status/${requestId}`, {
+        // Check status with rate limiting
+        const response = await rateLimiterService.fetch(`${this.endpoint}/status/${requestId}`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
@@ -332,8 +335,8 @@ class RunPodService {
 
       logger.info('Downloading video', { videoUrl });
 
-      // Download video
-      const response = await fetch(videoUrl);
+      // Download video with rate limiting
+      const response = await rateLimiterService.fetch(videoUrl);
       if (!response.ok) {
         throw new Error(`Failed to download video: ${response.status}`);
       }
@@ -487,8 +490,8 @@ class RunPodService {
     }
 
     try {
-      // Try to reach the endpoint (without submitting a job)
-      const response = await fetch(this.endpoint.replace(/\/run\/.*$/, '/status'), {
+      // Try to reach the endpoint (without submitting a job) with rate limiting
+      const response = await rateLimiterService.fetch(this.endpoint.replace(/\/run\/.*$/, '/status'), {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`

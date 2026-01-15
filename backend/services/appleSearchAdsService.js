@@ -14,6 +14,7 @@
 
 import winston from 'winston';
 import retryService from './retry.js';
+import rateLimiterService from './rateLimiter.js';
 
 // Create logger
 const logger = winston.createLogger({
@@ -147,8 +148,8 @@ class AppleSearchAdsService {
         scope: this.organizationId, // Organization ID as the scope
       };
 
-      // Make token request using fetch
-      const response = await fetch(this.tokenUrl, {
+      // Make token request using rate limiter
+      const response = await rateLimiterService.fetch(this.tokenUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -210,7 +211,8 @@ class AppleSearchAdsService {
     });
 
     try {
-      const response = await fetch(url, requestOptions);
+      // Use rate limiter service for all API requests
+      const response = await rateLimiterService.fetch(url, requestOptions);
 
       // Handle token expiry - refresh and retry once
       if (response.status === 401) {
@@ -221,7 +223,7 @@ class AppleSearchAdsService {
 
         // Retry with new token
         requestOptions.headers['Authorization'] = `Bearer ${this.accessToken}`;
-        const retryResponse = await fetch(url, requestOptions);
+        const retryResponse = await rateLimiterService.fetch(url, requestOptions);
 
         if (!retryResponse.ok) {
           throw new Error(`API request failed after token refresh: ${retryResponse.status} ${retryResponse.statusText}`);

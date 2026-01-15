@@ -16,6 +16,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { SignJWT, importPKCS8 } from 'jose';
+import rateLimiterService from './rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,14 +183,8 @@ class AppStoreConnectService {
     logger.info('Making API request', { url, method: requestOptions.method });
 
     try {
-      const response = await fetch(url, requestOptions);
-
-      // Handle rate limiting
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('Retry-After');
-        logger.warn('Rate limited, retry after', { retryAfter });
-        throw new Error(`Rate limited. Retry after ${retryAfter} seconds`);
-      }
+      // Use rate limiter service for all API requests
+      const response = await rateLimiterService.fetch(url, requestOptions);
 
       // Handle other errors
       if (!response.ok) {
@@ -543,7 +538,8 @@ class AppStoreConnectService {
 
       const authHeader = await this.getAuthToken();
 
-      const response = await fetch(salesReportsUrl + endpoint, {
+      // Use rate limiter service for sales reports API
+      const response = await rateLimiterService.fetch(salesReportsUrl + endpoint, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authHeader}`,

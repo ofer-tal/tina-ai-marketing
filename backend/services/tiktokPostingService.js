@@ -13,6 +13,7 @@
 
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
+import rateLimiterService from './rateLimiter.js';
 
 const logger = getLogger('services', 'tiktok-posting');
 
@@ -570,7 +571,8 @@ class TikTokPostingService extends BaseApiClient {
         }
       }, 500);
 
-      const response = await fetch(uploadUrl, {
+      // Upload video with rate limiting
+      const response = await rateLimiterService.fetch(uploadUrl, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.accessToken}`,
