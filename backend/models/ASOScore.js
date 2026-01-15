@@ -50,86 +50,86 @@ const asoScoreSchema = new mongoose.Schema({
     // Keyword factors (30% weight)
     keywordRanking: {
       score: { type: Number, default: 0 },
-      weight: 0.10,
-      description: 'Average ranking of target keywords'
+      weight: { type: Number, default: 0.10 },
+      description: { type: String, default: 'Average ranking of target keywords' }
     },
     keywordCoverage: {
       score: { type: Number, default: 0 },
-      weight: 0.08,
-      description: 'Percentage of tracked keywords ranking in top 50'
+      weight: { type: Number, default: 0.08 },
+      description: { type: String, default: 'Percentage of tracked keywords ranking in top 50' }
     },
     keywordRelevance: {
       score: { type: Number, default: 0 },
-      weight: 0.07,
-      description: 'Relevance of keywords to app category'
+      weight: { type: Number, default: 0.07 },
+      description: { type: String, default: 'Relevance of keywords to app category' }
     },
     keywordDensity: {
       score: { type: Number, default: 0 },
-      weight: 0.05,
-      description: 'Keyword usage in title, subtitle, description'
+      weight: { type: Number, default: 0.05 },
+      description: { type: String, default: 'Keyword usage in title, subtitle, description' }
     },
 
     // Metadata factors (25% weight)
     titleOptimization: {
       score: { type: Number, default: 0 },
-      weight: 0.10,
-      description: 'Title length, keyword inclusion, clarity'
+      weight: { type: Number, default: 0.10 },
+      description: { type: String, default: 'Title length, keyword inclusion, clarity' }
     },
     subtitleOptimization: {
       score: { type: Number, default: 0 },
-      weight: 0.08,
-      description: 'Subtitle length, keyword inclusion'
+      weight: { type: Number, default: 0.08 },
+      description: { type: String, default: 'Subtitle length, keyword inclusion' }
     },
     descriptionQuality: {
       score: { type: Number, default: 0 },
-      weight: 0.07,
-      description: 'Description length, readability, keyword usage'
+      weight: { type: Number, default: 0.07 },
+      description: { type: String, default: 'Description length, readability, keyword usage' }
     },
 
     // Visual factors (20% weight)
     iconQuality: {
       score: { type: Number, default: 0 },
-      weight: 0.10,
-      description: 'Icon clarity, branding, emotional appeal'
+      weight: { type: Number, default: 0.10 },
+      description: { type: String, default: 'Icon clarity, branding, emotional appeal' }
     },
     screenshotQuality: {
       score: { type: Number, default: 0 },
-      weight: 0.06,
-      description: 'Screenshot quality, captions, appeal'
+      weight: { type: Number, default: 0.06 },
+      description: { type: String, default: 'Screenshot quality, captions, appeal' }
     },
     visualConsistency: {
       score: { type: Number, default: 0 },
-      weight: 0.04,
-      description: 'Consistent branding across visuals'
+      weight: { type: Number, default: 0.04 },
+      description: { type: String, default: 'Consistent branding across visuals' }
     },
 
     // Ratings factors (15% weight)
     averageRating: {
       score: { type: Number, default: 0 },
-      weight: 0.08,
-      description: 'App store average rating'
+      weight: { type: Number, default: 0.08 },
+      description: { type: String, default: 'App store average rating' }
     },
     ratingCount: {
       score: { type: Number, default: 0 },
-      weight: 0.04,
-      description: 'Number of ratings'
+      weight: { type: Number, default: 0.04 },
+      description: { type: String, default: 'Number of ratings' }
     },
     reviewSentiment: {
       score: { type: Number, default: 0 },
-      weight: 0.03,
-      description: 'Positive review sentiment'
+      weight: { type: Number, default: 0.03 },
+      description: { type: String, default: 'Positive review sentiment' }
     },
 
     // Conversion factors (10% weight)
     conversionRate: {
       score: { type: Number, default: 0 },
-      weight: 0.06,
-      description: 'Product page to download conversion rate'
+      weight: { type: Number, default: 0.06 },
+      description: { type: String, default: 'Product page to download conversion rate' }
     },
     categoryRanking: {
       score: { type: Number, default: 0 },
-      weight: 0.04,
-      description: 'Ranking in primary category'
+      weight: { type: Number, default: 0.04 },
+      description: { type: String, default: 'Ranking in primary category' }
     }
   },
 

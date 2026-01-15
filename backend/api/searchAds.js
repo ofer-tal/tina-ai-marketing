@@ -1,0 +1,219 @@
+/**
+ * Apple Search Ads API Routes
+ *
+ * Provides endpoints for managing Apple Search Ads campaigns
+ */
+
+import express from 'express';
+import appleSearchAdsService from '../services/appleSearchAdsService.js';
+
+const router = express.Router();
+
+/**
+ * GET /api/searchAds/status
+ * Get API configuration and connection status
+ */
+router.get('/status', async (req, res) => {
+  try {
+    const configStatus = appleSearchAdsService.getConfigStatus();
+
+    res.json({
+      success: true,
+      data: configStatus,
+    });
+  } catch (error) {
+    console.error('Error fetching status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/searchAds/test-connection
+ * Step 3: Test API connection
+ * Verifies credentials and connectivity
+ */
+router.post('/test-connection', async (req, res) => {
+  try {
+    const result = await appleSearchAdsService.testConnection();
+
+    res.json({
+      success: result.success,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error testing connection:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/campaigns
+ * Step 4: Verify campaign access
+ * Fetch all accessible campaigns
+ */
+router.get('/campaigns', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = parseInt(req.query.offset) || 0;
+
+    const result = await appleSearchAdsService.getCampaigns(limit, offset);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching campaigns:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/permissions
+ * Step 5: Confirm permissions granted
+ * Verify specific API permissions
+ */
+router.get('/permissions', async (req, res) => {
+  try {
+    const permissions = await appleSearchAdsService.verifyPermissions();
+
+    res.json({
+      success: true,
+      data: permissions,
+    });
+  } catch (error) {
+    console.error('Error verifying permissions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/campaigns/:campaignId
+ * Get detailed campaign metrics
+ */
+router.get('/campaigns/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const result = await appleSearchAdsService.getCampaignMetrics(campaignId);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching campaign metrics:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/campaigns/:campaignId/report
+ * Get campaign performance report
+ */
+router.get('/campaigns/:campaignId/report', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: 'startDate and endDate query parameters are required',
+      });
+    }
+
+    const result = await appleSearchAdsService.getCampaignReport(campaignId, startDate, endDate);
+
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error('Error fetching campaign report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/searchAds/campaigns/:campaignId/budget
+ * Update campaign daily budget
+ */
+router.put('/campaigns/:campaignId/budget', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { dailyBudget } = req.body;
+
+    if (!dailyBudget || isNaN(dailyBudget)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Valid dailyBudget is required',
+      });
+    }
+
+    const result = await appleSearchAdsService.updateCampaignBudget(campaignId, dailyBudget);
+
+    res.json({
+      success: true,
+      data: result,
+      message: `Campaign budget updated to $${dailyBudget}/day`,
+    });
+  } catch (error) {
+    console.error('Error updating campaign budget:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * PUT /api/searchAds/campaigns/:campaignId/status
+ * Pause or resume campaign
+ */
+router.put('/campaigns/:campaignId/status', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { paused } = req.body;
+
+    if (typeof paused !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        error: 'paused boolean field is required',
+      });
+    }
+
+    const result = await appleSearchAdsService.setCampaignStatus(campaignId, paused);
+
+    res.json({
+      success: true,
+      data: result,
+      message: paused ? 'Campaign paused' : 'Campaign resumed',
+    });
+  } catch (error) {
+    console.error('Error updating campaign status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+export default router;

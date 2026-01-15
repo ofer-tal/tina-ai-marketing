@@ -31,6 +31,7 @@ import asoRouter from "./api/aso.js";
 import conversionMetricsRouter from "./api/conversionMetrics.js";
 import reportsRouter from "./api/reports.js";
 import experimentsRouter from "./api/experiments.js";
+import searchAdsRouter from "./api/searchAds.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 
@@ -199,6 +200,7 @@ app.use("/api/aso", asoRouter);
 app.use("/api/conversion", conversionMetricsRouter);
 app.use("/api/reports", reportsRouter);
 app.use("/api/experiments", experimentsRouter);
+app.use("/api/searchAds", searchAdsRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
