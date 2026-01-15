@@ -54,14 +54,30 @@ const TodoList = styled.div`
   padding: 1rem;
 `;
 
-const TodoItem = styled.div`
-  background: #1a1a2e;
-  border: 1px solid #2d3561;
+const TodoItem = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'overdue'
+})`
+  background: ${props => props.overdue ? 'rgba(233, 69, 96, 0.15)' : '#1a1a2e'};
+  border: 1px solid ${props => props.overdue ? '#f8312f' : '#2d3561'};
   border-radius: 8px;
   padding: 1rem;
   margin-bottom: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+
+  ${props => props.overdue && `
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #f8312f 0%, #ff6b6b 100%);
+    }
+  `}
 
   &:hover {
     border-color: #e94560;
@@ -85,6 +101,27 @@ const TodoTime = styled.div`
   color: #e94560;
   font-weight: 600;
   white-space: nowrap;
+`;
+
+const OverdueBadge = styled.span`
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #f8312f 0%, #ff6b6b 100%);
+  color: #fff;
+  animation: pulse 2s ease-in-out infinite;
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
 `;
 
 const TodoStatus = styled.span`
@@ -528,6 +565,13 @@ function TodoSidebar() {
     }
   };
 
+  const isOverdue = (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const now = new Date();
+    return date < now;
+  };
+
   const handleTodoClick = (todo) => {
     setSelectedTodo(todo);
   };
@@ -566,26 +610,34 @@ function TodoSidebar() {
         <EmptyState>✓ No pending tasks</EmptyState>
       ) : (
         <TodoList>
-          {todos.map(todo => (
-            <TodoItem
-              key={todo._id || todo.id}
-              onClick={() => handleTodoClick(todo)}
-            >
-              <TodoHeader>
-                <TodoTime>{formatTime(todo.scheduledAt)}</TodoTime>
-                <TodoStatus $status={todo.status}>
-                  {todo.status === 'in_progress' ? 'In Progress' : todo.status}
-                </TodoStatus>
-              </TodoHeader>
-              <TodoTitle>{todo.title}</TodoTitle>
-              <TodoMeta>
-                <PriorityBadge $priority={todo.priority}>
-                  {todo.priority}
-                </PriorityBadge>
-                <CategoryBadge>{todo.category}</CategoryBadge>
-              </TodoMeta>
-            </TodoItem>
-          ))}
+          {todos.map(todo => {
+            const overdue = isOverdue(todo.scheduledAt) && todo.status !== 'completed';
+            return (
+              <TodoItem
+                key={todo._id || todo.id}
+                overdue={overdue}
+                onClick={() => handleTodoClick(todo)}
+              >
+                <TodoHeader>
+                  {overdue ? (
+                    <OverdueBadge>⚠️ Overdue</OverdueBadge>
+                  ) : (
+                    <TodoTime>{formatTime(todo.scheduledAt)}</TodoTime>
+                  )}
+                  <TodoStatus $status={todo.status}>
+                    {todo.status === 'in_progress' ? 'In Progress' : todo.status}
+                  </TodoStatus>
+                </TodoHeader>
+                <TodoTitle>{todo.title}</TodoTitle>
+                <TodoMeta>
+                  <PriorityBadge $priority={todo.priority}>
+                    {todo.priority}
+                  </PriorityBadge>
+                  <CategoryBadge>{todo.category}</CategoryBadge>
+                </TodoMeta>
+              </TodoItem>
+            );
+          })}
         </TodoList>
       )}
 

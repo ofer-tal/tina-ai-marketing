@@ -66,13 +66,29 @@ const TodoGrid = styled.div`
   gap: 1rem;
 `;
 
-const TodoCard = styled.div`
-  background: #16213e;
-  border: 1px solid #2d3561;
+const TodoCard = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'overdue'
+})`
+  background: ${props => props.overdue ? 'rgba(233, 69, 96, 0.1)' : '#16213e'};
+  border: 1px solid ${props => props.overdue ? '#f8312f' : '#2d3561'};
   border-radius: 12px;
   padding: 1.5rem;
   cursor: pointer;
   transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+
+  ${props => props.overdue && `
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, #f8312f 0%, #ff6b6b 100%);
+    }
+  `}
 
   &:hover {
     border-color: #e94560;
@@ -177,6 +193,27 @@ const CategoryBadge = styled.span`
   white-space: nowrap;
   background: #7b2cbf;
   color: #fff;
+`;
+
+const OverdueBadge = styled.span`
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  background: linear-gradient(135deg, #f8312f 0%, #ff6b6b 100%);
+  color: #fff;
+  animation: pulse 2s ease-in-out infinite;
+
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.8;
+    }
+  }
 `;
 
 const BadgesContainer = styled.div`
@@ -523,6 +560,13 @@ function Todos() {
     }
   };
 
+  const isOverdue = (dateString) => {
+    if (!dateString) return false;
+    const date = new Date(dateString);
+    const now = new Date();
+    return date < now;
+  };
+
   if (loading) {
     return <PageContainer><p>Loading todos...</p></PageContainer>;
   }
@@ -584,40 +628,48 @@ function Todos() {
         </EmptyState>
       ) : (
         <TodoGrid>
-          {filteredTodos.map(todo => (
-            <TodoCard key={todo.id || todo._id} onClick={() => handleTodoClick(todo)}>
-              <TodoHeader>
-                <Checkbox
-                  type="checkbox"
-                  checked={todo.status === 'completed'}
-                  onChange={(e) => handleToggleComplete(todo, e)}
-                  onClick={(e) => e.stopPropagation()}
-                />
-                <TodoTitle completed={todo.status === 'completed'}>{todo.title}</TodoTitle>
-              </TodoHeader>
+          {filteredTodos.map(todo => {
+            const overdue = isOverdue(todo.scheduledAt) && todo.status !== 'completed';
+            return (
+              <TodoCard
+                key={todo.id || todo._id}
+                overdue={overdue}
+                onClick={() => handleTodoClick(todo)}
+              >
+                <TodoHeader>
+                  <Checkbox
+                    type="checkbox"
+                    checked={todo.status === 'completed'}
+                    onChange={(e) => handleToggleComplete(todo, e)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <TodoTitle completed={todo.status === 'completed'}>{todo.title}</TodoTitle>
+                </TodoHeader>
 
-              <BadgesContainer>
-                <StatusBadge status={todo.status}>{todo.status.replace('_', ' ')}</StatusBadge>
-                <PriorityBadge priority={todo.priority}>{todo.priority}</PriorityBadge>
-                <CategoryBadge>{todo.category}</CategoryBadge>
-              </BadgesContainer>
+                <BadgesContainer>
+                  {overdue && <OverdueBadge>⚠️ Overdue</OverdueBadge>}
+                  <StatusBadge status={todo.status}>{todo.status.replace('_', ' ')}</StatusBadge>
+                  <PriorityBadge priority={todo.priority}>{todo.priority}</PriorityBadge>
+                  <CategoryBadge>{todo.category}</CategoryBadge>
+                </BadgesContainer>
 
-              {todo.description && (
-                <TodoDescription>{todo.description}</TodoDescription>
-              )}
-
-              <TodoMeta>
-                <MetaItem>
-                  📅 {formatDate(todo.scheduledAt)}
-                </MetaItem>
-                {todo.estimatedTime && (
-                  <MetaItem>
-                    ⏱️ {todo.estimatedTime}m
-                  </MetaItem>
+                {todo.description && (
+                  <TodoDescription>{todo.description}</TodoDescription>
                 )}
-              </TodoMeta>
-            </TodoCard>
-          ))}
+
+                <TodoMeta>
+                  <MetaItem>
+                    📅 {formatDate(todo.scheduledAt)}
+                  </MetaItem>
+                  {todo.estimatedTime && (
+                    <MetaItem>
+                      ⏱️ {todo.estimatedTime}m
+                    </MetaItem>
+                  )}
+                </TodoMeta>
+              </TodoCard>
+            );
+          })}
         </TodoGrid>
       )}
 
