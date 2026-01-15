@@ -4,6 +4,15 @@ import mongoose from "mongoose";
 
 const router = express.Router();
 
+// GET /api/todos/test - Test route
+router.get("/test", async (req, res) => {
+  res.json({
+    success: true,
+    message: "Todos routes are working!",
+    timestamp: new Date().toISOString()
+  });
+});
+
 // GET /api/todos - Get all todos
 router.get("/", async (req, res) => {
   try {
@@ -277,8 +286,24 @@ router.put("/:id", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      await mongoose.connection.collection("marketing_tasks").updateOne(
-        { _id: id },
+      const { ObjectId } = require('mongodb');
+
+      // First try to find the document to see if it exists
+      const existingDoc = await mongoose.connection.collection("marketing_tasks").findOne({ _id: new ObjectId(id) });
+
+      if (!existingDoc) {
+        console.log(`[PUT] Document not found with _id: ${id}`);
+        return res.status(404).json({
+          success: false,
+          error: "Todo not found"
+        });
+      }
+
+      console.log(`[PUT] Found document:`, existingDoc.title, `current status:`, existingDoc.status);
+
+      // Update the document
+      const result = await mongoose.connection.collection("marketing_tasks").updateOne(
+        { _id: new ObjectId(id) },
         {
           $set: {
             ...updates,
@@ -286,6 +311,8 @@ router.put("/:id", async (req, res) => {
           }
         }
       );
+
+      console.log(`[PUT] Update result - matchedCount:`, result.matchedCount, `modifiedCount:`, result.modifiedCount);
     }
 
     res.json({
@@ -297,6 +324,29 @@ router.put("/:id", async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+// GET /api/todos/:id/debug - Debug endpoint to see raw document (must come before /:id routes)
+router.get("/:id/debug", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const ObjectId = require('mongodb').ObjectId;
+
+    const doc = await mongoose.connection.collection("marketing_tasks").findOne({ _id: new ObjectId(id) });
+
+    res.json({
+      success: true,
+      document: doc,
+      idType: typeof id,
+      objectId: new ObjectId(id)
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
     });
   }
 });

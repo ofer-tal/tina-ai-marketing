@@ -86,13 +86,38 @@ const TodoHeader = styled.div`
   justify-content: space-between;
   align-items: start;
   margin-bottom: 0.75rem;
+  gap: 0.75rem;
 `;
 
-const TodoTitle = styled.h3`
+const Checkbox = styled.input`
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  cursor: pointer;
+  accent-color: #00d26a;
+  margin-top: 2px;
+
+  &:checked {
+    accent-color: #00d26a;
+  }
+
+  &:hover {
+    transform: scale(1.1);
+    transition: transform 0.2s;
+  }
+`;
+
+const TodoTitle = styled.h3.withConfig({
+  shouldForwardProp: (prop) => prop !== 'completed'
+})`
   font-size: 1.1rem;
   margin: 0;
   color: #eaeaea;
   flex: 1;
+  ${props => props.completed && `
+    text-decoration: line-through;
+    color: #a0a0a0;
+  `}
 `;
 
 const StatusBadge = styled.span`
@@ -448,6 +473,32 @@ function Todos() {
     setShowDetailModal(true);
   };
 
+  const handleToggleComplete = async (todo, e) => {
+    e.stopPropagation(); // Prevent opening detail modal
+
+    const newStatus = todo.status === 'completed' ? 'pending' : 'completed';
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/todos/${todo._id || todo.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        // Update local state
+        await fetchTodos();
+      }
+    } catch (error) {
+      console.error('Error toggling todo completion:', error);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'No date';
     const date = new Date(dateString);
@@ -536,7 +587,13 @@ function Todos() {
           {filteredTodos.map(todo => (
             <TodoCard key={todo.id || todo._id} onClick={() => handleTodoClick(todo)}>
               <TodoHeader>
-                <TodoTitle>{todo.title}</TodoTitle>
+                <Checkbox
+                  type="checkbox"
+                  checked={todo.status === 'completed'}
+                  onChange={(e) => handleToggleComplete(todo, e)}
+                  onClick={(e) => e.stopPropagation()}
+                />
+                <TodoTitle completed={todo.status === 'completed'}>{todo.title}</TodoTitle>
               </TodoHeader>
 
               <BadgesContainer>
