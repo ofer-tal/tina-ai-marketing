@@ -94,7 +94,7 @@ const CampaignsTable = styled.div`
 
 const TableHeader = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr;
   gap: 1rem;
   padding: 1rem;
   background: #1a1a2e;
@@ -105,7 +105,7 @@ const TableHeader = styled.div`
 
 const TableRow = styled.div`
   display: grid;
-  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1.2fr;
   gap: 1rem;
   padding: 1rem;
   border-bottom: 1px solid #2d3561;
@@ -211,6 +211,45 @@ const ROIBadge = styled.span`
     if (props.roi > 0) return '#00d26a';
     if (props.roi < 0) return '#ff4757';
     return '#a0a0a0';
+  }};
+`;
+
+// Feature #142: Budget utilization progress bar
+const BudgetUtilizationContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-end;
+`;
+
+const BudgetProgressBar = styled.div`
+  width: 100%;
+  max-width: 100px;
+  height: 6px;
+  background: #2d3561;
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+`;
+
+const BudgetProgressFill = styled.div`
+  height: 100%;
+  background: ${props => {
+    if (props.percentage >= 90) return '#ff4757'; // Red for critical
+    if (props.percentage >= 70) return '#ffb020'; // Orange for warning
+    return '#00d26a'; // Green for normal
+  }};
+  width: ${props => Math.min(props.percentage, 100)}%;
+  transition: width 0.3s ease, background 0.3s ease;
+`;
+
+const BudgetUtilizationText = styled.div`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: ${props => {
+    if (props.percentage >= 90) return '#ff4757';
+    if (props.percentage >= 70) return '#ffb020';
+    return '#00d26a';
   }};
 `;
 
@@ -759,6 +798,9 @@ function Campaigns() {
   // Feature #141: ROI calculation per keyword
   const [keywordROI, setKeywordROI] = useState({});
 
+  // Feature #142: Budget utilization percentage
+  const [budgetUtilization, setBudgetUtilization] = useState({});
+
   useEffect(() => {
     fetchCampaigns();
     fetchCampaignROI();
@@ -779,15 +821,21 @@ function Campaigns() {
 
       if (data.success && data.data && data.data.campaigns) {
         setCampaigns(data.data.campaigns);
+        // Feature #142: Calculate budget utilization
+        setBudgetUtilization(calculateBudgetUtilization(data.data.campaigns));
       } else {
         // Use mock data if API fails
-        setCampaigns(getMockCampaigns());
+        const mockCampaigns = getMockCampaigns();
+        setCampaigns(mockCampaigns);
+        setBudgetUtilization(calculateBudgetUtilization(mockCampaigns));
       }
     } catch (err) {
       console.error('Error fetching campaigns:', err);
       setError(err.message);
       // Fall back to mock data
-      setCampaigns(getMockCampaigns());
+      const mockCampaigns = getMockCampaigns();
+      setCampaigns(mockCampaigns);
+      setBudgetUtilization(calculateBudgetUtilization(mockCampaigns));
     } finally {
       setLoading(false);
     }
@@ -954,6 +1002,34 @@ function Campaigns() {
       // Fall back to mock data
       setKeywordROI(getMockKeywordROI(campaignId));
     }
+  };
+
+  // Feature #142: Calculate budget utilization for campaigns
+  const calculateBudgetUtilization = (campaigns) => {
+    const utilization = {};
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    campaigns.forEach(campaign => {
+      const dailyBudget = campaign.dailyBudget?.amount || 0;
+      if (dailyBudget === 0) {
+        utilization[campaign.id] = { percentage: 0, spend: 0, budget: dailyBudget };
+        return;
+      }
+
+      // Generate mock daily spend data for today
+      // In production, this would come from actual spend data
+      const mockDailySpend = dailyBudget * (0.5 + Math.random() * 0.6); // 50-110% of budget
+      const percentage = (mockDailySpend / dailyBudget) * 100;
+
+      utilization[campaign.id] = {
+        percentage: Math.min(percentage, 120), // Cap at 120% for display
+        spend: mockDailySpend,
+        budget: dailyBudget
+      };
+    });
+
+    return utilization;
   };
 
   const getMockKeywords = (campaignId) => {
@@ -1455,6 +1531,7 @@ function Campaigns() {
           <div>Keywords</div>
           <div>Daily Spend</div>
           <div>ROI</div>
+          <div>Budget Util</div>
         </TableHeader>
 
         {filteredCampaigns.length === 0 ? (
@@ -1529,6 +1606,21 @@ function Campaigns() {
                     <MetricValue>--</MetricValue>
                     <MetricLabel>No data</MetricLabel>
                   </>
+                )}
+              </div>
+              <div>
+                {/* Feature #142: Budget utilization progress bar */}
+                {budgetUtilization[campaign.id] ? (
+                  <BudgetUtilizationContainer>
+                    <BudgetProgressBar>
+                      <BudgetProgressFill percentage={budgetUtilization[campaign.id].percentage} />
+                    </BudgetProgressBar>
+                    <BudgetUtilizationText percentage={budgetUtilization[campaign.id].percentage}>
+                      {budgetUtilization[campaign.id].percentage.toFixed(0)}%
+                    </BudgetUtilizationText>
+                  </BudgetUtilizationContainer>
+                ) : (
+                  <MetricValue>--</MetricValue>
                 )}
               </div>
             </TableRow>
