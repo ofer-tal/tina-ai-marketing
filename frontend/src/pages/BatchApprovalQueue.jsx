@@ -302,7 +302,7 @@ function BatchApprovalQueue() {
   const fetchPosts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3010/api/content/posts');
+      const response = await fetch('http://localhost:3001/api/content/posts');
       if (!response.ok) throw new Error('Failed to fetch');
       const result = await response.json();
       // API returns { success: true, data: { posts: [...] } }
@@ -363,7 +363,7 @@ function BatchApprovalQueue() {
     if (selectedPosts.size === filteredPosts.length) {
       setSelectedPosts(new Set());
     } else {
-      setSelectedPosts(new Set(filteredPosts.map(p => p.id)));
+      setSelectedPosts(new Set(filteredPosts.map(p => p._id)));
     }
   };
 
@@ -381,7 +381,7 @@ function BatchApprovalQueue() {
 
     try {
       const promises = Array.from(selectedPosts).map(id =>
-        fetch(`http://localhost:3010/api/content/posts/${id}`, {
+        fetch(`http://localhost:3001/api/content/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'approved' })
@@ -397,7 +397,7 @@ function BatchApprovalQueue() {
       alert(`✅ Approved ${selectedPosts.size} post(s)! (Note: Backend not connected)`);
       // Optimistic update for development
       setPosts(posts.map(p =>
-        selectedPosts.has(p.id) ? { ...p, status: 'approved' } : p
+        selectedPosts.has(p._id) ? { ...p, status: 'approved' } : p
       ));
       setSelectedPosts(new Set());
     }
@@ -411,7 +411,7 @@ function BatchApprovalQueue() {
 
     try {
       const promises = Array.from(selectedPosts).map(id =>
-        fetch(`http://localhost:3010/api/content/posts/${id}`, {
+        fetch(`http://localhost:3001/api/content/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'rejected', rejectionReason: reason })
@@ -427,7 +427,7 @@ function BatchApprovalQueue() {
       alert(`❌ Rejected ${selectedPosts.size} post(s)! (Note: Backend not connected)`);
       // Optimistic update for development
       setPosts(posts.map(p =>
-        selectedPosts.has(p.id) ? { ...p, status: 'rejected' } : p
+        selectedPosts.has(p._id) ? { ...p, status: 'rejected' } : p
       ));
       setSelectedPosts(new Set());
     }
@@ -435,16 +435,15 @@ function BatchApprovalQueue() {
 
   const handleQuickApprove = async (postId) => {
     try {
-      await fetch(`http://localhost:3010/api/content/posts/${postId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'approved' })
+      await fetch(`http://localhost:3001/api/content/posts/${postId}/approve`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
       });
       fetchPosts();
     } catch (error) {
       console.error('Error approving post:', error);
       // Optimistic update
-      setPosts(posts.map(p => p.id === postId ? { ...p, status: 'approved' } : p));
+      setPosts(posts.map(p => p._id === postId ? { ...p, status: 'approved' } : p));
     }
   };
 
@@ -453,16 +452,16 @@ function BatchApprovalQueue() {
     if (!reason) return;
 
     try {
-      await fetch(`http://localhost:3010/api/content/posts/${postId}`, {
-        method: 'PATCH',
+      await fetch(`http://localhost:3001/api/content/posts/${postId}/reject`, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'rejected', rejectionReason: reason })
+        body: JSON.stringify({ reason })
       });
       fetchPosts();
     } catch (error) {
       console.error('Error rejecting post:', error);
       // Optimistic update
-      setPosts(posts.map(p => p.id === postId ? { ...p, status: 'rejected' } : p));
+      setPosts(posts.map(p => p._id === postId ? { ...p, status: 'rejected' } : p));
     }
   };
 
@@ -546,18 +545,18 @@ function BatchApprovalQueue() {
         <QueueList>
           {filteredPosts.map(post => (
             <QueueItem
-              key={post.id}
-              $selected={selectedPosts.has(post.id)}
+              key={post._id}
+              $selected={selectedPosts.has(post._id)}
               onClick={(e) => {
                 if (e.target.type !== 'checkbox' && !e.target.closest('button')) {
-                  toggleSelectPost(post.id);
+                  toggleSelectPost(post._id);
                 }
               }}
             >
               <Checkbox
                 type="checkbox"
-                checked={selectedPosts.has(post.id)}
-                onChange={() => toggleSelectPost(post.id)}
+                checked={selectedPosts.has(post._id)}
+                onChange={() => toggleSelectPost(post._id)}
                 onClick={(e) => e.stopPropagation()}
               />
               <ContentPreview>
@@ -576,10 +575,10 @@ function BatchApprovalQueue() {
                 </ContentInfo>
               </ContentPreview>
               <QuickActions>
-                <QuickActionButton onClick={() => handleQuickApprove(post.id)}>
+                <QuickActionButton onClick={() => handleQuickApprove(post._id)}>
                   ✅ Approve
                 </QuickActionButton>
-                <QuickActionButton onClick={() => handleQuickReject(post.id)}>
+                <QuickActionButton onClick={() => handleQuickReject(post._id)}>
                   ❌ Reject
                 </QuickActionButton>
               </QuickActions>
