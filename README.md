@@ -204,11 +204,37 @@ The system runs automated jobs via node-cron:
 ## Development
 
 ### Running Tests
+
+**Local Testing:**
 ```bash
-npm test              # Run all tests
+npm test              # Run all unit tests (Jest)
 npm run test:watch    # Watch mode
 npm run test:coverage # Coverage report
+npm run test:api      # Integration tests (Vitest)
+npm run test:regression # Regression suite
 ```
+
+**CI/CD Automated Testing:**
+
+All tests run automatically on every push and PR via GitHub Actions:
+
+- ✅ Unit Tests (Jest)
+- ✅ Integration Tests (Vitest)
+- ✅ End-to-End Tests
+- ✅ Performance Tests
+- ✅ Regression Tests (30+ tests)
+- ✅ Security Scanning (npm audit, TruffleHog, CodeQL)
+- ✅ Code Quality (ESLint, Prettier)
+
+**CI/CD Documentation:**
+- [Full CI/CD Documentation](.github/workflows/CI_CD_DOCUMENTATION.md)
+- [Quick Start Guide](.github/workflows/QUICK_START.md)
+- [Workflows README](.github/workflows/README.md)
+
+**View Results:**
+- Check PR comments for automated test results
+- GitHub Actions tab for detailed logs
+- Test artifacts stored for 30 days
 
 ### Linting & Formatting
 ```bash
