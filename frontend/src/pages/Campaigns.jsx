@@ -307,6 +307,155 @@ const InfoDescription = styled.div`
   color: #a0a0a0;
 `;
 
+// Feature #143: 70% budget warning alert
+const AlertsContainer = styled.div`
+  margin-bottom: 1.5rem;
+`;
+
+const AlertCard = styled.div`
+  background: ${props => {
+    if (props.severity === 'critical') return '#ff475722';
+    if (props.severity === 'warning') return '#ffb02022';
+    return '#16213e';
+  }};
+  border: 1px solid ${props => {
+    if (props.severity === 'critical') return '#ff475744';
+    if (props.severity === 'warning') return '#ffb02044';
+    return '#2d3561';
+  }};
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  animation: slideIn 0.3s ease;
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const AlertIcon = styled.span`
+  font-size: 1.5rem;
+  flex-shrink: 0;
+`;
+
+const AlertContent = styled.div`
+  flex: 1;
+`;
+
+const AlertTitle = styled.div`
+  font-weight: 600;
+  color: ${props => {
+    if (props.severity === 'critical') return '#ff6b8a';
+    if (props.severity === 'warning') return '#ffc947';
+    return '#eaeaea';
+  }};
+  margin-bottom: 0.25rem;
+`;
+
+const AlertMessage = styled.div`
+  font-size: 0.9rem;
+  color: #a0a0a0;
+`;
+
+const AlertCampaign = styled.div`
+  font-size: 0.85rem;
+  color: #eaeaea;
+  font-weight: 500;
+  margin-top: 0.25rem;
+`;
+
+const AlertActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const AlertButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: ${props => {
+    if (props.severity === 'critical') return '#ff4757';
+    if (props.severity === 'warning') return '#ffb020';
+    return '#2d3561';
+  }};
+  border: none;
+  border-radius: 4px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    opacity: 0.8;
+  }
+`;
+
+const DismissButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: transparent;
+  border: 1px solid #2d3561;
+  border-radius: 4px;
+  color: #a0a0a0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #2d3561;
+    color: #eaeaea;
+  }
+`;
+
+const AlertSummary = styled.div`
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const AlertSummaryHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+`;
+
+const AlertSummaryTitle = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const AlertSummaryCount = styled.span`
+  background: ${props => {
+    if (props.count === 0) return '#2d3561';
+    if (props.severity === 'critical') return '#ff4757';
+    return '#ffb020';
+  }};
+  color: ${props => props.count === 0 ? '#a0a0a0' : '#eaeaea'};
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+`;
+
+const AlertSummaryText = styled.div`
+  font-size: 0.9rem;
+  color: #a0a0a0;
+`;
+
 const AdGroupsSection = styled.div`
   margin-top: 2rem;
   padding: 1.5rem;
@@ -801,10 +950,20 @@ function Campaigns() {
   // Feature #142: Budget utilization percentage
   const [budgetUtilization, setBudgetUtilization] = useState({});
 
+  // Feature #143: 70% budget warning alert
+  const [budgetAlerts, setBudgetAlerts] = useState([]);
+  const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
+
   useEffect(() => {
     fetchCampaigns();
     fetchCampaignROI();
+    checkBudgetAlerts();
   }, []);
+
+  // Feature #143: Check for budget alerts whenever budget utilization changes
+  useEffect(() => {
+    checkBudgetAlerts();
+  }, [budgetUtilization]);
 
   const fetchCampaigns = async () => {
     setLoading(true);
@@ -885,6 +1044,126 @@ function Campaigns() {
   const calculateROI = (revenue, spend) => {
     if (spend === 0) return 0;
     return ((revenue - spend) / spend) * 100;
+  };
+
+  // Feature #143: Check for budget alerts (70% and 90% thresholds)
+  const checkBudgetAlerts = () => {
+    const alerts = [];
+
+    campaigns.forEach(campaign => {
+      const utilization = budgetUtilization[campaign.id];
+      if (!utilization) return;
+
+      const { percentage, spend, budget } = utilization;
+      const alertKey = `budget-${campaign.id}`;
+
+      // Skip if alert was already dismissed
+      if (dismissedAlerts.has(alertKey)) return;
+
+      // Check if budget reached warning threshold (70%)
+      if (percentage >= 70 && percentage < 90) {
+        alerts.push({
+          id: alertKey,
+          severity: 'warning',
+          campaignId: campaign.id,
+          campaignName: campaign.name || `Campaign ${campaign.id}`,
+          percentage: percentage.toFixed(1),
+          spend: spend.toFixed(2),
+          budget: budget.toFixed(2),
+          remaining: (budget - spend).toFixed(2),
+          message: `${percentage.toFixed(1)}% of daily budget used`,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      // Check if budget reached critical threshold (90%)
+      if (percentage >= 90) {
+        alerts.push({
+          id: alertKey,
+          severity: 'critical',
+          campaignId: campaign.id,
+          campaignName: campaign.name || `Campaign ${campaign.id}`,
+          percentage: percentage.toFixed(1),
+          spend: spend.toFixed(2),
+          budget: budget.toFixed(2),
+          remaining: (budget - spend).toFixed(2),
+          message: `${percentage.toFixed(1)}% of daily budget used - CRITICAL`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
+    setBudgetAlerts(alerts);
+
+    // Step 5: Send notification for new alerts (simulated via console)
+    if (alerts.length > 0) {
+      console.log(`[Budget Alerts] ${alerts.length} new budget alert(s):`, alerts);
+      // In production, this would trigger real notifications:
+      // - Email notification
+      // - Push notification
+      // - Slack/Discord webhook
+      // - In-app notification
+      alerts.forEach(alert => {
+        console.log(`[Budget Alert] ${alert.severity.toUpperCase()}: ${alert.campaignName} - ${alert.message}`);
+      });
+    }
+  };
+
+  // Feature #143: Dismiss a budget alert
+  const handleDismissAlert = (alertId) => {
+    setDismissedAlerts(prev => new Set([...prev, alertId]));
+    setBudgetAlerts(prev => prev.filter(alert => alert.id !== alertId));
+  };
+
+  // Feature #143: Increase budget for a campaign (action button handler)
+  const handleIncreaseBudget = async (campaignId) => {
+    const campaign = campaigns.find(c => c.id === campaignId);
+    if (!campaign) return;
+
+    const newBudget = prompt(
+      `Enter new daily budget for "${campaign.name || campaign.id}":`,
+      campaign.dailyBudget?.amount || 50
+    );
+
+    if (newBudget && !isNaN(newBudget)) {
+      console.log(`[Budget Action] Increasing budget for campaign ${campaignId} to $${newBudget}`);
+      // In production, this would call API to update budget
+      // await fetch(`/api/searchAds/campaigns/${campaignId}/budget`, {
+      //   method: 'PUT',
+      //   body: JSON.stringify({ dailyBudget: parseFloat(newBudget) })
+      // });
+
+      // For now, just update local state
+      const updatedCampaigns = campaigns.map(c =>
+        c.id === campaignId
+          ? { ...c, dailyBudget: { ...c.dailyBudget, amount: parseFloat(newBudget) } }
+          : c
+      );
+      setCampaigns(updatedCampaigns);
+      setBudgetUtilization(calculateBudgetUtilization(updatedCampaigns));
+      handleDismissAlert(`budget-${campaignId}`);
+    }
+  };
+
+  // Feature #143: Pause campaign (action button handler)
+  const handlePauseCampaign = async (campaignId) => {
+    const campaign = campaigns.find(c => c.id === campaignId);
+    if (!campaign) return;
+
+    if (confirm(`Pause campaign "${campaign.name || campaign.id}" to prevent overspending?`)) {
+      console.log(`[Budget Action] Pausing campaign ${campaignId}`);
+      // In production, this would call API to pause campaign
+      // await fetch(`/api/searchAds/campaigns/${campaignId}/pause`, { method: 'POST' });
+
+      // For now, just update local state
+      const updatedCampaigns = campaigns.map(c =>
+        c.id === campaignId
+          ? { ...c, status: 'PAUSED' }
+          : c
+      );
+      setCampaigns(updatedCampaigns);
+      handleDismissAlert(`budget-${campaignId}`);
+    }
   };
 
   const handleViewAdGroups = async (campaign) => {
@@ -1487,6 +1766,73 @@ function Campaigns() {
           </InfoText>
         </InfoCardContent>
       </InfoCard>
+
+      {/* Feature #143: Budget Alert Summary */}
+      <AlertSummary>
+        <AlertSummaryHeader>
+          <AlertSummaryTitle>
+            🚨 Budget Alerts
+          </AlertSummaryTitle>
+          <AlertSummaryCount
+            count={budgetAlerts.length}
+            severity={budgetAlerts.some(a => a.severity === 'critical') ? 'critical' : 'warning'}
+          >
+            {budgetAlerts.length}
+          </AlertSummaryCount>
+        </AlertSummaryHeader>
+        <AlertSummaryText>
+          {budgetAlerts.length === 0
+            ? 'No budget warnings. All campaigns are within safe limits.'
+            : `${budgetAlerts.length} campaign(s) have exceeded budget thresholds.`}
+        </AlertSummaryText>
+      </AlertSummary>
+
+      {/* Feature #143: Budget Alert Details */}
+      {budgetAlerts.length > 0 && (
+        <AlertsContainer>
+          {budgetAlerts.map(alert => (
+            <AlertCard key={alert.id} severity={alert.severity}>
+              <AlertIcon>
+                {alert.severity === 'critical' ? '🔴' : '⚠️'}
+              </AlertIcon>
+              <AlertContent>
+                <AlertTitle severity={alert.severity}>
+                  {alert.severity === 'critical' ? 'Critical Budget Alert' : 'Budget Warning'}
+                </AlertTitle>
+                <AlertMessage>
+                  {alert.message}
+                </AlertMessage>
+                <AlertCampaign>
+                  📢 {alert.campaignName}
+                </AlertCampaign>
+                <AlertMessage>
+                  Spent: ${alert.spend} of ${alert.budget} daily budget
+                  {alert.remaining > 0 ? ` ($${alert.remaining} remaining)` : ' (budget exceeded)'}
+                </AlertMessage>
+              </AlertContent>
+              <AlertActions>
+                {alert.severity === 'critical' && (
+                  <AlertButton
+                    severity={alert.severity}
+                    onClick={() => handlePauseCampaign(alert.campaignId)}
+                  >
+                    ⏸️ Pause Campaign
+                  </AlertButton>
+                )}
+                <AlertButton
+                  severity={alert.severity}
+                  onClick={() => handleIncreaseBudget(alert.campaignId)}
+                >
+                  💰 Increase Budget
+                </AlertButton>
+                <DismissButton onClick={() => handleDismissAlert(alert.id)}>
+                  Dismiss
+                </DismissButton>
+              </AlertActions>
+            </AlertCard>
+          ))}
+        </AlertsContainer>
+      )}
 
       <ControlsBar>
         <FilterButton
