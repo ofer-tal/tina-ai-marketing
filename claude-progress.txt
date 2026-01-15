@@ -3132,3 +3132,142 @@ NEXT SESSION PRIORITIES
 Continue with feature #153 (next in priority order).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION COMPLETE - 2026-01-15 09:00 UTC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**FEATURE #153: REVENUE AGGREGATION BY WEEK** ⚠️ (Code Complete, Awaiting Server Restart)
+
+**Summary:**
+
+Feature #153 is fully implemented but cannot be verified because the backend server
+process was started BEFORE the new code was committed and cannot be restarted due to
+Windows/WSL environment limitations.
+
+**Code Implementation:**
+
+✅ Backend Complete:
+- WeeklyRevenueAggregate model (590 lines) with comprehensive aggregation logic
+- Four new API endpoints in revenue.js (+174 lines)
+- ISO week numbering (Monday-Sunday weeks)
+- Week-over-week comparison calculations
+- Channel, subscription type, and regional breakdowns
+
+✅ Frontend Complete:
+- WeeklyRevenueAggregates.jsx page (710 lines)
+- Interactive weekly cards with growth indicators
+- Click-to-expand modal with transaction drill-down
+- Route registered at /revenue/weekly
+- Dark theme with brand colors
+
+**Total Implementation:**
+- 3 files created/modified
+- 1,474 lines of new code
+- All syntax verified (no errors)
+- Git commits: 29a6297, 4784b13
+
+**Blocker:**
+
+Backend server (PID 245005) started at 00:16:46 UTC
+Code committed at 00:19 and 00:40 UTC
+Server uptime: ~42 minutes with stale code
+
+Attempted restart methods:
+❌ Unix kill signals (don't work with Windows processes)
+❌ lsof command (not available on this system)
+❌ taskkill command (blocked by security restrictions)
+❌ pkill (ineffective in WSL environment)
+
+**Resolution Path:**
+
+Created helper files for next session/user:
+1. verify-weekly-aggregation.sh - Automated verification script
+2. FEATURE_153_STATUS.md - Complete status documentation
+3. restart-backend.sh - Existing restart script (needs Windows-compatible update)
+
+**To Complete Feature #153:**
+
+Option 1: Manual Restart (Quickest)
+- Open Windows Task Manager (Ctrl+Shift+Esc)
+- End all node.exe processes
+- Run: cd backend && node server.js
+- Run: bash verify-weekly-aggregation.sh
+
+Option 2: Use Windows PowerShell
+- Stop-Process -Name node -Force
+- cd backend; node server.js
+- bash verify-weekly-aggregation.sh
+
+Option 3: Git Bash/WSL
+- taskkill //F //IM node.exe (if available)
+- cd backend && node server.js
+- bash verify-weekly-aggregation.sh
+
+**Verification Steps (After Restart):**
+
+Backend API:
+1. curl -X POST http://localhost:3001/api/revenue/weekly/aggregate -d '{"year":2026,"weekNumber":2}'
+2. curl http://localhost:3001/api/revenue/weekly/aggregates
+3. curl http://localhost:3001/api/revenue/weekly/2026/2/transactions
+
+Frontend UI:
+1. Open http://localhost:5173/revenue/weekly
+2. Verify weekly aggregates display
+3. Click week card to open modal
+4. Verify transaction drill-down
+5. Check week-over-week calculations
+
+**Expected Results:**
+
+- Weekly aggregates for week 2 (2026-01-06 to 2026-01-12)
+- Aggregation of 32 transactions from marketing_revenue collection
+- Week-over-week comparison against week 1
+- Growth indicators (green ↑ for positive, red ↓ for negative)
+- Interactive modal with transaction list
+
+**Session Achievements:**
+
+✅ Verified code is complete and syntactically correct
+✅ Confirmed all files exist and are properly structured
+✅ Verified frontend route is registered
+✅ Created comprehensive verification script
+✅ Documented status and resolution path
+✅ Cleaned up temporary changes to server.js
+⚠️ Could not restart server due to Windows/WSL limitations
+
+**Technical Notes:**
+
+- Weekly aggregation uses ISO 8601 week standard
+- Week boundaries: Monday 00:00:00 to Sunday 23:59:59
+- Upsert operation prevents duplicate aggregates
+- Comprehensive metrics matching daily aggregation pattern
+- Week-over-week compares against previous week's aggregate
+
+**Files Created This Session:**
+- verify-weekly-aggregation.sh (automated verification)
+- FEATURE_153_STATUS.md (comprehensive status doc)
+- session-progress-153.txt (this file)
+
+**Files Verified:**
+- backend/models/WeeklyRevenueAggregate.js ✅
+- backend/api/revenue.js ✅
+- frontend/src/pages/WeeklyRevenueAggregates.jsx ✅
+- frontend/src/App.jsx ✅
+
+**Progress:** 146/338 (43.2%) → **146/338 (43.2%)** (Pending verification)
+
+**Git Commits:**
+- 29a6297: Feature #153 implementation
+- 4784b13: Progress notes
+
+**Next Session Priorities:**
+
+1. Restart backend server (see options above)
+2. Run verify-weekly-aggregation.sh
+3. Complete verification testing
+4. Mark feature #153 as passing
+5. Continue with feature #154
+
+**Estimated Time to Complete:** 10-15 minutes (server restart + verification)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
