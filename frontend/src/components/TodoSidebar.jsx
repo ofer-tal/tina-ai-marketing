@@ -413,10 +413,39 @@ function TodoSidebar() {
       const data = await response.json();
 
       if (data.success && data.todos) {
-        // Sort by scheduled time and filter for pending/in-progress
+        // Sort by urgency and priority, then filter for pending/in-progress
         const sortedTodos = data.todos
           .filter(todo => todo.status === 'pending' || todo.status === 'in_progress')
-          .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
+          .sort((a, b) => {
+            const now = new Date();
+            const aTime = new Date(a.scheduledAt);
+            const bTime = new Date(b.scheduledAt);
+            const aOverdue = aTime < now;
+            const bOverdue = bTime < now;
+
+            // Priority weight mapping
+            const priorityWeight = {
+              urgent: 4,
+              high: 3,
+              medium: 2,
+              low: 1
+            };
+
+            const aPriorityWeight = priorityWeight[a.priority] || 2;
+            const bPriorityWeight = priorityWeight[b.priority] || 2;
+
+            // 1. Overdue todos first
+            if (aOverdue && !bOverdue) return -1;
+            if (!aOverdue && bOverdue) return 1;
+
+            // 2. Then by priority (urgent first)
+            if (aPriorityWeight !== bPriorityWeight) {
+              return bPriorityWeight - aPriorityWeight;
+            }
+
+            // 3. Finally by scheduled time (earlier first)
+            return aTime - bTime;
+          })
           .slice(0, 7); // Max 7 todos in sidebar
 
         setTodos(sortedTodos);
