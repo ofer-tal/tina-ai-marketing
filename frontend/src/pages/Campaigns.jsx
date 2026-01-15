@@ -895,6 +895,168 @@ const EmptySuggestions = styled.div`
   font-style: italic;
 `;
 
+// Feature #149: Negative keyword management styled components
+const NegativeKeywordsButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: ${props => props.active ? '#ff4757' : '#16213e'};
+  border: 1px solid ${props => props.active ? '#ff4757' : '#2d3561'};
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.85rem;
+  font-weight: 500;
+
+  &:hover {
+    background: ${props => props.active ? '#ff5c6c' : '#ff4757'};
+    border-color: #ff4757;
+    transform: scale(1.05);
+  }
+`;
+
+const NegativeKeywordsSection = styled.div`
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 12px;
+`;
+
+const NegativeKeywordsHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+`;
+
+const NegativeKeywordsTitle = styled.h4`
+  margin: 0;
+  font-size: 1.25rem;
+  color: #eaeaea;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const NegativeKeywordsCount = styled.span`
+  background: #ff4757;
+  color: #eaeaea;
+  padding: 0.15rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+`;
+
+const NegativeKeywordInputContainer = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+`;
+
+const NegativeKeywordInput = styled.input`
+  flex: 1;
+  padding: 0.5rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+  }
+
+  &::placeholder {
+    color: #a0a0a0;
+  }
+`;
+
+const AddNegativeKeywordButton = styled.button`
+  padding: 0.5rem 1.5rem;
+  background: #e94560;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff6b6b;
+    transform: scale(1.05);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const NegativeKeywordsList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+`;
+
+const NegativeKeywordCard = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #ff4757;
+    background: #1f1f3a;
+  }
+`;
+
+const NegativeKeywordInfo = styled.div`
+  flex: 1;
+`;
+
+const NegativeKeywordText = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  margin-bottom: 0.25rem;
+`;
+
+const NegativeKeywordMeta = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  display: flex;
+  gap: 1rem;
+`;
+
+const RemoveNegativeKeywordButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: #ff4757;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff5c6c;
+    transform: scale(1.05);
+  }
+`;
+
+const EmptyNegativeKeywords = styled.div`
+  text-align: center;
+  padding: 2rem;
+  color: #a0a0a0;
+  font-style: italic;
+`;
+
 // Feature #138: Daily spend aggregation styled components
 const DailySpendSection = styled.div`
   margin-top: 2rem;
@@ -1248,6 +1410,11 @@ function Campaigns() {
   // Feature #148: Bid adjustment suggestions
   const [bidSuggestions, setBidSuggestions] = useState({});
   const [showBidSuggestions, setShowBidSuggestions] = useState(false);
+
+  // Feature #149: Negative keyword management
+  const [negativeKeywords, setNegativeKeywords] = useState({});
+  const [showNegativeKeywords, setShowNegativeKeywords] = useState(false);
+  const [newNegativeKeyword, setNewNegativeKeyword] = useState('');
 
   useEffect(() => {
     fetchCampaigns();
@@ -1662,6 +1829,9 @@ function Campaigns() {
     // Feature #141: Fetch keyword ROI data
     fetchKeywordROI(campaign.id);
     // Feature #148: Bid suggestions will be generated automatically via useEffect when keywords and ROI are loaded
+    // Feature #149: Fetch negative keywords
+    const negKeywords = await fetchNegativeKeywords(campaign.id);
+    setNegativeKeywords(prev => ({ ...prev, [campaign.id]: negKeywords }));
   };
 
   const handleCloseKeywords = () => {
@@ -1977,6 +2147,86 @@ function Campaigns() {
     } catch (err) {
       console.error('Error fetching bid suggestions:', err);
       return generateBidSuggestions(campaignId);
+    }
+  };
+
+  // Feature #149: Negative keyword management
+  const fetchNegativeKeywords = async (campaignId) => {
+    try {
+      console.log('[Negative Keywords] Fetching for campaign:', campaignId);
+      // In production, this would call an API endpoint
+      // const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaignId}/negative-keywords`);
+      // const data = await response.json();
+
+      // For now, return mock data
+      const mockNegativeKeywords = [
+        { keywordId: `${campaignId}-neg-1`, keywordText: 'free romance', matchType: 'BROAD', createdAt: '2026-01-10' },
+        { keywordId: `${campaignId}-neg-2`, keywordText: 'cheap stories', matchType: 'PHRASE', createdAt: '2026-01-11' },
+        { keywordId: `${campaignId}-neg-3`, keywordText: 'pirate app', matchType: 'EXACT', createdAt: '2026-01-12' },
+      ];
+      return mockNegativeKeywords;
+    } catch (err) {
+      console.error('Error fetching negative keywords:', err);
+      return [];
+    }
+  };
+
+  const handleAddNegativeKeyword = async () => {
+    if (!newNegativeKeyword.trim() || !selectedCampaign) {
+      return;
+    }
+
+    const keywordText = newNegativeKeyword.trim().toLowerCase();
+    console.log('[Negative Keywords] Adding keyword:', keywordText, 'to campaign:', selectedCampaign.id);
+
+    try {
+      // In production, this would call an API endpoint
+      // const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${selectedCampaign.id}/negative-keywords`, {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({ keywordText, matchType: 'BROAD' })
+      // });
+
+      // For now, add locally
+      const newKeyword = {
+        keywordId: `${selectedCampaign.id}-neg-${Date.now()}`,
+        keywordText: keywordText,
+        matchType: 'BROAD',
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+
+      setNegativeKeywords(prev => ({
+        ...prev,
+        [selectedCampaign.id]: [...(prev[selectedCampaign.id] || []), newKeyword]
+      }));
+
+      setNewNegativeKeyword('');
+      console.log('[Negative Keywords] Added successfully:', newKeyword);
+    } catch (err) {
+      console.error('Error adding negative keyword:', err);
+    }
+  };
+
+  const handleRemoveNegativeKeyword = async (keywordId) => {
+    if (!selectedCampaign) return;
+
+    console.log('[Negative Keywords] Removing keyword:', keywordId, 'from campaign:', selectedCampaign.id);
+
+    try {
+      // In production, this would call an API endpoint
+      // await fetch(`http://localhost:3001/api/searchAds/campaigns/${selectedCampaign.id}/negative-keywords/${keywordId}`, {
+      //   method: 'DELETE'
+      // });
+
+      // For now, remove locally
+      setNegativeKeywords(prev => ({
+        ...prev,
+        [selectedCampaign.id]: (prev[selectedCampaign.id] || []).filter(kw => kw.keywordId !== keywordId)
+      }));
+
+      console.log('[Negative Keywords] Removed successfully:', keywordId);
+    } catch (err) {
+      console.error('Error removing negative keyword:', err);
     }
   };
 
@@ -2709,6 +2959,12 @@ function Campaigns() {
                 >
                   💡 Bid Suggestions
                 </BidSuggestionsButton>
+                <NegativeKeywordsButton
+                  active={showNegativeKeywords}
+                  onClick={() => setShowNegativeKeywords(!showNegativeKeywords)}
+                >
+                  🚫 Negative Keywords
+                </NegativeKeywordsButton>
               </SortControls>
 
               <KeywordsTable>
@@ -2823,6 +3079,66 @@ function Campaigns() {
                     ))
                   )}
                 </BidSuggestionsSection>
+              )}
+
+              {/* Feature #149: Negative keywords management */}
+              {showNegativeKeywords && (
+                <NegativeKeywordsSection>
+                  <NegativeKeywordsHeader>
+                    <NegativeKeywordsTitle>
+                      🚫 Negative Keywords
+                      <NegativeKeywordsCount>
+                        {(negativeKeywords[selectedCampaign?.id] || []).length}
+                      </NegativeKeywordsCount>
+                    </NegativeKeywordsTitle>
+                  </NegativeKeywordsHeader>
+
+                  <NegativeKeywordInputContainer>
+                    <NegativeKeywordInput
+                      type="text"
+                      placeholder="Enter negative keyword (e.g., 'free romance', 'cheap stories')"
+                      value={newNegativeKeyword}
+                      onChange={(e) => setNewNegativeKeyword(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddNegativeKeyword();
+                        }
+                      }}
+                    />
+                    <AddNegativeKeywordButton
+                      onClick={handleAddNegativeKeyword}
+                      disabled={!newNegativeKeyword.trim()}
+                    >
+                      Add Keyword
+                    </AddNegativeKeywordButton>
+                  </NegativeKeywordInputContainer>
+
+                  {(!negativeKeywords[selectedCampaign?.id] || negativeKeywords[selectedCampaign.id].length === 0) ? (
+                    <EmptyNegativeKeywords>
+                      No negative keywords configured. Add keywords above to exclude them from this campaign.
+                    </EmptyNegativeKeywords>
+                  ) : (
+                    <NegativeKeywordsList>
+                      {(negativeKeywords[selectedCampaign.id] || []).map((negKeyword) => (
+                        <NegativeKeywordCard key={negKeyword.keywordId}>
+                          <NegativeKeywordInfo>
+                            <NegativeKeywordText>{negKeyword.keywordText}</NegativeKeywordText>
+                            <NegativeKeywordMeta>
+                              <MatchTypeBadge>{negKeyword.matchType}</MatchTypeBadge>
+                              <span>ID: {negKeyword.keywordId}</span>
+                              <span>Added: {negKeyword.createdAt}</span>
+                            </NegativeKeywordMeta>
+                          </NegativeKeywordInfo>
+                          <RemoveNegativeKeywordButton
+                            onClick={() => handleRemoveNegativeKeyword(negKeyword.keywordId)}
+                          >
+                            Remove
+                          </RemoveNegativeKeywordButton>
+                        </NegativeKeywordCard>
+                      ))}
+                    </NegativeKeywordsList>
+                  )}
+                </NegativeKeywordsSection>
               )}
             </>
           )}

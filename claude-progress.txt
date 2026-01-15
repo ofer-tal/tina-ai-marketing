@@ -2459,3 +2459,159 @@ NEXT SESSION PRIORITIES
 Continue with next feature in priority order (feature #148+).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SESSION COMPLETE - 2026-01-15 05:30 UTC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**REGRESSION TESTING:** Not performed (focused on new feature implementation)
+
+**FEATURE #148: BID ADJUSTMENT SUGGESTIONS** ✅
+
+All 5 steps verified working with browser automation:
+
+✅ **Step 1: Analyze keyword performance**
+- generateBidSuggestions() function analyzes ROI, CPA, CTR, conversion rate
+- Metrics object identifies performance characteristics for each keyword
+- Example: highROI (roi > 50), lowCPA (cpa < 4), highCTR (ctr > 2)
+
+✅ **Step 2: Identify under/over-performing keywords**
+- Over-performing: romance stories (ROI 69.8%, CPA $3.50, CTR 6.74%)
+- Over-performing: romantic games (ROI 63.3%, CPA $3.67, CTR 7.37%)
+- Under-performing: interactive fiction (ROI -11.8%, CPA $5.19, CTR 6.82%)
+- Under-performing: love stories (ROI -8.6%, CPA $3.28, CTR 5.99%)
+
+✅ **Step 3: Calculate optimal bid**
+- Bid adjustment logic based on performance tiers:
+  * +30%: Excellent (high ROI + low CPA + high CTR)
+  * +15%: Good (positive ROI + one good metric)
+  * -40%: Very poor (very negative ROI + very high CPA)
+  * -25%: Moderate poor (negative/high CPA + low CTR)
+  * -15%: Concerning (negative ROI or very high CPA)
+
+✅ **Step 4: Generate suggestions**
+- generateBidSuggestions() processes all keywords in campaign
+- Creates suggestion objects with: keywordId, keywordText, currentBid, newBid, 
+  adjustment, action, reason, priority
+- Sorts by priority (high → medium → low) then by action (increase first)
+- Sets bidSuggestions state with campaignId as key
+
+✅ **Step 5: Display in recommendations**
+- "💡 Bid Suggestions" toggle button in keywords sort controls
+- Clicking button shows/hides BidSuggestionsSection
+- Section header with title and suggestion count badge
+- BidSuggestionCard components with:
+  * Color-coded borders (red=high priority, orange=medium, green=low)
+  * Keyword text and ID
+  * Current bid and new bid with visual indicators (↗ increase, ↘ decrease)
+  * Percentage adjustment badge (green for positive, red for negative)
+  * Reason explaining the suggestion
+  * Priority badge (HIGH/MEDIUM/LOW)
+- Empty state message when no suggestions available
+
+**Frontend Implementation:**
+
+State Management:
+- bidSuggestions: Object mapping campaignId → array of suggestions
+- showBidSuggestions: Boolean for toggling suggestions display
+
+Styled Components (9 new):
+- BidSuggestionsButton - Purple toggle button
+- BidSuggestionsSection - Container with dark theme
+- BidSuggestionsHeader - Flex header with title and count
+- BidSuggestionsTitle - Heading with icon and count badge
+- BidSuggestionsCount - Purple badge showing count
+- BidSuggestionCard - Grid layout with dynamic border colors
+- SuggestionKeywordText/Id - Keyword display
+- SuggestionBidInfo - Current/new bid display
+- SuggestionCurrentBid - Gray text for current bid
+- SuggestionNewBid - Colored text for new bid (green/red)
+- SuggestionAdjustment - Badge showing % change
+- SuggestionReason - Explanation text
+- SuggestionPriority - Priority badge
+- EmptySuggestions - Empty state message
+
+Handler Functions:
+- generateBidSuggestions(campaignId) - Main generation logic
+- fetchBidSuggestions(campaignId) - API wrapper (calls generate locally)
+
+useEffect Hook:
+- Auto-generates suggestions when keywords, keywordROI, or selectedCampaign change
+- Only runs when all data is available (keywords.length > 0 and ROI data exists)
+
+**Test Results:**
+
+✅ End-to-end testing completed:
+1. Navigated to Campaigns page
+2. Clicked "View Keywords" on first campaign (123456789)
+3. Keywords section opened with 5 keywords
+4. ROI data loaded for all keywords
+5. Console logs confirmed generation:
+   [Bid Suggestions] Generating via useEffect for campaign: 123456789
+   [Bid Suggestions] Keywords count: 5
+   [Bid Suggestions] ROI data keys: [5 keywords]
+6. Clicked "💡 Bid Suggestions" button
+7. Bid suggestions section displayed with 5 suggestions
+8. Verified high-priority suggestions (red border):
+   - romance stories: $1.85 → $2.41 (+30%) - High ROI (+69.8%), low CPA ($3.50), high CTR (6.74%)
+   - romantic games: $1.75 → $2.27 (+30%) - High ROI (+63.3%), low CPA ($3.67), high CTR (7.37%)
+9. Verified medium-priority suggestion (orange border):
+   - spicy stories: $2.10 → $2.42 (+15%) - Positive ROI (+20.5%), high CTR
+10. Verified low-priority suggestions (green border):
+    - interactive fiction: $2.45 → $2.08 (-15%) - Negative ROI (-11.8%)
+    - love stories: $1.65 → $1.40 (-15%) - Negative ROI (-8.6%)
+11. Confirmed sorting by priority (high → medium → low)
+12. Verified color coding (red/orange/green borders)
+13. Confirmed bid arrows (↗ for increase, ↘ for decrease)
+14. Verified percentage badges (+30%, +15%, -15%)
+15. Verified priority badges (HIGH/MEDIUM/LOW)
+16. Verified reason text explaining each suggestion
+17. Screenshot captured: feature-148-bid-suggestions-complete.png
+
+**Console Output:**
+- [Bid Suggestions] Generating via useEffect for campaign: 123456789
+- [Bid Suggestions] Generating for campaign: 123456789
+- [Bid Suggestions] Keywords count: 5
+- [Bid Suggestions] ROI data keys: [123456789-kw-001, 123456789-kw-002, ...]
+
+**Git Commit:** acccd90
+
+**Progress:** 141/338 (41.7%) → **142/338 (42.0%)** +1 feature
+
+**Session Achievements:**
+- Complete bid adjustment suggestion system for keywords
+- Performance-based bid optimization logic
+- Priority-based suggestion sorting
+- Beautiful color-coded UI with visual indicators
+- Auto-generation via React useEffect
+- Mock data with bid amounts for all keywords
+- 370+ lines of new code
+- 15 new styled components
+- All 5 implementation steps verified end-to-end
+
+**Technical Highlights:**
+- Performance analysis: ROI, CPA, CTR, conversion rate
+- Bid adjustment ranges: +30% (excellent) to -40% (very poor)
+- Priority tiers: high (excellent/terrible), medium (good/poor), low (acceptable/concerning)
+- Color coding: red (high priority), orange (medium), green (low)
+- Visual indicators: ↗ (increase), ↘ (decrease)
+- Dynamic border colors based on priority
+- Auto-generation when data loaded via useEffect
+- Sorted by priority then action (increase first)
+- Detailed reasons explaining each suggestion
+- Mock keyword data includes bid amounts
+- Graceful handling of missing data (defaults to $1.50 bid)
+
+**Note:** Bid suggestions using mock keyword performance data. 
+Production implementation would use real keyword performance metrics from 
+Apple Search Ads API. The suggestion logic is complete and ready for 
+production data integration.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NEXT SESSION PRIORITIES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Continue with next feature in priority order (feature #149+).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
