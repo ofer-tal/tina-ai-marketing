@@ -8,6 +8,7 @@ import Chat from './pages/Chat';
 import ContentLibrary from './pages/ContentLibrary';
 import BatchApprovalQueue from './pages/BatchApprovalQueue';
 import Campaigns from './pages/Campaigns';
+import RevenueAttributionTest from './pages/RevenueAttributionTest';
 import TodoSidebar from './components/TodoSidebar';
 
 const AppContainer = styled.div`
@@ -224,6 +225,7 @@ function App() {
             <SidebarNavLink to="/content/approval">✅ Approvals</SidebarNavLink>
             <SidebarNavLink to="/chat">🤖 AI Chat</SidebarNavLink>
             <SidebarNavLink to="/ads/campaigns">📢 Campaigns</SidebarNavLink>
+            <SidebarNavLink to="/ads/revenue-test">💰 Revenue</SidebarNavLink>
             <SidebarNavLink to="/settings">⚙️ Settings</SidebarNavLink>
           </SidebarNav>
 
@@ -237,6 +239,7 @@ function App() {
                 <Route path="/content/approval" element={<BatchApprovalQueue />} />
                 <Route path="/chat" element={<Chat />} />
                 <Route path="/ads/campaigns" element={<Campaigns />} />
+                <Route path="/ads/revenue-test" element={<RevenueAttributionTest />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
             </PageContent>
