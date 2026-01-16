@@ -74,6 +74,8 @@ import contentPerformanceRouter from "./api/contentPerformance.js";
 import trendingTopicsRouter from "./api/trendingTopics.js";
 import keywordRecommendationsRouter from "./api/keywordRecommendations.js";
 import serviceStatusRouter from "./api/service-status.js";
+import testErrorsRouter from "./api/test-errors.js";
+import errorMessageService from "./services/errorMessageService.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -301,6 +303,10 @@ app.use("/api/content-performance", contentPerformanceRouter);
 app.use("/api/trending-topics", trendingTopicsRouter);
 app.use("/api/keyword-recommendations", keywordRecommendationsRouter);
 app.use("/api/service-status", serviceStatusRouter);
+app.use("/api/test-errors", testErrorsRouter);
+
+// Error handling middleware (must be after all routes)
+app.use(errorMessageService.errorHandlerMiddleware.bind(errorMessageService));
 
 app.get("/api/config/status", (req, res) => {
   try {
