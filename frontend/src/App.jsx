@@ -17,6 +17,7 @@ import ToastTest from './components/ToastTest';
 import ModalDemo from './pages/ModalDemo';
 import TabsDemo from './pages/TabsDemo';
 import DataTableDemo from './pages/DataTableDemo';
+import EmptyStateDemo from './pages/EmptyStateDemo';
 import Breadcrumbs from './components/Breadcrumbs';
 import { cssVar } from './themeUtils';
 
@@ -371,6 +372,7 @@ function App() {
                 <Route path="/test/modals" element={<PageWithBreadcrumbs><ModalDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/tabs" element={<PageWithBreadcrumbs><TabsDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/tables" element={<PageWithBreadcrumbs><DataTableDemo /></PageWithBreadcrumbs>} />
+                <Route path="/test/empty-states" element={<PageWithBreadcrumbs><EmptyStateDemo /></PageWithBreadcrumbs>} />
               </Routes>
             </PageContent>
 
