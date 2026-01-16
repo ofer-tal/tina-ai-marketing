@@ -677,4 +677,270 @@ router.get('/score/history', async (req, res) => {
   }
 });
 
+/**
+ * ============================================================
+ * WEEKLY ASO ANALYSIS REPORTS
+ * ============================================================
+ */
+
+/**
+ * POST /api/aso/analysis/schedule/start
+ * Start the weekly ASO analysis scheduler
+ */
+router.post('/analysis/schedule/start', async (req, res) => {
+  try {
+    const weeklyASOAnalysis = (await import('../jobs/weeklyASOAnalysis.js')).default;
+    weeklyASOAnalysis.start(req.body);
+
+    res.json({
+      success: true,
+      message: 'Weekly ASO analysis scheduler started'
+    });
+  } catch (error) {
+    console.error('Error starting weekly ASO analysis scheduler:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/analysis/schedule/stop
+ * Stop the weekly ASO analysis scheduler
+ */
+router.post('/analysis/schedule/stop', async (req, res) => {
+  try {
+    const weeklyASOAnalysis = (await import('../jobs/weeklyASOAnalysis.js')).default;
+    weeklyASOAnalysis.stop();
+
+    res.json({
+      success: true,
+      message: 'Weekly ASO analysis scheduler stopped'
+    });
+  } catch (error) {
+    console.error('Error stopping weekly ASO analysis scheduler:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/analysis/schedule/trigger
+ * Manually trigger ASO analysis
+ * Body params:
+ * - weekStart: ISO date string (optional)
+ * - weekEnd: ISO date string (optional)
+ */
+router.post('/analysis/schedule/trigger', async (req, res) => {
+  try {
+    const weeklyASOAnalysis = (await import('../jobs/weeklyASOAnalysis.js')).default;
+    const result = await weeklyASOAnalysis.trigger(req.body.weekStart, req.body.weekEnd);
+
+    res.json({
+      success: true,
+      message: 'ASO analysis triggered successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error triggering ASO analysis:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/analysis/schedule/status
+ * Get the status of the weekly ASO analysis scheduler
+ */
+router.get('/analysis/schedule/status', async (req, res) => {
+  try {
+    const weeklyASOAnalysis = (await import('../jobs/weeklyASOAnalysis.js')).default;
+    const status = weeklyASOAnalysis.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('Error fetching ASO analysis scheduler status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/analysis/reports
+ * Get ASO analysis reports
+ * Query params:
+ * - reportType: weekly, biweekly, monthly (default: weekly)
+ * - startDate: ISO date string (optional)
+ * - endDate: ISO date string (optional)
+ * - limit: number of reports to return (default: 10)
+ */
+router.get('/analysis/reports', async (req, res) => {
+  try {
+    const ASOAnalysisReport = (await import('../models/ASOAnalysisReport.js')).default;
+    const { reportType = 'weekly', startDate, endDate, limit = 10 } = req.query;
+
+    let query = { reportType };
+
+    if (startDate || endDate) {
+      query.reportDate = {};
+      if (startDate) query.reportDate.$gte = new Date(startDate);
+      if (endDate) query.reportDate.$lte = new Date(endDate);
+    }
+
+    const reports = await ASOAnalysisReport
+      .find(query)
+      .sort({ reportDate: -1 })
+      .limit(parseInt(limit))
+      .exec();
+
+    res.json({
+      success: true,
+      data: reports,
+      count: reports.length
+    });
+  } catch (error) {
+    console.error('Error fetching ASO analysis reports:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/analysis/reports/latest
+ * Get the latest ASO analysis report
+ * Query params:
+ * - reportType: weekly, biweekly, monthly (default: weekly)
+ */
+router.get('/analysis/reports/latest', async (req, res) => {
+  try {
+    const ASOAnalysisReport = (await import('../models/ASOAnalysisReport.js')).default;
+    const reportType = req.query.reportType || 'weekly';
+
+    const report = await ASOAnalysisReport.getLatestReport(reportType);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'No report found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: report
+    });
+  } catch (error) {
+    console.error('Error fetching latest ASO analysis report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/aso/analysis/reports/:id
+ * Get a specific ASO analysis report by ID
+ */
+router.get('/analysis/reports/:id', async (req, res) => {
+  try {
+    const ASOAnalysisReport = (await import('../models/ASOAnalysisReport.js')).default;
+    const report = await ASOAnalysisReport.findById(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: report
+    });
+  } catch (error) {
+    console.error('Error fetching ASO analysis report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/analysis/reports/:id/finalize
+ * Finalize a report (mark as final)
+ */
+router.post('/analysis/reports/:id/finalize', async (req, res) => {
+  try {
+    const ASOAnalysisReport = (await import('../models/ASOAnalysisReport.js')).default;
+    const report = await ASOAnalysisReport.findById(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found'
+      });
+    }
+
+    await report.finalize();
+
+    res.json({
+      success: true,
+      message: 'Report finalized successfully',
+      data: report
+    });
+  } catch (error) {
+    console.error('Error finalizing ASO analysis report:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/aso/analysis/reports/:id/send
+ * Mark report as sent (notification sent)
+ */
+router.post('/analysis/reports/:id/send', async (req, res) => {
+  try {
+    const ASOAnalysisReport = (await import('../models/ASOAnalysisReport.js')).default;
+    const report = await ASOAnalysisReport.findById(req.params.id);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: 'Report not found'
+      });
+    }
+
+    await report.markAsSent();
+
+    res.json({
+      success: true,
+      message: 'Report marked as sent',
+      data: report
+    });
+  } catch (error) {
+    console.error('Error marking ASO analysis report as sent:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
