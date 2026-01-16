@@ -90,6 +90,35 @@ const pressReleaseSchema = new mongoose.Schema({
     type: String,
     enum: ['prnewswire', 'businesswire', 'email', 'direct', 'social']
   }],
+
+  // Performance metrics (populated after distribution)
+  performanceMetrics: {
+    pickups: {
+      type: Number,
+      default: 0
+    },
+    impressions: {
+      type: Number,
+      default: 0
+    },
+    clicks: {
+      type: Number,
+      default: 0
+    },
+    socialShares: {
+      type: Number,
+      default: 0
+    },
+    mentions: {
+      type: Number,
+      default: 0
+    },
+    engagementRate: {
+      type: Number,
+      default: 0
+    }
+  },
+
   generatedAt: {
     type: Date
   },
