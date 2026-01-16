@@ -13,6 +13,7 @@ import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
 import ChannelPerformance from './pages/ChannelPerformance';
 import ContentEngagement from './pages/ContentEngagement';
 import OptimalPostingTime from './pages/OptimalPostingTime';
+import StoryCategories from './pages/StoryCategories';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -287,6 +288,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/analytics/channels', icon: '🎯', label: 'Channels' },
     { path: '/analytics/engagement', icon: '🔍', label: 'Engagement' },
     { path: '/analytics/posting-times', icon: '⏰', label: 'Best Times' },
+    { path: '/analytics/categories', icon: '📚', label: 'Categories' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
@@ -374,6 +376,7 @@ function App() {
                 <Route path="/analytics/channels" element={<PageWithBreadcrumbs><ChannelPerformance /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/engagement" element={<PageWithBreadcrumbs><ContentEngagement /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/posting-times" element={<PageWithBreadcrumbs><OptimalPostingTime /></PageWithBreadcrumbs>} />
+                <Route path="/analytics/categories" element={<PageWithBreadcrumbs><StoryCategories /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />

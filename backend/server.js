@@ -50,6 +50,7 @@ import logRotationRouter from "./api/logRotation.js";
 import channelPerformanceRouter from "./api/channel-performance.js";
 import contentEngagementAnalysisRouter from "./api/contentEngagementAnalysis.js";
 import optimalPostingTimeRouter from "./api/optimalPostingTime.js";
+import storyCategoryAnalysisRouter from "./api/storyCategoryAnalysis.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -252,6 +253,7 @@ app.use("/api/log-rotation", logRotationRouter);
 app.use("/api/channel-performance", channelPerformanceRouter);
 app.use("/api/content-engagement", contentEngagementAnalysisRouter);
 app.use("/api/posting-time", optimalPostingTimeRouter);
+app.use("/api/story-category-analysis", storyCategoryAnalysisRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
