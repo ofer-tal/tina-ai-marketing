@@ -43,6 +43,7 @@ import dataCleanupRouter from "./api/dataCleanup.js";
 import apiHealthRouter from "./api/apiHealth.js";
 import postRetryRouter from "./api/postRetry.js";
 import storyRefreshRouter from "./api/storyRefresh.js";
+import revenueSyncRouter from "./api/revenueSync.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -55,6 +56,7 @@ import dataCleanupJob from "./jobs/dataCleanup.js";
 import apiHealthMonitorJob from "./jobs/apiHealthMonitor.js";
 import postRetryJob from "./jobs/postRetryJob.js";
 import storyRefreshJob from "./jobs/storyRefreshJob.js";
+import revenueSyncJob from "./jobs/revenueSyncJob.js";
 
 dotenv.config();
 
@@ -234,6 +236,7 @@ app.use("/api/data-cleanup", dataCleanupRouter);
 app.use("/api/api-health", apiHealthRouter);
 app.use("/api/post-retry", postRetryRouter);
 app.use("/api/story-refresh", storyRefreshRouter);
+app.use("/api/revenue-sync", revenueSyncRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -354,6 +357,10 @@ async function startServer() {
     // Start the story database refresh job
     storyRefreshJob.start();
     console.log("Story database refresh job started");
+
+    // Start the revenue sync job
+    revenueSyncJob.start();
+    console.log("Revenue sync job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -406,6 +413,8 @@ const gracefulShutdown = async (signal) => {
     dataCleanupJob.stop();
     apiHealthMonitorJob.stop();
     postRetryJob.stop();
+    storyRefreshJob.stop();
+    revenueSyncJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)

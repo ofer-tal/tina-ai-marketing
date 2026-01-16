@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger('api-health-api', 'api-health-api');
+const router = express.Router();
 
 /**
  * Get or create Strategy model
