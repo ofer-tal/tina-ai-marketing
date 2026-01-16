@@ -31,6 +31,11 @@ class BaseApiClient {
    */
   async request(endpoint, options = {}) {
     const url = this.baseURL + endpoint;
+
+    // Create AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
     const requestOptions = {
       method: options.method || 'GET',
       headers: {
@@ -38,6 +43,7 @@ class BaseApiClient {
         ...options.headers,
       },
       body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: controller.signal, // Add abort signal for timeout
       ...options,
     };
 
@@ -51,11 +57,15 @@ class BaseApiClient {
       method: requestOptions.method,
       url,
       headers: this._sanitizeHeaders(requestOptions.headers),
+      timeout: this.timeout,
     });
 
     try {
-      // Use rate limiter
-      const response = await this.rateLimiter.fetch(url, requestOptions);
+      // Use rate limiter with timeout
+      const response = await this.rateLimiter.fetch(url, requestOptions, this.timeout);
+
+      // Clear timeout on success
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         throw await this._handleError(response);
@@ -70,6 +80,9 @@ class BaseApiClient {
 
       return data;
     } catch (error) {
+      // Clear timeout on error
+      clearTimeout(timeoutId);
+
       return this._handleRequestError(error, url, requestOptions);
     }
   }
@@ -102,6 +115,7 @@ class BaseApiClient {
       url,
       error: error.message,
       status: error.status,
+      code: error.code,
     });
 
     // Check if retryable
@@ -110,17 +124,58 @@ class BaseApiClient {
     if (isRetryable && this.retryConfig.maxRetries > 0) {
       this.logger.info('Retrying request', { url, attempt: 1 });
 
-      return retryService.retry(
-        async () => {
-          // Use rate limiter for retries too
-          const response = await this.rateLimiter.fetch(url, options);
-          if (!response.ok) {
-            throw await this._handleError(response);
-          }
-          return response.json();
-        },
-        { maxRetries: this.retryConfig.maxRetries }
+      try {
+        return await retryService.retry(
+          async () => {
+            // Create new AbortController for retry
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+            const retryOptions = {
+              ...options,
+              signal: controller.signal,
+            };
+
+            try {
+              // Use rate limiter for retries too
+              const response = await this.rateLimiter.fetch(url, retryOptions, this.timeout);
+              clearTimeout(timeoutId);
+
+              if (!response.ok) {
+                throw await this._handleError(response);
+              }
+              return response.json();
+            } catch (retryError) {
+              clearTimeout(timeoutId);
+              throw retryError;
+            }
+          },
+          { maxRetries: this.retryConfig.maxRetries }
+        );
+      } catch (retryError) {
+        // If all retries failed, throw user-friendly error
+        if (retryError.code === 'ETIMEDOUT' || retryError.name === 'AbortError') {
+          const timeoutError = new Error(
+            `Request timed out after ${this.timeout}ms. Please check your connection and try again.`
+          );
+          timeoutError.code = 'ETIMEDOUT';
+          timeoutError.userMessage = true;
+          timeoutError.originalError = retryError;
+          throw timeoutError;
+        }
+        throw retryError;
+      }
+    }
+
+    // Create user-friendly error message for timeouts
+    if (error.code === 'ETIMEDOUT' || error.name === 'AbortError') {
+      const timeoutError = new Error(
+        `Request timed out after ${this.timeout}ms. Please check your connection and try again.`
       );
+      timeoutError.code = 'ETIMEDOUT';
+      timeoutError.userMessage = true;
+      timeoutError.originalError = error;
+      throw timeoutError;
     }
 
     throw error;

@@ -173,9 +173,10 @@ class RateLimiter {
    *
    * @param {string} url - URL to fetch
    * @param {Object} options - Fetch options
+   * @param {number} timeout - Optional timeout in milliseconds
    * @returns {Promise<Response>} Fetch response
    */
-  async fetch(url, options = {}) {
+  async fetch(url, options = {}, timeout = null) {
     const host = this._parseHost(url);
     const hostInfo = this._getHostInfo(host);
 
@@ -197,8 +198,9 @@ class RateLimiter {
         queue.push({
           url,
           options,
+          timeout,
           execute: async () => {
-            const response = await this.fetch(url, options);
+            const response = await this.fetch(url, options, timeout);
             resolve(response);
           },
           reject,
@@ -222,13 +224,45 @@ class RateLimiter {
       }
     }
 
+    // Create AbortController for timeout if not already provided
+    let controller = null;
+    let timeoutId = null;
+
+    if (timeout && !options.signal) {
+      controller = new AbortController();
+      timeoutId = setTimeout(() => {
+        logger.warn(`Request timeout for ${host}`, { url, timeout });
+        controller.abort();
+      }, timeout);
+      options = { ...options, signal: controller.signal };
+    }
+
     // Execute request
     let response;
     try {
       response = await fetch(url, options);
       // Update last request time
       this.lastRequestTime.set(host, Date.now());
+
+      // Clear timeout on success
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     } catch (error) {
+      // Clear timeout on error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+
+      // Check if it's an abort error (timeout)
+      if (error.name === 'AbortError' && controller) {
+        const timeoutError = new Error(`Request timeout after ${timeout}ms: ${url}`);
+        timeoutError.code = 'ETIMEDOUT';
+        timeoutError.originalError = error;
+        logger.error('Request timed out', { url, host, timeout });
+        throw timeoutError;
+      }
+
       // Network errors don't have status codes
       throw error;
     }
