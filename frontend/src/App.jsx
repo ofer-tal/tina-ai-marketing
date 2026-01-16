@@ -19,6 +19,7 @@ import VideoStyles from './pages/VideoStyles';
 import CohortAnalysis from './pages/CohortAnalysis';
 import Attribution from './pages/Attribution';
 import Forecast from './pages/Forecast';
+import AnomalyDetection from './pages/AnomalyDetection';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -299,6 +300,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/analytics/cohort-analysis', icon: '📊', label: 'Cohorts' },
     { path: '/analytics/attribution', icon: '🎯', label: 'Attribution' },
     { path: '/analytics/forecast', icon: '🔮', label: 'Forecast' },
+    { path: '/analytics/anomaly-detection', icon: '🔍', label: 'Anomaly Detection' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
@@ -392,6 +394,7 @@ function App() {
                 <Route path="/analytics/cohort-analysis" element={<PageWithBreadcrumbs><CohortAnalysis /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/attribution" element={<PageWithBreadcrumbs><Attribution /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/forecast" element={<PageWithBreadcrumbs><Forecast /></PageWithBreadcrumbs>} />
+                <Route path="/analytics/anomaly-detection" element={<PageWithBreadcrumbs><AnomalyDetection /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
