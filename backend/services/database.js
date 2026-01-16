@@ -54,6 +54,10 @@ class DatabaseService {
     this.retryAttempts = 0;
     this.maxRetries = 5;
     this.retryDelay = 5000; // 5 seconds
+    this.reconnectionAttempts = []; // Track reconnection history
+    this.maxReconnectionHistory = 50; // Keep last 50 reconnection attempts
+    this.persistentFailureCount = 0; // Count consecutive failures
+    this.lastSuccessfulConnection = null;
   }
 
   /**
@@ -66,7 +70,14 @@ class DatabaseService {
       throw new Error('MONGODB_URI environment variable is not defined');
     }
 
-    logger.info('Attempting to connect to MongoDB...', { uri: this.sanitizeUri(mongoUri) });
+    const attemptId = Date.now();
+    logger.info('Attempting to connect to MongoDB...', {
+      uri: this.sanitizeUri(mongoUri),
+      attemptId
+    });
+
+    // Log connection attempt
+    this.logConnectionAttempt(attemptId, 'connecting', null);
 
     try {
       // Connect to MongoDB
@@ -74,12 +85,17 @@ class DatabaseService {
 
       this.isConnected = true;
       this.retryAttempts = 0;
+      this.persistentFailureCount = 0;
+      this.lastSuccessfulConnection = new Date();
 
       logger.info('Successfully connected to MongoDB', {
         database: this.connection.connection.name,
         host: this.connection.connection.host,
         port: this.connection.connection.port,
       });
+
+      // Log successful connection
+      this.logConnectionAttempt(attemptId, 'success', null);
 
       // Set up connection event listeners
       this.setupEventListeners();
@@ -90,11 +106,17 @@ class DatabaseService {
       return this.connection;
     } catch (error) {
       this.isConnected = false;
+      this.persistentFailureCount++;
+
       logger.error('Failed to connect to MongoDB', {
         error: error.message,
         attempt: this.retryAttempts + 1,
         maxRetries: this.maxRetries,
+        persistentFailures: this.persistentFailureCount,
       });
+
+      // Log failed connection attempt
+      this.logConnectionAttempt(attemptId, 'failed', error.message);
 
       // Implement retry logic with exponential backoff
       if (this.retryAttempts < this.maxRetries) {
@@ -106,7 +128,9 @@ class DatabaseService {
         await this.sleep(delay);
         return this.connect(); // Recursive retry
       } else {
-        logger.error('Max retry attempts reached. Giving up.');
+        logger.error('Max retry attempts reached. Giving up.', {
+          persistentFailures: this.persistentFailureCount,
+        });
         throw new Error(`Failed to connect to MongoDB after ${this.maxRetries} attempts: ${error.message}`);
       }
     }
@@ -123,22 +147,99 @@ class DatabaseService {
     db.on('connected', () => {
       logger.info('Mongoose connected to MongoDB');
       this.isConnected = true;
+      this.persistentFailureCount = 0;
+      this.lastSuccessfulConnection = new Date();
     });
 
     db.on('error', (err) => {
       logger.error('Mongoose connection error', { error: err.message });
       this.isConnected = false;
+      this.persistentFailureCount++;
+      this.logConnectionAttempt(Date.now(), 'error', err.message);
     });
 
     db.on('disconnected', () => {
-      logger.warn('Mongoose disconnected');
+      logger.warn('Mongoose disconnected', {
+        persistentFailures: this.persistentFailureCount,
+      });
       this.isConnected = false;
+      this.logConnectionAttempt(Date.now(), 'disconnected', 'Connection lost');
+
+      // Attempt reconnection after a delay
+      this.attemptReconnection();
     });
 
     // Handle process termination
     process.on('SIGINT', async () => {
       await this.disconnect();
       process.exit(0);
+    });
+  }
+
+  /**
+   * Attempt automatic reconnection after disconnection
+   */
+  async attemptReconnection() {
+    const reconnectionDelay = 5000; // 5 seconds
+
+    logger.info(`Scheduling reconnection attempt in ${reconnectionDelay}ms...`);
+
+    setTimeout(async () => {
+      if (!this.isConnected) {
+        logger.info('Attempting to reconnect to MongoDB...');
+
+        try {
+          this.logConnectionAttempt(Date.now(), 'reconnecting', null);
+
+          await mongoose.connect(process.env.MONGODB_URI, connectionOptions);
+
+          this.isConnected = true;
+          this.persistentFailureCount = 0;
+          this.lastSuccessfulConnection = new Date();
+
+          logger.info('Successfully reconnected to MongoDB');
+          this.logConnectionAttempt(Date.now(), 'reconnected', null);
+        } catch (error) {
+          this.persistentFailureCount++;
+          logger.error('Reconnection attempt failed', {
+            error: error.message,
+            persistentFailures: this.persistentFailureCount,
+          });
+          this.logConnectionAttempt(Date.now(), 'reconnection_failed', error.message);
+
+          // Schedule another reconnection attempt
+          if (this.persistentFailureCount < 10) {
+            this.attemptReconnection();
+          } else {
+            logger.error('Max reconnection attempts reached. Manual intervention required.');
+          }
+        }
+      }
+    }, reconnectionDelay);
+  }
+
+  /**
+   * Log connection attempt to history
+   */
+  logConnectionAttempt(attemptId, status, errorMessage) {
+    const attempt = {
+      attemptId,
+      timestamp: new Date().toISOString(),
+      status,
+      errorMessage,
+    };
+
+    this.reconnectionAttempts.push(attempt);
+
+    // Keep only the last N attempts
+    if (this.reconnectionAttempts.length > this.maxReconnectionHistory) {
+      this.reconnectionAttempts.shift();
+    }
+
+    logger.debug('Connection attempt logged', {
+      attemptId,
+      status,
+      historySize: this.reconnectionAttempts.length,
     });
   }
 
@@ -224,10 +325,27 @@ class DatabaseService {
     return {
       isConnected: this.isConnected,
       readyState: mongoose.connection.readyState,
+      readyStateText: this.getReadyStateText(mongoose.connection.readyState),
       name: mongoose.connection.name,
       host: mongoose.connection.host,
       port: mongoose.connection.port,
+      persistentFailureCount: this.persistentFailureCount,
+      lastSuccessfulConnection: this.lastSuccessfulConnection,
+      reconnectionHistory: this.reconnectionAttempts.slice(-10), // Last 10 attempts
     };
+  }
+
+  /**
+   * Get human-readable ready state text
+   */
+  getReadyStateText(state) {
+    const states = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting',
+    };
+    return states[state] || 'unknown';
   }
 
   /**

@@ -78,6 +78,7 @@ import testErrorsRouter from "./api/test-errors.js";
 import errorMonitoringRouter from "./api/error-monitoring.js";
 import circuitBreakerRouter from "./api/circuit-breaker.js";
 import manualPostingFallbackRouter from "./api/manualPostingFallback.js";
+import databaseStatusRouter from "./api/database-status.js";
 import errorMessageService from "./services/errorMessageService.js";
 import * as errorMonitoringService from "./services/errorMonitoringService.js";
 import storageService from "./services/storage.js";
@@ -311,6 +312,7 @@ app.use("/api/test-errors", testErrorsRouter);
 app.use("/api/error-monitoring", errorMonitoringRouter);
 app.use("/api/circuit-breaker", circuitBreakerRouter);
 app.use("/api/manual-posting-fallback", manualPostingFallbackRouter);
+app.use("/api/database-status", databaseStatusRouter);
 
 // Error handling middleware (must be after all routes)
 // Integrates with error monitoring service to track all errors
