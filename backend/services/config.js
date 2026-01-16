@@ -449,6 +449,147 @@ const configSchema = {
     },
     errorMessage: 'Must be a valid directory path'
   },
+
+  // Platform-Specific Settings
+  TIKTOK_MAX_CAPTION_LENGTH: {
+    required: false,
+    default: '150',
+    description: 'Maximum caption length for TikTok posts',
+    validate: (value) => {
+      const length = parseInt(value, 10);
+      return !isNaN(length) && length > 0 && length <= 2200;
+    },
+    errorMessage: 'Must be a number between 1 and 2200'
+  },
+
+  TIKTOK_MAX_HASHTAGS: {
+    required: false,
+    default: '5',
+    description: 'Maximum number of hashtags for TikTok posts',
+    validate: (value) => {
+      const count = parseInt(value, 10);
+      return !isNaN(count) && count >= 0 && count <= 10;
+    },
+    errorMessage: 'Must be a number between 0 and 10'
+  },
+
+  TIKTOK_VIDEO_DURATION_MIN: {
+    required: false,
+    default: '15',
+    description: 'Minimum video duration for TikTok (seconds)',
+    validate: (value) => {
+      const duration = parseInt(value, 10);
+      return !isNaN(duration) && duration >= 3 && duration <= 600;
+    },
+    errorMessage: 'Must be a number between 3 and 600'
+  },
+
+  TIKTOK_VIDEO_DURATION_MAX: {
+    required: false,
+    default: '60',
+    description: 'Maximum video duration for TikTok (seconds)',
+    validate: (value) => {
+      const duration = parseInt(value, 10);
+      return !isNaN(duration) && duration >= 3 && duration <= 600;
+    },
+    errorMessage: 'Must be a number between 3 and 600'
+  },
+
+  INSTAGRAM_MAX_CAPTION_LENGTH: {
+    required: false,
+    default: '2200',
+    description: 'Maximum caption length for Instagram posts',
+    validate: (value) => {
+      const length = parseInt(value, 10);
+      return !isNaN(length) && length > 0 && length <= 2200;
+    },
+    errorMessage: 'Must be a number between 1 and 2200'
+  },
+
+  INSTAGRAM_MAX_HASHTAGS: {
+    required: false,
+    default: '30',
+    description: 'Maximum number of hashtags for Instagram posts',
+    validate: (value) => {
+      const count = parseInt(value, 10);
+      return !isNaN(count) && count >= 0 && count <= 30;
+    },
+    errorMessage: 'Must be a number between 0 and 30'
+  },
+
+  INSTAGRAM_REEL_DURATION_MIN: {
+    required: false,
+    default: '15',
+    description: 'Minimum Reel duration for Instagram (seconds)',
+    validate: (value) => {
+      const duration = parseInt(value, 10);
+      return !isNaN(duration) && duration >= 3 && duration <= 600;
+    },
+    errorMessage: 'Must be a number between 3 and 600'
+  },
+
+  INSTAGRAM_REEL_DURATION_MAX: {
+    required: false,
+    default: '90',
+    description: 'Maximum Reel duration for Instagram (seconds)',
+    validate: (value) => {
+      const duration = parseInt(value, 10);
+      return !isNaN(duration) && duration >= 3 && duration <= 600;
+    },
+    errorMessage: 'Must be a number between 3 and 600'
+  },
+
+  YOUTUBE_MAX_CAPTION_LENGTH: {
+    required: false,
+    default: '5000',
+    description: 'Maximum caption length for YouTube Shorts',
+    validate: (value) => {
+      const length = parseInt(value, 10);
+      return !isNaN(length) && length > 0 && length <= 5000;
+    },
+    errorMessage: 'Must be a number between 1 and 5000'
+  },
+
+  YOUTUBE_MAX_HASHTAGS: {
+    required: false,
+    default: '15',
+    description: 'Maximum number of hashtags for YouTube Shorts',
+    validate: (value) => {
+      const count = parseInt(value, 10);
+      return !isNaN(count) && count >= 0 && count <= 15;
+    },
+    errorMessage: 'Must be a number between 0 and 15'
+  },
+
+  YOUTUBE_SHORTS_DURATION_MIN: {
+    required: false,
+    default: '15',
+    description: 'Minimum duration for YouTube Shorts (seconds)',
+    validate: (value) => {
+      const duration = parseInt(value, 10);
+      return !isNaN(duration) && duration >= 15 && duration <= 600;
+    },
+    errorMessage: 'Must be a number between 15 and 600'
+  },
+
+  YOUTUBE_SHORTS_DURATION_MAX: {
+    required: false,
+    default: '60',
+    description: 'Maximum duration for YouTube Shorts (seconds)',
+    validate: (value) => {
+      const duration = parseInt(value, 10);
+      return !isNaN(duration) && duration >= 15 && duration <= 600;
+    },
+    errorMessage: 'Must be a number between 15 and 600'
+  },
+
+  YOUTUBE_VIDEO_QUALITY: {
+    required: false,
+    default: '1080p',
+    description: 'Video quality for YouTube Shorts (720p, 1080p, 1440p)',
+    validate: (value) => ['720p', '1080p', '1440p'].includes(value),
+    errorMessage: 'Must be one of: 720p, 1080p, 1440p'
+  },
 };
 
 class ConfigService {

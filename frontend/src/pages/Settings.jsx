@@ -247,6 +247,7 @@ const categoryIcons = {
   ai: '🤖',
   budget: '💰',
   content: '📝',
+  platform: '📱',
   storage: '💾',
   features: '✨',
   logging: '📋'
@@ -262,6 +263,7 @@ const categoryTitles = {
   ai: 'AI Services',
   budget: 'Budget & Limits',
   content: 'Content Generation',
+  platform: 'Platform Settings',
   storage: 'Storage',
   features: 'Feature Flags',
   logging: 'Logging'

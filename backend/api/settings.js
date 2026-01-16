@@ -167,6 +167,7 @@ router.get("/schema", (req, res) => {
       ai: {},
       budget: {},
       content: {},
+      platform: {},
       storage: {},
       features: {},
       logging: {}
@@ -179,8 +180,18 @@ router.get("/schema", (req, res) => {
         grouped.appstore[key] = config;
       } else if (key.includes('SEARCH_ADS')) {
         grouped.searchads[key] = config;
-      } else if (key.includes('TIKTOK')) {
+      } else if (key.includes('TIKTOK') && (key.includes('APP_KEY') || key.includes('APP_SECRET') || key.includes('REDIRECT_URI'))) {
         grouped.tiktok[key] = config;
+      } else if (key.includes('TIKTOK') && (key.includes('MAX_') || key.includes('DURATION') || key.includes('QUALITY') || key.includes('AUDIO_LIBRARY'))) {
+        grouped.platform[key] = config;
+      } else if (key.includes('INSTAGRAM') || key.includes('YOUTUBE')) {
+        if (key.includes('MAX_') || key.includes('DURATION') || key.includes('QUALITY')) {
+          grouped.platform[key] = config;
+        } else if (key.includes('APP_KEY') || key.includes('APP_SECRET') || key.includes('CLIENT_ID') || key.includes('CLIENT_SECRET') || key.includes('REDIRECT_URI') || key.includes('API_KEY')) {
+          grouped.server[key] = config;
+        } else {
+          grouped.platform[key] = config;
+        }
       } else if (key.includes('GA') || key.includes('ANALYTICS')) {
         grouped.analytics[key] = config;
       } else if (key.includes('FAL') || key.includes('RUNPOD') || key.includes('GLM')) {
@@ -191,7 +202,7 @@ router.get("/schema", (req, res) => {
         grouped.content[key] = config;
       } else if (key.includes('STORAGE') || key.includes('FILE')) {
         grouped.storage[key] = config;
-      } else if (key.includes('ENABLE_')) {
+      } else if (key.includes('ENABLE_') || key.includes('AUDIO_OVERLAY')) {
         grouped.features[key] = config;
       } else if (key.includes('LOG')) {
         grouped.logging[key] = config;
