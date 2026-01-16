@@ -48,7 +48,7 @@ router.get("/", (req, res) => {
 router.put("/:key", async (req, res) => {
   try {
     const { key } = req.params;
-    const { value } = req.body;
+    const { value, confirmed } = req.body;
 
     if (value === undefined || value === null) {
       return res.status(400).json({
@@ -63,6 +63,39 @@ router.put("/:key", async (req, res) => {
         success: false,
         error: `Unknown setting: ${key}`
       });
+    }
+
+    // SECURITY: Budget changes above $100 require explicit confirmation
+    if (key.includes('BUDGET') && key.includes('LIMIT')) {
+      const numericValue = parseFloat(value);
+      const currentValue = parseFloat(process.env[key] || '0');
+      const changeAmount = Math.abs(numericValue - currentValue);
+
+      // If the change is more than $100, require confirmation
+      if (changeAmount > 100 && !confirmed) {
+        return res.status(400).json({
+          success: false,
+          requiresConfirmation: true,
+          error: `Budget changes above $100 require explicit confirmation`,
+          details: {
+            key,
+            currentValue,
+            newValue: numericValue,
+            changeAmount
+          }
+        });
+      }
+
+      // Log large budget changes for audit trail
+      if (changeAmount > 100) {
+        console.log('Large budget change confirmed', {
+          key,
+          currentValue,
+          newValue: numericValue,
+          changeAmount,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
 
     // Validate the value

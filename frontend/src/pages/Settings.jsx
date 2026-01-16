@@ -4,6 +4,7 @@ import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
 import GoogleAnalyticsConfig from '../components/GoogleAnalyticsConfig';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import ErrorAlert from '../components/ErrorAlert.jsx';
+import ConfirmationModal from '../components/ConfirmationModal';
 import { showSuccessToast, showErrorToast } from '../components/Toast';
 import { validateRequired, validateUrl, validateApiKey, validateMongoDbUri, validateRange } from '../utils/validation.js';
 
@@ -338,6 +339,16 @@ function Settings() {
   const [exporting, setExporting] = useState(false);
   const fileInputRef = React.createRef();
 
+  // Budget confirmation state
+  const [budgetConfirmModal, setBudgetConfirmModal] = useState({
+    isOpen: false,
+    key: null,
+    currentValue: 0,
+    newValue: 0,
+    changeAmount: 0,
+    pendingUpdates: {}
+  });
+
   useEffect(() => {
     fetchSchema();
     fetchSettings();
@@ -448,7 +459,7 @@ function Settings() {
     }
   };
 
-  const handleSubmit = async (category, event) => {
+  const handleSubmit = async (category, event, confirmed = false) => {
     event.preventDefault();
     const formData = new FormData(event.target);
 
@@ -516,13 +527,47 @@ function Settings() {
     setMessage(null);
 
     try {
+      // Check if any budget settings are being changed by more than $100
+      const budgetChanges = [];
+      for (const [key, value] of Object.entries(updates)) {
+        if (key.includes('BUDGET') && key.includes('LIMIT')) {
+          const numericValue = parseFloat(value);
+          const currentValue = parseFloat(settings[key] || '0');
+          const changeAmount = Math.abs(numericValue - currentValue);
+
+          if (changeAmount > 100 && !confirmed) {
+            budgetChanges.push({
+              key,
+              currentValue,
+              newValue: numericValue,
+              changeAmount
+            });
+          }
+        }
+      }
+
+      // If there are budget changes over $100 and not yet confirmed, show modal
+      if (budgetChanges.length > 0 && !confirmed) {
+        const change = budgetChanges[0]; // Handle first large change
+        setBudgetConfirmModal({
+          isOpen: true,
+          key: change.key,
+          currentValue: change.currentValue,
+          newValue: change.newValue,
+          changeAmount: change.changeAmount,
+          pendingUpdates: updates
+        });
+        setSaving(prev => ({ ...prev, [category]: false }));
+        return;
+      }
+
       // Update each setting
       const results = await Promise.all(
         Object.entries(updates).map(([key, value]) =>
           fetch(`/api/settings/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ value })
+            body: JSON.stringify({ value, confirmed })
           }).then(res => res.json())
         )
       );
@@ -546,11 +591,24 @@ function Settings() {
         // Refresh settings
         await fetchSettings();
       } else {
-        showErrorToast('Some settings failed to update. Please try again.', {
-          title: 'Partial Failure',
-          duration: 6000
-        });
-        setMessage({ type: 'error', text: 'Some settings failed to update' });
+        // Check if any result requires confirmation
+        const requiresConfirmation = results.find(r => r.requiresConfirmation);
+        if (requiresConfirmation) {
+          setBudgetConfirmModal({
+            isOpen: true,
+            key: requiresConfirmation.details.key,
+            currentValue: requiresConfirmation.details.currentValue,
+            newValue: requiresConfirmation.details.newValue,
+            changeAmount: requiresConfirmation.details.changeAmount,
+            pendingUpdates: updates
+          });
+        } else {
+          showErrorToast('Some settings failed to update. Please try again.', {
+            title: 'Partial Failure',
+            duration: 6000
+          });
+          setMessage({ type: 'error', text: 'Some settings failed to update' });
+        }
       }
     } catch (error) {
       console.error('Failed to update settings:', error);
@@ -562,6 +620,34 @@ function Settings() {
     } finally {
       setSaving(prev => ({ ...prev, [category]: false }));
     }
+  };
+
+  const handleConfirmBudgetChange = async () => {
+    const { pendingUpdates, key } = budgetConfirmModal;
+
+    // Determine which category this belongs to
+    let category = 'budget';
+    for (const [cat, keys] of Object.entries(schema)) {
+      if (keys[key]) {
+        category = cat;
+        break;
+      }
+    }
+
+    // Create a mock event with the pending updates
+    const mockEvent = {
+      preventDefault: () => {},
+      target: {
+        elements: Object.entries(pendingUpdates).reduce((acc, [k, v]) => {
+          acc[k] = { value: v, name: k };
+          return acc;
+        }, {})
+      }
+    };
+
+    // Close the modal and submit with confirmed=true
+    setBudgetConfirmModal(prev => ({ ...prev, isOpen: false }));
+    await handleSubmit(category, mockEvent, true);
   };
 
   const handleExport = async () => {
@@ -841,6 +927,20 @@ function Settings() {
           </Card>
         ))}
       </Grid>
+
+      {/* Budget Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={budgetConfirmModal.isOpen}
+        onClose={() => setBudgetConfirmModal(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmBudgetChange}
+        title="Confirm Large Budget Change"
+        message={`You are about to change the budget by $${budgetConfirmModal.changeAmount.toFixed(2)}. This action requires explicit confirmation.`}
+        detail={`Current: $${budgetConfirmModal.currentValue.toFixed(2)} → New: $${budgetConfirmModal.newValue.toFixed(2)}`}
+        icon="💰"
+        confirmText="Confirm Budget Change"
+        cancelText="Cancel"
+        variant="warning"
+      />
     </SettingsContainer>
   );
 }
