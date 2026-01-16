@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import LoadingSpinner from './LoadingSpinner.jsx';
 
 const Container = styled.div`
   background: #16213e;
@@ -291,6 +292,7 @@ function TikTokSandboxConfig() {
           onClick={testConnection}
           disabled={loading}
         >
+          {loading && <LoadingSpinner inline size="small" color="#ffffff" />}
           {loading ? 'Testing...' : '🔄 Test Sandbox Connection'}
         </Button>
 

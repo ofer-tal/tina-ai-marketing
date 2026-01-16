@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import LoadingSpinner from '../components/LoadingSpinner.jsx';
 
 const LibraryContainer = styled.div`
   width: 100%;
@@ -243,7 +244,7 @@ const ActionButton = styled.button`
   }
 `;
 
-const LoadingSpinner = styled.div`
+const LegacyLoadingSpinner = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
@@ -2737,9 +2738,12 @@ function ContentLibrary() {
         <Header>
           <Title>Content Library</Title>
         </Header>
-        <LoadingSpinner>
-          <div>⏳ Loading content...</div>
-        </LoadingSpinner>
+        <LoadingSpinner
+          variant="circular"
+          size="large"
+          text="Loading content..."
+          color="#e94560"
+        />
       </LibraryContainer>
     );
   }

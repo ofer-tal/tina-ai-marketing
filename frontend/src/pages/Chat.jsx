@@ -601,7 +601,7 @@ const NoResults = styled.div`
   padding: 2rem;
 `;
 
-const LoadingSpinner = styled.div`
+const LegacyLoadingSpinner = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;

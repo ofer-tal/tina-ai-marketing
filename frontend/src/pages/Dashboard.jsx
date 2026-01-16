@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import MonthlyRevenue from '../components/MonthlyRevenue.jsx';
+import LoadingSpinner from '../components/LoadingSpinner.jsx';
 
 const DashboardContainer = styled.div`
   width: 100%;
@@ -1507,9 +1508,12 @@ function Dashboard() {
   if (loading) {
     return (
       <DashboardContainer>
-        <LoadingState>
-          Loading dashboard metrics...
-        </LoadingState>
+        <LoadingSpinner
+          variant="circular"
+          size="large"
+          text="Loading dashboard metrics..."
+          color="#e94560"
+        />
       </DashboardContainer>
     );
   }
@@ -1549,7 +1553,8 @@ function Dashboard() {
             disabled={exporting}
             $exporting={exporting}
           >
-            {exporting ? '📥 Exporting...' : '📥 Export CSV'}
+            {exporting && <LoadingSpinner inline size="small" color="#ffffff" />}
+            {exporting ? 'Exporting...' : '📥 Export CSV'}
           </ExportButton>
 
           <GlobalRefreshButton
@@ -1557,7 +1562,8 @@ function Dashboard() {
             disabled={refreshing}
             $refreshing={refreshing}
           >
-            {refreshing ? '🔄 Refreshing...' : '🔄 Refresh All'}
+            {refreshing && <LoadingSpinner inline size="small" color="#ffffff" />}
+            {refreshing ? 'Refreshing...' : '🔄 Refresh All'}
           </GlobalRefreshButton>
         </HeaderControls>
       </DashboardHeader>

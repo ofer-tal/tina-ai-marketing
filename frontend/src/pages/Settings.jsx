@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
 import GoogleAnalyticsConfig from '../components/GoogleAnalyticsConfig';
+import LoadingSpinner from '../components/LoadingSpinner.jsx';
 
 const SettingsContainer = styled.div`
   padding: 2rem;
@@ -179,7 +180,7 @@ const StatusMessage = styled.div`
   }}
 `;
 
-const LoadingSpinner = styled.div`
+const LegacyLoadingSpinner = styled.div`
   display: inline-block;
   width: 1rem;
   height: 1rem;
@@ -344,7 +345,12 @@ function Settings() {
     return (
       <SettingsContainer>
         <Title>Settings</Title>
-        <LoadingSpinner /> Loading settings...
+        <LoadingSpinner
+          variant="circular"
+          size="large"
+          text="Loading settings..."
+          color="#e94560"
+        />
       </SettingsContainer>
     );
   }
