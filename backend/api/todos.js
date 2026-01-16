@@ -1,6 +1,7 @@
 import express from "express";
 import databaseService from "../services/database.js";
 import mongoose from "mongoose";
+import { validate, schemas } from "../middleware/validation.js";
 
 const router = express.Router();
 
@@ -129,16 +130,9 @@ router.get("/", async (req, res) => {
 });
 
 // POST /api/todos - Create new todo
-router.post("/", async (req, res) => {
+router.post("/", validate(schemas.todo, { sanitize: true }), async (req, res) => {
   try {
     const { title, description, category, priority, scheduledAt, dueAt, resources, estimatedTime, createdBy, relatedStrategyId } = req.body;
-
-    if (!title) {
-      return res.status(400).json({
-        success: false,
-        error: "Title is required"
-      });
-    }
 
     const status = databaseService.getStatus();
     let createdTodo = null;
@@ -279,7 +273,7 @@ router.post("/:id/snooze", async (req, res) => {
 });
 
 // PUT /api/todos/:id - Update todo
-router.put("/:id", async (req, res) => {
+router.put("/:id", validate(schemas.todo, { sanitize: true }), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;

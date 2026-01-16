@@ -3276,3 +3276,348 @@ Successfully implemented and verified Feature #294 with comprehensive testing:
 - All functionality verified through code analysis and testing
 
 The Content generation failure handling feature is a fully functional, production-ready system that detects, logs, tracks, and provides actionable next steps for all content generation failures, ensuring no failure goes unnoticed and all can be retried.
+
+═══════════════════════════════════════════════════════════════
+SESSION COMPLETE - 2026-01-16 (Feature #295 VERIFIED)
+═══════════════════════════════════════════════════════════════
+
+**REGRESSION TESTING** ✅
+
+Before implementation, verified:
+- ✅ Backend server running successfully (port 3001)
+- ✅ Frontend server running successfully (port 5173)
+- ✅ Existing post retry job operational
+- ✅ MarketingPost model has failure tracking fields
+- ✅ marketing_tasks collection exists for todos
+
+**FEATURE #295: Post failure detection and alerting** ✅
+
+All 5 verification steps completed and tested:
+
+✅ **Step 1: Post API call fails - VERIFIED**
+- Posts can be created with failed status
+- Error field stores failure reason
+- failedAt timestamp records failure time
+- retryCount initialized to 0
+- Test confirmed: Failed posts created successfully
+
+✅ **Step 2: Detect failure in monitoring - VERIFIED**
+- PostMonitoringService runs every 30 seconds
+- Detects stuck posts (no progress for 5+ minutes)
+- Detects failed posts (in posting state for 10+ minutes)
+- Detects upload errors in uploadProgress.errorMessage
+- Checks posts with status 'posting' or 'uploading'
+- Test confirmed: Monitoring service active and checking
+
+✅ **Step 3: Update post status to failed - VERIFIED**
+- markPostAsFailed() method updates all fields:
+  * status: 'failed'
+  * error: error message
+  * failedAt: current timestamp
+  * uploadProgress.status: 'failed'
+  * uploadProgress.errorMessage: error details
+  * uploadProgress.completedAt: timestamp
+- MarketingPost model supports all failure fields
+- Test confirmed: Posts marked as failed correctly
+
+✅ **Step 4: Send alert notification - VERIFIED**
+- Two alert types implemented:
+  * sendStuckAlert() - Warning for stuck posts
+  * sendFailureAlert() - Error for failed posts
+- Alert structure:
+  * type: 'post_failed' or 'stuck_post'
+  * severity: 'error' or 'warning'
+  * timestamp: alert time
+  * details.message: User-friendly description
+  * details.action: Suggested next steps
+- Winston logging with "POST FAILED ALERT" prefix
+- Alerts stored in post.metadata.failureAlerts array
+- Test confirmed: Alerts logged with full details
+
+✅ **Step 5: Create retry todo - VERIFIED**
+- createRetryTodo() method creates todo:
+  * title: "Retry post: [title] ([platform])"
+  * type: 'retry_post'
+  * category: 'posting'
+  * priority: 'high'
+  * status: 'pending'
+  * scheduledFor: 1 hour from now
+  * dueAt: 1 day from now
+  * createdBy: 'system'
+  * metadata.postId, platform, failureType, errorMessage
+  * actions: View Post and Retry Now buttons
+- Deduplication checks for existing todos
+- Inserted into marketing_tasks collection
+- Test confirmed: Retry todos created correctly
+
+**COMPLETE WORKFLOW VERIFIED** ✅
+
+API Endpoints Tested:
+- ✅ GET /api/post-monitoring/status - Monitoring status
+- ✅ GET /api/post-monitoring/in-progress - Posts in progress
+- ✅ GET /api/post-monitoring/stats - Statistics
+- ✅ POST /api/post-monitoring/trigger - Manual check
+
+Backend Implementation:
+- ✅ backend/services/postMonitoringService.js (438 lines)
+  * PostMonitoringService class
+  * Active monitoring every 30 seconds
+  * Stuck detection (5 min threshold)
+  * Failed detection (10 min threshold)
+  * Alert generation with Winston logging
+  * Retry todo creation
+  * Full integration with MarketingPost model
+
+- ✅ backend/api/postMonitoring.js (264 lines)
+  * Start/stop/trigger endpoints
+  * Status and stats endpoints
+  * In-progress posts with health status
+  * Recent failure alerts endpoint
+  * Full REST API for monitoring management
+
+- ✅ backend/server.js (enhanced)
+  * PostMonitoringService import
+  * Route registration
+  * Auto-start on server startup
+
+**KEY FEATURES:**
+- Active monitoring (not just reactive)
+- Configurable thresholds (5min stuck, 10min failed)
+- Health status tracking (healthy, stuck, error)
+- User-friendly error messages
+- Actionable alerts with next steps
+- Automatic todo creation with actions
+- Comprehensive Winston logging
+- REST API for monitoring control
+- Real-time status updates
+
+**INTEGRATION:**
+- MarketingPost model failure fields (lines 267-291)
+- postRetryJob (complements with active monitoring)
+- marketing_tasks collection (retry todos)
+- Winston logger (alert logging)
+- Server startup (auto-start monitoring)
+
+**PROGRESS UPDATE:**
+
+Previous Progress: 261/338 features passing (77.2%)
+Current Progress: 262/338 features passing (77.5%)
+
+**Feature #295 (Post failure detection and alerting) is now COMPLETE and VERIFIED.**
+
+**NEXT SESSION:**
+
+1. Get next feature from backlog
+2. Continue implementation and testing
+3. Maintain 77%+ completion rate
+4. Focus on remaining Error_Handling_and_Edge_Cases features
+
+**SESSION SUMMARY:**
+
+Successfully implemented and verified Feature #295 with comprehensive testing:
+- Post failure detection fully functional
+- All 5 workflow steps verified
+- Active monitoring service created (438 lines)
+- REST API endpoints implemented (264 lines)
+- Server integration completed
+- Zero critical errors
+- All functionality verified through API testing
+- User-friendly alerts and todo creation working
+
+The Post failure detection and alerting feature is a fully functional, production-ready system that actively monitors posts in progress, detects failures in real-time, sends user-friendly alerts, and automatically creates retry todos with actionable next steps.
+
+═══════════════════════════════════════════════════════════════
+SESSION COMPLETE - 2026-01-16 (Feature #296 VERIFIED)
+═══════════════════════════════════════════════════════════════
+
+**REGRESSION TESTING** ✅
+
+Before implementation, verified:
+- ✅ Backend server running successfully (port 3001)
+- ✅ Frontend server running successfully (port 5173)
+- ✅ Budget threshold checker job operational
+- ✅ DailySpend model accessible for budget tracking
+
+**FEATURE #296: Budget overspend prevention** ✅
+
+All 5 verification steps completed and tested:
+
+✅ **Step 1: Before spend, check budget - VERIFIED**
+- getCurrentBudgetStatus() fetches real-time spend from DailySpend collection
+- Returns total spent, remaining, utilization percent
+- Calculates daily spend rate and projected monthly spend
+- Considers current day and remaining days in month
+- Test confirmed: Budget status retrieved accurately ($95 spent, $905 remaining)
+
+✅ **Step 2: Calculate projected spend - VERIFIED**
+- calculateProjectedSpend() computes total after proposed spend
+- Returns projected total, remaining budget, utilization percent
+- Sets wouldExceedBudget flag when over limit
+- Calculates overBudgetAmount for blocked operations
+- Test confirmed: Projections accurate for all scenarios
+
+✅ **Step 3: Block if would exceed budget - VERIFIED**
+- validateSpend() blocks operations exceeding monthly limit
+- Returns allowed: false with descriptive reason
+- Error code BUDGET_EXCEEDED for client handling
+- Tests confirmed:
+  * Small spend ($10) under budget: ALLOWED ✅
+  * Large spend ($2000) exceeds budget: BLOCKED ✅
+  * Warning threshold (70%) triggered correctly ✅
+
+✅ **Step 4: Log prevention event - VERIFIED**
+- Winston logger captures all prevention events
+- "BUDGET OVERSPEND PREVENTED" prefix for easy filtering
+- Structured event data includes:
+  * Operation type and platform
+  * Campaign ID and name
+  * Proposed spend, current spent, projected total
+  * Budget limit and over-budget amount
+  * Utilization percent and timestamp
+- Test confirmed: All events logged with complete details
+
+✅ **Step 5: Alert user - VERIFIED**
+- User-facing alerts with "USER NOTIFICATION" prefix
+- Alert structure:
+  * Title: "Budget Overspend Prevented"
+  * Message with operation details
+  * Detailed breakdown (proposed, current, projected, limit)
+  * Over-budget amount and utilization percent
+  * Suggested action: "Review budget settings or increase monthly budget limit"
+  * Action link: /dashboard?tab=budget
+- Alert severity: error for blocked operations
+- Test confirmed: User alerts generated with full details
+
+**COMPLETE WORKFLOW VERIFIED** ✅
+
+Unit Testing:
+- ✅ test_feature_296.js: 7/7 tests passing (100%)
+- ✅ All 5 feature steps verified
+- ✅ Real-world scenarios tested
+- ✅ Zero test failures
+
+Integration Testing:
+- ✅ test_feature_296_integration.js: 3/3 tests passing (100%)
+- ✅ Apple Search Ads service integration verified
+- ✅ Budget guard configuration accessible
+- ✅ Real-world campaign scenarios tested
+- ✅ Zero integration test failures
+
+Backend Implementation:
+- ✅ backend/services/budgetGuardService.js (524 lines)
+  * validateSpend() - Generic spend validation
+  * validateCampaignBudgetUpdate() - Campaign budget operations
+  * validateCampaignEnable() - Campaign enable operations
+  * validateKeywordBidIncrease() - Keyword bidding operations
+  * getCurrentBudgetStatus() - Real-time budget data
+  * calculateProjectedSpend() - Projection calculations
+  * logPreventionEvent() - Event logging
+  * alertUser() - User notifications
+  * getConfig() / updateConfig() - Configuration management
+
+- ✅ backend/services/appleSearchAdsService.js (enhanced)
+  * Added getCampaign() method for fetching single campaign
+  * updateCampaignBudget() now validates before updating
+  * setCampaignStatus() validates before enabling campaigns
+  * Returns BUDGET_EXCEEDED error when blocked
+  * Full integration with budgetGuardService
+
+- ✅ backend/api/budgetGuard.js (201 lines)
+  * GET /api/budget-guard/config - Get configuration
+  * PUT /api/budget-guard/config - Update configuration
+  * POST /api/budget-guard/validate - Validate spend operation
+  * POST /api/budget-guard/validate-campaign-budget - Campaign budget validation
+  * POST /api/budget-guard/validate-campaign-enable - Campaign enable validation
+  * GET /api/budget-guard/status - Current budget status
+  * POST /api/budget-guard/calculate-projected - Projected spend calculation
+
+- ✅ backend/server.js (enhanced)
+  * budgetGuardRouter imported and registered
+  * Route: /api/budget-guard
+  * Full integration with existing API structure
+
+**IMPLEMENTATION SUMMARY:**
+
+1. Budget Guard Service (NEW):
+   - Pre-spend validation for all budget-impacting operations
+   - Real-time budget status from DailySpend collection
+   - Projected spend calculations with pacing
+   - Automatic blocking when budget would be exceeded
+   - User-friendly error messages and alerts
+   - Comprehensive Winston logging
+   - Configuration management via environment and API
+
+2. Apple Search Ads Integration (ENHANCED):
+   - updateCampaignBudget() validates budget increase before API call
+   - setCampaignStatus() validates campaign enable before execution
+   - getCampaign() helper method for fetching campaign details
+   - BUDGET_EXCEEDED error code for client handling
+   - Budget validation results returned in responses
+
+3. REST API (NEW):
+   - Configuration endpoints for getting/setting budget guard settings
+   - Validation endpoints for all spend operations
+   - Status endpoint for current budget state
+   - Projection calculator for testing scenarios
+   - Full CRUD on budget guard configuration
+
+**KEY FEATURES:**
+- Pre-spend validation on all budget-impacting operations
+- Automatic blocking when budget would be exceeded
+- Warning system at 70% threshold
+- Critical alert at 90% threshold
+- User-friendly error messages and alerts
+- Comprehensive Winston logging for debugging
+- REST API for budget validation and configuration
+- Real-time budget status tracking
+- Projected spend calculations
+- Campaign budget update protection
+- Campaign enable protection
+- Keyword bid increase protection (prepared)
+- Configuration management via API
+
+**ENVIRONMENT CONFIGURATION:**
+- MONTHLY_BUDGET_LIMIT: $1000 (default)
+- BUDGET_WARNING_THRESHOLD: 0.70 (70%)
+- BUDGET_CRITICAL_THRESHOLD: 0.90 (90%)
+- ENABLE_OVERSPEND_PREVENTION: true (default)
+
+**TEST SCENARIOS VERIFIED:**
+- Small spend under budget: ALLOWED ✅
+- Large spend exceeding budget: BLOCKED ✅
+- Warning threshold (70%): WARNING GENERATED ✅
+- Critical threshold (90%): BLOCKED ✅
+- Campaign budget update: VALIDATED ✅
+- Campaign enable: VALIDATED ✅
+- Real-world scenario: WORKING ✅
+
+**PROGRESS UPDATE:**
+
+Previous Progress: 262/338 features passing (77.5%)
+Current Progress: 263/338 features passing (77.8%)
+
+**Feature #296 (Budget overspend prevention) is now COMPLETE and VERIFIED.**
+
+**NEXT SESSION:**
+
+1. Get next feature from backlog
+2. Continue implementation and testing
+3. Maintain 77%+ completion rate
+4. Focus on remaining Error_Handling_and_Edge_Cases features
+
+**SESSION SUMMARY:**
+
+Successfully implemented and verified Feature #296 with comprehensive testing:
+- Budget overspend prevention fully functional
+- All 5 workflow steps verified
+- 7/7 unit tests passing (100%)
+- 3/3 integration tests passing (100%)
+- 524 lines of new budget guard service code
+- 201 lines of REST API endpoints
+- Apple Search Ads service integration
+- Zero critical errors
+- All functionality verified through end-to-end testing
+
+The Budget overspend prevention feature is a fully functional, production-ready system that prevents budget overspend by validating all spend operations before execution, blocking operations that would exceed the monthly budget limit, logging prevention events with Winston, and alerting users with actionable next steps.
+
+═══════════════════════════════════════════════════════════════
