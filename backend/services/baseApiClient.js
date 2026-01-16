@@ -7,11 +7,13 @@
  * - Error handling with retry logic
  * - Rate limiting integration
  * - Request/response logging
+ * - Response validation with safe defaults
  */
 
 import { getLogger } from '../utils/logger.js';
 import retryService from './retry.js';
 import rateLimiterService from './rateLimiter.js';
+import { validateResponse, sanitizeResponse, ValidationError } from './responseValidator.js';
 
 class BaseApiClient {
   constructor(config = {}) {
@@ -22,6 +24,9 @@ class BaseApiClient {
       maxRetries: 3,
       initialDelay: 1000,
     };
+    this.responseSchema = config.responseSchema || null; // Optional response schema
+    this.validateResponses = config.validateResponses !== false; // Default: true
+    this.returnSafeDefaults = config.returnSafeDefaults !== false; // Default: true
     this.logger = getLogger('api', this.name.toLowerCase());
     this.rateLimiter = config.rateLimiter || rateLimiterService;
   }
@@ -78,12 +83,81 @@ class BaseApiClient {
         status: response.status,
       });
 
+      // Validate response if enabled
+      if (this.validateResponses) {
+        const validation = this._validateResponse(data, url, options);
+
+        if (!validation.valid) {
+          this.logger.warn('Response validation failed, using sanitized data', {
+            url,
+            errors: validation.errors,
+          });
+
+          if (this.returnSafeDefaults) {
+            return validation.data;
+          }
+
+          throw new ValidationError(
+            `Invalid API response from ${url}`,
+            { errors: validation.errors, url }
+          );
+        }
+      }
+
       return data;
     } catch (error) {
       // Clear timeout on error
       clearTimeout(timeoutId);
 
       return this._handleRequestError(error, url, requestOptions);
+    }
+  }
+
+  /**
+   * Validate API response
+   */
+  _validateResponse(data, url, options = {}) {
+    try {
+      // Check if data is valid JSON object
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        this.logger.error('Invalid response structure', {
+          url,
+          dataType: typeof data,
+          isArray: Array.isArray(data),
+        });
+
+        return {
+          valid: false,
+          data: { success: false, error: 'Invalid response structure' },
+          errors: [{ message: 'Response is not a valid object' }],
+        };
+      }
+
+      // Check for schema if provided in options or constructor
+      const schema = options.responseSchema || this.responseSchema;
+
+      if (schema) {
+        return validateResponse(data, schema, {
+          serviceName: this.name,
+          endpoint: url.replace(this.baseURL, ''),
+          returnSafeDefaults: this.returnSafeDefaults,
+          logErrors: true,
+        });
+      }
+
+      // No schema, just validate it's an object
+      return { valid: true, data, errors: [] };
+    } catch (error) {
+      this.logger.error('Response validation error', {
+        url,
+        error: error.message,
+      });
+
+      return {
+        valid: false,
+        data: { success: false, error: 'Validation failed' },
+        errors: [{ message: error.message }],
+      };
     }
   }
 
@@ -144,7 +218,27 @@ class BaseApiClient {
               if (!response.ok) {
                 throw await this._handleError(response);
               }
-              return response.json();
+
+              const data = await response.json();
+
+              // Validate response on retry too
+              if (this.validateResponses) {
+                const validation = this._validateResponse(data, url, options);
+
+                if (!validation.valid && this.returnSafeDefaults) {
+                  this.logger.warn('Response validation failed on retry, using safe defaults');
+                  return validation.data;
+                }
+
+                if (!validation.valid) {
+                  throw new ValidationError(
+                    `Invalid API response from ${url} after retry`,
+                    { errors: validation.errors, url }
+                  );
+                }
+              }
+
+              return data;
             } catch (retryError) {
               clearTimeout(timeoutId);
               throw retryError;
