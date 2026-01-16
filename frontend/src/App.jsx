@@ -29,6 +29,7 @@ import MediumArticleGenerator from './pages/MediumArticleGenerator';
 import PressReleaseGenerator from './pages/PressReleaseGenerator';
 import SeoContentSuggestions from './pages/SeoContentSuggestions';
 import ContentCalendar from './pages/ContentCalendar';
+import WebsiteTraffic from './pages/WebsiteTraffic';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -319,6 +320,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/content/press-release', icon: '📰', label: 'Press Releases' },
     { path: '/content/seo-suggestions', icon: '🔍', label: 'SEO Suggestions' },
     { path: '/content/calendar', icon: '📅', label: 'Calendar' },
+    { path: '/analytics/website-traffic', icon: '🌐', label: 'Traffic' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
@@ -422,6 +424,7 @@ function App() {
                 <Route path="/content/press-release" element={<PageWithBreadcrumbs><PressReleaseGenerator /></PageWithBreadcrumbs>} />
                 <Route path="/content/seo-suggestions" element={<PageWithBreadcrumbs><SeoContentSuggestions /></PageWithBreadcrumbs>} />
                 <Route path="/content/calendar" element={<PageWithBreadcrumbs><ContentCalendar /></PageWithBreadcrumbs>} />
+                <Route path="/analytics/website-traffic" element={<PageWithBreadcrumbs><WebsiteTraffic /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
