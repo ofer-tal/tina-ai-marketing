@@ -22,6 +22,18 @@ const ToastContainerWrapper = styled.div`
   }
 `;
 
+const LiveRegion = styled.div`
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+`;
+
 // Toast Item Styles
 const ToastItemWrapper = styled.div`
   display: flex;
@@ -213,11 +225,14 @@ const Toast = ({ toast, onRemove }) => {
       $variant={toast.variant}
       $isRemoving={isRemoving}
       className={isRemoving ? 'removing' : ''}
+      role="alert"
+      aria-live="polite"
+      aria-atomic="true"
     >
       {toast.showProgress && (
-        <ToastProgress $variant={toast.variant} $duration={toast.duration || 5000} />
+        <ToastProgress $variant={toast.variant} $duration={toast.duration || 5000} aria-hidden="true" />
       )}
-      <ToastIcon>{getIcon()}</ToastIcon>
+      <ToastIcon aria-hidden="true">{getIcon()}</ToastIcon>
       <ToastContent>
         {toast.title && <ToastTitle>{toast.title}</ToastTitle>}
         <ToastMessage>{toast.message}</ToastMessage>
@@ -255,7 +270,10 @@ export const ToastContainer = () => {
   };
 
   return (
-    <ToastContainerWrapper>
+    <ToastContainerWrapper role="region" aria-live="polite" aria-label="Notifications">
+      <LiveRegion aria-live="assertive" aria-atomic="true">
+        {toasts.length > 0 && `${toasts.length} notification${toasts.length > 1 ? 's' : ''} available`}
+      </LiveRegion>
       {toasts.map(toast => (
         <Toast
           key={toast.id}

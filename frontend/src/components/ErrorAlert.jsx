@@ -250,10 +250,10 @@ const ErrorAlert = ({
   );
 
   return (
-    <AlertContainer $type={type} role="alert" aria-live="polite">
+    <AlertContainer $type={type} role="alert" aria-live="assertive" aria-atomic="true">
       <AlertHeader>
         <AlertTitleRow>
-          <AlertIcon>{getAlertIcon(type)}</AlertIcon>
+          <AlertIcon aria-hidden="true">{getAlertIcon(type)}</AlertIcon>
           <AlertTitle $type={type}>{displayTitle}</AlertTitle>
         </AlertTitleRow>
         {dismissible && (

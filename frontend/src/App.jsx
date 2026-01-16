@@ -19,6 +19,7 @@ import TabsDemo from './pages/TabsDemo';
 import DataTableDemo from './pages/DataTableDemo';
 import EmptyStateDemo from './pages/EmptyStateDemo';
 import AccessibilityTest from './pages/AccessibilityTest';
+import ScreenReaderTest from './pages/ScreenReaderTest';
 import NotFound from './pages/NotFound';
 import Breadcrumbs from './components/Breadcrumbs';
 import { cssVar } from './themeUtils';
@@ -291,15 +292,17 @@ function Sidebar({ collapsed, onToggle }) {
 
   return (
     <>
-      <SidebarNav $collapsed={collapsed}>
+      <SidebarNav $collapsed={collapsed} aria-label="Main navigation">
         {menuItems.map(item => (
           <SidebarNavLink
             key={item.path}
             to={item.path}
             $collapsed={collapsed}
             className={location.pathname === item.path ? 'active' : ''}
+            aria-label={item.label}
+            aria-current={location.pathname === item.path ? 'page' : undefined}
           >
-            {item.icon}
+            <span aria-hidden="true">{item.icon}</span>
             <span>{item.label}</span>
           </SidebarNavLink>
         ))}
@@ -376,6 +379,7 @@ function App() {
                 <Route path="/test/tables" element={<PageWithBreadcrumbs><DataTableDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/empty-states" element={<PageWithBreadcrumbs><EmptyStateDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/accessibility" element={<PageWithBreadcrumbs><AccessibilityTest /></PageWithBreadcrumbs>} />
+                <Route path="/test/screen-reader" element={<PageWithBreadcrumbs><ScreenReaderTest /></PageWithBreadcrumbs>} />
                 {/* 404 - Must be last route with wildcard path */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
