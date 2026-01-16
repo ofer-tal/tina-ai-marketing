@@ -130,6 +130,7 @@ class PostingSchedulerJob {
       // Mark as failed
       post.status = 'failed';
       post.error = error.message;
+      post.failedAt = new Date();
       await post.save();
 
       throw error;

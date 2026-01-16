@@ -41,6 +41,7 @@ import cacheRouter from "./api/cache.js";
 import briefingRouter from "./api/briefing.js";
 import dataCleanupRouter from "./api/dataCleanup.js";
 import apiHealthRouter from "./api/apiHealth.js";
+import postRetryRouter from "./api/postRetry.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -51,6 +52,7 @@ import dailyBriefingJob from "./jobs/dailyBriefing.js";
 import campaignReviewScheduler from "./jobs/campaignReviewScheduler.js";
 import dataCleanupJob from "./jobs/dataCleanup.js";
 import apiHealthMonitorJob from "./jobs/apiHealthMonitor.js";
+import postRetryJob from "./jobs/postRetryJob.js";
 
 dotenv.config();
 
@@ -228,6 +230,7 @@ app.use("/api/cache", cacheRouter);
 app.use("/api/briefing", briefingRouter);
 app.use("/api/data-cleanup", dataCleanupRouter);
 app.use("/api/api-health", apiHealthRouter);
+app.use("/api/post-retry", postRetryRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -340,6 +343,8 @@ async function startServer() {
     // Start the API health monitor
     apiHealthMonitorJob.start();
     console.log("API health monitor started");
+    postRetryJob.start();
+    console.log("Post retry job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -391,6 +396,7 @@ const gracefulShutdown = async (signal) => {
     campaignReviewScheduler.stop();
     dataCleanupJob.stop();
     apiHealthMonitorJob.stop();
+    postRetryJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)

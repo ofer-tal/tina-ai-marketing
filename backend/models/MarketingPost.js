@@ -269,6 +269,26 @@ const marketingPostSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  failedAt: {
+    type: Date
+  },
+
+  // Retry tracking for failed posts
+  retryCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  lastRetriedAt: {
+    type: Date
+  },
+  permanentlyFailed: {
+    type: Boolean,
+    default: false
+  },
+  permanentlyFailedAt: {
+    type: Date
+  },
 
   // Metadata
   createdAt: {
