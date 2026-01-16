@@ -52,6 +52,8 @@ import contentEngagementAnalysisRouter from "./api/contentEngagementAnalysis.js"
 import optimalPostingTimeRouter from "./api/optimalPostingTime.js";
 import storyCategoryAnalysisRouter from "./api/storyCategoryAnalysis.js";
 import hashtagEffectivenessAnalysisRouter from "./api/hashtagEffectivenessAnalysis.js";
+import videoStyleAnalysisRouter from "./api/videoStyleAnalysis.js";
+import cohortAnalysisRouter from "./api/cohortAnalysis.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -256,6 +258,8 @@ app.use("/api/content-engagement", contentEngagementAnalysisRouter);
 app.use("/api/posting-time", optimalPostingTimeRouter);
 app.use("/api/story-category-analysis", storyCategoryAnalysisRouter);
 app.use("/api/hashtag-effectiveness", hashtagEffectivenessAnalysisRouter);
+app.use("/api/video-style-analysis", videoStyleAnalysisRouter);
+app.use("/api/cohort-analysis", cohortAnalysisRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
