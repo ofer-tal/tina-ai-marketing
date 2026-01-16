@@ -38,12 +38,14 @@ import testDbAccessRouter from "./api/testDbAccess.js";
 import googleAnalyticsRouter from "./api/googleAnalytics.js";
 import glmRouter from "./api/glm.js";
 import cacheRouter from "./api/cache.js";
+import briefingRouter from "./api/briefing.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
 import metricsAggregatorJob from "./jobs/metricsAggregator.js";
 import weeklyASOAnalysis from "./jobs/weeklyASOAnalysis.js";
 import budgetThresholdChecker from "./jobs/budgetThresholdChecker.js";
+import dailyBriefingJob from "./jobs/dailyBriefing.js";
 
 dotenv.config();
 
@@ -218,6 +220,7 @@ app.use("/api/test-db-access", testDbAccessRouter);
 app.use("/api/googleAnalytics", googleAnalyticsRouter);
 app.use("/api/glm", glmRouter);
 app.use("/api/cache", cacheRouter);
+app.use("/api/briefing", briefingRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -314,6 +317,10 @@ async function startServer() {
     // Start the budget threshold checker
     budgetThresholdChecker.start();
     console.log("Budget threshold checker started");
+
+    // Start the daily briefing generator
+    dailyBriefingJob.start();
+    console.log("Daily briefing generator started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -361,6 +368,7 @@ const gracefulShutdown = async (signal) => {
     metricsAggregatorJob.stop();
     weeklyASOAnalysis.stop();
     budgetThresholdChecker.stop();
+    dailyBriefingJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
