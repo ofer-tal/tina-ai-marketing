@@ -63,6 +63,7 @@ import churnPredictionRouter from "./api/churnPrediction.js";
 import ltvModelingRouter from "./api/ltvModeling.js";
 import blogPostsRouter from "./api/blogPosts.js";
 import mediumArticlesRouter from "./api/mediumArticles.js";
+import pressReleasesRouter from "./api/pressReleases.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -278,6 +279,7 @@ app.use("/api/churn-prediction", churnPredictionRouter);
 app.use("/api/ltv-modeling", ltvModelingRouter);
 app.use("/api/blog-posts", blogPostsRouter);
 app.use("/api/medium-articles", mediumArticlesRouter);
+app.use("/api/press-releases", pressReleasesRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
