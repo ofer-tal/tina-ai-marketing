@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
 import GoogleAnalyticsConfig from '../components/GoogleAnalyticsConfig';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import ErrorAlert from '../components/ErrorAlert.jsx';
 
 const SettingsContainer = styled.div`
   padding: 2rem;
@@ -362,7 +363,27 @@ function Settings() {
         <Subtitle>Configure your Blush Marketing Operations Center</Subtitle>
       </Header>
 
-      {message && (
+      {message && message.type === 'error' && (
+        <ErrorAlert
+          type="error"
+          title="Settings Error"
+          message={message.text}
+          helpText="Please check your input and try again. If the problem persists, contact support."
+          onDismiss={() => setMessage(null)}
+          actions={[
+            {
+              label: 'Retry',
+              onClick: () => {
+                setMessage(null);
+                fetchSettings();
+              },
+              variant: 'primary'
+            }
+          ]}
+        />
+      )}
+
+      {message && message.type === 'success' && (
         <StatusMessage $variant={message.type}>
           {message.text}
         </StatusMessage>

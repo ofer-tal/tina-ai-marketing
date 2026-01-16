@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import MonthlyRevenue from '../components/MonthlyRevenue.jsx';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import ErrorAlert from '../components/ErrorAlert.jsx';
 
 const DashboardContainer = styled.div`
   width: 100%;
@@ -1569,9 +1570,28 @@ function Dashboard() {
       </DashboardHeader>
 
       {error && (
-        <ErrorState>
-          {error}
-        </ErrorState>
+        <ErrorAlert
+          type="error"
+          title="Dashboard Error"
+          message={error}
+          helpText="Please try refreshing the page. If the problem persists, check your backend server connection."
+          onDismiss={() => setError(null)}
+          actions={[
+            {
+              label: 'Retry',
+              onClick: () => {
+                setError(null);
+                fetchMetrics();
+              },
+              variant: 'primary'
+            },
+            {
+              label: 'Refresh Page',
+              onClick: () => window.location.reload(),
+              variant: 'secondary'
+            }
+          ]}
+        />
       )}
 
       {/* Alert Notifications Section */}
