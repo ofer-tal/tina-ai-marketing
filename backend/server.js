@@ -59,6 +59,7 @@ import predictiveAnalyticsRouter from "./api/predictiveAnalytics.js";
 import anomalyDetectionRouter from "./api/anomalyDetection.js";
 import abTestStatisticsRouter from "./api/abTestStatistics.js";
 import roiOptimizationRouter from "./api/roiOptimization.js";
+import churnPredictionRouter from "./api/churnPrediction.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -270,6 +271,7 @@ app.use("/api/predictive-analytics", predictiveAnalyticsRouter);
 app.use("/api/anomaly-detection", anomalyDetectionRouter);
 app.use("/api/ab-test-statistics", abTestStatisticsRouter);
 app.use("/api/roi-optimization", roiOptimizationRouter);
+app.use("/api/churn-prediction", churnPredictionRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {

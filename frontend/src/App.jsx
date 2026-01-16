@@ -22,6 +22,7 @@ import Forecast from './pages/Forecast';
 import AnomalyDetection from './pages/AnomalyDetection';
 import ABTestStatistics from './pages/ABTestStatistics';
 import ROIOptimization from './pages/ROIOptimization';
+import ChurnPrediction from './pages/ChurnPrediction';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -304,6 +305,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/analytics/forecast', icon: '🔮', label: 'Forecast' },
     { path: '/analytics/anomaly-detection', icon: '🔍', label: 'Anomaly Detection' },
     { path: '/analytics/roi-optimization', icon: '💰', label: 'ROI Optimization' },
+    { path: '/analytics/churn-prediction', icon: '📉', label: 'Churn Prediction' },
     { path: '/analytics/ab-test-statistics', icon: '📈', label: 'A/B Test Stats' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
@@ -400,6 +402,7 @@ function App() {
                 <Route path="/analytics/forecast" element={<PageWithBreadcrumbs><Forecast /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/anomaly-detection" element={<PageWithBreadcrumbs><AnomalyDetection /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/roi-optimization" element={<PageWithBreadcrumbs><ROIOptimization /></PageWithBreadcrumbs>} />
+                <Route path="/analytics/churn-prediction" element={<PageWithBreadcrumbs><ChurnPrediction /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/ab-test-statistics" element={<PageWithBreadcrumbs><ABTestStatistics /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
