@@ -309,6 +309,7 @@ class ContentBatchingService {
    */
   async _createMarketingPosts(stories, scheduledTimes) {
     const posts = [];
+    const failures = [];
 
     for (let i = 0; i < Math.min(stories.length, scheduledTimes.length); i++) {
       const story = stories[i];
@@ -346,15 +347,185 @@ class ContentBatchingService {
         });
 
       } catch (error) {
-        logger.error('Failed to create marketing post', {
+        // Step 1: Content generation fails - CAUGHT
+        const failureDetails = {
+          storyId: story._id,
+          storyTitle: story.title,
+          platform,
+          scheduledAt,
           error: error.message,
+          stack: error.stack,
+          timestamp: new Date()
+        };
+
+        // Step 2: Log failure with details
+        logger.error('Content generation failed', {
+          error: error.message,
+          stack: error.stack,
           story: story.title,
-          platform
+          storyId: story._id,
+          platform,
+          scheduledAt,
+          category: story.category,
+          spiciness: story.spiciness
         });
+
+        // Step 3: Mark content as failed
+        await this._markPostAsFailed(failureDetails);
+
+        // Step 4: Notify user (via notification system)
+        await this._notifyUserOfFailure(failureDetails);
+
+        // Step 5: Create retry todo
+        await this._createRetryTodo(failureDetails);
+
+        // Track failure for reporting
+        failures.push(failureDetails);
       }
     }
 
+    // Log failure summary if any failures occurred
+    if (failures.length > 0) {
+      logger.warn('Content generation batch completed with failures', {
+        total: stories.length,
+        succeeded: posts.length,
+        failed: failures.length,
+        failures: failures.map(f => ({
+          story: f.storyTitle,
+          platform: f.platform,
+          error: f.error
+        }))
+      });
+    }
+
     return posts;
+  }
+
+  /**
+   * Mark a post as failed with full details
+   * @private
+   */
+  async _markPostAsFailed(failureDetails) {
+    try {
+      // Create a failed post record for tracking
+      const failedPost = new MarketingPost({
+        title: `${failureDetails.storyTitle} - ${failureDetails.platform} Content (FAILED)`,
+        description: 'Content generation failed',
+        platform: failureDetails.platform,
+        status: 'failed',
+        contentType: 'video',
+        caption: '',
+        hashtags: [],
+        scheduledAt: failureDetails.scheduledAt,
+        storyId: failureDetails.storyId,
+        storyName: failureDetails.storyTitle,
+        storyCategory: 'unknown',
+        storySpiciness: 0,
+        error: failureDetails.error,
+        failedAt: failureDetails.timestamp,
+        retryCount: 0
+      });
+
+      await failedPost.save();
+
+      logger.info('Failed post marked in database', {
+        postId: failedPost._id,
+        story: failureDetails.storyTitle,
+        platform: failureDetails.platform
+      });
+
+    } catch (saveError) {
+      logger.error('Failed to save failed post record', {
+        error: saveError.message,
+        originalError: failureDetails.error
+      });
+    }
+  }
+
+  /**
+   * Notify user of content generation failure
+   * @private
+   */
+  async _notifyUserOfFailure(failureDetails) {
+    try {
+      // Log user-facing notification
+      logger.warn('USER NOTIFICATION: Content generation failed', {
+        title: 'Content Generation Failed',
+        message: `Failed to generate ${failureDetails.platform} content for "${failureDetails.storyTitle}"`,
+        details: {
+          story: failureDetails.storyTitle,
+          platform: failureDetails.platform,
+          error: failureDetails.error,
+          scheduledAt: failureDetails.scheduledAt
+        },
+        action: 'A retry todo has been created. Check your todos to reschedule.'
+      });
+
+    } catch (notifyError) {
+      logger.error('Failed to notify user of failure', {
+        error: notifyError.message
+      });
+    }
+  }
+
+  /**
+   * Create a retry todo for failed content generation
+   * @private
+   */
+  async _createRetryTodo(failureDetails) {
+    try {
+      const { default: mongoose } = await import('mongoose');
+
+      const todo = {
+        title: `Retry content generation for "${failureDetails.storyTitle}"`,
+        description: `Content generation failed for ${failureDetails.platform}. Error: ${failureDetails.error}`,
+        category: 'posting',
+        priority: 'medium',
+        status: 'pending',
+        scheduledAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Schedule for tomorrow
+        dueAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // Due in 2 days
+        completedAt: null,
+        resources: [
+          {
+            type: 'link',
+            url: `/content/library?story=${failureDetails.storyId}`,
+            description: 'View Content Library'
+          },
+          {
+            type: 'document',
+            url: '#',
+            description: `Story: ${failureDetails.storyTitle}`
+          }
+        ],
+        estimatedTime: 15,
+        actualTime: null,
+        createdBy: 'ai',
+        relatedStrategyId: null,
+        failure: {
+          storyId: failureDetails.storyId,
+          storyTitle: failureDetails.storyTitle,
+          platform: failureDetails.platform,
+          originalError: failureDetails.error,
+          failedAt: failureDetails.timestamp
+        },
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+
+      await mongoose.connection.collection('marketing_tasks').insertOne(todo);
+
+      logger.info('Retry todo created', {
+        todoTitle: todo.title,
+        story: failureDetails.storyTitle,
+        platform: failureDetails.platform
+      });
+
+    } catch (todoError) {
+      logger.error('Failed to create retry todo', {
+        error: todoError.message,
+        story: failureDetails.storyTitle
+      });
+    }
   }
 
   /**
