@@ -537,6 +537,138 @@ const configSchema = {
     errorMessage: 'Must be a valid directory path'
   },
 
+  // Notification Preferences
+  ENABLE_BUDGET_ALERTS: {
+    required: false,
+    default: 'true',
+    description: 'Enable budget threshold alerts',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  ENABLE_CONTENT_APPROVAL_NOTIFICATIONS: {
+    required: false,
+    default: 'true',
+    description: 'Enable notifications when content awaits approval',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  ENABLE_POST_SUCCESS_NOTIFICATIONS: {
+    required: false,
+    default: 'true',
+    description: 'Enable notifications when posts are published successfully',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  ENABLE_POST_FAILURE_NOTIFICATIONS: {
+    required: false,
+    default: 'true',
+    description: 'Enable notifications when posts fail to publish',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  ENABLE_AI_STRATEGY_NOTIFICATIONS: {
+    required: false,
+    default: 'true',
+    description: 'Enable notifications for AI strategy recommendations',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  ENABLE_DAILY_BRIEFING: {
+    required: false,
+    default: 'true',
+    description: 'Enable daily briefing notifications',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  ENABLE_WEEKLY_REPORTS: {
+    required: false,
+    default: 'true',
+    description: 'Enable weekly performance reports',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  NOTIFICATION_METHOD_IN_APP: {
+    required: false,
+    default: 'true',
+    description: 'Show notifications in the app',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  NOTIFICATION_METHOD_EMAIL: {
+    required: false,
+    default: 'false',
+    description: 'Send notifications via email',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  NOTIFICATION_EMAIL_ADDRESS: {
+    required: false,
+    description: 'Email address for notifications',
+    validate: (value) => {
+      if (!value) return true;
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      return emailRegex.test(value);
+    },
+    errorMessage: 'Must be a valid email address'
+  },
+
+  QUIET_HOURS_ENABLED: {
+    required: false,
+    default: 'false',
+    description: 'Enable quiet hours (no non-critical notifications)',
+    validate: (value) => ['true', 'false'].includes(value.toLowerCase()),
+    errorMessage: 'Must be either true or false'
+  },
+
+  QUIET_HOURS_START: {
+    required: false,
+    default: '22:00',
+    description: 'Quiet hours start time (HH:MM format)',
+    validate: (value) => {
+      if (!value) return true;
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      return timeRegex.test(value);
+    },
+    errorMessage: 'Must be in HH:MM format (24-hour)'
+  },
+
+  QUIET_HOURS_END: {
+    required: false,
+    default: '08:00',
+    description: 'Quiet hours end time (HH:MM format)',
+    validate: (value) => {
+      if (!value) return true;
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      return timeRegex.test(value);
+    },
+    errorMessage: 'Must be in HH:MM format (24-hour)'
+  },
+
+  QUIET_HOURS_TIMEZONE: {
+    required: false,
+    default: 'UTC',
+    description: 'Timezone for quiet hours',
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    errorMessage: 'Must be a valid timezone'
+  },
+
   // Platform-Specific Settings
   TIKTOK_MAX_CAPTION_LENGTH: {
     required: false,

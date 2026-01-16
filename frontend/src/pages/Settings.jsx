@@ -250,7 +250,8 @@ const categoryIcons = {
   platform: '📱',
   storage: '💾',
   features: '✨',
-  logging: '📋'
+  logging: '📋',
+  notifications: '🔔'
 };
 
 const categoryTitles = {
@@ -266,7 +267,8 @@ const categoryTitles = {
   platform: 'Platform Settings',
   storage: 'Storage',
   features: 'Feature Flags',
-  logging: 'Logging'
+  logging: 'Logging',
+  notifications: 'Notifications'
 };
 
 function Settings() {
