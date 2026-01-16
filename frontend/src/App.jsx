@@ -45,6 +45,7 @@ import AccessibilityTest from './pages/AccessibilityTest';
 import ScreenReaderTest from './pages/ScreenReaderTest';
 import NotFound from './pages/NotFound';
 import Breadcrumbs from './components/Breadcrumbs';
+import ServiceStatusBanner from './components/ServiceStatusBanner';
 import { cssVar } from './themeUtils';
 
 const AppContainer = styled.div`
@@ -395,6 +396,7 @@ function App() {
   return (
     <Router>
       <AppContainer>
+        <ServiceStatusBanner />
         <Header>
           <HeaderLeft>
             <Title>Blush Marketing Operations Center</Title>

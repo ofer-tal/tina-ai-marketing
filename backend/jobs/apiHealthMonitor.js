@@ -8,6 +8,7 @@ import falAiService from '../services/falAiService.js';
 import runPodService from '../services/runPodService.js';
 import mongoose from 'mongoose';
 import { getLogger } from '../utils/logger.js';
+import serviceDegradationHandler from '../services/serviceDegradationHandler.js';
 
 const logger = getLogger('api-health-monitor', 'api-health-monitor');
 
@@ -235,6 +236,9 @@ class ApiHealthMonitorJob {
         // Update health status tracking
         this.updateHealthStatus(api.key, result.healthy);
 
+        // Update service degradation handler
+        serviceDegradationHandler.updateServiceStatus(api.key, result.healthy);
+
         logger.info(`${api.name} health check completed`, {
           healthy: result.healthy,
           responseTime: result.responseTime
@@ -255,6 +259,9 @@ class ApiHealthMonitorJob {
 
         // Update health status tracking
         this.updateHealthStatus(api.key, false);
+
+        // Update service degradation handler
+        serviceDegradationHandler.updateServiceStatus(api.key, false);
       }
     }
 

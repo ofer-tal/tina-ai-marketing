@@ -73,6 +73,7 @@ import websiteTrafficRouter from "./api/websiteTraffic.js";
 import contentPerformanceRouter from "./api/contentPerformance.js";
 import trendingTopicsRouter from "./api/trendingTopics.js";
 import keywordRecommendationsRouter from "./api/keywordRecommendations.js";
+import serviceStatusRouter from "./api/service-status.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -299,6 +300,7 @@ app.use("/api/website-traffic", websiteTrafficRouter);
 app.use("/api/content-performance", contentPerformanceRouter);
 app.use("/api/trending-topics", trendingTopicsRouter);
 app.use("/api/keyword-recommendations", keywordRecommendationsRouter);
+app.use("/api/service-status", serviceStatusRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
