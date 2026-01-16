@@ -237,6 +237,57 @@ const LegacyLoadingSpinner = styled.div`
   }
 `;
 
+const ImportExportSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const ImportExportCard = styled(Card)`
+  max-width: 800px;
+  margin: 0 auto;
+`;
+
+const ImportExportDescription = styled.p`
+  color: #a0a0a0;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+`;
+
+const ButtonGroup = styled.div`
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+`;
+
+const SecondaryButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: #1a1a2e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover:not(:disabled) {
+    background: #16213e;
+    border-color: #e94560;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+`;
+
+const HiddenInput = styled.input`
+  display: none;
+`;
+
 const categoryIcons = {
   server: '⚙️',
   database: '🗄️',
@@ -270,7 +321,8 @@ const categoryTitles = {
   features: 'Feature Flags',
   logging: 'Logging',
   notifications: 'Notifications',
-  retention: 'Data Retention'
+  retention: 'Data Retention',
+  importexport: 'Import / Export'
 };
 
 function Settings() {
@@ -282,6 +334,9 @@ function Settings() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [fieldSuccess, setFieldSuccess] = useState({});
   const [touchedFields, setTouchedFields] = useState({});
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const fileInputRef = React.createRef();
 
   useEffect(() => {
     fetchSchema();
@@ -509,6 +564,118 @@ function Settings() {
     }
   };
 
+  const handleExport = async () => {
+    try {
+      setExporting(true);
+      const response = await fetch('/api/settings/export', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Create a blob and download
+        const blob = new Blob([JSON.stringify(result.data, null, 2)], {
+          type: 'application/json'
+        });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `blush-marketing-config-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        showSuccessToast('Configuration exported successfully!', {
+          title: 'Export Complete',
+          duration: 4000
+        });
+        setMessage({ type: 'success', text: 'Configuration exported successfully!' });
+      } else {
+        throw new Error(result.error || 'Export failed');
+      }
+    } catch (error) {
+      console.error('Failed to export settings:', error);
+      showErrorToast('Failed to export configuration', {
+        title: 'Export Error',
+        duration: 6000
+      });
+      setMessage({ type: 'error', text: 'Failed to export configuration' });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    try {
+      setImporting(true);
+
+      // Read the file
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      // Validate the structure
+      if (!data.version || !data.settings) {
+        throw new Error('Invalid configuration file format');
+      }
+
+      // Confirm import
+      const confirmed = window.confirm(
+        `This will import ${Object.keys(data.settings).length} settings from ${data.exportedAt}.\n\n` +
+        `Version: ${data.version}\n` +
+        `Environment: ${data.environment}\n\n` +
+        `Continue? This action cannot be undone.`
+      );
+
+      if (!confirmed) {
+        setImporting(false);
+        event.target.value = '';
+        return;
+      }
+
+      // Send to backend
+      const response = await fetch('/api/settings/import', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ data })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        showSuccessToast(`Configuration imported successfully! ${result.updateCount} settings updated.`, {
+          title: 'Import Complete',
+          duration: 5000
+        });
+        setMessage({ type: 'success', text: result.message });
+
+        // Refresh settings
+        await fetchSettings();
+      } else {
+        throw new Error(result.error || 'Import failed');
+      }
+    } catch (error) {
+      console.error('Failed to import settings:', error);
+      showErrorToast(error.message || 'Failed to import configuration', {
+        title: 'Import Error',
+        duration: 6000
+      });
+      setMessage({ type: 'error', text: error.message || 'Failed to import configuration' });
+    } finally {
+      setImporting(false);
+      event.target.value = '';
+    }
+  };
+
   const renderInput = (key, config, category) => {
     const value = settings[key] || config.default || '';
     const isPassword = key.includes('SECRET') || key.includes('PASSWORD') || key.includes('PRIVATE_KEY') || key.includes('TOKEN');
@@ -577,6 +744,42 @@ function Settings() {
         <Title>Settings</Title>
         <Subtitle>Configure your Blush Marketing Operations Center</Subtitle>
       </Header>
+
+      {/* Import/Export Configuration */}
+      <ImportExportSection>
+        <ImportExportCard>
+          <CardTitle>
+            <CardIcon>📦</CardIcon>
+            Import / Export Configuration
+          </CardTitle>
+          <ImportExportDescription>
+            Export your current settings to a file for backup or transfer to another environment.
+            Import previously exported settings to restore your configuration.
+          </ImportExportDescription>
+          <ButtonGroup>
+            <SecondaryButton
+              onClick={handleExport}
+              disabled={exporting}
+            >
+              {exporting && <LegacyLoadingSpinner />}
+              📥 Export Configuration
+            </SecondaryButton>
+            <SecondaryButton
+              onClick={() => fileInputRef.current.click()}
+              disabled={importing}
+            >
+              {importing && <LegacyLoadingSpinner />}
+              📤 Import Configuration
+            </SecondaryButton>
+            <HiddenInput
+              ref={fileInputRef}
+              type="file"
+              accept=".json"
+              onChange={handleImport}
+            />
+          </ButtonGroup>
+        </ImportExportCard>
+      </ImportExportSection>
 
       {message && message.type === 'error' && (
         <ErrorAlert

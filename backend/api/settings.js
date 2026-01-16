@@ -229,4 +229,128 @@ router.get("/schema", (req, res) => {
   }
 });
 
+// POST /api/settings/export - Export all settings to a JSON file
+router.post("/export", async (req, res) => {
+  try {
+    const config = configService.getAll();
+
+    // Create export data structure with metadata
+    const exportData = {
+      version: "1.0.0",
+      exportedAt: new Date().toISOString(),
+      environment: process.env.NODE_ENV || "development",
+      settings: config
+    };
+
+    res.json({
+      success: true,
+      data: exportData
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/settings/import - Import settings from a JSON file
+router.post("/import", async (req, res) => {
+  try {
+    const { data } = req.body;
+
+    if (!data || !data.settings) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid import data format"
+      });
+    }
+
+    const importData = data;
+    const envPath = path.join(process.cwd(), '.env');
+    let envContent = '';
+
+    try {
+      envContent = await fs.readFile(envPath, 'utf-8');
+    } catch (error) {
+      // File doesn't exist, create it
+      envContent = '';
+    }
+
+    const lines = envContent.split('\n');
+    const settingsToUpdate = Object.entries(importData.settings);
+    let updateCount = 0;
+
+    // Validate each setting and update .env
+    for (const [key, value] of settingsToUpdate) {
+      // Check if this key exists in our schema
+      if (!configService.has(key)) {
+        console.warn(`Skipping unknown setting: ${key}`);
+        continue;
+      }
+
+      // Validate the value
+      const schema = configService.getSchema();
+      const settingSchema = schema[key];
+
+      // Type validation
+      if (settingSchema.type === "number" && isNaN(Number(value))) {
+        console.warn(`Skipping invalid number setting: ${key}`);
+        continue;
+      }
+
+      if (settingSchema.type === "boolean" && typeof value !== "boolean" && typeof value !== "string") {
+        console.warn(`Skipping invalid boolean setting: ${key}`);
+        continue;
+      }
+
+      // Convert value to string
+      let stringValue = value;
+      if (typeof value === "boolean") {
+        stringValue = value ? "true" : "false";
+      } else if (typeof value === "number") {
+        stringValue = value.toString();
+      } else if (typeof value === "string") {
+        stringValue = value;
+      } else {
+        stringValue = String(value);
+      }
+
+      // Check if key already exists in .env
+      let keyFound = false;
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].startsWith(`${key}=`)) {
+          lines[i] = `${key}=${stringValue}`;
+          keyFound = true;
+          break;
+        }
+      }
+
+      // If key not found, add it
+      if (!keyFound) {
+        lines.push(`${key}=${stringValue}`);
+      }
+
+      // Update the environment variable in the current process
+      process.env[key] = stringValue;
+      updateCount++;
+    }
+
+    // Write back to .env
+    await fs.writeFile(envPath, lines.join('\n') + '\n', 'utf-8');
+
+    res.json({
+      success: true,
+      message: `Successfully imported ${updateCount} settings`,
+      updateCount,
+      importedAt: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
