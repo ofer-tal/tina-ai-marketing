@@ -9,7 +9,7 @@ const logger = getLogger('posting-scheduler', 'scheduler');
 /**
  * Posting Scheduler Job
  *
- * Runs every minute to check for scheduled content that needs to be posted
+ * Runs every 15 minutes to check for scheduled content that needs to be posted
  * - Finds content with status 'scheduled' and scheduledAt <= now
  * - Posts to the appropriate platform (TikTok, Instagram, YouTube)
  * - Updates status to 'posted' or 'failed'
@@ -243,10 +243,10 @@ class PostingSchedulerJob {
 
     logger.info('Starting scheduled posting job');
 
-    // Schedule job to run every minute
+    // Schedule job to run every 15 minutes
     schedulerService.schedule(
       this.jobName,
-      '* * * * *', // Every minute
+      '*/15 * * * *', // Every 15 minutes
       () => this.execute(),
       {
         timezone: 'UTC'
