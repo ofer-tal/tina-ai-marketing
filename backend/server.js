@@ -46,6 +46,7 @@ import storyRefreshRouter from "./api/storyRefresh.js";
 import revenueSyncRouter from "./api/revenueSync.js";
 import keywordRankingCheckRouter from "./api/keywordRankingCheck.js";
 import abTestDurationMonitorRouter from "./api/abTestDurationMonitor.js";
+import logRotationRouter from "./api/logRotation.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -61,6 +62,7 @@ import storyRefreshJob from "./jobs/storyRefreshJob.js";
 import revenueSyncJob from "./jobs/revenueSyncJob.js";
 import keywordRankingCheckJob from "./jobs/keywordRankingCheckJob.js";
 import abTestDurationMonitorJob from "./jobs/abTestDurationMonitor.js";
+import logRotationJob from "./jobs/logRotationJob.js";
 
 dotenv.config();
 
@@ -243,6 +245,7 @@ app.use("/api/story-refresh", storyRefreshRouter);
 app.use("/api/revenue-sync", revenueSyncRouter);
 app.use("/api/keyword-ranking-check", keywordRankingCheckRouter);
 app.use("/api/ab-test-monitor", abTestDurationMonitorRouter);
+app.use("/api/log-rotation", logRotationRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -375,6 +378,10 @@ async function startServer() {
     // Start the A/B test duration monitor job
     abTestDurationMonitorJob.start();
     console.log("A/B test duration monitor job started");
+
+    // Start the log rotation job
+    logRotationJob.start();
+    console.log("Log rotation job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -431,6 +438,7 @@ const gracefulShutdown = async (signal) => {
     revenueSyncJob.stop();
     keywordRankingCheckJob.stop();
     abTestDurationMonitorJob.stop();
+    logRotationJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
