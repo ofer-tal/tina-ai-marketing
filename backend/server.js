@@ -46,6 +46,7 @@ import metricsAggregatorJob from "./jobs/metricsAggregator.js";
 import weeklyASOAnalysis from "./jobs/weeklyASOAnalysis.js";
 import budgetThresholdChecker from "./jobs/budgetThresholdChecker.js";
 import dailyBriefingJob from "./jobs/dailyBriefing.js";
+import campaignReviewScheduler from "./jobs/campaignReviewScheduler.js";
 
 dotenv.config();
 
@@ -321,6 +322,10 @@ async function startServer() {
     // Start the daily briefing generator
     dailyBriefingJob.start();
     console.log("Daily briefing generator started");
+
+    // Start the campaign review scheduler
+    campaignReviewScheduler.start();
+    console.log("Campaign review scheduler started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -369,6 +374,7 @@ const gracefulShutdown = async (signal) => {
     weeklyASOAnalysis.stop();
     budgetThresholdChecker.stop();
     dailyBriefingJob.stop();
+    campaignReviewScheduler.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)

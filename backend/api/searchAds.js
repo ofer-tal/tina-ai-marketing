@@ -7,6 +7,7 @@
 import express from 'express';
 import appleSearchAdsService from '../services/appleSearchAdsService.js';
 import budgetThresholdChecker from '../jobs/budgetThresholdChecker.js';
+import campaignReviewScheduler from '../jobs/campaignReviewScheduler.js';
 
 const router = express.Router();
 
@@ -792,6 +793,108 @@ router.get('/budget-check/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting budget threshold checker status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Campaign Review Scheduler Endpoints
+ * Feature #241: Campaign review scheduling
+ */
+
+/**
+ * POST /api/searchAds/campaign-review/start
+ * Start the campaign review scheduler
+ */
+router.post('/campaign-review/start', async (req, res) => {
+  try {
+    const { dayOfWeek, scheduleTime, timezone } = req.body;
+
+    campaignReviewScheduler.start({
+      dayOfWeek,
+      scheduleTime,
+      timezone
+    });
+
+    res.json({
+      success: true,
+      message: 'Campaign review scheduler started',
+      data: {
+        jobName: 'campaign-review-scheduler',
+        dayOfWeek: dayOfWeek || process.env.CAMPAIGN_REVIEW_DAY || 'friday',
+        scheduleTime: scheduleTime || process.env.CAMPAIGN_REVIEW_TIME || '15:00',
+        timezone: timezone || process.env.CAMPAIGN_REVIEW_TIMEZONE || 'UTC'
+      }
+    });
+  } catch (error) {
+    console.error('Error starting campaign review scheduler:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/searchAds/campaign-review/stop
+ * Stop the campaign review scheduler
+ */
+router.post('/campaign-review/stop', async (req, res) => {
+  try {
+    campaignReviewScheduler.stop();
+
+    res.json({
+      success: true,
+      message: 'Campaign review scheduler stopped'
+    });
+  } catch (error) {
+    console.error('Error stopping campaign review scheduler:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/searchAds/campaign-review/trigger
+ * Manually trigger a campaign review
+ */
+router.post('/campaign-review/trigger', async (req, res) => {
+  try {
+    const result = await campaignReviewScheduler.execute();
+
+    res.json({
+      success: true,
+      message: 'Campaign review triggered manually',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error triggering campaign review:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/campaign-review/status
+ * Get the status of the campaign review scheduler
+ */
+router.get('/campaign-review/status', async (req, res) => {
+  try {
+    const status = campaignReviewScheduler.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('Error getting campaign review scheduler status:', error);
     res.status(500).json({
       success: false,
       error: error.message
