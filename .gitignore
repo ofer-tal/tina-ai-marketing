@@ -30,6 +30,9 @@ storage/images/*.jpg
 storage/audio/*.mp3
 storage/audio/*.m4a
 
+# Playwright screenshots
+.playwright-mcp/
+
 # OS files
 .DS_Store
 .DS_Store?
