@@ -60,6 +60,7 @@ import anomalyDetectionRouter from "./api/anomalyDetection.js";
 import abTestStatisticsRouter from "./api/abTestStatistics.js";
 import roiOptimizationRouter from "./api/roiOptimization.js";
 import churnPredictionRouter from "./api/churnPrediction.js";
+import ltvModelingRouter from "./api/ltvModeling.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -272,6 +273,7 @@ app.use("/api/anomaly-detection", anomalyDetectionRouter);
 app.use("/api/ab-test-statistics", abTestStatisticsRouter);
 app.use("/api/roi-optimization", roiOptimizationRouter);
 app.use("/api/churn-prediction", churnPredictionRouter);
+app.use("/api/ltv-modeling", ltvModelingRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
