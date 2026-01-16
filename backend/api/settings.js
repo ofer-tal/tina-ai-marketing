@@ -198,7 +198,7 @@ router.get("/schema", (req, res) => {
         grouped.ai[key] = config;
       } else if (key.includes('BUDGET')) {
         grouped.budget[key] = config;
-      } else if (key.includes('CONTENT') || key.includes('POSTING') || key.includes('MAX_CONTENT')) {
+      } else if (key.includes('SPICINESS') || key.includes('CONTENT_STYLE') || key.includes('HASHTAG_STRATEGY') || key.includes('HASHTAG_COUNT') || key.includes('INCLUDE_CALL') || key.includes('AVOID_EXPLICIT') || key.includes('CONTENT') || key.includes('POSTING') || key.includes('MAX_CONTENT')) {
         grouped.content[key] = config;
       } else if (key.includes('STORAGE') || key.includes('FILE')) {
         grouped.storage[key] = config;

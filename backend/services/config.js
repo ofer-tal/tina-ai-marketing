@@ -348,6 +348,93 @@ const configSchema = {
     errorMessage: 'Must be a number between 1 and 100'
   },
 
+  // Content Generation Preferences
+  PREFERRED_SPICINESS_MIN: {
+    required: false,
+    default: '1',
+    description: 'Minimum preferred spiciness level for content (1-5)',
+    validate: (value) => {
+      const level = parseInt(value, 10);
+      return !isNaN(level) && level >= 1 && level <= 5;
+    },
+    errorMessage: 'Must be a number between 1 and 5'
+  },
+
+  PREFERRED_SPICINESS_MAX: {
+    required: false,
+    default: '2',
+    description: 'Maximum preferred spiciness level for content (1-5)',
+    validate: (value) => {
+      const level = parseInt(value, 10);
+      return !isNaN(level) && level >= 1 && level <= 5;
+    },
+    errorMessage: 'Must be a number between 1 and 5'
+  },
+
+  CONTENT_STYLE_TONE: {
+    required: false,
+    default: 'romantic',
+    description: 'Preferred content tone',
+    validate: (value) => {
+      const validTones = ['romantic', 'sexy', 'empowering', 'playful', 'intense', 'balanced'];
+      return !value || validTones.includes(value);
+    },
+    errorMessage: 'Must be one of: romantic, sexy, empowering, playful, intense, balanced'
+  },
+
+  CONTENT_STYLE_VOICE: {
+    required: false,
+    default: 'sex-positive',
+    description: 'Brand voice for content',
+    validate: (value) => {
+      const validVoices = ['sex-positive', 'romantic', 'empowering', 'provocative', 'subtle', 'bold'];
+      return !value || validVoices.includes(value);
+    },
+    errorMessage: 'Must be one of: sex-positive, romantic, empowering, provocative, subtle, bold'
+  },
+
+  HASHTAG_STRATEGY_TYPE: {
+    required: false,
+    default: 'balanced',
+    description: 'Hashtag strategy approach',
+    validate: (value) => {
+      const validStrategies = ['conservative', 'balanced', 'aggressive', 'trending', 'niche'];
+      return !value || validStrategies.includes(value);
+    },
+    errorMessage: 'Must be one of: conservative, balanced, aggressive, trending, niche'
+  },
+
+  HASHTAG_COUNT_PREFERENCE: {
+    required: false,
+    default: 'medium',
+    description: 'Preferred number of hashtags per post',
+    validate: (value) => {
+      const validCounts = ['minimal', 'medium', 'maximum'];
+      return !value || validCounts.includes(value);
+    },
+    errorMessage: 'Must be one of: minimal, medium, maximum'
+  },
+
+  INCLUDE_CALL_TO_ACTION: {
+    required: false,
+    default: 'true',
+    description: 'Include call-to-action in generated content',
+    validate: (value) => {
+      return !value || ['true', 'false'].includes(value.toLowerCase());
+    },
+    errorMessage: 'Must be either true or false'
+  },
+
+  AVOID_EXPLICIT_CONTENT: {
+    required: false,
+    default: 'false',
+    description: 'Avoid overly explicit content in generation',
+    validate: (value) => {
+      return !value || ['true', 'false'].includes(value.toLowerCase());
+    },
+    errorMessage: 'Must be either true or false'
+  },
+
   // Storage Settings
   STORAGE_PATH: {
     required: false,
