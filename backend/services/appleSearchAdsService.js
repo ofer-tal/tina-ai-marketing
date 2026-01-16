@@ -15,6 +15,7 @@
 import winston from 'winston';
 import retryService from './retry.js';
 import rateLimiterService from './rateLimiter.js';
+import budgetGuardService from './budgetGuardService.js';
 
 // Create logger
 const logger = winston.createLogger({
@@ -324,6 +325,37 @@ class AppleSearchAdsService {
   }
 
   /**
+   * Get a single campaign by ID
+   */
+  async getCampaign(campaignId) {
+    logger.info('Fetching campaign', { campaignId });
+
+    try {
+      const response = await this.makeRequest(
+        `/orgs/${this.organizationId}/campaigns/${campaignId}`
+      );
+
+      const campaign = response.data;
+
+      logger.info('Campaign fetched successfully', {
+        campaignId,
+        campaignName: campaign?.name
+      });
+
+      return campaign;
+
+    } catch (error) {
+      logger.error('Failed to fetch campaign', {
+        campaignId,
+        error: error.message,
+      });
+
+      // Return null on error to allow graceful degradation
+      return null;
+    }
+  }
+
+  /**
    * Step 5: Confirm permissions granted
    * Verifies specific permissions by attempting different API operations
    */
@@ -464,6 +496,27 @@ class AppleSearchAdsService {
    */
   async updateCampaignBudget(campaignId, dailyBudget) {
     try {
+      // Feature #296: Budget overspend prevention - Step 1: Before spend, check budget
+      // Get current campaign budget to calculate the increase
+      const currentCampaign = await this.getCampaign(campaignId);
+      const currentBudget = currentCampaign?.dailyBudget?.amount || 0;
+
+      // Validate with budget guard before making changes
+      const validation = await budgetGuardService.validateCampaignBudgetUpdate(
+        campaignId,
+        currentBudget,
+        dailyBudget,
+        'apple_search_ads'
+      );
+
+      // Step 3: Block if would exceed budget
+      if (!validation.allowed) {
+        const error = new Error(`Budget overspend prevented: ${validation.reason}`);
+        error.code = 'BUDGET_EXCEEDED';
+        error.details = validation;
+        throw error;
+      }
+
       const response = await this.makeRequest(
         `/orgs/${this.organizationId}/campaigns/${campaignId}`,
         {
@@ -479,12 +532,15 @@ class AppleSearchAdsService {
 
       logger.info('Campaign budget updated', {
         campaignId,
-        dailyBudget,
+        currentBudget,
+        newBudget: dailyBudget,
+        budgetValidation: validation.warning || 'passed'
       });
 
       return {
         success: true,
         campaign: response.data,
+        budgetValidation: validation
       };
 
     } catch (error) {
@@ -492,6 +548,7 @@ class AppleSearchAdsService {
         campaignId,
         dailyBudget,
         error: error.message,
+        code: error.code
       });
 
       throw new Error(`Failed to update campaign budget: ${error.message}`);
@@ -503,6 +560,38 @@ class AppleSearchAdsService {
    */
   async setCampaignStatus(campaignId, paused) {
     try {
+      // Feature #296: Budget overspend prevention - Step 1: Before spend, check budget
+      // Only check budget when enabling a campaign (not pausing)
+      if (!paused) {
+        // Get current campaign details to check budget
+        const currentCampaign = await this.getCampaign(campaignId);
+        const dailyBudget = currentCampaign?.dailyBudget?.amount || 0;
+        const campaignName = currentCampaign?.name || 'Unknown';
+
+        // Validate with budget guard before enabling
+        const validation = await budgetGuardService.validateCampaignEnable(
+          campaignId,
+          campaignName,
+          dailyBudget,
+          'apple_search_ads'
+        );
+
+        // Step 3: Block if would exceed budget
+        if (!validation.allowed) {
+          const error = new Error(`Budget overspend prevented: ${validation.reason}`);
+          error.code = 'BUDGET_EXCEEDED';
+          error.details = validation;
+          throw error;
+        }
+
+        logger.info('Campaign enable validated by budget guard', {
+          campaignId,
+          campaignName,
+          dailyBudget,
+          validation: validation.warning || 'passed'
+        });
+      }
+
       const response = await this.makeRequest(
         `/orgs/${this.organizationId}/campaigns/${campaignId}`,
         {
@@ -528,6 +617,7 @@ class AppleSearchAdsService {
         campaignId,
         paused,
         error: error.message,
+        code: error.code
       });
 
       throw new Error(`Failed to update campaign status: ${error.message}`);
