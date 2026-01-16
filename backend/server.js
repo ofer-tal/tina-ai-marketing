@@ -39,6 +39,7 @@ import googleAnalyticsRouter from "./api/googleAnalytics.js";
 import glmRouter from "./api/glm.js";
 import cacheRouter from "./api/cache.js";
 import briefingRouter from "./api/briefing.js";
+import dataCleanupRouter from "./api/dataCleanup.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -47,6 +48,7 @@ import weeklyASOAnalysis from "./jobs/weeklyASOAnalysis.js";
 import budgetThresholdChecker from "./jobs/budgetThresholdChecker.js";
 import dailyBriefingJob from "./jobs/dailyBriefing.js";
 import campaignReviewScheduler from "./jobs/campaignReviewScheduler.js";
+import dataCleanupJob from "./jobs/dataCleanup.js";
 
 dotenv.config();
 
@@ -222,6 +224,7 @@ app.use("/api/googleAnalytics", googleAnalyticsRouter);
 app.use("/api/glm", glmRouter);
 app.use("/api/cache", cacheRouter);
 app.use("/api/briefing", briefingRouter);
+app.use("/api/data-cleanup", dataCleanupRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -326,6 +329,10 @@ async function startServer() {
     // Start the campaign review scheduler
     campaignReviewScheduler.start();
     console.log("Campaign review scheduler started");
+
+    // Start the data cleanup job
+    dataCleanupJob.start();
+    console.log("Data cleanup job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -375,6 +382,7 @@ const gracefulShutdown = async (signal) => {
     budgetThresholdChecker.stop();
     dailyBriefingJob.stop();
     campaignReviewScheduler.stop();
+    dataCleanupJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
