@@ -45,6 +45,7 @@ import AccessibilityTest from './pages/AccessibilityTest';
 import ScreenReaderTest from './pages/ScreenReaderTest';
 import ErrorTestPage from './pages/ErrorTestPage';
 import DatabaseTestPage from './pages/DatabaseTestPage';
+import FileSystemErrorTestPage from './pages/FileSystemErrorTestPage';
 import NotFound from './pages/NotFound';
 import Breadcrumbs from './components/Breadcrumbs';
 import ServiceStatusBanner from './components/ServiceStatusBanner';
@@ -455,6 +456,7 @@ function App() {
                 <Route path="/test/empty-states" element={<PageWithBreadcrumbs><EmptyStateDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/errors" element={<PageWithBreadcrumbs><ErrorTestPage /></PageWithBreadcrumbs>} />
                 <Route path="/test/database" element={<PageWithBreadcrumbs><DatabaseTestPage /></PageWithBreadcrumbs>} />
+                <Route path="/test/filesystem" element={<PageWithBreadcrumbs><FileSystemErrorTestPage /></PageWithBreadcrumbs>} />
                 <Route path="/test/accessibility" element={<PageWithBreadcrumbs><AccessibilityTest /></PageWithBreadcrumbs>} />
                 <Route path="/test/screen-reader" element={<PageWithBreadcrumbs><ScreenReaderTest /></PageWithBreadcrumbs>} />
                 {/* 404 - Must be last route with wildcard path */}

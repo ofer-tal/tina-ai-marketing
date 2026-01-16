@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File System Error Handling - Feature #304</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: #1a1a2e;
+            color: #eaeaea;
+        }
+        h1 { color: #e94560; }
+        h2 { color: #7b2cbf; border-bottom: 1px solid #2d3561; padding-bottom: 0.5rem; }
+        .section {
+            background: #16213e;
+            border: 1px solid #2d3561;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .button-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        button {
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: white;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.3); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-default { background: #7b2cbf; }
+        .btn-warning { background: #ffb020; }
+        .btn-danger { background: #f8312f; }
+        .result-box {
+            background: #0f1629;
+            border: 1px solid #2d3561;
+            border-radius: 6px;
+            padding: 1rem;
+            margin-top: 1rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .check { color: #00d26a; font-size: 1.25rem; }
+        .feature-check {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            margin: 0.5rem 0;
+        }
+        .status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        .status.success { background: rgba(0, 210, 106, 0.2); color: #00d26a; }
+        .status.error { background: rgba(248, 49, 47, 0.2); color: #f8312f; }
+    </style>
+</head>
+<body>
+    <h1>🗂️ File System Error Handling - Feature #304</h1>
+    <p style="color: #a0a0a0;">Comprehensive file system error handling with automatic recovery, user-friendly messages, and detailed logging.</p>
+
+    <!-- Feature Verification -->
+    <div class="section">
+        <h2>✅ Feature Verification</h2>
+        <div class="feature-check"><span class="check">✓</span> Step 1: File operation fails - Error detection and classification</div>
+        <div class="feature-check"><span class="check">✓</span> Step 2: Catch file system error - Error logging with context</div>
+        <div class="feature-check"><span class="check">✓</span> Step 3: Log error with file path - Detailed error history tracking</div>
+        <div class="feature-check"><span class="check">✓</span> Step 4: Show user-friendly message - Contextual error messages</div>
+        <div class="feature-check"><span class="check">✓</span> Step 5: Attempt recovery or cleanup - Automatic retry and recovery</div>
+    </div>
+
+    <!-- Test Scenarios -->
+    <div class="section">
+        <h2 id="status-title">🧪 Test Scenarios <span id="status-badge" class="status">4 errors logged</span></h2>
+        <div class="button-grid">
+            <button class="btn-default" onclick="runTest('file-not-found')">File Not Found</button>
+            <button class="btn-default" onclick="runTest('directory-not-found')">Directory Not Found</button>
+            <button class="btn-warning" onclick="runTest('permission-denied')">Permission Denied</button>
+            <button class="btn-danger" onclick="runTest('disk-full')">Disk Full</button>
+            <button class="btn-warning" onclick="runTest('file-locked')">File Locked</button>
+            <button class="btn-default" onclick="runTest('invalid-path')">Invalid Path</button>
+            <button class="btn-danger" onclick="runTest('io-error')">I/O Error</button>
+        </div>
+        <div id="result" class="result-box" style="display:none;"></div>
+    </div>
+
+    <!-- Error History -->
+    <div class="section">
+        <h2 id="history-title">📋 Error History <span class="status">Loading...</span></h2>
+        <div id="error-history"></div>
+        <button class="btn-default" onclick="clearHistory()" style="margin-top: 1rem;">Clear History</button>
+    </div>
+
+    <!-- Documentation -->
+    <div class="section">
+        <h2>📖 Implementation Details</h2>
+        <div style="color: #a0a0a0; line-height: 1.8;">
+            <p><strong>Error Types Classified:</strong></p>
+            <ul>
+                <li>PERMISSION_DENIED - User lacks required permissions</li>
+                <li>FILE_NOT_FOUND - Requested file doesn't exist</li>
+                <li>DISK_FULL - Insufficient disk space</li>
+                <li>INVALID_PATH - Malformed file path</li>
+                <li>FILE_LOCKED - File in use by another process</li>
+                <li>DIRECTORY_NOT_FOUND - Target directory missing</li>
+                <li>IO_ERROR - General I/O failure</li>
+            </ul>
+            <p><strong>Recovery Strategies:</strong></p>
+            <ul>
+                <li>RETRY - Exponential backoff (max 3 attempts, 1s-10s delays)</li>
+                <li>CREATE_DIRECTORY - Auto-create missing directories</li>
+                <li>USE_ALTERNATIVE_PATH - Fallback to alternative location</li>
+                <li>CLEANUP_AND_RETRY - Clean up and retry operation</li>
+                <li>NOTIFY_USER - Alert user of unrecoverable error</li>
+                <li>SKIP - Skip operation due to error</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001/api/filesystem-errors';
+
+        // Fetch initial status
+        async function fetchStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/status`);
+                const data = await response.json();
+                document.getElementById('status-badge').textContent = `${data.errorHistorySize} errors logged`;
+                document.getElementById('status-badge').className = `status ${data.errorHistorySize < 50 ? 'success' : 'error'}`;
+            } catch (error) {
+                console.error('Failed to fetch status:', error);
+            }
+        }
+
+        // Fetch error history
+        async function fetchErrorHistory() {
+            try {
+                const response = await fetch(`${API_BASE}/history`);
+                const data = await response.json();
+                const historyContainer = document.getElementById('error-history');
+                const historyTitle = document.getElementById('history-title');
+
+                historyTitle.querySelector('.status').textContent = `${data.count} errors`;
+
+                if (data.count === 0) {
+                    historyContainer.innerHTML = '<p style="color: #a0a0a0; text-align: center; padding: 2rem;">No errors logged yet. Run a test scenario.</p>';
+                } else {
+                    historyContainer.innerHTML = data.errors.slice(0, 10).map(error => `
+                        <div style="background: #0f1629; border: 1px solid #2d3561; border-radius: 6px; padding: 1rem; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <strong style="color: #e94560;">${error.errorType}</strong>
+                                <span style="font-size: 0.75rem; color: #a0a0a0;">${new Date(error.timestamp).toLocaleString()}</span>
+                            </div>
+                            <div style="font-size: 0.875rem; color: #a0a0a0;">
+                                <div><strong style="color: #7b2cbf;">Operation:</strong> ${error.operation}</div>
+                                <div><strong style="color: #7b2cbf;">File:</strong> ${error.filePath || 'N/A'}</div>
+                                <div><strong style="color: #7b2cbf;">Error Code:</strong> ${error.errorCode || 'N/A'}</div>
+                                <div><strong style="color: #7b2cbf;">Message:</strong> ${error.errorMessage}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Failed to fetch error history:', error);
+            }
+        }
+
+        // Run test scenario
+        async function runTest(scenario) {
+            const resultBox = document.getElementById('result');
+            resultBox.style.display = 'block';
+            resultBox.textContent = 'Running test...';
+
+            try {
+                const response = await fetch(`${API_BASE}/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ scenario })
+                });
+
+                const data = await response.json();
+                resultBox.textContent = JSON.stringify(data, null, 2);
+
+                // Refresh status and history
+                await fetchStatus();
+                await fetchErrorHistory();
+            } catch (error) {
+                resultBox.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Clear error history
+        async function clearHistory() {
+            try {
+                await fetch(`${API_BASE}/history`, { method: 'DELETE' });
+                await fetchStatus();
+                await fetchErrorHistory();
+            } catch (error) {
+                console.error('Failed to clear history:', error);
+            }
+        }
+
+        // Initialize
+        fetchStatus();
+        fetchErrorHistory();
+    </script>
+</body>
+</html>

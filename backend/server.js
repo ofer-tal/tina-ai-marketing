@@ -79,6 +79,7 @@ import errorMonitoringRouter from "./api/error-monitoring.js";
 import circuitBreakerRouter from "./api/circuit-breaker.js";
 import manualPostingFallbackRouter from "./api/manualPostingFallback.js";
 import databaseStatusRouter from "./api/database-status.js";
+import fileSystemErrorsRouter from "./api/fileSystemErrors.js";
 import errorMessageService from "./services/errorMessageService.js";
 import * as errorMonitoringService from "./services/errorMonitoringService.js";
 import storageService from "./services/storage.js";
@@ -243,6 +244,8 @@ app.use("/api/settings", settingsRouter);
 app.use("/api/storage", storageRouter);
 // Serve storage directory statically for generated content access
 app.use("/storage", express.static(path.join(__dirname, "../storage")));
+// Serve public directory for test pages and static assets
+app.use("/test-pages", express.static(path.join(__dirname, "public")));
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/chat", chatRouter);
 app.use("/api/todos", todosRouter);
@@ -313,6 +316,7 @@ app.use("/api/error-monitoring", errorMonitoringRouter);
 app.use("/api/circuit-breaker", circuitBreakerRouter);
 app.use("/api/manual-posting-fallback", manualPostingFallbackRouter);
 app.use("/api/database-status", databaseStatusRouter);
+app.use("/api/filesystem-errors", fileSystemErrorsRouter);
 
 // Error handling middleware (must be after all routes)
 // Integrates with error monitoring service to track all errors
