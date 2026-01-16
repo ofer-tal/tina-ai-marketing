@@ -32,6 +32,7 @@ import ContentCalendar from './pages/ContentCalendar';
 import WebsiteTraffic from './pages/WebsiteTraffic';
 import ContentPerformance from './pages/ContentPerformance';
 import TrendingTopics from './pages/TrendingTopics';
+import KeywordRecommendations from './pages/KeywordRecommendations';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -325,6 +326,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/analytics/website-traffic', icon: '🌐', label: 'Traffic' },
     { path: '/analytics/content-performance', icon: '📊', label: 'Performance' },
     { path: '/content/trending-topics', icon: '🔥', label: 'Trending Topics' },
+    { path: '/content/keyword-recommendations', icon: '🔍', label: 'Keywords' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
@@ -431,6 +433,7 @@ function App() {
                 <Route path="/analytics/website-traffic" element={<PageWithBreadcrumbs><WebsiteTraffic /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/content-performance" element={<PageWithBreadcrumbs><ContentPerformance /></PageWithBreadcrumbs>} />
                 <Route path="/content/trending-topics" element={<PageWithBreadcrumbs><TrendingTopics /></PageWithBreadcrumbs>} />
+                <Route path="/content/keyword-recommendations" element={<PageWithBreadcrumbs><KeywordRecommendations /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
