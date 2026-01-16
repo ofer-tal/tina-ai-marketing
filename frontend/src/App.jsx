@@ -18,6 +18,7 @@ import ModalDemo from './pages/ModalDemo';
 import TabsDemo from './pages/TabsDemo';
 import DataTableDemo from './pages/DataTableDemo';
 import EmptyStateDemo from './pages/EmptyStateDemo';
+import NotFound from './pages/NotFound';
 import Breadcrumbs from './components/Breadcrumbs';
 import { cssVar } from './themeUtils';
 
@@ -373,6 +374,8 @@ function App() {
                 <Route path="/test/tabs" element={<PageWithBreadcrumbs><TabsDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/tables" element={<PageWithBreadcrumbs><DataTableDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/empty-states" element={<PageWithBreadcrumbs><EmptyStateDemo /></PageWithBreadcrumbs>} />
+                {/* 404 - Must be last route with wildcard path */}
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </PageContent>
 
