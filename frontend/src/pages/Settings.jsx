@@ -4,6 +4,7 @@ import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
 import GoogleAnalyticsConfig from '../components/GoogleAnalyticsConfig';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import ErrorAlert from '../components/ErrorAlert.jsx';
+import { showSuccessToast, showErrorToast } from '../components/Toast';
 
 const SettingsContainer = styled.div`
   padding: 2rem;
@@ -293,14 +294,26 @@ function Settings() {
       const allSuccessful = results.every(r => r.success);
 
       if (allSuccessful) {
+        showSuccessToast('Settings saved successfully!', {
+          title: 'Success',
+          duration: 4000
+        });
         setMessage({ type: 'success', text: `Settings updated successfully! Server restart may be required for some changes to take effect.` });
         // Refresh settings
         await fetchSettings();
       } else {
+        showErrorToast('Some settings failed to update. Please try again.', {
+          title: 'Partial Failure',
+          duration: 6000
+        });
         setMessage({ type: 'error', text: 'Some settings failed to update' });
       }
     } catch (error) {
       console.error('Failed to update settings:', error);
+      showErrorToast('Failed to update settings. Please check your connection.', {
+        title: 'Error',
+        duration: 6000
+      });
       setMessage({ type: 'error', text: 'Failed to update settings' });
     } finally {
       setSaving(prev => ({ ...prev, [category]: false }));

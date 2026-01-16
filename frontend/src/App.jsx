@@ -12,6 +12,8 @@ import RevenueAttributionTest from './pages/RevenueAttributionTest';
 import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
+import { ToastContainer } from './components/Toast';
+import ToastTest from './components/ToastTest';
 import { cssVar } from './themeUtils';
 
 const AppContainer = styled.div`
@@ -345,12 +347,15 @@ function App() {
                 <Route path="/revenue/weekly" element={<WeeklyRevenueAggregates />} />
                 <Route path="/todos" element={<Todos />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/test/toasts" element={<ToastTest />} />
               </Routes>
             </PageContent>
 
             <TodoSidebar />
           </MainContentArea>
         </MainLayout>
+
+        <ToastContainer />
       </AppContainer>
     </Router>
   );

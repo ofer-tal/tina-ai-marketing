@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import MonthlyRevenue from '../components/MonthlyRevenue.jsx';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import ErrorAlert from '../components/ErrorAlert.jsx';
+import { showSuccessToast, showErrorToast } from '../components/Toast';
 
 const DashboardContainer = styled.div`
   width: 100%;
@@ -1239,8 +1240,16 @@ function Dashboard() {
         fetchAlerts()
       ]);
       setLastUpdated(new Date());
+      showSuccessToast('Dashboard data refreshed successfully!', {
+        title: 'Refresh Complete',
+        duration: 3000
+      });
     } catch (err) {
       console.error('Failed to refresh data:', err);
+      showErrorToast('Failed to refresh some data. Please try again.', {
+        title: 'Refresh Failed',
+        duration: 5000
+      });
     } finally {
       setRefreshing(false);
     }
@@ -1463,8 +1472,16 @@ function Dashboard() {
       document.body.removeChild(link);
 
       console.log('Dashboard data exported to CSV');
+      showSuccessToast('Dashboard data exported successfully!', {
+        title: 'Export Complete',
+        duration: 3000
+      });
     } catch (error) {
       console.error('Failed to export CSV:', error);
+      showErrorToast('Failed to export dashboard data. Please try again.', {
+        title: 'Export Failed',
+        duration: 5000
+      });
     } finally {
       setExporting(false);
     }
