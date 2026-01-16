@@ -251,7 +251,8 @@ const categoryIcons = {
   storage: '💾',
   features: '✨',
   logging: '📋',
-  notifications: '🔔'
+  notifications: '🔔',
+  retention: '🗂️'
 };
 
 const categoryTitles = {
@@ -268,7 +269,8 @@ const categoryTitles = {
   storage: 'Storage',
   features: 'Feature Flags',
   logging: 'Logging',
-  notifications: 'Notifications'
+  notifications: 'Notifications',
+  retention: 'Data Retention'
 };
 
 function Settings() {

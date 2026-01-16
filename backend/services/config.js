@@ -809,6 +809,147 @@ const configSchema = {
     validate: (value) => ['720p', '1080p', '1440p'].includes(value),
     errorMessage: 'Must be one of: 720p, 1080p, 1440p'
   },
+
+  // Data Retention Settings
+  DATA_RETENTION_POSTS_DAYS: {
+    required: false,
+    default: '365',
+    description: 'Number of days to retain posted content (posts) before archival',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 7 && days <= 3650;
+    },
+    errorMessage: 'Must be a number between 7 and 3650 days'
+  },
+
+  DATA_RETENTION_METRICS_DAYS: {
+    required: false,
+    default: '90',
+    description: 'Number of days to retain detailed metrics before aggregation',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 30 && days <= 365;
+    },
+    errorMessage: 'Must be a number between 30 and 365 days'
+  },
+
+  DATA_RETENTION_LOGS_DAYS: {
+    required: false,
+    default: '30',
+    description: 'Number of days to retain log files',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 7 && days <= 180;
+    },
+    errorMessage: 'Must be a number between 7 and 180 days'
+  },
+
+  DATA_RETENTION_TASKS_DAYS: {
+    required: false,
+    default: '180',
+    description: 'Number of days to retain completed tasks before cleanup',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 30 && days <= 730;
+    },
+    errorMessage: 'Must be a number between 30 and 730 days'
+  },
+
+  DATA_RETENTION_CHAT_HISTORY_DAYS: {
+    required: false,
+    default: '365',
+    description: 'Number of days to retain AI chat history',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 30 && days <= 3650;
+    },
+    errorMessage: 'Must be a number between 30 and 3650 days'
+  },
+
+  DATA_RETENSION_FAILED_POSTS_DAYS: {
+    required: false,
+    default: '30',
+    description: 'Number of days to retain failed post attempts',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 7 && days <= 180;
+    },
+    errorMessage: 'Must be a number between 7 and 180 days'
+  },
+
+  DATA_CLEANUP_ENABLED: {
+    required: false,
+    default: 'true',
+    description: 'Enable automatic data cleanup based on retention policies',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
+  DATA_CLEANUP_SCHEDULE: {
+    required: false,
+    default: '00 02 * * 0',
+    description: 'Cron schedule for automatic data cleanup (default: Sunday 2 AM UTC)',
+    validate: (value) => {
+      // Basic cron validation: 5 parts separated by spaces
+      const cronPattern = /^(\*|\d+|\d+-\d+|\d+\/\d+)\s+(\*|\d+|\d+-\d+|\d+\/\d+)\s+(\*|\d+|\d+-\d+|\d+\/\d+)\s+(\*|\d+|\d+-\d+|\d+\/\d+)\s+(\*|\d+|\d+-\d+|\d+\/\d+)$/;
+      return cronPattern.test(value);
+    },
+    errorMessage: 'Must be a valid cron expression (5 parts)'
+  },
+
+  DATA_ARCHIVE_ENABLED: {
+    required: false,
+    default: 'false',
+    description: 'Archive old data instead of permanent deletion',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
+  DATA_ARCHIVE_PATH: {
+    required: false,
+    default: './storage/archive',
+    description: 'Path to archive directory for old data',
+    validate: (value) => {
+      // Basic path validation
+      return typeof value === 'string' && value.length > 0 && value.length <= 500;
+    },
+    errorMessage: 'Must be a valid path (max 500 characters)'
+  },
+
+  DATA_ARCHIVE_COMPRESSION: {
+    required: false,
+    default: 'true',
+    description: 'Compress archived data to save disk space',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
+  DATA_RETENTION_DELETE_BLACKLISTED_STORIES: {
+    required: false,
+    default: 'false',
+    description: 'Automatically delete content from blacklisted stories',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
+  DATA_RETENTION_KEEP_PERFORMANT_CONTENT: {
+    required: false,
+    default: 'true',
+    description: 'Never delete content with high performance (top 10%)',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
+  DATA_RETENTION_MIN_STORAGE_GB: {
+    required: false,
+    default: '10',
+    description: 'Minimum free disk space (GB) before cleanup is triggered',
+    validate: (value) => {
+      const gb = parseInt(value, 10);
+      return !isNaN(gb) && gb >= 1 && gb <= 1000;
+    },
+    errorMessage: 'Must be a number between 1 and 1000 GB'
+  },
 };
 
 class ConfigService {

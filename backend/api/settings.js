@@ -171,7 +171,8 @@ router.get("/schema", (req, res) => {
       storage: {},
       features: {},
       logging: {},
-      notifications: {}
+      notifications: {},
+      retention: {}
     };
 
     for (const [key, config] of Object.entries(schema)) {
@@ -209,6 +210,8 @@ router.get("/schema", (req, res) => {
         grouped.logging[key] = config;
       } else if (key.includes('NOTIFICATION') || key.includes('QUIET_HOURS') || key.includes('BUDGET_ALERTS') || key.includes('CONTENT_APPROVAL_NOTIFICATIONS') || key.includes('POST_SUCCESS_NOTIFICATIONS') || key.includes('POST_FAILURE_NOTIFICATIONS') || key.includes('AI_STRATEGY_NOTIFICATIONS') || key.includes('DAILY_BRIEFING') || key.includes('WEEKLY_REPORTS')) {
         grouped.notifications[key] = config;
+      } else if (key.includes('DATA_RETENTION') || key.includes('DATA_CLEANUP') || key.includes('DATA_ARCHIVE')) {
+        grouped.retention[key] = config;
       } else {
         grouped.server[key] = config;
       }
