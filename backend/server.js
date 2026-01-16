@@ -40,6 +40,7 @@ import glmRouter from "./api/glm.js";
 import cacheRouter from "./api/cache.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
+import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
 
 dotenv.config();
 
@@ -294,6 +295,10 @@ async function startServer() {
     // Start the posting scheduler job after MongoDB connects
     postingSchedulerJob.start();
     console.log("Posting scheduler job started");
+
+    // Start the batch generation scheduler
+    batchGenerationScheduler.start();
+    console.log("Batch generation scheduler started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -337,6 +342,7 @@ const gracefulShutdown = async (signal) => {
     // Stop scheduler jobs
     console.log('  Stopping scheduler jobs...');
     postingSchedulerJob.stop();
+    batchGenerationScheduler.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)

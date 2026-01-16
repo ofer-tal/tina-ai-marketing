@@ -2,6 +2,7 @@ import express from 'express';
 import winston from 'winston';
 import contentGenerationJob from '../jobs/contentGeneration.js';
 import postingSchedulerJob from '../jobs/postingScheduler.js';
+import batchGenerationScheduler from '../jobs/batchGenerationScheduler.js';
 import captionGenerationService from '../services/captionGenerationService.js';
 import hashtagGenerationService from '../services/hashtagGenerationService.js';
 import hookGenerationService from '../services/hookGenerationService.js';
@@ -2861,6 +2862,130 @@ router.post('/posts/:id/manual-posted', async (req, res) => {
 
   } catch (error) {
     logger.error('Mark manual posted API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/batch/schedule/start
+ * Start the scheduled batch generation job
+ */
+router.post('/batch/schedule/start', async (req, res) => {
+  try {
+    logger.info('Starting batch generation scheduler via API');
+
+    batchGenerationScheduler.start({
+      scheduleTime: req.body.scheduleTime,
+      timezone: req.body.timezone,
+      runImmediately: req.body.runImmediately || false
+    });
+
+    const status = batchGenerationScheduler.getStatus();
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Batch generation scheduler started successfully',
+        status
+      }
+    });
+
+  } catch (error) {
+    logger.error('Start batch scheduler API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/batch/schedule/stop
+ * Stop the scheduled batch generation job
+ */
+router.post('/batch/schedule/stop', async (req, res) => {
+  try {
+    logger.info('Stopping batch generation scheduler via API');
+
+    batchGenerationScheduler.stop();
+
+    const status = batchGenerationScheduler.getStatus();
+
+    res.json({
+      success: true,
+      data: {
+        message: 'Batch generation scheduler stopped successfully',
+        status
+      }
+    });
+
+  } catch (error) {
+    logger.error('Stop batch scheduler API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/batch/schedule/trigger
+ * Manually trigger batch generation (for testing or on-demand)
+ */
+router.post('/batch/schedule/trigger', async (req, res) => {
+  try {
+    logger.info('Manual batch generation triggered via API', { options: req.body });
+
+    const results = await batchGenerationScheduler.trigger(req.body.options);
+
+    res.json({
+      success: true,
+      data: results
+    });
+
+  } catch (error) {
+    logger.error('Manual batch generation API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/batch/schedule/status
+ * Get the status of the batch generation scheduler
+ */
+router.get('/batch/schedule/status', async (req, res) => {
+  try {
+    const status = batchGenerationScheduler.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+
+  } catch (error) {
+    logger.error('Batch scheduler status API error', {
       error: error.message,
       stack: error.stack
     });

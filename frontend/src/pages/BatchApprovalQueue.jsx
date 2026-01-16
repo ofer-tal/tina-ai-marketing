@@ -479,9 +479,19 @@ function BatchApprovalQueue() {
   };
 
   const formatTime = (dateString) => {
+    if (!dateString) return 'Not scheduled';
+
     const date = new Date(dateString);
     const now = new Date();
+
+    // Check if date is valid
+    if (isNaN(date.getTime())) return 'Invalid date';
+
     const diff = date - now;
+
+    // If date is in the past
+    if (diff < 0) return 'Past due';
+
     const hours = Math.floor(diff / 3600000);
     if (hours < 1) return 'In less than an hour';
     if (hours === 1) return 'In 1 hour';
