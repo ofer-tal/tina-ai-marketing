@@ -6,6 +6,7 @@
 
 import express from 'express';
 import appleSearchAdsService from '../services/appleSearchAdsService.js';
+import budgetThresholdChecker from '../jobs/budgetThresholdChecker.js';
 
 const router = express.Router();
 
@@ -685,6 +686,115 @@ router.post('/campaigns/check-and-pause', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+    });
+  }
+});
+
+/**
+ * Feature #239: Budget threshold checking hourly
+ *
+ * Control endpoints for the budget threshold checker job:
+ * - POST /api/searchAds/budget-check/start - Start the hourly budget checker
+ * - POST /api/searchAds/budget-check/stop - Stop the budget checker
+ * - POST /api/searchAds/budget-check/trigger - Manually trigger a budget check
+ * - GET /api/searchAds/budget-check/status - Get checker status
+ */
+
+/**
+ * POST /api/searchAds/budget-check/start
+ * Start the budget threshold checker scheduler
+ */
+router.post('/budget-check/start', async (req, res) => {
+  try {
+    const { interval, timezone, runImmediately } = req.body;
+
+    budgetThresholdChecker.start({
+      interval,
+      timezone,
+      runImmediately
+    });
+
+    res.json({
+      success: true,
+      message: 'Budget threshold checker scheduler started',
+      data: {
+        jobName: 'budget-threshold-checker',
+        interval: interval || process.env.BUDGET_CHECK_INTERVAL || '0 * * * *',
+        timezone: timezone || process.env.BUDGET_CHECK_TIMEZONE || 'UTC'
+      }
+    });
+  } catch (error) {
+    console.error('Error starting budget threshold checker:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/searchAds/budget-check/stop
+ * Stop the budget threshold checker scheduler
+ */
+router.post('/budget-check/stop', async (req, res) => {
+  try {
+    budgetThresholdChecker.stop();
+
+    res.json({
+      success: true,
+      message: 'Budget threshold checker scheduler stopped',
+      data: {
+        jobName: 'budget-threshold-checker'
+      }
+    });
+  } catch (error) {
+    console.error('Error stopping budget threshold checker:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/searchAds/budget-check/trigger
+ * Manually trigger a budget check
+ */
+router.post('/budget-check/trigger', async (req, res) => {
+  try {
+    const result = await budgetThresholdChecker.trigger();
+
+    res.json({
+      success: true,
+      message: 'Budget threshold check triggered manually',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error triggering budget threshold check:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/searchAds/budget-check/status
+ * Get the status of the budget threshold checker
+ */
+router.get('/budget-check/status', async (req, res) => {
+  try {
+    const status = budgetThresholdChecker.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('Error getting budget threshold checker status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

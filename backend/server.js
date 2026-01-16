@@ -43,6 +43,7 @@ import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
 import metricsAggregatorJob from "./jobs/metricsAggregator.js";
 import weeklyASOAnalysis from "./jobs/weeklyASOAnalysis.js";
+import budgetThresholdChecker from "./jobs/budgetThresholdChecker.js";
 
 dotenv.config();
 
@@ -309,6 +310,10 @@ async function startServer() {
     // Start the weekly ASO analysis scheduler
     weeklyASOAnalysis.start();
     console.log("Weekly ASO analysis scheduler started");
+
+    // Start the budget threshold checker
+    budgetThresholdChecker.start();
+    console.log("Budget threshold checker started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -355,6 +360,7 @@ const gracefulShutdown = async (signal) => {
     batchGenerationScheduler.stop();
     metricsAggregatorJob.stop();
     weeklyASOAnalysis.stop();
+    budgetThresholdChecker.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
