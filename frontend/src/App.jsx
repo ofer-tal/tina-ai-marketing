@@ -17,6 +17,7 @@ import StoryCategories from './pages/StoryCategories';
 import HashtagAnalytics from './pages/HashtagAnalytics';
 import VideoStyles from './pages/VideoStyles';
 import CohortAnalysis from './pages/CohortAnalysis';
+import Attribution from './pages/Attribution';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -295,6 +296,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/analytics/hashtags', icon: '#️⃣', label: 'Hashtags' },
     { path: '/analytics/video-styles', icon: '🎬', label: 'Video Styles' },
     { path: '/analytics/cohort-analysis', icon: '📊', label: 'Cohorts' },
+    { path: '/analytics/attribution', icon: '🎯', label: 'Attribution' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
@@ -386,6 +388,7 @@ function App() {
                 <Route path="/analytics/hashtags" element={<PageWithBreadcrumbs><HashtagAnalytics /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/video-styles" element={<PageWithBreadcrumbs><VideoStyles /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/cohort-analysis" element={<PageWithBreadcrumbs><CohortAnalysis /></PageWithBreadcrumbs>} />
+                <Route path="/analytics/attribution" element={<PageWithBreadcrumbs><Attribution /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />

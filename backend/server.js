@@ -54,6 +54,7 @@ import storyCategoryAnalysisRouter from "./api/storyCategoryAnalysis.js";
 import hashtagEffectivenessAnalysisRouter from "./api/hashtagEffectivenessAnalysis.js";
 import videoStyleAnalysisRouter from "./api/videoStyleAnalysis.js";
 import cohortAnalysisRouter from "./api/cohortAnalysis.js";
+import attributionRouter from "./api/attribution.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -260,6 +261,7 @@ app.use("/api/story-category-analysis", storyCategoryAnalysisRouter);
 app.use("/api/hashtag-effectiveness", hashtagEffectivenessAnalysisRouter);
 app.use("/api/video-style-analysis", videoStyleAnalysisRouter);
 app.use("/api/cohort-analysis", cohortAnalysisRouter);
+app.use("/api/attribution", attributionRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
