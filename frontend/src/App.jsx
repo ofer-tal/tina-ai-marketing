@@ -11,6 +11,7 @@ import Campaigns from './pages/Campaigns';
 import RevenueAttributionTest from './pages/RevenueAttributionTest';
 import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
 import ChannelPerformance from './pages/ChannelPerformance';
+import ContentEngagement from './pages/ContentEngagement';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -283,6 +284,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/dashboard', icon: '📊', label: 'Dashboard' },
     { path: '/dashboard/strategic', icon: '📈', label: 'Strategic' },
     { path: '/analytics/channels', icon: '🎯', label: 'Channels' },
+    { path: '/analytics/engagement', icon: '🔍', label: 'Engagement' },
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
@@ -368,6 +370,7 @@ function App() {
                 <Route path="/dashboard" element={<PageWithBreadcrumbs><Dashboard /></PageWithBreadcrumbs>} />
                 <Route path="/dashboard/strategic" element={<PageWithBreadcrumbs><StrategicDashboard /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/channels" element={<PageWithBreadcrumbs><ChannelPerformance /></PageWithBreadcrumbs>} />
+                <Route path="/analytics/engagement" element={<PageWithBreadcrumbs><ContentEngagement /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
