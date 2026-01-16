@@ -16,6 +16,7 @@ import { ToastContainer } from './components/Toast';
 import ToastTest from './components/ToastTest';
 import ModalDemo from './pages/ModalDemo';
 import TabsDemo from './pages/TabsDemo';
+import Breadcrumbs from './components/Breadcrumbs';
 import { cssVar } from './themeUtils';
 
 const AppContainer = styled.div`
@@ -104,6 +105,10 @@ const PageContent = styled.div`
   @media (max-width: 768px) {
     max-width: 100vw;
   }
+`;
+
+const BreadcrumbsWrapper = styled.div`
+  margin-bottom: ${cssVar('--spacing-md')};
 `;
 
 const Header = styled.header`
@@ -306,6 +311,18 @@ function Sidebar({ collapsed, onToggle }) {
   );
 }
 
+// Wrapper component to add breadcrumbs to pages
+function PageWithBreadcrumbs({ children }) {
+  return (
+    <>
+      <BreadcrumbsWrapper>
+        <Breadcrumbs />
+      </BreadcrumbsWrapper>
+      {children}
+    </>
+  );
+}
+
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     // Load from localStorage on mount
@@ -339,19 +356,19 @@ function App() {
             <PageContent $sidebarCollapsed={sidebarCollapsed}>
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/dashboard/strategic" element={<StrategicDashboard />} />
-                <Route path="/content/library" element={<ContentLibrary />} />
-                <Route path="/content/approval" element={<BatchApprovalQueue />} />
-                <Route path="/chat" element={<Chat />} />
-                <Route path="/ads/campaigns" element={<Campaigns />} />
-                <Route path="/ads/revenue-test" element={<RevenueAttributionTest />} />
-                <Route path="/revenue/weekly" element={<WeeklyRevenueAggregates />} />
-                <Route path="/todos" element={<Todos />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/test/toasts" element={<ToastTest />} />
-                <Route path="/test/modals" element={<ModalDemo />} />
-                <Route path="/test/tabs" element={<TabsDemo />} />
+                <Route path="/dashboard" element={<PageWithBreadcrumbs><Dashboard /></PageWithBreadcrumbs>} />
+                <Route path="/dashboard/strategic" element={<PageWithBreadcrumbs><StrategicDashboard /></PageWithBreadcrumbs>} />
+                <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
+                <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
+                <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
+                <Route path="/ads/campaigns" element={<PageWithBreadcrumbs><Campaigns /></PageWithBreadcrumbs>} />
+                <Route path="/ads/revenue-test" element={<PageWithBreadcrumbs><RevenueAttributionTest /></PageWithBreadcrumbs>} />
+                <Route path="/revenue/weekly" element={<PageWithBreadcrumbs><WeeklyRevenueAggregates /></PageWithBreadcrumbs>} />
+                <Route path="/todos" element={<PageWithBreadcrumbs><Todos /></PageWithBreadcrumbs>} />
+                <Route path="/settings" element={<PageWithBreadcrumbs><Settings /></PageWithBreadcrumbs>} />
+                <Route path="/test/toasts" element={<PageWithBreadcrumbs><ToastTest /></PageWithBreadcrumbs>} />
+                <Route path="/test/modals" element={<PageWithBreadcrumbs><ModalDemo /></PageWithBreadcrumbs>} />
+                <Route path="/test/tabs" element={<PageWithBreadcrumbs><TabsDemo /></PageWithBreadcrumbs>} />
               </Routes>
             </PageContent>
 
