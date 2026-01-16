@@ -42,6 +42,7 @@ import briefingRouter from "./api/briefing.js";
 import dataCleanupRouter from "./api/dataCleanup.js";
 import apiHealthRouter from "./api/apiHealth.js";
 import postRetryRouter from "./api/postRetry.js";
+import storyRefreshRouter from "./api/storyRefresh.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -53,6 +54,7 @@ import campaignReviewScheduler from "./jobs/campaignReviewScheduler.js";
 import dataCleanupJob from "./jobs/dataCleanup.js";
 import apiHealthMonitorJob from "./jobs/apiHealthMonitor.js";
 import postRetryJob from "./jobs/postRetryJob.js";
+import storyRefreshJob from "./jobs/storyRefreshJob.js";
 
 dotenv.config();
 
@@ -231,6 +233,7 @@ app.use("/api/briefing", briefingRouter);
 app.use("/api/data-cleanup", dataCleanupRouter);
 app.use("/api/api-health", apiHealthRouter);
 app.use("/api/post-retry", postRetryRouter);
+app.use("/api/story-refresh", storyRefreshRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -343,8 +346,14 @@ async function startServer() {
     // Start the API health monitor
     apiHealthMonitorJob.start();
     console.log("API health monitor started");
+
+    // Start the post retry job
     postRetryJob.start();
     console.log("Post retry job started");
+
+    // Start the story database refresh job
+    storyRefreshJob.start();
+    console.log("Story database refresh job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
