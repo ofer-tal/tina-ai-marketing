@@ -171,27 +171,27 @@ const trendingTopicService = {
       );
 
       let aiResponse;
+      let suggestions;
       try {
         aiResponse = await glmService.createMessage(
           'trending-topic-suggestions',
           [{ role: 'user', content: prompt }]
         );
+        // Parse AI response into structured suggestions
+        suggestions = this._parseTopicSuggestions(
+          aiResponse.content,
+          contentType
+        );
       } catch (apiError) {
         console.warn('GLM API error, using fallback suggestions:', apiError.message);
-        aiResponse = {
-          content: this._getFallbackTopicSuggestions(
-            contentGaps,
-            trendingThemes,
-            count
-          )
-        };
+        const fallbackSuggestions = this._getFallbackTopicSuggestions(
+          contentGaps,
+          trendingThemes,
+          count
+        );
+        // Use fallback directly (already an array)
+        suggestions = fallbackSuggestions;
       }
-
-      // Parse AI response into structured suggestions
-      const suggestions = this._parseTopicSuggestions(
-        aiResponse.content,
-        contentType
-      );
 
       // Enhance suggestions with metadata
       const enhancedSuggestions = suggestions
