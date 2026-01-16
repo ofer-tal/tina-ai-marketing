@@ -65,6 +65,7 @@ import blogPostsRouter from "./api/blogPosts.js";
 import mediumArticlesRouter from "./api/mediumArticles.js";
 import pressReleasesRouter from "./api/pressReleases.js";
 import seoContentSuggestionsRouter from "./api/seoContentSuggestions.js";
+import contentCalendarRouter from "./api/contentCalendar.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -282,6 +283,7 @@ app.use("/api/blog-posts", blogPostsRouter);
 app.use("/api/medium-articles", mediumArticlesRouter);
 app.use("/api/press-releases", pressReleasesRouter);
 app.use("/api/seo-suggestions", seoContentSuggestionsRouter);
+app.use("/api/content-calendar", contentCalendarRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
