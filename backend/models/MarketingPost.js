@@ -290,6 +290,22 @@ const marketingPostSchema = new mongoose.Schema({
     type: Date
   },
 
+  // Manual posting fallback
+  manualPostingTodoId: {
+    type: mongoose.Schema.Types.ObjectId
+  },
+  manualPostingExportPath: {
+    type: String,
+    trim: true
+  },
+  manuallyPostedAt: {
+    type: Date
+  },
+  manualPostUrl: {
+    type: String,
+    trim: true
+  },
+
   // Metadata
   createdAt: {
     type: Date,

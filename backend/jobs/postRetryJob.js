@@ -2,6 +2,7 @@ import schedulerService from '../services/scheduler.js';
 import MarketingPost from '../models/MarketingPost.js';
 import tiktokPostingService from '../services/tiktokPostingService.js';
 import instagramPostingService from '../services/instagramPostingService.js';
+import manualPostingFallbackService from '../services/manualPostingFallbackService.js';
 import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger('post-retry-job', 'scheduler');
@@ -219,6 +220,28 @@ class PostRetryJob {
         post.permanentlyFailed = true;
         post.permanentlyFailedAt = new Date();
         await post.save();
+
+        // Trigger manual posting fallback
+        logger.info(`Creating manual posting fallback for post ${post._id}`);
+        const fallbackResult = await manualPostingFallbackService.handlePermanentFailure(post);
+
+        if (fallbackResult.success) {
+          logger.info(`Manual posting fallback created`, {
+            postId: post._id,
+            todoId: fallbackResult.todoId,
+            exportPath: fallbackResult.exportPath,
+          });
+
+          // Update post with fallback reference
+          post.manualPostingTodoId = fallbackResult.todoId;
+          post.manualPostingExportPath = fallbackResult.exportPath;
+          await post.save();
+        } else {
+          logger.error(`Failed to create manual posting fallback`, {
+            postId: post._id,
+            error: fallbackResult.error,
+          });
+        }
 
         return false; // Indicates permanently failed
       }
