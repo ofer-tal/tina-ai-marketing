@@ -156,11 +156,11 @@ const Tabs = styled.div`
 const Tab = styled.button`
   padding: 0.75rem 1.5rem;
   background: transparent;
-  color: ${props => props.active
+  color: ${props => props.$active
     ? cssVar('--color-primary')
     : cssVar('--color-text-secondary')};
   border: none;
-  border-bottom: 2px solid ${props => props.active
+  border-bottom: 2px solid ${props => props.$active
     ? cssVar('--color-primary')
     : 'transparent'};
   cursor: pointer;
@@ -445,19 +445,19 @@ const SeoContentSuggestions = () => {
           <Card>
             <Tabs>
               <Tab
-                active={activeTab === 'suggestions'}
+                $active={activeTab === 'suggestions'}
                 onClick={() => setActiveTab('suggestions')}
               >
                 Content Suggestions
               </Tab>
               <Tab
-                active={activeTab === 'analysis'}
+                $active={activeTab === 'analysis'}
                 onClick={() => setActiveTab('analysis')}
               >
                 Keyword Analysis
               </Tab>
               <Tab
-                active={activeTab === 'meta'}
+                $active={activeTab === 'meta'}
                 onClick={() => setActiveTab('meta')}
               >
                 Meta Descriptions
