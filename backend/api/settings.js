@@ -175,7 +175,7 @@ router.get("/schema", (req, res) => {
     for (const [key, config] of Object.entries(schema)) {
       if (key.startsWith('MONGODB')) {
         grouped.database[key] = config;
-      } else if (key.startsWith('KEY_ID') || key.startsWith('ISSUER_ID') || key.includes('PRIVATE_KEY')) {
+      } else if (key.includes('APP_STORE_CONNECT')) {
         grouped.appstore[key] = config;
       } else if (key.includes('SEARCH_ADS')) {
         grouped.searchads[key] = config;
