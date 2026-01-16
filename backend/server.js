@@ -40,6 +40,7 @@ import glmRouter from "./api/glm.js";
 import cacheRouter from "./api/cache.js";
 import briefingRouter from "./api/briefing.js";
 import dataCleanupRouter from "./api/dataCleanup.js";
+import apiHealthRouter from "./api/apiHealth.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -49,6 +50,7 @@ import budgetThresholdChecker from "./jobs/budgetThresholdChecker.js";
 import dailyBriefingJob from "./jobs/dailyBriefing.js";
 import campaignReviewScheduler from "./jobs/campaignReviewScheduler.js";
 import dataCleanupJob from "./jobs/dataCleanup.js";
+import apiHealthMonitorJob from "./jobs/apiHealthMonitor.js";
 
 dotenv.config();
 
@@ -225,6 +227,7 @@ app.use("/api/glm", glmRouter);
 app.use("/api/cache", cacheRouter);
 app.use("/api/briefing", briefingRouter);
 app.use("/api/data-cleanup", dataCleanupRouter);
+app.use("/api/api-health", apiHealthRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -333,6 +336,10 @@ async function startServer() {
     // Start the data cleanup job
     dataCleanupJob.start();
     console.log("Data cleanup job started");
+
+    // Start the API health monitor
+    apiHealthMonitorJob.start();
+    console.log("API health monitor started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -383,6 +390,7 @@ const gracefulShutdown = async (signal) => {
     dailyBriefingJob.stop();
     campaignReviewScheduler.stop();
     dataCleanupJob.stop();
+    apiHealthMonitorJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
