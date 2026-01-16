@@ -15,6 +15,7 @@ import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
 import ToastTest from './components/ToastTest';
 import ModalDemo from './pages/ModalDemo';
+import TabsDemo from './pages/TabsDemo';
 import { cssVar } from './themeUtils';
 
 const AppContainer = styled.div`
@@ -350,6 +351,7 @@ function App() {
                 <Route path="/settings" element={<Settings />} />
                 <Route path="/test/toasts" element={<ToastTest />} />
                 <Route path="/test/modals" element={<ModalDemo />} />
+                <Route path="/test/tabs" element={<TabsDemo />} />
               </Routes>
             </PageContent>
 
