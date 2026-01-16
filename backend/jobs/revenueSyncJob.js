@@ -520,7 +520,7 @@ class RevenueSyncJob {
    * Stop the revenue sync scheduler
    */
   stop() {
-    schedulerService.unscheduleJob(this.jobName);
+    schedulerService.unschedule(this.jobName);
     logger.info('Revenue sync job stopped');
   }
 

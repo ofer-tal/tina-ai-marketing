@@ -197,7 +197,8 @@ class SchedulerService {
   unschedule(name) {
     const job = this.jobs.get(name);
     if (!job) {
-      throw new Error(`Job not found: ${name}`);
+      logger.warn(`Job not found for unscheduling: ${name}`);
+      return;
     }
 
     if (job.task) {
@@ -270,6 +271,34 @@ class SchedulerService {
       jobCount: this.jobs.size,
       activeJobs: Array.from(this.jobs.values()).filter(j => j.scheduled).length
     };
+  }
+
+  /**
+   * Alias for schedule() - backward compatibility
+   */
+  scheduleJob(name, cronExpression, task, options = {}) {
+    return this.schedule(name, cronExpression, task, options);
+  }
+
+  /**
+   * Alias for schedule() - backward compatibility
+   */
+  registerJob(name, cronExpression, task, options = {}) {
+    return this.schedule(name, cronExpression, task, options);
+  }
+
+  /**
+   * Alias for unschedule() - backward compatibility
+   */
+  unscheduleJob(name) {
+    return this.unschedule(name);
+  }
+
+  /**
+   * Alias for unschedule() - backward compatibility
+   */
+  unregisterJob(name) {
+    return this.unschedule(name);
   }
 }
 
