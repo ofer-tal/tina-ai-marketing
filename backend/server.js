@@ -44,6 +44,7 @@ import apiHealthRouter from "./api/apiHealth.js";
 import postRetryRouter from "./api/postRetry.js";
 import storyRefreshRouter from "./api/storyRefresh.js";
 import revenueSyncRouter from "./api/revenueSync.js";
+import keywordRankingCheckRouter from "./api/keywordRankingCheck.js";
 import storageService from "./services/storage.js";
 import postingSchedulerJob from "./jobs/postingScheduler.js";
 import batchGenerationScheduler from "./jobs/batchGenerationScheduler.js";
@@ -57,6 +58,7 @@ import apiHealthMonitorJob from "./jobs/apiHealthMonitor.js";
 import postRetryJob from "./jobs/postRetryJob.js";
 import storyRefreshJob from "./jobs/storyRefreshJob.js";
 import revenueSyncJob from "./jobs/revenueSyncJob.js";
+import keywordRankingCheckJob from "./jobs/keywordRankingCheckJob.js";
 
 dotenv.config();
 
@@ -237,6 +239,7 @@ app.use("/api/api-health", apiHealthRouter);
 app.use("/api/post-retry", postRetryRouter);
 app.use("/api/story-refresh", storyRefreshRouter);
 app.use("/api/revenue-sync", revenueSyncRouter);
+app.use("/api/keyword-ranking-check", keywordRankingCheckRouter);
 
 app.get("/api/config/status", (req, res) => {
   try {
@@ -361,6 +364,10 @@ async function startServer() {
     // Start the revenue sync job
     revenueSyncJob.start();
     console.log("Revenue sync job started");
+
+    // Start the keyword ranking check job
+    keywordRankingCheckJob.start();
+    console.log("Keyword ranking check job started");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -415,6 +422,7 @@ const gracefulShutdown = async (signal) => {
     postRetryJob.stop();
     storyRefreshJob.stop();
     revenueSyncJob.stop();
+    keywordRankingCheckJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
