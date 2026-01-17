@@ -11,6 +11,8 @@ import campaignReviewScheduler from '../jobs/campaignReviewScheduler.js';
 
 const router = express.Router();
 
+console.log('[searchAds.js] Routes loaded, including DELETE /campaigns/:campaignId');
+
 /**
  * GET /api/searchAds/status
  * Get API configuration and connection status
@@ -895,6 +897,57 @@ router.get('/campaign-review/status', async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting campaign review scheduler status:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Feature #307: Deleting marketing campaigns requires confirmation
+ * DELETE /api/searchAds/campaigns/:campaignId
+ * Delete a marketing campaign (requires explicit confirmation)
+ */
+router.delete('/campaigns/:campaignId', async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { confirmed } = req.body;
+
+    // Security check: Require explicit confirmation
+    if (!confirmed || confirmed !== true) {
+      console.log('[Campaign Deletion] Confirmation not provided for campaign:', campaignId);
+
+      return res.status(400).json({
+        success: false,
+        error: 'Confirmation required',
+        requiresConfirmation: true,
+        message: 'This action requires explicit confirmation to prevent accidental deletion.'
+      });
+    }
+
+    console.log('[Campaign Deletion] Deleting campaign:', campaignId);
+
+    // Delete the campaign via Apple Search Ads API
+    const result = await appleSearchAdsService.deleteCampaign(campaignId);
+
+    console.log('[Campaign Deletion] Campaign deleted successfully:', campaignId);
+
+    res.json({
+      success: true,
+      message: 'Campaign deleted successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error deleting campaign:', error);
+
+    // Log security event for failed deletion attempts
+    console.error('[Campaign Deletion] Failed attempt:', {
+      campaignId: req.params.campaignId,
+      confirmed: req.body.confirmed,
+      error: error.message
+    });
+
     res.status(500).json({
       success: false,
       error: error.message

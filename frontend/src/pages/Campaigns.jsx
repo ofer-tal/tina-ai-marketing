@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   ReferenceLine
 } from 'recharts';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const PageContainer = styled.div`
   padding: 2rem;
@@ -661,6 +662,29 @@ const ResumeButton = styled.button`
 
   &:hover {
     background: #00e574;
+    transform: scale(1.05);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+`;
+
+// Feature #307: Delete campaign button
+const DeleteButton = styled.button`
+  padding: 0.4rem 0.8rem;
+  background: #f8312f;
+  border: none;
+  border-radius: 6px;
+  color: #eaeaea;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background: #ff4757;
     transform: scale(1.05);
   }
 
@@ -1632,6 +1656,12 @@ function Campaigns() {
   // Feature #147: Campaign pause/resume functionality
   const [confirmDialog, setConfirmDialog] = useState(null);
 
+  // Feature #307: Campaign deletion confirmation
+  const [deleteConfirmModal, setDeleteConfirmModal] = useState({
+    isOpen: false,
+    campaign: null
+  });
+
   // Feature #148: Bid adjustment suggestions
   const [bidSuggestions, setBidSuggestions] = useState({});
   const [showBidSuggestions, setShowBidSuggestions] = useState(false);
@@ -2002,6 +2032,73 @@ function Campaigns() {
 
   const handleCancelDialog = () => {
     setConfirmDialog(null);
+  };
+
+  // Feature #307: Campaign deletion handlers
+  const handleDeleteClick = (campaign) => {
+    console.log(`[Campaign Deletion] Delete clicked for campaign:`, campaign.id, campaign.name);
+    setDeleteConfirmModal({
+      isOpen: true,
+      campaign: campaign
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfirmModal.campaign) return;
+
+    const campaign = deleteConfirmModal.campaign;
+    console.log(`[Campaign Deletion] Confirming deletion for campaign:`, campaign.id);
+
+    try {
+      // Step 4: Confirm deletion - call API with confirmed=true
+      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ confirmed: true })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`[Campaign Deletion] Campaign deleted successfully:`, result);
+
+        // Remove campaign from local state
+        const updatedCampaigns = campaigns.filter(c => c.id !== campaign.id);
+        setCampaigns(updatedCampaigns);
+
+        // Show success message
+        alert(`Campaign "${campaign.name || campaign.id}" has been deleted successfully.`);
+      } else {
+        const errorData = await response.json();
+
+        // Check if confirmation is required
+        if (errorData.requiresConfirmation) {
+          console.warn('[Campaign Deletion] Confirmation required');
+          alert('This action requires explicit confirmation.');
+          return;
+        }
+
+        throw new Error(errorData.error || response.statusText);
+      }
+    } catch (error) {
+      console.error(`[Campaign Deletion] Error deleting campaign ${campaign.id}:`, error);
+      alert(`Failed to delete campaign: ${error.message}`);
+    } finally {
+      // Close the modal
+      setDeleteConfirmModal({
+        isOpen: false,
+        campaign: null
+      });
+    }
+  };
+
+  const handleCancelDelete = () => {
+    console.log(`[Campaign Deletion] Deletion cancelled for campaign:`, deleteConfirmModal.campaign?.id);
+    setDeleteConfirmModal({
+      isOpen: false,
+      campaign: null
+    });
   };
 
   const handleViewAdGroups = async (campaign) => {
@@ -3147,19 +3244,35 @@ function Campaigns() {
               </div>
               <div>
                 {/* Feature #147: Campaign pause/resume buttons */}
+                {/* Feature #307: Campaign delete button */}
                 <ActionButtonsContainer>
                   {campaign.status === 'ENABLED' ? (
-                    <PauseButton onClick={() => handlePauseClick(campaign)}>
-                      ⏸ Pause
-                    </PauseButton>
+                    <>
+                      <PauseButton onClick={() => handlePauseClick(campaign)}>
+                        ⏸ Pause
+                      </PauseButton>
+                      <DeleteButton onClick={() => handleDeleteClick(campaign)}>
+                        🗑 Delete
+                      </DeleteButton>
+                    </>
                   ) : campaign.status === 'PAUSED' ? (
-                    <ResumeButton onClick={() => handleResumeClick(campaign)}>
-                      ▶ Resume
-                    </ResumeButton>
+                    <>
+                      <ResumeButton onClick={() => handleResumeClick(campaign)}>
+                        ▶ Resume
+                      </ResumeButton>
+                      <DeleteButton onClick={() => handleDeleteClick(campaign)}>
+                        🗑 Delete
+                      </DeleteButton>
+                    </>
                   ) : (
-                    <MetricValue style={{ fontSize: '0.85rem', color: '#a0a0a0' }}>
-                      N/A
-                    </MetricValue>
+                    <>
+                      <MetricValue style={{ fontSize: '0.85rem', color: '#a0a0a0' }}>
+                        N/A
+                      </MetricValue>
+                      <DeleteButton onClick={() => handleDeleteClick(campaign)}>
+                        🗑 Delete
+                      </DeleteButton>
+                    </>
                   )}
                 </ActionButtonsContainer>
               </div>
@@ -3678,6 +3791,20 @@ function Campaigns() {
           </ConfirmDialog>
         </>
       )}
+
+      {/* Feature #307: Campaign deletion confirmation modal */}
+      <ConfirmationModal
+        isOpen={deleteConfirmModal.isOpen}
+        onClose={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
+        title="Delete Marketing Campaign"
+        message="Are you sure you want to delete this campaign? This action cannot be undone."
+        detail={`Campaign: ${deleteConfirmModal.campaign?.name || deleteConfirmModal.campaign?.id || 'Unknown'}`}
+        icon="🗑️"
+        confirmText="Delete Campaign"
+        cancelText="Cancel"
+        variant="danger"
+      />
 
       {/* Feature #150: Campaign Creation Modal */}
       {showCreateModal && (
