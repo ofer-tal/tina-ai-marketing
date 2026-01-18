@@ -381,6 +381,30 @@ marketingRevenueSchema.statics.getMonthlyNetRevenueHistory = async function(mont
   ]);
 };
 
+/**
+ * Get new customer count for a date range
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @returns {Number} New customer count
+ */
+marketingRevenueSchema.statics.getNewCustomerCount = async function(startDate, endDate) {
+  const result = await this.aggregate([
+    {
+      $match: {
+        transactionDate: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalNewCustomers: { $sum: { $cond: ['$customer.new', 1, 0] } }
+      }
+    }
+  ]);
+
+  return result[0]?.totalNewCustomers || 0;
+};
+
 // Instance method to calculate ROAS
 marketingRevenueSchema.methods.calculateROAS = function(spend) {
   if (!spend || spend === 0) return null;

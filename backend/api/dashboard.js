@@ -1847,9 +1847,9 @@ router.get('/projections', async (req, res) => {
 
       // Monthly projections (aggregate daily forecasts to monthly)
       monthlyProjections: aggregateDailyToMonthly(
-        forecast.projections.values.map((v, i) => ({
-          date: new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000),
-          value: v
+        forecast.projections.projections.map((p, i) => ({
+          date: p.date,
+          value: p.value
         })),
         parseInt(horizon)
       ),
@@ -2030,6 +2030,287 @@ router.get('/strategic/financial-projections', async (req, res) => {
 });
 
 /**
+ * Feature #167: Revenue by acquisition channel
+ * GET /api/dashboard/revenue-by-channel
+ * Get revenue breakdown by acquisition channel with attribution data
+ * Query params:
+ *   - period: '30d', '90d', '180d' (default: '90d')
+ */
+router.get('/revenue-by-channel', async (req, res) => {
+  try {
+    const { period = '90d' } = req.query;
+
+    console.log(`Fetching revenue by acquisition channel for period: ${period}`);
+
+    // Calculate date range
+    const days = parseInt(period) || 90;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Import MarketingRevenue model
+    const MarketingRevenue = (await import('../models/MarketingRevenue.js')).default;
+
+    // Step 1: Attribute users to channels (already done in MarketingRevenue collection via attributionService)
+    // Step 2: Fetch revenue by attributed users
+    const revenueByChannel = await MarketingRevenue.getRevenueByChannel(startDate, endDate);
+
+    // Step 3: Aggregate by channel with additional metrics
+    const totalRevenue = revenueByChannel.reduce((sum, ch) => sum + (ch.totalRevenue || 0), 0);
+    const totalTransactions = revenueByChannel.reduce((sum, ch) => sum + (ch.transactionCount || 0), 0);
+
+    // Format channel data for display
+    const channelBreakdown = revenueByChannel.map(channel => {
+      const revenue = channel.totalRevenue || 0;
+      const percentage = totalRevenue > 0 ? (revenue / totalRevenue) * 100 : 0;
+
+      // Calculate ROI (if spend data is available)
+      const spend = channel.spend || 0;
+      const roi = spend > 0 ? ((revenue - spend) / spend) * 100 : null;
+      const roas = spend > 0 ? revenue / spend : null;
+
+      return {
+        channel: channel._id || 'unknown',
+        channelName: formatChannelName(channel._id),
+        totalRevenue: parseFloat(revenue.toFixed(2)),
+        revenuePercentage: parseFloat(percentage.toFixed(2)),
+        transactionCount: channel.transactionCount || 0,
+        newCustomerRevenue: parseFloat((channel.newCustomerRevenue || 0).toFixed(2)),
+        newCustomerCount: channel.newCustomerCount || 0,
+        avgTransactionValue: channel.transactionCount > 0
+          ? parseFloat((revenue / channel.transactionCount).toFixed(2))
+          : 0,
+        spend: parseFloat(spend.toFixed(2)),
+        roi: roi !== null ? parseFloat(roi.toFixed(2)) : null,
+        roas: roas !== null ? parseFloat(roas.toFixed(2)) : null
+      };
+    });
+
+    // Sort by revenue (descending)
+    channelBreakdown.sort((a, b) => b.totalRevenue - a.totalRevenue);
+
+    // Step 4: Display in breakdown chart format
+    const chartData = channelBreakdown.map(ch => ({
+      label: ch.channelName,
+      value: ch.totalRevenue,
+      percentage: ch.revenuePercentage,
+      color: getChannelColor(ch.channel)
+    }));
+
+    // Step 5: Show channel ROI
+    const roiSummary = {
+      bestChannel: channelBreakdown.length > 0 ? {
+        channel: channelBreakdown[0].channelName,
+        roi: channelBreakdown[0].roi,
+        revenue: channelBreakdown[0].totalRevenue
+      } : null,
+      worstChannel: channelBreakdown.length > 1 ? {
+        channel: channelBreakdown[channelBreakdown.length - 1].channelName,
+        roi: channelBreakdown[channelBreakdown.length - 1].roi,
+        revenue: channelBreakdown[channelBreakdown.length - 1].totalRevenue
+      } : null,
+      overallROI: calculateOverallROI(channelBreakdown)
+    };
+
+    res.json({
+      success: true,
+      period: period,
+      dateRange: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        days: days
+      },
+      summary: {
+        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
+        totalTransactions: totalTransactions,
+        channelCount: channelBreakdown.length
+      },
+      breakdown: channelBreakdown,
+      chartData: chartData,
+      roiSummary: roiSummary,
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching revenue by channel:', error);
+    res.status(500).json({
+      error: 'Failed to fetch revenue by channel',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Feature #168: Break-even analysis
+ * GET /api/dashboard/breakeven-analysis
+ * Calculate break-even point and payback period for marketing spend
+ * Query params:
+ *   - period: '30d', '90d', '180d' (default: '90d')
+ */
+router.get('/breakeven-analysis', async (req, res) => {
+  try {
+    const { period = '90d' } = req.query;
+
+    console.log(`Fetching break-even analysis for period: ${period}`);
+
+    // Calculate date range
+    const days = parseInt(period) || 90;
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    // Import models
+    const DailyRevenueAggregate = (await import('../models/DailyRevenueAggregate.js')).default;
+    const MarketingRevenue = (await import('../models/MarketingRevenue.js')).default;
+
+    // Step 1: Calculate CAC (Customer Acquisition Cost)
+    // CAC = Total Marketing Spend / Number of New Customers
+    const totalSpend = await DailyRevenueAggregate.getTotalSpend(startDate, endDate);
+    const newCustomers = await MarketingRevenue.getNewCustomerCount(startDate, endDate);
+    const cac = newCustomers > 0 ? totalSpend / newCustomers : 0;
+
+    // Step 2: Calculate LTV (Lifetime Value)
+    // LTV = (Average Revenue Per User * Gross Margin) / Churn Rate
+    // For monthly subscriptions: LTV = ARPU * (1 / churn_rate)
+    const ltvData = await DailyRevenueAggregate.getLTV(startDate, endDate);
+    const ltv = ltvData.value || 0;
+
+    // Get ARPU (Average Revenue Per User)
+    const arpu = await DailyRevenueAggregate.getARPU(startDate, endDate);
+
+    // Get churn rate
+    const churnRate = await DailyRevenueAggregate.getChurnRate(startDate, endDate);
+
+    // Step 3: Determine break-even period
+    // Break-even period = CAC / (ARPU * Gross Margin)
+    // Assuming gross margin of 80% (industry standard for subscription apps)
+    const grossMargin = 0.8;
+    const monthlyRevenuePerUser = arpu * grossMargin;
+    const breakEvenMonths = monthlyRevenuePerUser > 0 ? cac / monthlyRevenuePerUser : 0;
+
+    // Step 5: Show payback period
+    // Payback period is the same as break-even period (time to recover CAC)
+    const paybackPeriodMonths = breakEvenMonths;
+    const paybackPeriodDays = breakEvenMonths * 30;
+
+    // Calculate ROI at different time horizons
+    const roi1Month = monthlyRevenuePerUser > 0 ? ((monthlyRevenuePerUser - cac) / cac * 100) : -100;
+    const roi3Months = monthlyRevenuePerUser > 0 ? ((monthlyRevenuePerUser * 3 - cac) / cac * 100) : -100;
+    const roi6Months = monthlyRevenuePerUser > 0 ? ((monthlyRevenuePerUser * 6 - cac) / cac * 100) : -100;
+    const roi12Months = monthlyRevenuePerUser > 0 ? ((monthlyRevenuePerUser * 12 - cac) / cac * 100) : -100;
+
+    // Calculate LTV:CAC ratio (industry standard is 3:1 or better)
+    const ltvCacRatio = cac > 0 ? ltv / cac : 0;
+
+    res.json({
+      success: true,
+      period: period,
+      dateRange: {
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        days: days
+      },
+      cac: {
+        value: parseFloat(cac.toFixed(2)),
+        currency: 'USD',
+        components: {
+          totalSpend: parseFloat(totalSpend.toFixed(2)),
+          newCustomers: newCustomers
+        }
+      },
+      ltv: {
+        value: parseFloat(ltv.toFixed(2)),
+        currency: 'USD',
+        arpu: parseFloat(arpu.toFixed(2)),
+        churnRate: parseFloat((churnRate * 100).toFixed(2)) // as percentage
+      },
+      breakEven: {
+        periodMonths: parseFloat(breakEvenMonths.toFixed(1)),
+        periodDays: Math.round(paybackPeriodDays),
+        monthlyRevenuePerUser: parseFloat(monthlyRevenuePerUser.toFixed(2)),
+        grossMargin: grossMargin * 100 // as percentage
+      },
+      payback: {
+        periodMonths: parseFloat(paybackPeriodMonths.toFixed(1)),
+        periodDays: Math.round(paybackPeriodDays),
+        description: paybackPeriodMonths <= 6 ? 'Healthy' : paybackPeriodMonths <= 12 ? 'Acceptable' : 'Needs Improvement'
+      },
+      ltvCacRatio: {
+        value: parseFloat(ltvCacRatio.toFixed(2)),
+        target: 3.0,
+        status: ltvCacRatio >= 3 ? 'Excellent' : ltvCacRatio >= 2 ? 'Good' : ltvCacRatio >= 1 ? 'Fair' : 'Poor'
+      },
+      roiProjections: {
+        '1month': parseFloat(roi1Month.toFixed(2)),
+        '3months': parseFloat(roi3Months.toFixed(2)),
+        '6months': parseFloat(roi6Months.toFixed(2)),
+        '12months': parseFloat(roi12Months.toFixed(2))
+      },
+      summary: {
+        cac: parseFloat(cac.toFixed(2)),
+        ltv: parseFloat(ltv.toFixed(2)),
+        ltvCacRatio: parseFloat(ltvCacRatio.toFixed(2)),
+        paybackPeriod: parseFloat(paybackPeriodMonths.toFixed(1)),
+        status: ltvCacRatio >= 3 && paybackPeriodMonths <= 6 ? 'Excellent' : ltvCacRatio >= 2 && paybackPeriodMonths <= 12 ? 'Good' : 'Needs Improvement'
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error calculating break-even analysis:', error);
+    res.status(500).json({
+      error: 'Failed to calculate break-even analysis',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Helper function to format channel names
+ */
+function formatChannelName(channelId) {
+  const names = {
+    'organic': 'Organic Traffic',
+    'apple_search_ads': 'Apple Search Ads',
+    'tiktok_ads': 'TikTok Ads',
+    'instagram_ads': 'Instagram Ads',
+    'google_ads': 'Google Ads',
+    'facebook_ads': 'Facebook Ads',
+    'referral': 'Referral',
+    'social_organic': 'Social Organic'
+  };
+  return names[channelId] || channelId.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+}
+
+/**
+ * Helper function to get channel colors
+ */
+function getChannelColor(channelId) {
+  const colors = {
+    'organic': '#00d4ff',
+    'apple_search_ads': '#0066cc',
+    'tiktok_ads': '#ff0050',
+    'instagram_ads': '#7b2cbf',
+    'google_ads': '#4285f4',
+    'facebook_ads': '#1877f2',
+    'referral': '#ffb020',
+    'social_organic': '#ff6b6b'
+  };
+  return colors[channelId] || '#999999';
+}
+
+/**
+ * Helper function to calculate overall ROI
+ */
+function calculateOverallROI(channels) {
+  const totalRevenue = channels.reduce((sum, ch) => sum + ch.totalRevenue, 0);
+  const totalSpend = channels.reduce((sum, ch) => sum + ch.spend, 0);
+
+  if (totalSpend === 0) return null;
+  return parseFloat(((totalRevenue - totalSpend) / totalSpend * 100).toFixed(2));
+}
+
+/**
  * Helper function to aggregate daily projections to monthly
  */
 function aggregateDailyToMonthly(dailyData, numMonths) {
@@ -2092,9 +2373,9 @@ async function generateFinancialProjections(period, horizon) {
     model: 'ensemble',
     calculatedAt: new Date().toISOString(),
     monthlyProjections: aggregateDailyToMonthly(
-      forecast.projections.values.map((v, i) => ({
-        date: new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000),
-        value: v
+      forecast.projections.projections.map((p, i) => ({
+        date: p.date,
+        value: p.value
       })),
       horizon
     ),

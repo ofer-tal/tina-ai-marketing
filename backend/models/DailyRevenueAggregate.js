@@ -827,6 +827,112 @@ dailyRevenueAggregateSchema.statics.getDailyWithChannelBreakdown = async functio
   ]);
 };
 
+/**
+ * Get total marketing spend for a date range
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @returns {Number} Total spend
+ */
+dailyRevenueAggregateSchema.statics.getTotalSpend = async function(startDate, endDate) {
+  const result = await this.aggregate([
+    {
+      $match: {
+        date: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalSpend: { $sum: '$costs.totalCost' }
+      }
+    }
+  ]);
+
+  return result[0]?.totalSpend || 0;
+};
+
+/**
+ * Get LTV (Lifetime Value) for a date range
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @returns {Object} LTV data with value
+ */
+dailyRevenueAggregateSchema.statics.getLTV = async function(startDate, endDate) {
+  const result = await this.aggregate([
+    {
+      $match: {
+        date: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalLTV: { $sum: { $ifNull: ['$ltv.value', 0] } },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const value = result[0] && result[0].count > 0 ? result[0].totalLTV / result[0].count : 0;
+  return { value };
+};
+
+/**
+ * Get ARPU (Average Revenue Per User) for a date range
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @returns {Number} ARPU value
+ */
+dailyRevenueAggregateSchema.statics.getARPU = async function(startDate, endDate) {
+  const result = await this.aggregate([
+    {
+      $match: {
+        date: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalRevenue: { $sum: '$revenue.netRevenue' },
+        totalActiveUsers: { $sum: '$customers.totalActive' }
+      }
+    }
+  ]);
+
+  if (result[0] && result[0].totalActiveUsers > 0) {
+    return result[0].totalRevenue / result[0].totalActiveUsers;
+  }
+  return 0;
+};
+
+/**
+ * Get churn rate for a date range
+ * @param {Date} startDate - Start date
+ * @param {Date} endDate - End date
+ * @returns {Number} Churn rate (0-1)
+ */
+dailyRevenueAggregateSchema.statics.getChurnRate = async function(startDate, endDate) {
+  const result = await this.aggregate([
+    {
+      $match: {
+        date: { $gte: startDate, $lte: endDate }
+      }
+    },
+    {
+      $group: {
+        _id: null,
+        totalChurned: { $sum: '$customers.churnedCount' },
+        totalActive: { $sum: '$customers.totalActive' }
+      }
+    }
+  ]);
+
+  if (result[0] && result[0].totalActive > 0) {
+    return result[0].totalChurned / result[0].totalActive;
+  }
+  return 0;
+};
+
 // Update timestamp on save
 dailyRevenueAggregateSchema.pre('save', function(next) {
   this.updatedAt = Date.now();

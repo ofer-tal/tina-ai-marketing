@@ -12,7 +12,7 @@
 import mongoose from 'mongoose';
 import fetch from 'node-fetch';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = 'http://localhost:3002/api';
 
 console.log('═══════════════════════════════════════════════════════════════');
 console.log('FEATURE #166: FINANCIAL PROJECTIONS BASED ON TRENDS');
