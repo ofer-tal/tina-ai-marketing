@@ -427,7 +427,9 @@ function Todos() {
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showSnoozeModal, setShowSnoozeModal] = useState(false);
   const [selectedTodo, setSelectedTodo] = useState(null);
+  const [snoozeUntil, setSnoozeUntil] = useState('');
   const [filters, setFilters] = useState({
     status: 'all',
     category: 'all',
@@ -568,6 +570,41 @@ function Todos() {
     }
   };
 
+  const handleSnoozeClick = (todo) => {
+    setSelectedTodo(todo);
+    // Set default snooze time to 1 hour from now
+    const defaultSnooze = new Date(Date.now() + 60 * 60 * 1000);
+    setSnoozeUntil(defaultSnooze.toISOString().slice(0, 16));
+    setShowSnoozeModal(true);
+    setShowDetailModal(false);
+  };
+
+  const handleSnoozeConfirm = async () => {
+    if (!selectedTodo || !snoozeUntil) return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}/snooze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          snoozeUntil: snoozeUntil
+        })
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await fetchTodos();
+        setShowSnoozeModal(false);
+        setSelectedTodo(null);
+        setSnoozeUntil('');
+      }
+    } catch (error) {
+      console.error('Error snoozing todo:', error);
+    }
+  };
+
   const formatDate = (dateString) => {
     if (!dateString) return 'No date';
     const date = new Date(dateString);
@@ -696,9 +733,15 @@ function Todos() {
                 )}
 
                 <TodoMeta>
-                  <MetaItem>
-                    📅 {formatDate(todo.scheduledAt)}
-                  </MetaItem>
+                  {todo.status === 'completed' && todo.completedAt ? (
+                    <MetaItem>
+                      ✅ Completed {new Date(todo.completedAt).toLocaleDateString()}
+                    </MetaItem>
+                  ) : (
+                    <MetaItem>
+                      📅 {formatDate(todo.scheduledAt)}
+                    </MetaItem>
+                  )}
                   {todo.estimatedTime && (
                     <MetaItem>
                       ⏱️ {todo.estimatedTime}m
@@ -823,7 +866,11 @@ function Todos() {
                 <div><strong>Status:</strong> {selectedTodo.status.replace('_', ' ')}</div>
                 <div><strong>Priority:</strong> {selectedTodo.priority}</div>
                 <div><strong>Category:</strong> {selectedTodo.category}</div>
-                <div><strong>Scheduled:</strong> {formatDate(selectedTodo.scheduledAt)}</div>
+                {selectedTodo.status === 'completed' && selectedTodo.completedAt ? (
+                  <div><strong>Completed:</strong> {new Date(selectedTodo.completedAt).toLocaleString()}</div>
+                ) : (
+                  <div><strong>Scheduled:</strong> {formatDate(selectedTodo.scheduledAt)}</div>
+                )}
                 {selectedTodo.dueAt && (
                   <div><strong>Due:</strong> {new Date(selectedTodo.dueAt).toLocaleString()}</div>
                 )}
@@ -936,6 +983,11 @@ function Todos() {
                     ▶️ Start Task
                   </Button>
                   <Button
+                    onClick={() => handleSnoozeClick(selectedTodo)}
+                  >
+                    ⏰ Snooze
+                  </Button>
+                  <Button
                     onClick={async () => {
                       try {
                         const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
@@ -977,6 +1029,11 @@ function Todos() {
                     }}
                   >
                     ✅ Complete
+                  </Button>
+                  <Button
+                    onClick={() => handleSnoozeClick(selectedTodo)}
+                  >
+                    ⏰ Snooze
                   </Button>
                   <Button
                     onClick={async () => {
@@ -1022,6 +1079,41 @@ function Todos() {
               )}
               <Button onClick={() => setShowDetailModal(false)}>
                 Close
+              </Button>
+            </ButtonGroup>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* Snooze Modal */}
+      {showSnoozeModal && selectedTodo && (
+        <ModalOverlay onClick={() => setShowSnoozeModal(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalTitle>⏰ Snooze Task</ModalTitle>
+            <p style={{ color: '#a0a0a0', marginBottom: '1.5rem' }}>
+              Reschedule "{selectedTodo.title}" to a later time.
+            </p>
+
+            <FormGroup>
+              <Label htmlFor="snoozeUntil">Snooze Until</Label>
+              <Input
+                id="snoozeUntil"
+                type="datetime-local"
+                value={snoozeUntil}
+                onChange={(e) => setSnoozeUntil(e.target.value)}
+                min={new Date().toISOString().slice(0, 16)}
+              />
+            </FormGroup>
+
+            <ButtonGroup>
+              <Button
+                $primary
+                onClick={handleSnoozeConfirm}
+              >
+                ✅ Confirm Snooze
+              </Button>
+              <Button onClick={() => setShowSnoozeModal(false)}>
+                Cancel
               </Button>
             </ButtonGroup>
           </ModalContent>

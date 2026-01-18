@@ -248,7 +248,7 @@ router.post("/:id/snooze", async (req, res) => {
 
     if (status.isConnected && status.readyState === 1) {
       await mongoose.connection.collection("marketing_tasks").updateOne(
-        { _id: id },
+        { _id: new ObjectId(id) },
         {
           $set: {
             status: "snoozed",
