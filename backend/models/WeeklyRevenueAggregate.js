@@ -179,6 +179,26 @@ const weeklyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // ARPU (Average Revenue Per User)
+  arpu: {
+    value: {
+      type: Number,
+      default: 0
+    },
+    periodRevenue: {
+      type: Number,
+      default: 0
+    },
+    periodSubscribers: {
+      type: Number,
+      default: 0
+    },
+    calculatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+
   // Channel breakdown
   byChannel: {
     organic: {
@@ -564,6 +584,21 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
     };
 
     console.log(`Week ${year}-W${weekNumber} Churn: ${churnedCount} churned, ${churnMetrics.rate}% rate`);
+
+    // Calculate ARPU (Average Revenue Per User)
+    // ARPU = period net revenue / period active subscribers
+    const arpuValue = activeSubscribers.totalCount > 0
+      ? aggregate.netRevenue / activeSubscribers.totalCount
+      : 0;
+
+    var arpuMetrics = {
+      value: parseFloat(arpuValue.toFixed(2)),
+      periodRevenue: aggregate.netRevenue,
+      periodSubscribers: activeSubscribers.totalCount,
+      calculatedAt: new Date()
+    };
+
+    console.log(`Week ${year}-W${weekNumber} ARPU: $${arpuMetrics.value} (revenue: $${aggregate.netRevenue}, subscribers: ${activeSubscribers.totalCount})`);
   } catch (error) {
     console.error('Error querying active subscribers or calculating churn:', error);
     // If query fails, subscribers will remain at 0, churn at 0
@@ -571,6 +606,12 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
       rate: 0,
       periodStartSubscribers: 0,
       periodEndSubscribers: activeSubscribers.totalCount
+    };
+    var arpuMetrics = {
+      value: 0,
+      periodRevenue: aggregate.netRevenue,
+      periodSubscribers: activeSubscribers.totalCount,
+      calculatedAt: new Date()
     };
   }
 
@@ -634,6 +675,7 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
       mrr: aggregate.mrr || 0,
       subscribers: activeSubscribers,
       churn: churnMetrics,
+      arpu: arpuMetrics,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,

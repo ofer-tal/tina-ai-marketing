@@ -161,6 +161,26 @@ const dailyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // ARPU (Average Revenue Per User)
+  arpu: {
+    value: {
+      type: Number,
+      default: 0
+    },
+    periodRevenue: {
+      type: Number,
+      default: 0
+    },
+    periodSubscribers: {
+      type: Number,
+      default: 0
+    },
+    calculatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+
   // Attribution breakdown (revenue by channel)
   byChannel: [{
     channel: {
@@ -506,6 +526,21 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     };
 
     console.log(`Churn metrics: ${churnedCount} churned, ${churnMetrics.rate}% rate (${periodStartSubscribers} → ${activeSubscribers.totalCount})`);
+
+    // Calculate ARPU (Average Revenue Per User)
+    // ARPU = period net revenue / period active subscribers
+    const arpuValue = activeSubscribers.totalCount > 0
+      ? netRevenue / activeSubscribers.totalCount
+      : 0;
+
+    var arpuMetrics = {
+      value: parseFloat(arpuValue.toFixed(2)),
+      periodRevenue: netRevenue,
+      periodSubscribers: activeSubscribers.totalCount,
+      calculatedAt: new Date()
+    };
+
+    console.log(`ARPU: $${arpuMetrics.value} (revenue: $${netRevenue}, subscribers: ${activeSubscribers.totalCount})`);
   } catch (error) {
     console.error('Error querying active subscribers or calculating churn:', error);
     // If query fails, subscribers will remain at 0, churn at 0
@@ -513,6 +548,12 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
       rate: 0,
       periodStartSubscribers: 0,
       periodEndSubscribers: activeSubscribers.totalCount
+    };
+    var arpuMetrics = {
+      value: 0,
+      periodRevenue: netRevenue,
+      periodSubscribers: activeSubscribers.totalCount,
+      calculatedAt: new Date()
     };
   }
 
@@ -535,6 +576,7 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     mrr: Math.round(mrr * 100) / 100, // Round to 2 decimal places
     subscribers: activeSubscribers,
     churn: churnMetrics,
+    arpu: arpuMetrics,
     customers: {
       newCount: newCustomerCount,
       returningCount: returningCustomerCount,

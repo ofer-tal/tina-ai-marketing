@@ -66,6 +66,9 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
     // Get active subscribers from DailyRevenueAggregate
     const currentActiveSubscribers = latestAggregate?.subscribers?.totalCount || 0;
 
+    // Get ARPU from DailyRevenueAggregate
+    const currentARPU = latestAggregate?.arpu?.value || 0;
+
     // Get previous MRR from a week ago for comparison
     const previousDate = new Date(now);
     previousDate.setDate(previousDate.getDate() - 7);
@@ -81,6 +84,9 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const previousActiveSubscribers = previousAggregate?.subscribers?.totalCount || 0;
     const subscribersChange = previousActiveSubscribers > 0 ? ((currentActiveSubscribers - previousActiveSubscribers) / previousActiveSubscribers * 100) : 0;
+
+    const previousARPU = previousAggregate?.arpu?.value || 0;
+    const arpuChange = previousARPU > 0 ? ((currentARPU - previousARPU) / previousARPU * 100) : 0;
 
     // Get churn rate from aggregates
     // Use monthly aggregate if available, otherwise use weekly, otherwise use latest daily
@@ -205,6 +211,12 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
         previous: previousActiveSubscribers,
         change: parseFloat(subscribersChange.toFixed(1)),
         trend: currentActiveSubscribers >= previousActiveSubscribers ? 'up' : 'down'
+      },
+      arpu: {
+        current: parseFloat(currentARPU.toFixed(2)),
+        previous: parseFloat(previousARPU.toFixed(2)),
+        change: parseFloat(arpuChange.toFixed(1)),
+        trend: currentARPU >= previousARPU ? 'up' : 'down'
       },
       churn: {
         current: parseFloat(currentChurnRate.toFixed(2)),
