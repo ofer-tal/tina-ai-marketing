@@ -69,7 +69,31 @@ const dailyRevenueAggregateSchema = new mongoose.Schema({
     default: 0
   },
 
-  // Customer metrics
+  // Active subscribers (from users collection with subscription.status='active')
+  subscribers: {
+    totalCount: {
+      type: Number,
+      default: 0
+    },
+    monthlyCount: {
+      type: Number,
+      default: 0
+    },
+    annualCount: {
+      type: Number,
+      default: 0
+    },
+    lifetimeCount: {
+      type: Number,
+      default: 0
+    },
+    trialCount: {
+      type: Number,
+      default: 0
+    }
+  },
+
+  // Customer metrics (from transactions)
   customers: {
     newCount: {
       type: Number,
@@ -394,6 +418,52 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     // Trials are not counted in MRR
   }
 
+  // Query active subscribers from users collection
+  // This gives us the actual count of users with active subscriptions
+  let activeSubscribers = {
+    totalCount: 0,
+    monthlyCount: 0,
+    annualCount: 0,
+    lifetimeCount: 0,
+    trialCount: 0
+  };
+
+  try {
+    const db = mongoose.connection.db;
+    const usersCollection = db.collection('users');
+
+    // Count total active subscribers
+    activeSubscribers.totalCount = await usersCollection.countDocuments({
+      'subscription.status': 'active'
+    });
+
+    // Count by subscription type using productId patterns
+    activeSubscribers.monthlyCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /monthly\.|subscription\.monthly/
+    });
+
+    activeSubscribers.annualCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /annual\.|annualTrial/
+    });
+
+    activeSubscribers.lifetimeCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /lifetime/
+    });
+
+    activeSubscribers.trialCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /trial/
+    });
+
+    console.log(`Active subscribers: ${activeSubscribers.totalCount} total (${activeSubscribers.monthlyCount} monthly, ${activeSubscribers.annualCount} annual, ${activeSubscribers.lifetimeCount} lifetime, ${activeSubscribers.trialCount} trial)`);
+  } catch (error) {
+    console.error('Error querying active subscribers:', error);
+    // If query fails, subscribers will remain at 0
+  }
+
   // Build aggregate object
   const aggregateData = {
     date: dateStr,
@@ -411,6 +481,7 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
       trialRevenue
     },
     mrr: Math.round(mrr * 100) / 100, // Round to 2 decimal places
+    subscribers: activeSubscribers,
     customers: {
       newCount: newCustomerCount,
       returningCount: returningCustomerCount,

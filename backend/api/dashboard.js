@@ -63,6 +63,9 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const currentMRR = latestAggregate?.mrr || 0;
 
+    // Get active subscribers from DailyRevenueAggregate
+    const currentActiveSubscribers = latestAggregate?.subscribers?.totalCount || 0;
+
     // Get previous MRR from a week ago for comparison
     const previousDate = new Date(now);
     previousDate.setDate(previousDate.getDate() - 7);
@@ -75,6 +78,9 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const previousMRR = previousAggregate?.mrr || 0;
     const mrrChange = previousMRR > 0 ? ((currentMRR - previousMRR) / previousMRR * 100) : 0;
+
+    const previousActiveSubscribers = previousAggregate?.subscribers?.totalCount || 0;
+    const subscribersChange = previousActiveSubscribers > 0 ? ((currentActiveSubscribers - previousActiveSubscribers) / previousActiveSubscribers * 100) : 0;
 
     // Fetch posted posts count (current period)
     const currentPosts = await MarketingPost.countDocuments({
@@ -89,42 +95,6 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
     });
 
     const postsChange = previousPosts > 0 ? ((currentPosts - previousPosts) / previousPosts * 100) : 0;
-
-    // Fetch unique new customers (current period)
-    const currentCustomersResult = await MarketingRevenue.aggregate([
-      {
-        $match: {
-          transactionDate: { $gte: startTime, $lte: now },
-          'customer.new': true
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    // Fetch unique new customers (previous period)
-    const previousCustomersResult = await MarketingRevenue.aggregate([
-      {
-        $match: {
-          transactionDate: { $gte: previousStartTime, $lt: startTime },
-          'customer.new': true
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          count: { $sum: 1 }
-        }
-      }
-    ]);
-
-    const currentSubscribers = currentCustomersResult[0]?.count || 0;
-    const previousSubscribers = previousCustomersResult[0]?.count || 0;
-    const subscribersChange = previousSubscribers > 0 ? ((currentSubscribers - previousSubscribers) / previousSubscribers * 100) : 0;
 
     // Fetch total unique customers (subscribers + returning)
     const currentUsersResult = await MarketingRevenue.aggregate([
@@ -183,10 +153,10 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
         trend: currentMRR >= previousMRR ? 'up' : 'down'
       },
       subscribers: {
-        current: currentSubscribers,
-        previous: previousSubscribers,
+        current: currentActiveSubscribers,
+        previous: previousActiveSubscribers,
         change: parseFloat(subscribersChange.toFixed(1)),
-        trend: currentSubscribers >= previousSubscribers ? 'up' : 'down'
+        trend: currentActiveSubscribers >= previousActiveSubscribers ? 'up' : 'down'
       },
       users: {
         current: currentUsers,

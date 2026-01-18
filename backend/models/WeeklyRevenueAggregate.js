@@ -87,6 +87,30 @@ const weeklyRevenueAggregateSchema = new mongoose.Schema({
     default: 0
   },
 
+  // Active subscribers (from users collection with subscription.status='active')
+  subscribers: {
+    totalCount: {
+      type: Number,
+      default: 0
+    },
+    monthlyCount: {
+      type: Number,
+      default: 0
+    },
+    annualCount: {
+      type: Number,
+      default: 0
+    },
+    lifetimeCount: {
+      type: Number,
+      default: 0
+    },
+    trialCount: {
+      type: Number,
+      default: 0
+    }
+  },
+
   // Customer metrics
   customers: {
     newCount: {
@@ -454,6 +478,51 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
   }
   aggregate.mrr = Math.round(mrr * 100) / 100; // Round to 2 decimal places
 
+  // Query active subscribers from users collection
+  let activeSubscribers = {
+    totalCount: 0,
+    monthlyCount: 0,
+    annualCount: 0,
+    lifetimeCount: 0,
+    trialCount: 0
+  };
+
+  try {
+    const db = mongoose.connection.db;
+    const usersCollection = db.collection('users');
+
+    // Count total active subscribers
+    activeSubscribers.totalCount = await usersCollection.countDocuments({
+      'subscription.status': 'active'
+    });
+
+    // Count by subscription type using productId patterns
+    activeSubscribers.monthlyCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /monthly\.|subscription\.monthly/
+    });
+
+    activeSubscribers.annualCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /annual\.|annualTrial/
+    });
+
+    activeSubscribers.lifetimeCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /lifetime/
+    });
+
+    activeSubscribers.trialCount = await usersCollection.countDocuments({
+      'subscription.status': 'active',
+      'subscription.type.productId': /trial/
+    });
+
+    console.log(`Week ${year}-W${weekNumber} Active subscribers: ${activeSubscribers.totalCount} total`);
+  } catch (error) {
+    console.error('Error querying active subscribers:', error);
+    // If query fails, subscribers will remain at 0
+  }
+
   // Generate week identifier
   const weekIdentifier = `${year}-W${weekNumber.toString().padStart(2, '0')}`;
 
@@ -512,6 +581,7 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
         trialRevenue: aggregate.trialRevenue
       },
       mrr: aggregate.mrr || 0,
+      subscribers: activeSubscribers,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,
