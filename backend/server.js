@@ -582,3 +582,4 @@ export default app;
 
 // Trigger reload
 
+// Restart trigger

@@ -1,6 +1,7 @@
 import express from "express";
 import databaseService from "../services/database.js";
 import mongoose from "mongoose";
+import { ObjectId } from "mongodb";
 import { validate, schemas } from "../middleware/validation.js";
 
 const router = express.Router();
@@ -212,7 +213,6 @@ router.post("/:id/complete", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      const { ObjectId } = require('mongodb');
       await mongoose.connection.collection("marketing_tasks").updateOne(
         { _id: new ObjectId(id) },
         {
@@ -281,8 +281,6 @@ router.put("/:id", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      const { ObjectId } = require('mongodb');
-
       // First try to find the document to see if it exists
       const existingDoc = await mongoose.connection.collection("marketing_tasks").findOne({ _id: new ObjectId(id) });
 
@@ -337,7 +335,6 @@ router.put("/:id", async (req, res) => {
 router.get("/:id/debug", async (req, res) => {
   try {
     const { id } = req.params;
-    const ObjectId = require('mongodb').ObjectId;
 
     const doc = await mongoose.connection.collection("marketing_tasks").findOne({ _id: new ObjectId(id) });
 
