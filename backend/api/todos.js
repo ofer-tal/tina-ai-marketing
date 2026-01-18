@@ -272,8 +272,8 @@ router.post("/:id/snooze", async (req, res) => {
   }
 });
 
-// PUT /api/todos/:id - Update todo
-router.put("/:id", validate(schemas.todo, { sanitize: true }), async (req, res) => {
+// PUT /api/todos/:id - Update todo (no validation required for partial updates)
+router.put("/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;

@@ -414,6 +414,60 @@ export const schemas = {
     }
   },
 
+  // Todo partial update (for status changes, etc.)
+  todoUpdate: {
+    title: {
+      type: 'string',
+      required: false,
+      minLength: 1,
+      maxLength: 200,
+      errorMessage: 'Title must be between 1 and 200 characters'
+    },
+    description: {
+      type: 'string',
+      required: false,
+      maxLength: 2000
+    },
+    category: {
+      type: 'string',
+      required: false,
+      enum: ['posting', 'configuration', 'review', 'development', 'analysis']
+    },
+    priority: {
+      type: 'string',
+      required: false,
+      enum: ['low', 'medium', 'high', 'urgent']
+    },
+    status: {
+      type: 'string',
+      required: false,
+      enum: ['pending', 'in_progress', 'completed', 'cancelled', 'snoozed']
+    },
+    scheduledAt: {
+      type: 'string',
+      required: false
+    },
+    dueAt: {
+      type: 'string',
+      required: false
+    },
+    estimatedTime: {
+      type: 'number',
+      required: false,
+      min: 0,
+      max: 480
+    }
+  },
+
+  // Todo status update (minimal validation for status changes only)
+  todoStatusUpdate: {
+    status: {
+      type: 'string',
+      required: true,
+      enum: ['pending', 'in_progress', 'completed', 'cancelled', 'snoozed']
+    }
+  },
+
   // Content post validation
   post: {
     title: {
