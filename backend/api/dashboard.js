@@ -24,7 +24,7 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
       });
     }
 
-    console.log(`Fetching dashboard metrics for period: ${period}`);
+    console.log(`Fetching dashboard metrics for period: ${period} [CHURN_FEATURE_ENABLED_v2]`);
 
     // Calculate time range based on period
     const now = new Date();
@@ -81,6 +81,54 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const previousActiveSubscribers = previousAggregate?.subscribers?.totalCount || 0;
     const subscribersChange = previousActiveSubscribers > 0 ? ((currentActiveSubscribers - previousActiveSubscribers) / previousActiveSubscribers * 100) : 0;
+
+    // Get churn rate from aggregates
+    // Use monthly aggregate if available, otherwise use weekly, otherwise use latest daily
+    let currentChurnRate = 0;
+    let previousChurnRate = 0;
+
+    // Try monthly first for the current month
+    const currentMonth = now.getMonth() + 1;
+    const currentYear = now.getFullYear();
+    const MonthlyRevenueAggregate = (await import('../models/MonthlyRevenueAggregate.js')).default;
+
+    const currentMonthAggregate = await MonthlyRevenueAggregate.findOne({
+      year: currentYear,
+      month: currentMonth
+    });
+
+    if (currentMonthAggregate) {
+      currentChurnRate = currentMonthAggregate.churn?.rate || 0;
+    } else {
+      // Fall back to latest daily
+      currentChurnRate = latestAggregate?.churn?.rate || 0;
+    }
+
+    // Get previous month's churn rate for comparison
+    const prevMonth = currentMonth - 1;
+    let previousMonthAggregate = null;
+
+    if (prevMonth > 0) {
+      previousMonthAggregate = await MonthlyRevenueAggregate.findOne({
+        year: currentYear,
+        month: prevMonth
+      });
+    } else if (prevMonth === 0) {
+      // Check December of previous year
+      previousMonthAggregate = await MonthlyRevenueAggregate.findOne({
+        year: currentYear - 1,
+        month: 12
+      });
+    }
+
+    if (previousMonthAggregate) {
+      previousChurnRate = previousMonthAggregate.churn?.rate || 0;
+    } else {
+      // Fall back to previous aggregate
+      previousChurnRate = previousAggregate?.churn?.rate || 0;
+    }
+
+    const churnChange = previousChurnRate > 0 ? ((currentChurnRate - previousChurnRate) / previousChurnRate * 100) : 0;
 
     // Fetch posted posts count (current period)
     const currentPosts = await MarketingPost.countDocuments({
@@ -157,6 +205,12 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
         previous: previousActiveSubscribers,
         change: parseFloat(subscribersChange.toFixed(1)),
         trend: currentActiveSubscribers >= previousActiveSubscribers ? 'up' : 'down'
+      },
+      churn: {
+        current: parseFloat(currentChurnRate.toFixed(2)),
+        previous: parseFloat(previousChurnRate.toFixed(2)),
+        change: parseFloat(churnChange.toFixed(1)),
+        trend: currentChurnRate <= previousChurnRate ? 'down' : 'up' // Lower churn is better
       },
       users: {
         current: currentUsers,

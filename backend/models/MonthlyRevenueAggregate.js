@@ -137,6 +137,22 @@ const monthlyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // Churn metrics
+  churn: {
+    rate: {
+      type: Number,
+      default: 0
+    },
+    periodStartSubscribers: {
+      type: Number,
+      default: 0
+    },
+    periodEndSubscribers: {
+      type: Number,
+      default: 0
+    }
+  },
+
   // Transaction counts
   transactions: {
     totalCount: {
@@ -545,9 +561,51 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
     });
 
     console.log(`Month ${year}-${month} Active subscribers: ${activeSubscribers.totalCount} total`);
+
+    // Calculate churn metrics
+    // Get churned users - those whose subscription changed to inactive/expired during this month
+    const churnedCount = await usersCollection.countDocuments({
+      'subscription.status': { $in: ['inactive', 'expired', 'canceled', 'cancelled', 'expired_redeemable'] },
+      'subscription.changeDate': { $gte: monthStart, $lte: monthEnd }
+    });
+
+    // Get previous month's subscriber count
+    const prevMonth = month - 1;
+    let periodStartSubscribers = activeSubscribers.totalCount;
+
+    if (prevMonth > 0) {
+      const prevMonthData = await this.findOne({
+        year,
+        month: prevMonth
+      });
+      periodStartSubscribers = prevMonthData?.subscribers?.totalCount || activeSubscribers.totalCount;
+    } else if (prevMonth === 0) {
+      // Check December of previous year
+      const prevMonthData = await this.findOne({
+        year: year - 1,
+        month: 12
+      });
+      periodStartSubscribers = prevMonthData?.subscribers?.totalCount || activeSubscribers.totalCount;
+    }
+
+    // Calculate churn rate: (churned / period_start) * 100
+    const churnRate = periodStartSubscribers > 0 ? (churnedCount / periodStartSubscribers * 100) : 0;
+
+    var churnMetrics = {
+      rate: parseFloat(churnRate.toFixed(2)),
+      periodStartSubscribers,
+      periodEndSubscribers: activeSubscribers.totalCount
+    };
+
+    console.log(`Month ${year}-${month} Churn: ${churnedCount} churned, ${churnMetrics.rate}% rate`);
   } catch (error) {
-    console.error('Error querying active subscribers:', error);
-    // If query fails, subscribers will remain at 0
+    console.error('Error querying active subscribers or calculating churn:', error);
+    // If query fails, subscribers will remain at 0, churn at 0
+    var churnMetrics = {
+      rate: 0,
+      periodStartSubscribers: 0,
+      periodEndSubscribers: activeSubscribers.totalCount
+    };
   }
 
   // Generate month identifier
@@ -633,6 +691,7 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
       },
       mrr: aggregate.mrr || 0,
       subscribers: activeSubscribers,
+      churn: churnMetrics,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,

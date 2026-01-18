@@ -113,6 +113,22 @@ const dailyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // Churn metrics
+  churn: {
+    rate: {
+      type: Number,
+      default: 0
+    },
+    periodStartSubscribers: {
+      type: Number,
+      default: 0
+    },
+    periodEndSubscribers: {
+      type: Number,
+      default: 0
+    }
+  },
+
   // Transaction counts
   transactions: {
     totalCount: {
@@ -459,9 +475,45 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     });
 
     console.log(`Active subscribers: ${activeSubscribers.totalCount} total (${activeSubscribers.monthlyCount} monthly, ${activeSubscribers.annualCount} annual, ${activeSubscribers.lifetimeCount} lifetime, ${activeSubscribers.trialCount} trial)`);
+
+    // Calculate churn metrics
+    // Churn = users whose subscription changed from active to inactive/expired during this day
+    let churnedCount = 0;
+    let periodStartSubscribers = activeSubscribers.totalCount;
+
+    // Get churned users - those whose subscription changed to inactive/expired today
+    churnedCount = await usersCollection.countDocuments({
+      'subscription.status': { $in: ['inactive', 'expired', 'canceled', 'cancelled', 'expired_redeemable'] },
+      'subscription.changeDate': { $gte: startOfDay, $lte: endOfDay }
+    });
+
+    // Get subscribers at start of day (end of previous day + new today - churned today)
+    // For more accuracy, we'll look at yesterday's aggregate if it exists
+    const yesterday = new Date(dateObj);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const yesterdayAggregate = await this.findOne({ date: yesterdayStr });
+    periodStartSubscribers = yesterdayAggregate?.subscribers?.totalCount || activeSubscribers.totalCount;
+
+    // Calculate churn rate: (churned / period_start) * 100
+    const churnRate = periodStartSubscribers > 0 ? (churnedCount / periodStartSubscribers * 100) : 0;
+
+    var churnMetrics = {
+      rate: parseFloat(churnRate.toFixed(2)),
+      periodStartSubscribers,
+      periodEndSubscribers: activeSubscribers.totalCount
+    };
+
+    console.log(`Churn metrics: ${churnedCount} churned, ${churnMetrics.rate}% rate (${periodStartSubscribers} → ${activeSubscribers.totalCount})`);
   } catch (error) {
-    console.error('Error querying active subscribers:', error);
-    // If query fails, subscribers will remain at 0
+    console.error('Error querying active subscribers or calculating churn:', error);
+    // If query fails, subscribers will remain at 0, churn at 0
+    var churnMetrics = {
+      rate: 0,
+      periodStartSubscribers: 0,
+      periodEndSubscribers: activeSubscribers.totalCount
+    };
   }
 
   // Build aggregate object
@@ -482,6 +534,7 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     },
     mrr: Math.round(mrr * 100) / 100, // Round to 2 decimal places
     subscribers: activeSubscribers,
+    churn: churnMetrics,
     customers: {
       newCount: newCustomerCount,
       returningCount: returningCustomerCount,
