@@ -1814,4 +1814,337 @@ router.get('/alerts', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/dashboard/projections
+ * Get financial projections based on historical trends
+ * Query params:
+ *   - period: Historical period (default: 90d)
+ *   - horizon: Forecast horizon in months (default: 6)
+ */
+router.get('/projections', async (req, res) => {
+  try {
+    const { period = '90d', horizon = 6 } = req.query;
+
+    console.log(`Fetching financial projections with period: ${period}, horizon: ${horizon} months`);
+
+    const PredictiveAnalyticsService = (await import('../services/predictiveAnalyticsService.js')).default;
+    const service = new PredictiveAnalyticsService();
+
+    // Step 1: Analyze revenue growth trend
+    const historicalTrend = await service.analyzeHistoricalTrends(period, 'revenue');
+
+    // Step 2: Apply forecasting model to extrapolate future months
+    // Use ensemble model for balanced predictions
+    const forecastDays = parseInt(horizon) * 30; // Convert months to days
+    const forecast = await service.generateForecast(period, forecastDays, 'revenue', 'ensemble');
+
+    // Step 3: Generate projections with scenarios
+    const projections = {
+      horizon: parseInt(horizon),
+      period: period,
+      model: 'ensemble',
+      calculatedAt: new Date().toISOString(),
+
+      // Monthly projections (aggregate daily forecasts to monthly)
+      monthlyProjections: aggregateDailyToMonthly(
+        forecast.projections.values.map((v, i) => ({
+          date: new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000),
+          value: v
+        })),
+        parseInt(horizon)
+      ),
+
+      // Summary statistics
+      summary: {
+        totalProjected: forecast.projections.summary.totalProjected,
+        averageMonthly: forecast.projections.summary.totalProjected / parseInt(horizon),
+        finalMonthRevenue: forecast.projections.summary.finalValue,
+        growthRate: historicalTrend.statistics.avgDailyGrowthRate * 30, // Monthly growth rate
+        trendDirection: historicalTrend.statistics.trendDirection,
+        confidence: forecast.confidenceIntervals.confidenceLevel
+      },
+
+      // Scenario analysis (optimistic, base, pessimistic)
+      scenarios: {
+        optimistic: {
+          description: 'Best-case scenario (95th percentile)',
+          total: forecast.confidenceIntervals.summary.totalUpper,
+          monthly: forecast.confidenceIntervals.intervals
+            .slice(0, parseInt(horizon) * 30)
+            .reduce((acc, val) => acc + val.upperBound, 0) / parseInt(horizon),
+          finalMonth: forecast.confidenceIntervals.intervals[
+            Math.min(forecast.confidenceIntervals.intervals.length - 1, parseInt(horizon) * 30 - 1)
+          ]?.upperBound || 0
+        },
+        base: {
+          description: 'Base case forecast',
+          total: forecast.projections.summary.totalProjected,
+          monthly: forecast.projections.summary.totalProjected / parseInt(horizon),
+          finalMonth: forecast.projections.summary.finalValue
+        },
+        pessimistic: {
+          description: 'Worst-case scenario (5th percentile)',
+          total: forecast.confidenceIntervals.summary.totalLower,
+          monthly: forecast.confidenceIntervals.intervals
+            .slice(0, parseInt(horizon) * 30)
+            .reduce((acc, val) => acc + val.lowerBound, 0) / parseInt(horizon),
+          finalMonth: forecast.confidenceIntervals.intervals[
+            Math.min(forecast.confidenceIntervals.intervals.length - 1, parseInt(horizon) * 30 - 1)
+          ]?.lowerBound || 0
+        }
+      },
+
+      // Confidence intervals
+      confidenceIntervals: {
+        level: forecast.confidenceIntervals.confidenceLevel,
+        margin: forecast.confidenceIntervals.summary.avgMargin,
+        marginPercent: forecast.confidenceIntervals.summary.marginPercentage
+      },
+
+      // Model performance metrics
+      modelMetrics: {
+        type: forecast.forecast.modelMetrics.type,
+        components: forecast.forecast.modelMetrics.components || [],
+        accuracy: forecast.forecast.modelMetrics.r_squared || forecast.forecast.modelMetrics.mse || null
+      }
+    };
+
+    // Build response
+    const responseData = {
+      success: true,
+      analysis: {
+        historical: {
+          period: historicalTrend.period,
+          dataPoints: historicalTrend.dataPoints,
+          timeSeries: historicalTrend.timeSeries,
+          statistics: historicalTrend.statistics,
+          seasonality: historicalTrend.seasonality
+        },
+        projections: projections,
+        metadata: {
+          dataFreshness: 'real-time',
+          lastDataUpdate: new Date().toISOString(),
+          calculationTime: '< 1s',
+          dataSource: 'marketing_revenue aggregates'
+        }
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`Financial projections calculated successfully`);
+    res.json(responseData);
+
+  } catch (error) {
+    console.error('Error generating financial projections:', error);
+    res.status(500).json({
+      error: 'Failed to generate financial projections',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/dashboard/strategic/financial-projections
+ * Get financial projections formatted for strategic dashboard
+ * This is a simplified version optimized for dashboard display
+ */
+router.get('/strategic/financial-projections', async (req, res) => {
+  try {
+    const { horizon = 6 } = req.query;
+
+    console.log(`Fetching strategic dashboard projections for ${horizon} months`);
+
+    // Fetch projections from the main projections endpoint
+    const projections = await generateFinancialProjections('90d', parseInt(horizon));
+
+    // Format for strategic dashboard display
+    const chartData = projections.monthlyProjections.map((p, index) => {
+      const monthNum = index + 1;
+      const projectedDate = new Date();
+      projectedDate.setMonth(projectedDate.getMonth() + monthNum);
+
+      return {
+        month: projectedDate.toLocaleString('default', { month: 'short', year: '2-digit' }),
+        date: projectedDate.toISOString(),
+        projected: Math.round(p.projectedRevenue),
+        optimistic: Math.round(p.optimisticRevenue),
+        pessimistic: Math.round(p.pessimisticRevenue),
+        lowerBound: Math.round(p.lowerBound),
+        upperBound: Math.round(p.upperBound)
+      };
+    });
+
+    const summaryCards = [
+      {
+        title: 'Projected MRR',
+        value: `$${Math.round(projections.summary.finalMonthRevenue)}`,
+        change: `+${projections.summary.growthRate.toFixed(1)}%/mo`,
+        trend: projections.summary.trendDirection,
+        icon: '📈',
+        color: 'success'
+      },
+      {
+        title: '6-Month Forecast',
+        value: `$${Math.round(projections.summary.totalProjected / 1000)}k`,
+        subtitle: `Total revenue`,
+        icon: '💰',
+        color: 'primary'
+      },
+      {
+        title: 'Confidence',
+        value: `${Math.round(projections.confidenceIntervals.level * 100)}%`,
+        subtitle: `±${Math.round(projections.confidenceIntervals.marginPercent)}% margin`,
+        icon: '🎯',
+        color: 'info'
+      },
+      {
+        title: 'Best Case',
+        value: `$${Math.round(projections.scenarios.optimistic.total / 1000)}k`,
+        subtitle: '6-month total',
+        icon: '🚀',
+        color: 'success'
+      }
+    ];
+
+    res.json({
+      success: true,
+      projections: {
+        chartData: chartData,
+        summaryCards: summaryCards,
+        scenarios: projections.scenarios,
+        summary: projections.summary,
+        horizon: projections.horizon,
+        model: projections.model,
+        calculatedAt: projections.calculatedAt
+      },
+      timestamp: new Date().toISOString()
+    });
+
+  } catch (error) {
+    console.error('Error fetching strategic dashboard projections:', error);
+    res.status(500).json({
+      error: 'Failed to fetch strategic dashboard projections',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Helper function to aggregate daily projections to monthly
+ */
+function aggregateDailyToMonthly(dailyData, numMonths) {
+  const monthly = [];
+  const daysPerMonth = 30;
+
+  for (let month = 0; month < numMonths; month++) {
+    const startIndex = month * daysPerMonth;
+    const endIndex = Math.min(startIndex + daysPerMonth, dailyData.length);
+
+    if (startIndex >= dailyData.length) break;
+
+    const monthDays = dailyData.slice(startIndex, endIndex);
+    const totalRevenue = monthDays.reduce((sum, d) => sum + d.value, 0);
+    const avgRevenue = totalRevenue / monthDays.length;
+
+    // Calculate optimistic and pessimistic bounds
+    const optimisticTotal = totalRevenue * 1.15; // +15% for optimistic
+    const pessimisticTotal = totalRevenue * 0.85; // -15% for pessimistic
+
+    // Get projected month name
+    const projectedDate = new Date();
+    projectedDate.setMonth(projectedDate.getMonth() + month + 1);
+
+    monthly.push({
+      month: projectedDate.toLocaleString('default', { month: 'long', year: 'numeric' }),
+      monthNumber: projectedDate.getMonth() + 1,
+      year: projectedDate.getFullYear(),
+      projectedRevenue: avgRevenue * daysPerMonth, // Monthly revenue
+      optimisticRevenue: optimisticTotal,
+      pessimisticRevenue: pessimisticTotal,
+      lowerBound: pessimisticTotal,
+      upperBound: optimisticTotal,
+      dailyAverage: avgRevenue
+    });
+  }
+
+  return monthly;
+}
+
+/**
+ * Helper function to generate financial projections
+ * Used by both endpoints
+ */
+async function generateFinancialProjections(period, horizon) {
+  const PredictiveAnalyticsService = (await import('../services/predictiveAnalyticsService.js')).default;
+  const service = new PredictiveAnalyticsService();
+
+  // Analyze historical trends
+  const historicalTrend = await service.analyzeHistoricalTrends(period, 'revenue');
+
+  // Generate forecast
+  const forecastDays = horizon * 30;
+  const forecast = await service.generateForecast(period, forecastDays, 'revenue', 'ensemble');
+
+  // Build projections object
+  return {
+    horizon: horizon,
+    period: period,
+    model: 'ensemble',
+    calculatedAt: new Date().toISOString(),
+    monthlyProjections: aggregateDailyToMonthly(
+      forecast.projections.values.map((v, i) => ({
+        date: new Date(Date.now() + (i + 1) * 24 * 60 * 60 * 1000),
+        value: v
+      })),
+      horizon
+    ),
+    summary: {
+      totalProjected: forecast.projections.summary.totalProjected,
+      averageMonthly: forecast.projections.summary.totalProjected / horizon,
+      finalMonthRevenue: forecast.projections.summary.finalValue,
+      growthRate: historicalTrend.statistics.avgDailyGrowthRate * 30,
+      trendDirection: historicalTrend.statistics.trendDirection,
+      confidence: forecast.confidenceIntervals.confidenceLevel
+    },
+    scenarios: {
+      optimistic: {
+        description: 'Best-case scenario (95th percentile)',
+        total: forecast.confidenceIntervals.summary.totalUpper,
+        monthly: forecast.confidenceIntervals.intervals
+          .slice(0, horizon * 30)
+          .reduce((acc, val) => acc + val.upperBound, 0) / horizon,
+        finalMonth: forecast.confidenceIntervals.intervals[
+          Math.min(forecast.confidenceIntervals.intervals.length - 1, horizon * 30 - 1)
+        ]?.upperBound || 0
+      },
+      base: {
+        description: 'Base case forecast',
+        total: forecast.projections.summary.totalProjected,
+        monthly: forecast.projections.summary.totalProjected / horizon,
+        finalMonth: forecast.projections.summary.finalValue
+      },
+      pessimistic: {
+        description: 'Worst-case scenario (5th percentile)',
+        total: forecast.confidenceIntervals.summary.totalLower,
+        monthly: forecast.confidenceIntervals.intervals
+          .slice(0, horizon * 30)
+          .reduce((acc, val) => acc + val.lowerBound, 0) / horizon,
+        finalMonth: forecast.confidenceIntervals.intervals[
+          Math.min(forecast.confidenceIntervals.intervals.length - 1, horizon * 30 - 1)
+        ]?.lowerBound || 0
+      }
+    },
+    confidenceIntervals: {
+      level: forecast.confidenceIntervals.confidenceLevel,
+      margin: forecast.confidenceIntervals.summary.avgMargin,
+      marginPercent: forecast.confidenceIntervals.summary.marginPercentage
+    },
+    modelMetrics: {
+      type: forecast.forecast.modelMetrics.type,
+      components: forecast.forecast.modelMetrics.components || [],
+      accuracy: forecast.forecast.modelMetrics.r_squared || forecast.forecast.modelMetrics.mse || null
+    }
+  };
+}
+
 export default router;
