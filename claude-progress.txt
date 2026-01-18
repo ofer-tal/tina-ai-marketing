@@ -1126,3 +1126,139 @@ The /api/content/posts/create endpoint works as expected.
 4. Focus on remaining Real_Data_Verification features
 
 ═══════════════════════════════════════════════════════════════
+
+═══════════════════════════════════════════════════════════════
+SESSION COMPLETE - 2026-01-18 (Feature #317 VERIFIED)
+═══════════════════════════════════════════════════════════════
+
+**FEATURE #317: Update content and verify persistence** ✅
+
+All 5 verification steps completed and tested:
+
+✅ **Step 1: Create content post - VERIFIED**
+- Created comprehensive test script (test-feature-317.cjs, 336 lines)
+- Successfully called POST /api/content/posts/create endpoint
+- API returned success with post data
+- Generated test post with unique title
+
+✅ **Step 2: Update caption text - VERIFIED**
+- Updated caption via PUT /api/content/posts/{id} endpoint
+- Changed from "Original caption for Feature #317 test"
+- To: "UPDATED caption for Feature #317 verification - 1768723350770"
+- API confirmed update with returned data
+
+✅ **Step 3: Refresh page - VERIFIED**
+- Used browser automation (Playwright) for UI testing
+- Updated caption through browser edit modal
+- Clicked Save Changes button
+- Success dialog appeared: "✅ Changes saved successfully!"
+- Pressed F5 to refresh page
+- Modal still showed updated caption
+
+✅ **Step 4: Verify caption shows updated text - VERIFIED**
+- After refresh, caption showed: "UPDATED caption for Feature #317 verification - 1768723350770"
+- Navigated to Dashboard, then back to Content Library
+- Viewed post again - caption still persisted
+- Confirmed UI displays updated value correctly
+
+✅ **Step 5: Check database for updated value - VERIFIED**
+- Connected to MongoDB Atlas (AdultStoriesCluster database)
+- Queried marketingposts collection
+- Found post with matching _id
+- Database caption matched updated value exactly
+- All required fields still present and intact
+- Verified field types (Date, Array) correct
+
+**KEY FINDINGS:**
+
+API Response Structure:
+- API returns {"success": true, "data": {...}} not {"success": true, "post": {...}}
+- Fixed test script to use response.data.data instead of response.data.post
+
+Database Persistence:
+- Mongoose uses "marketingposts" collection (not "marketing_posts")
+- This is standard Mongoose pluralization behavior
+- All updates persist correctly to MongoDB
+- No data loss during updates
+
+UI Workflow:
+- Edit modal in Content Library works correctly
+- Save Changes button triggers API update
+- Success dialog confirms save operation
+- Page refresh does not lose changes
+- Navigation away and back preserves updates
+
+**TEST COVERAGE:**
+
+API Layer:
+✓ POST /api/content/posts/create - Creates post with correct fields
+✓ PUT /api/content/posts/{id} - Updates caption field
+✓ GET /api/content/posts/{id} - Returns updated data
+✓ DELETE /api/content/posts/{id} - Cleanup working
+
+Database Layer:
+✓ MongoDB connection stable
+✓ Data persists to marketingposts collection
+✓ Update operations save correctly
+✓ Field types maintained (ObjectId, Date, Array, String)
+✓ No data corruption on updates
+
+UI Layer:
+✓ Edit modal opens correctly
+✓ Caption field editable
+✓ Save button triggers update
+✓ Success feedback provided
+✓ Changes persist after refresh
+✓ Changes persist after navigation
+
+**FILES CREATED:**
+
+1. test-feature-317.cjs (336 lines)
+   - Comprehensive API and database testing
+   - All 5 verification steps automated
+   - Color-coded output for easy reading
+   - Cleanup verification after deletion
+   - Handles both collection naming conventions
+
+2. test-feature-317-ui.cjs (145 lines)
+   - UI testing instructions
+   - Browser automation setup
+   - Manual testing workflow documentation
+
+**SCREENSHOTS:**
+- .playwright-mcp/feature-317-update-persistence-verified.png
+  Shows the updated caption persisting after page refresh
+
+**PROGRESS UPDATE:**
+
+Previous Progress: 283/338 features passing (83.7%)
+Current Progress: 284/338 features passing (84.0%)
+
+**Feature #317 (Update content and verify persistence) is now COMPLETE and VERIFIED.**
+
+**SUMMARY:**
+
+Successfully verified Feature #317 with comprehensive end-to-end testing:
+- Content creation API working correctly
+- Caption update API working correctly  
+- Database persistence verified via direct MongoDB query
+- UI workflow verified via browser automation
+- All 5 verification steps satisfied
+- Zero data loss issues detected
+- Page refresh preserves changes
+- Navigation preserves changes
+- Cleanup working correctly
+
+The content update and persistence feature is fully functional and working correctly.
+Users can edit content captions through the UI, and changes persist to the database
+and survive page refreshes and navigation. The API layer correctly handles update
+operations and returns accurate response data.
+
+**NEXT SESSION:**
+
+1. Get next feature from backlog
+2. Continue implementation and testing
+3. Maintain 84%+ completion rate
+4. Focus on remaining Real_Data_Verification features
+
+═══════════════════════════════════════════════════════════════
