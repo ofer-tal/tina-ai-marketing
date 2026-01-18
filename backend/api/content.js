@@ -1964,6 +1964,90 @@ router.post('/posts/:id/approve', async (req, res) => {
 });
 
 /**
+ * POST /api/content/posts/:id/duplicate
+ * Duplicate a marketing post for regeneration
+ */
+router.post('/posts/:id/duplicate', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    logger.info('Duplicating marketing post', { id });
+
+    const originalPost = await MarketingPost.findById(id);
+
+    if (!originalPost) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    // Create a copy of the post
+    const duplicatedPost = new MarketingPost({
+      title: `${originalPost.title} (Copy)`,
+      description: originalPost.description,
+      platform: originalPost.platform,
+      status: 'draft', // Reset to draft for regeneration
+      contentType: originalPost.contentType,
+      videoPath: originalPost.videoPath,
+      imagePath: originalPost.imagePath,
+      caption: originalPost.caption,
+      hashtags: originalPost.hashtags ? [...originalPost.hashtags] : [],
+      scheduledAt: new Date(Date.now() + 86400000), // Schedule for tomorrow
+      postedAt: null, // Reset posted date
+      storyId: originalPost.storyId,
+      storyName: originalPost.storyName,
+      storyCategory: originalPost.storyCategory,
+      storySpiciness: originalPost.storySpiciness,
+      generatedAt: new Date(),
+      approvedAt: null, // Reset approval
+      approvedBy: null,
+      rejectedAt: null,
+      rejectedBy: null,
+      rejectionReason: null,
+      rejectionCategory: null,
+      hook: originalPost.hook,
+      feedback: null,
+      regenerationCount: 0, // Reset regeneration count
+      regenerationHistory: [],
+      lastRegeneratedAt: null,
+      performanceMetrics: {
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        engagementRate: 0
+      },
+      generationSource: 'duplicate'
+    });
+
+    await duplicatedPost.save();
+
+    logger.info('Marketing post duplicated successfully', {
+      originalId: id,
+      newId: duplicatedPost._id
+    });
+
+    res.json({
+      success: true,
+      data: duplicatedPost,
+      message: 'Post duplicated successfully'
+    });
+
+  } catch (error) {
+    logger.error('Duplicate marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * POST /api/content/posts/:id/reject
  * Reject a marketing post with reason
  */

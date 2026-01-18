@@ -1347,6 +1347,35 @@ const RegenerateButton = styled.button`
   }
 `;
 
+const DuplicateButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: #17a2b8;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #138496;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(23, 162, 184, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+  }
+`;
+
 // Edit Mode Components
 const EditButton = styled.button`
   flex: 0 0 auto;
@@ -2613,6 +2642,48 @@ function ContentLibrary() {
     }
   };
 
+  // Duplicate handler
+  const handleDuplicate = async () => {
+    if (!selectedVideo) return;
+
+    const confirmed = window.confirm(
+      'Create a duplicate of this post for regeneration?\n\n' +
+      'The duplicate will:\n' +
+      '• Have "draft" status\n' +
+      '• Be scheduled for tomorrow\n' +
+      '• Have the same story and content\n' +
+      '• Be ready for regeneration with new variations'
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/duplicate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to duplicate post');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Add the duplicated post to the local state
+        setPosts(prevPosts => [result.data, ...prevPosts]);
+
+        alert('✅ Post duplicated successfully!\n\nThe new post has been added to your library with "draft" status.');
+        handleCloseModal();
+      } else {
+        alert(`❌ Error duplicating post: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error duplicating post:', err);
+      alert('❌ Failed to duplicate post. Please try again.');
+    }
+  };
+
   // Regenerate handlers
   const handleRegenerate = () => {
     if (!selectedVideo) return;
@@ -3314,6 +3385,9 @@ function ContentLibrary() {
                           <RegenerateButton onClick={handleRegenerate}>
                             🔄 Regenerate
                           </RegenerateButton>
+                          <DuplicateButton onClick={handleDuplicate}>
+                            📋 Duplicate
+                          </DuplicateButton>
                           <ApproveButton onClick={handleApprove}>
                             ✅ Approve Now
                           </ApproveButton>
@@ -3325,6 +3399,9 @@ function ContentLibrary() {
                           <RegenerateButton onClick={handleRegenerate}>
                             🔄 Regenerate
                           </RegenerateButton>
+                          <DuplicateButton onClick={handleDuplicate}>
+                            📋 Duplicate
+                          </DuplicateButton>
                           <ApproveButton onClick={handleApprove}>
                             ✅ Approve
                           </ApproveButton>
