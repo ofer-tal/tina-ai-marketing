@@ -75,6 +75,60 @@ const SearchInput = styled.input`
   }
 `;
 
+const DateFilterContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const DateFilterButton = styled.button`
+  padding: 0.5rem 1rem;
+  background: ${props => props.$active ? '#7b2cbf' : '#16213e'};
+  border: 1px solid ${props => props.$active ? '#7b2cbf' : '#2d3561'};
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+`;
+
+const DateInput = styled.input`
+  padding: 0.5rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 6px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  }
+
+  &::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+    cursor: pointer;
+  }
+`;
+
 const Button = styled.button`
   padding: 0.5rem 1.5rem;
   background: #e94560;
@@ -1768,7 +1822,12 @@ function ContentLibrary() {
   const [filters, setFilters] = useState({
     platform: 'all',
     status: 'all',
-    search: ''
+    search: '',
+    dateRange: 'all' // 'all', '7days', '30days', '90days', 'custom'
+  });
+  const [customDateRange, setCustomDateRange] = useState({
+    start: '',
+    end: ''
   });
   const [pagination, setPagination] = useState({
     page: 1,
@@ -1824,6 +1883,38 @@ function ContentLibrary() {
       if (filters.search) params.append('search', filters.search);
       params.append('limit', pagination.limit);
       params.append('skip', (pagination.page - 1) * pagination.limit);
+
+      // Add date range filtering
+      if (filters.dateRange !== 'all') {
+        const now = new Date();
+        let startDate = null;
+
+        switch (filters.dateRange) {
+          case '7days':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            break;
+          case '30days':
+            startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            break;
+          case '90days':
+            startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            break;
+          case 'custom':
+            if (customDateRange.start) {
+              startDate = new Date(customDateRange.start);
+              params.append('startDate', startDate.toISOString());
+            }
+            if (customDateRange.end) {
+              const endDate = new Date(customDateRange.end);
+              params.append('endDate', endDate.toISOString());
+            }
+            break;
+        }
+
+        if (startDate && filters.dateRange !== 'custom') {
+          params.append('startDate', startDate.toISOString());
+        }
+      }
 
       // Try to fetch from API
       const response = await fetch(`http://localhost:3001/api/content/posts?${params}`);
@@ -2785,6 +2876,57 @@ function ContentLibrary() {
           <option value="posted">Posted</option>
           <option value="rejected">Rejected</option>
         </FilterSelect>
+
+        <DateFilterContainer>
+          <DateFilterButton
+            $active={filters.dateRange === 'all'}
+            onClick={() => handleFilterChange('dateRange', 'all')}
+          >
+            All Time
+          </DateFilterButton>
+          <DateFilterButton
+            $active={filters.dateRange === '7days'}
+            onClick={() => handleFilterChange('dateRange', '7days')}
+          >
+            Last 7 Days
+          </DateFilterButton>
+          <DateFilterButton
+            $active={filters.dateRange === '30days'}
+            onClick={() => handleFilterChange('dateRange', '30days')}
+          >
+            Last 30 Days
+          </DateFilterButton>
+          <DateFilterButton
+            $active={filters.dateRange === '90days'}
+            onClick={() => handleFilterChange('dateRange', '90days')}
+          >
+            Last 90 Days
+          </DateFilterButton>
+          <DateFilterButton
+            $active={filters.dateRange === 'custom'}
+            onClick={() => handleFilterChange('dateRange', 'custom')}
+          >
+            Custom
+          </DateFilterButton>
+        </DateFilterContainer>
+
+        {filters.dateRange === 'custom' && (
+          <DateFilterContainer>
+            <DateInput
+              type="date"
+              value={customDateRange.start}
+              onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+              placeholder="Start Date"
+            />
+            <span style={{ color: '#a0a0a0' }}>to</span>
+            <DateInput
+              type="date"
+              value={customDateRange.end}
+              onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+              placeholder="End Date"
+            />
+          </DateFilterContainer>
+        )}
       </FilterBar>
 
       {error && (
