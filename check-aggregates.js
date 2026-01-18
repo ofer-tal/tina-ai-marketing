@@ -19,9 +19,13 @@ async function checkAggregates() {
 
     for (const agg of aggregates) {
       console.log(`Date: ${agg.date}`);
-      console.log(`  Subscribers: ${agg.subscribers?.totalCount || 0}`);
-      console.log(`  Churn rate: ${agg.churn?.rate || 0}%`);
-      console.log(`  MRR: $${agg.mrr || 0}`);
+      console.log(`  Subscribers: ${JSON.stringify(agg.subscribers, null, 2)}`);
+      console.log(`  Churn: ${JSON.stringify(agg.churn, null, 2)}`);
+      console.log(`  MRR: ${JSON.stringify(agg.mrr, null, 2)}`);
+      console.log(`  ARPU: ${JSON.stringify(agg.arpu, null, 2)}`);
+      console.log(`  LTV: ${JSON.stringify(agg.ltv, null, 2)}`);
+      console.log(`  Costs: ${JSON.stringify(agg.costs, null, 2)}`);
+      console.log(`  Profit Margin: ${JSON.stringify(agg.profitMargin, null, 2)}`);
       console.log('');
     }
 

@@ -261,6 +261,30 @@ const monthlyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // Profit margin (after all costs)
+  profitMargin: {
+    value: {
+      type: Number,
+      default: 0
+    },
+    percentage: {
+      type: Number,
+      default: 0
+    },
+    netRevenue: {
+      type: Number,
+      default: 0
+    },
+    totalCosts: {
+      type: Number,
+      default: 0
+    },
+    calculatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+
   // Channel breakdown
   byChannel: {
     organic: {
@@ -751,6 +775,23 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
     console.log(`  - API services: $${costsMetrics.apiServices.toFixed(2)}`);
   }
 
+  // Calculate profit margin
+  // Profit margin = (net revenue - total costs) / net revenue × 100
+  let profitMarginMetrics = {
+    value: 0,
+    percentage: 0,
+    netRevenue: aggregate.netRevenue,
+    totalCosts: costsMetrics.totalCost,
+    calculatedAt: new Date()
+  };
+
+  if (aggregate.netRevenue > 0) {
+    profitMarginMetrics.value = aggregate.netRevenue - costsMetrics.totalCost;
+    profitMarginMetrics.percentage = (profitMarginMetrics.value / aggregate.netRevenue) * 100;
+
+    console.log(`Profit margin: $${profitMarginMetrics.value.toFixed(2)} (${profitMarginMetrics.percentage.toFixed(1)}%)`);
+  }
+
   // Generate month identifier
   const monthIdentifier = `${year}-${month.toString().padStart(2, '0')}`;
 
@@ -838,6 +879,7 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
       arpu: arpuMetrics,
       ltv: ltvMetrics,
       costs: costsMetrics,
+      profitMargin: profitMarginMetrics,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,

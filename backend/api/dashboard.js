@@ -188,6 +188,35 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const costsChange = previousCosts.totalCost > 0 ? ((currentCosts.totalCost - previousCosts.totalCost) / previousCosts.totalCost * 100) : 0;
 
+    // Get profit margin from aggregates
+    // Use monthly aggregate if available, otherwise use latest daily
+    let currentProfitMargin = {
+      value: 0,
+      percentage: 0,
+      netRevenue: 0,
+      totalCosts: 0
+    };
+    let previousProfitMargin = {
+      value: 0,
+      percentage: 0,
+      netRevenue: 0,
+      totalCosts: 0
+    };
+
+    if (currentMonthAggregate) {
+      currentProfitMargin = currentMonthAggregate.profitMargin || currentProfitMargin;
+    } else {
+      currentProfitMargin = latestAggregate?.profitMargin || currentProfitMargin;
+    }
+
+    if (previousMonthAggregate) {
+      previousProfitMargin = previousMonthAggregate.profitMargin || previousProfitMargin;
+    } else {
+      previousProfitMargin = previousAggregate?.profitMargin || previousProfitMargin;
+    }
+
+    const profitMarginChange = previousProfitMargin.value > 0 ? ((currentProfitMargin.value - previousProfitMargin.value) / previousProfitMargin.value * 100) : 0;
+
     // Fetch posted posts count (current period)
     const currentPosts = await MarketingPost.countDocuments({
       status: 'posted',
@@ -294,6 +323,13 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
           other: parseFloat(currentCosts.other.toFixed(2)),
           percentageOfRevenue: parseFloat(currentCosts.percentageOfRevenue.toFixed(1))
         }
+      },
+      profitMargin: {
+        current: parseFloat(currentProfitMargin.value.toFixed(2)),
+        previous: parseFloat(previousProfitMargin.value.toFixed(2)),
+        change: parseFloat(profitMarginChange.toFixed(1)),
+        trend: currentProfitMargin.value >= previousProfitMargin.value ? 'up' : 'down',
+        percentage: parseFloat(currentProfitMargin.percentage.toFixed(1))
       },
       users: {
         current: currentUsers,
