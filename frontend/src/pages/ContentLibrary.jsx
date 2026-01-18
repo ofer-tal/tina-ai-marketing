@@ -1376,6 +1376,35 @@ const DuplicateButton = styled.button`
   }
 `;
 
+const DeleteButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: #dc3545;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: #c82333;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+  }
+`;
+
 // Edit Mode Components
 const EditButton = styled.button`
   flex: 0 0 auto;
@@ -1844,6 +1873,105 @@ const RegenerateModalButton = styled.button`
   }
 `;
 
+// Delete Modal Components
+const DeleteModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+`;
+
+const DeleteModalContent = styled.div`
+  background: #16213e;
+  border: 2px solid #dc3545;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: slideUp 0.3s ease-out;
+
+  @keyframes slideUp {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+`;
+
+const DeleteModalTitle = styled.h3`
+  font-size: 1.5rem;
+  margin: 0 0 1rem 0;
+  color: #dc3545;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const DeleteModalText = styled.p`
+  color: #eaeaea;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+`;
+
+const DeleteModalWarning = styled.div`
+  background: rgba(220, 53, 69, 0.1);
+  border: 1px solid #dc3545;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+  color: #eaeaea;
+  line-height: 1.5;
+`;
+
+const DeleteModalActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+`;
+
+const DeleteModalButton = styled.button`
+  flex: 1;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.cancel {
+    background: #2d3561;
+    color: #eaeaea;
+
+    &:hover {
+      background: #3d4561;
+    }
+  }
+
+  &.confirm {
+    background: #dc3545;
+    color: white;
+
+    &:hover {
+      background: #c82333;
+    }
+  }
+`;
+
 function ContentLibrary() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1873,6 +2001,10 @@ function ContentLibrary() {
   const [regenerateModal, setRegenerateModal] = useState({
     isOpen: false,
     feedback: ''
+  });
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    postToDelete: null
   });
   const [editMode, setEditMode] = useState(false);
   const [editedCaption, setEditedCaption] = useState('');
@@ -2684,6 +2816,60 @@ function ContentLibrary() {
     }
   };
 
+  // Delete handlers
+  const handleDelete = () => {
+    if (!selectedVideo) return;
+    setDeleteModal({
+      isOpen: true,
+      postToDelete: selectedVideo
+    });
+  };
+
+  const handleCloseDeleteModal = () => {
+    setDeleteModal({
+      isOpen: false,
+      postToDelete: null
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModal.postToDelete) return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/content/posts/${deleteModal.postToDelete._id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete post');
+      }
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Remove the deleted post from local state
+        setPosts(prevPosts =>
+          prevPosts.filter(post => post._id !== deleteModal.postToDelete._id)
+        );
+
+        // Update pagination count
+        setPagination(prev => ({
+          ...prev,
+          total: Math.max(0, prev.total - 1)
+        }));
+
+        alert('✅ Post deleted successfully!');
+        handleCloseModal();
+        handleCloseDeleteModal();
+      } else {
+        alert(`❌ Error deleting post: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Error deleting post:', err);
+      alert('❌ Failed to delete post. Please try again.');
+    }
+  };
+
   // Regenerate handlers
   const handleRegenerate = () => {
     if (!selectedVideo) return;
@@ -3358,6 +3544,9 @@ function ContentLibrary() {
                           <ExportButton onClick={handleExportForManual}>
                             📥 Export for Manual
                           </ExportButton>
+                          <DeleteButton onClick={handleDelete}>
+                            🗑️ Delete
+                          </DeleteButton>
                         </>
                       ) : selectedVideo.status === 'approved' && selectedVideo.platform === 'instagram' ? (
                         <>
@@ -3377,6 +3566,9 @@ function ContentLibrary() {
                           <ExportButton onClick={handleExportForManual}>
                             📥 Export for Manual
                           </ExportButton>
+                          <DeleteButton onClick={handleDelete}>
+                            🗑️ Delete
+                          </DeleteButton>
                         </>
                       ) : scheduleMode ? (
                         <>
@@ -3411,6 +3603,9 @@ function ContentLibrary() {
                           <RejectButton onClick={handleReject}>
                             ❌ Reject
                           </RejectButton>
+                          <DeleteButton onClick={handleDelete}>
+                            🗑️ Delete
+                          </DeleteButton>
                         </>
                       )}
                     </ModalActions>
@@ -3421,6 +3616,9 @@ function ContentLibrary() {
                     <ModalActions>
                       <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
                       <DownloadButton onClick={handleDownload}>📥 Download Content</DownloadButton>
+                      <DeleteButton onClick={handleDelete}>
+                        🗑️ Delete
+                      </DeleteButton>
                     </ModalActions>
                   )}
 
@@ -3585,6 +3783,42 @@ function ContentLibrary() {
                 </div>
               </InstructionsContent>
             </InstructionsModal>
+          )}
+
+          {/* Delete Confirmation Modal */}
+          {deleteModal.isOpen && (
+            <DeleteModalOverlay onClick={handleCloseDeleteModal}>
+              <DeleteModalContent onClick={(e) => e.stopPropagation()}>
+                <DeleteModalTitle>🗑️ Delete Content</DeleteModalTitle>
+
+                <DeleteModalText>
+                  Are you sure you want to delete this content? This action cannot be undone.
+                </DeleteModalText>
+
+                <DeleteModalWarning>
+                  <strong>⚠️ Warning:</strong><br />
+                  This will permanently delete:<br />
+                  • Video/image files<br />
+                  • Caption and hashtags<br />
+                  • All post metadata<br />
+                  • Performance history<br />
+                  <br />
+                  This action cannot be undone!
+                </DeleteModalWarning>
+
+                <DeleteModalActions>
+                  <DeleteModalButton className="cancel" onClick={handleCloseDeleteModal}>
+                    Cancel
+                  </DeleteModalButton>
+                  <DeleteModalButton
+                    className="confirm"
+                    onClick={handleConfirmDelete}
+                  >
+                    🗑️ Delete Forever
+                  </DeleteModalButton>
+                </DeleteModalActions>
+              </DeleteModalContent>
+            </DeleteModalOverlay>
           )}
 
           {pagination.total > pagination.limit && (
