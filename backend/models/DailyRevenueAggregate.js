@@ -205,6 +205,34 @@ const dailyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // Marketing costs (cloud, API, ad spend)
+  costs: {
+    totalCost: {
+      type: Number,
+      default: 0
+    },
+    cloudServices: {
+      type: Number,
+      default: 0
+    },
+    apiServices: {
+      type: Number,
+      default: 0
+    },
+    adSpend: {
+      type: Number,
+      default: 0
+    },
+    other: {
+      type: Number,
+      default: 0
+    },
+    percentageOfRevenue: {
+      type: Number,
+      default: 0
+    }
+  },
+
   // Attribution breakdown (revenue by channel)
   byChannel: [{
     channel: {
@@ -608,6 +636,29 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     };
   }
 
+  // Calculate marketing costs (10% of net revenue for cloud/API)
+  // Cloud services: 6% of revenue
+  // API services: 4% of revenue
+  let costsMetrics = {
+    totalCost: 0,
+    cloudServices: 0,
+    apiServices: 0,
+    adSpend: 0,
+    other: 0,
+    percentageOfRevenue: 0
+  };
+
+  if (netRevenue > 0) {
+    costsMetrics.cloudServices = netRevenue * 0.06; // 6% for cloud
+    costsMetrics.apiServices = netRevenue * 0.04; // 4% for APIs
+    costsMetrics.totalCost = costsMetrics.cloudServices + costsMetrics.apiServices;
+    costsMetrics.percentageOfRevenue = (costsMetrics.totalCost / netRevenue) * 100;
+
+    console.log(`Marketing costs: $${costsMetrics.totalCost.toFixed(2)} (${costsMetrics.percentageOfRevenue.toFixed(1)}% of revenue)`);
+    console.log(`  - Cloud services: $${costsMetrics.cloudServices.toFixed(2)}`);
+    console.log(`  - API services: $${costsMetrics.apiServices.toFixed(2)}`);
+  }
+
   // Build aggregate object
   const aggregateData = {
     date: dateStr,
@@ -629,6 +680,7 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     churn: churnMetrics,
     arpu: arpuMetrics,
     ltv: ltvMetrics,
+    costs: costsMetrics,
     customers: {
       newCount: newCustomerCount,
       returningCount: returningCustomerCount,

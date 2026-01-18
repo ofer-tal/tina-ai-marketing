@@ -155,6 +155,39 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const ltvChange = previousLTV > 0 ? ((currentLTV - previousLTV) / previousLTV * 100) : 0;
 
+    // Get marketing costs from aggregates
+    // Use monthly aggregate if available, otherwise use latest daily
+    let currentCosts = {
+      totalCost: 0,
+      cloudServices: 0,
+      apiServices: 0,
+      adSpend: 0,
+      other: 0,
+      percentageOfRevenue: 0
+    };
+    let previousCosts = {
+      totalCost: 0,
+      cloudServices: 0,
+      apiServices: 0,
+      adSpend: 0,
+      other: 0,
+      percentageOfRevenue: 0
+    };
+
+    if (currentMonthAggregate) {
+      currentCosts = currentMonthAggregate.costs || currentCosts;
+    } else {
+      currentCosts = latestAggregate?.costs || currentCosts;
+    }
+
+    if (previousMonthAggregate) {
+      previousCosts = previousMonthAggregate.costs || previousCosts;
+    } else {
+      previousCosts = previousAggregate?.costs || previousCosts;
+    }
+
+    const costsChange = previousCosts.totalCost > 0 ? ((currentCosts.totalCost - previousCosts.totalCost) / previousCosts.totalCost * 100) : 0;
+
     // Fetch posted posts count (current period)
     const currentPosts = await MarketingPost.countDocuments({
       status: 'posted',
@@ -248,6 +281,19 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
         previous: parseFloat(previousChurnRate.toFixed(2)),
         change: parseFloat(churnChange.toFixed(1)),
         trend: currentChurnRate <= previousChurnRate ? 'down' : 'up' // Lower churn is better
+      },
+      costs: {
+        current: parseFloat(currentCosts.totalCost.toFixed(2)),
+        previous: parseFloat(previousCosts.totalCost.toFixed(2)),
+        change: parseFloat(costsChange.toFixed(1)),
+        trend: currentCosts.totalCost <= previousCosts.totalCost ? 'down' : 'up', // Lower costs are better
+        breakdown: {
+          cloudServices: parseFloat(currentCosts.cloudServices.toFixed(2)),
+          apiServices: parseFloat(currentCosts.apiServices.toFixed(2)),
+          adSpend: parseFloat(currentCosts.adSpend.toFixed(2)),
+          other: parseFloat(currentCosts.other.toFixed(2)),
+          percentageOfRevenue: parseFloat(currentCosts.percentageOfRevenue.toFixed(1))
+        }
       },
       users: {
         current: currentUsers,

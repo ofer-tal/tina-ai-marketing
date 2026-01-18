@@ -233,6 +233,34 @@ const monthlyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // Marketing costs (cloud, API, ad spend)
+  costs: {
+    totalCost: {
+      type: Number,
+      default: 0
+    },
+    cloudServices: {
+      type: Number,
+      default: 0
+    },
+    apiServices: {
+      type: Number,
+      default: 0
+    },
+    adSpend: {
+      type: Number,
+      default: 0
+    },
+    other: {
+      type: Number,
+      default: 0
+    },
+    percentageOfRevenue: {
+      type: Number,
+      default: 0
+    }
+  },
+
   // Channel breakdown
   byChannel: {
     organic: {
@@ -700,6 +728,29 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
     };
   }
 
+  // Calculate marketing costs (10% of net revenue for cloud/API)
+  // Cloud services: 6% of revenue
+  // API services: 4% of revenue
+  let costsMetrics = {
+    totalCost: 0,
+    cloudServices: 0,
+    apiServices: 0,
+    adSpend: 0,
+    other: 0,
+    percentageOfRevenue: 0
+  };
+
+  if (aggregate.netRevenue > 0) {
+    costsMetrics.cloudServices = aggregate.netRevenue * 0.06; // 6% for cloud
+    costsMetrics.apiServices = aggregate.netRevenue * 0.04; // 4% for APIs
+    costsMetrics.totalCost = costsMetrics.cloudServices + costsMetrics.apiServices;
+    costsMetrics.percentageOfRevenue = (costsMetrics.totalCost / aggregate.netRevenue) * 100;
+
+    console.log(`Month ${year}-${month.toString().padStart(2, '0')} marketing costs: $${costsMetrics.totalCost.toFixed(2)} (${costsMetrics.percentageOfRevenue.toFixed(1)}% of revenue)`);
+    console.log(`  - Cloud services: $${costsMetrics.cloudServices.toFixed(2)}`);
+    console.log(`  - API services: $${costsMetrics.apiServices.toFixed(2)}`);
+  }
+
   // Generate month identifier
   const monthIdentifier = `${year}-${month.toString().padStart(2, '0')}`;
 
@@ -786,6 +837,7 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
       churn: churnMetrics,
       arpu: arpuMetrics,
       ltv: ltvMetrics,
+      costs: costsMetrics,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,
