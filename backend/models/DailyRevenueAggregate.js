@@ -181,6 +181,30 @@ const dailyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // LTV (Lifetime Value)
+  ltv: {
+    value: {
+      type: Number,
+      default: 0
+    },
+    arpu: {
+      type: Number,
+      default: 0
+    },
+    customerLifespanMonths: {
+      type: Number,
+      default: 0
+    },
+    churnRate: {
+      type: Number,
+      default: 0
+    },
+    calculatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+
   // Attribution breakdown (revenue by channel)
   byChannel: [{
     channel: {
@@ -541,6 +565,26 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     };
 
     console.log(`ARPU: $${arpuMetrics.value} (revenue: $${netRevenue}, subscribers: ${activeSubscribers.totalCount})`);
+
+    // Calculate LTV (Lifetime Value)
+    // LTV = ARPU × customer lifespan (in months)
+    // Customer lifespan = 1 / (churn rate / 100) if churn > 0, else use default 24 months
+    let customerLifespanMonths = 24; // Default: 2 years
+    if (churnMetrics.rate > 0) {
+      customerLifespanMonths = 1 / (churnMetrics.rate / 100);
+    }
+
+    const ltvValue = arpuMetrics.value * customerLifespanMonths;
+
+    var ltvMetrics = {
+      value: parseFloat(ltvValue.toFixed(2)),
+      arpu: arpuMetrics.value,
+      customerLifespanMonths: parseFloat(customerLifespanMonths.toFixed(1)),
+      churnRate: churnMetrics.rate,
+      calculatedAt: new Date()
+    };
+
+    console.log(`LTV: $${ltvMetrics.value} (ARPU: $${arpuMetrics.value}, lifespan: ${ltvMetrics.customerLifespanMonths} months, churn: ${churnMetrics.rate}%)`);
   } catch (error) {
     console.error('Error querying active subscribers or calculating churn:', error);
     // If query fails, subscribers will remain at 0, churn at 0
@@ -553,6 +597,13 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
       value: 0,
       periodRevenue: netRevenue,
       periodSubscribers: activeSubscribers.totalCount,
+      calculatedAt: new Date()
+    };
+    var ltvMetrics = {
+      value: 0,
+      arpu: arpuMetrics.value,
+      customerLifespanMonths: 0,
+      churnRate: churnMetrics.rate,
       calculatedAt: new Date()
     };
   }
@@ -577,6 +628,7 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
     subscribers: activeSubscribers,
     churn: churnMetrics,
     arpu: arpuMetrics,
+    ltv: ltvMetrics,
     customers: {
       newCount: newCustomerCount,
       returningCount: returningCustomerCount,

@@ -136,6 +136,25 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
 
     const churnChange = previousChurnRate > 0 ? ((currentChurnRate - previousChurnRate) / previousChurnRate * 100) : 0;
 
+    // Get LTV from aggregates
+    // Use monthly aggregate if available, otherwise use weekly, otherwise use latest daily
+    let currentLTV = 0;
+    let previousLTV = 0;
+
+    if (currentMonthAggregate) {
+      currentLTV = currentMonthAggregate.ltv?.value || 0;
+    } else {
+      currentLTV = latestAggregate?.ltv?.value || 0;
+    }
+
+    if (previousMonthAggregate) {
+      previousLTV = previousMonthAggregate.ltv?.value || 0;
+    } else {
+      previousLTV = previousAggregate?.ltv?.value || 0;
+    }
+
+    const ltvChange = previousLTV > 0 ? ((currentLTV - previousLTV) / previousLTV * 100) : 0;
+
     // Fetch posted posts count (current period)
     const currentPosts = await MarketingPost.countDocuments({
       status: 'posted',
@@ -217,6 +236,12 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
         previous: parseFloat(previousARPU.toFixed(2)),
         change: parseFloat(arpuChange.toFixed(1)),
         trend: currentARPU >= previousARPU ? 'up' : 'down'
+      },
+      ltv: {
+        current: parseFloat(currentLTV.toFixed(2)),
+        previous: parseFloat(previousLTV.toFixed(2)),
+        change: parseFloat(ltvChange.toFixed(1)),
+        trend: currentLTV >= previousLTV ? 'up' : 'down'
       },
       churn: {
         current: parseFloat(currentChurnRate.toFixed(2)),
