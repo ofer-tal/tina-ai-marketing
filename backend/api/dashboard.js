@@ -1,5 +1,7 @@
 import express from 'express';
 import { cacheMiddleware } from '../middleware/cache.js';
+import MarketingRevenue from '../models/MarketingRevenue.js';
+import MarketingPost from '../models/MarketingPost.js';
 
 const router = express.Router();
 
@@ -39,122 +41,186 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
         break;
     }
 
-    // TODO: In production, these would be fetched from MongoDB
-    // For now, returning period-specific mock data that represents the current period vs previous period
-    let metrics;
+    // Fetch real data from MongoDB
+    console.log(`Fetching dashboard metrics for period: ${period} from database`);
 
+    // Calculate previous period for comparison
+    let previousStartTime;
     if (period === '24h') {
-      // Last 24 hours metrics
-      metrics = {
-        period: period,
-        startTime: startTime.toISOString(),
-        endTime: now.toISOString(),
-        mrr: {
-          current: 425,
-          previous: 380,
-          change: 11.8,
-          trend: 'up'
-        },
-        subscribers: {
-          current: 892,
-          previous: 854,
-          change: 4.5,
-          trend: 'up'
-        },
-        users: {
-          current: 1247,
-          previous: 1102,
-          change: 13.2,
-          trend: 'up'
-        },
-        spend: {
-          current: 87,
-          previous: 92,
-          change: -5.4,
-          trend: 'down'
-        },
-        posts: {
-          current: 23,
-          previous: 18,
-          change: 27.8,
-          trend: 'up'
-        }
-      };
+      previousStartTime = new Date(startTime.getTime() - 24 * 60 * 60 * 1000);
     } else if (period === '7d') {
-      // Last 7 days metrics (weekly totals/averages)
-      metrics = {
-        period: period,
-        startTime: startTime.toISOString(),
-        endTime: now.toISOString(),
-        mrr: {
-          current: 2890,
-          previous: 2540,
-          change: 13.8,
-          trend: 'up'
-        },
-        subscribers: {
-          current: 3245,
-          previous: 2987,
-          change: 8.6,
-          trend: 'up'
-        },
-        users: {
-          current: 8542,
-          previous: 7234,
-          change: 18.1,
-          trend: 'up'
-        },
-        spend: {
-          current: 612,
-          previous: 645,
-          change: -5.1,
-          trend: 'down'
-        },
-        posts: {
-          current: 156,
-          previous: 128,
-          change: 21.9,
-          trend: 'up'
-        }
-      };
+      previousStartTime = new Date(startTime.getTime() - 7 * 24 * 60 * 60 * 1000);
     } else if (period === '30d') {
-      // Last 30 days metrics (monthly totals/averages)
-      metrics = {
-        period: period,
-        startTime: startTime.toISOString(),
-        endTime: now.toISOString(),
-        mrr: {
-          current: 12350,
-          previous: 10890,
-          change: 13.4,
-          trend: 'up'
-        },
-        subscribers: {
-          current: 12456,
-          previous: 11234,
-          change: 10.9,
-          trend: 'up'
-        },
-        users: {
-          current: 36847,
-          previous: 31256,
-          change: 17.9,
-          trend: 'up'
-        },
-        spend: {
-          current: 2450,
-          previous: 2680,
-          change: -8.6,
-          trend: 'down'
-        },
-        posts: {
-          current: 642,
-          previous: 545,
-          change: 17.8,
-          trend: 'up'
-        }
-      };
+      previousStartTime = new Date(startTime.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
+
+    // Fetch MRR from MarketingRevenue collection (current period)
+    const currentMRRResult = await MarketingRevenue.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: startTime, $lte: now }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$revenue.netAmount' },
+          transactionCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Fetch MRR from previous period
+    const previousMRRResult = await MarketingRevenue.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: previousStartTime, $lt: startTime }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalRevenue: { $sum: '$revenue.netAmount' },
+          transactionCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const currentMRR = currentMRRResult[0]?.totalRevenue || 0;
+    const previousMRR = previousMRRResult[0]?.totalRevenue || 0;
+    const mrrChange = previousMRR > 0 ? ((currentMRR - previousMRR) / previousMRR * 100) : 0;
+
+    // Fetch posted posts count (current period)
+    const currentPosts = await MarketingPost.countDocuments({
+      status: 'posted',
+      postedAt: { $gte: startTime, $lte: now }
+    });
+
+    // Fetch posted posts count (previous period)
+    const previousPosts = await MarketingPost.countDocuments({
+      status: 'posted',
+      postedAt: { $gte: previousStartTime, $lt: startTime }
+    });
+
+    const postsChange = previousPosts > 0 ? ((currentPosts - previousPosts) / previousPosts * 100) : 0;
+
+    // Fetch unique new customers (current period)
+    const currentCustomersResult = await MarketingRevenue.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: startTime, $lte: now },
+          'customer.new': true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    // Fetch unique new customers (previous period)
+    const previousCustomersResult = await MarketingRevenue.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: previousStartTime, $lt: startTime },
+          'customer.new': true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const currentSubscribers = currentCustomersResult[0]?.count || 0;
+    const previousSubscribers = previousCustomersResult[0]?.count || 0;
+    const subscribersChange = previousSubscribers > 0 ? ((currentSubscribers - previousSubscribers) / previousSubscribers * 100) : 0;
+
+    // Fetch total unique customers (subscribers + returning)
+    const currentUsersResult = await MarketingRevenue.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: startTime, $lte: now }
+        }
+      },
+      {
+        $group: {
+          _id: '$subscriptionId',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $count: 'totalUsers'
+      }
+    ]);
+
+    const previousUsersResult = await MarketingRevenue.aggregate([
+      {
+        $match: {
+          transactionDate: { $gte: previousStartTime, $lt: startTime }
+        }
+      },
+      {
+        $group: {
+          _id: '$subscriptionId',
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $count: 'totalUsers'
+      }
+    ]);
+
+    const currentUsers = currentUsersResult[0]?.totalUsers || 0;
+    const previousUsers = previousUsersResult[0]?.totalUsers || 0;
+    const usersChange = previousUsers > 0 ? ((currentUsers - previousUsers) / previousUsers * 100) : 0;
+
+    // For spend, we'll use the same data as posts for now (this would come from campaign spend data)
+    // TODO: Implement real campaign spend tracking
+    const currentSpend = currentPosts * 3.5; // Mock: $3.50 per post average
+    const previousSpend = previousPosts * 3.5;
+    const spendChange = previousSpend > 0 ? ((currentSpend - previousSpend) / previousSpend * 100) : 0;
+
+    // Build metrics object
+    const metrics = {
+      period: period,
+      startTime: startTime.toISOString(),
+      endTime: now.toISOString(),
+      mrr: {
+        current: Math.round(currentMRR),
+        previous: Math.round(previousMRR),
+        change: parseFloat(mrrChange.toFixed(1)),
+        trend: currentMRR >= previousMRR ? 'up' : 'down'
+      },
+      subscribers: {
+        current: currentSubscribers,
+        previous: previousSubscribers,
+        change: parseFloat(subscribersChange.toFixed(1)),
+        trend: currentSubscribers >= previousSubscribers ? 'up' : 'down'
+      },
+      users: {
+        current: currentUsers,
+        previous: previousUsers,
+        change: parseFloat(usersChange.toFixed(1)),
+        trend: currentUsers >= previousUsers ? 'up' : 'down'
+      },
+      spend: {
+        current: parseFloat(currentSpend.toFixed(2)),
+        previous: parseFloat(previousSpend.toFixed(2)),
+        change: parseFloat(spendChange.toFixed(1)),
+        trend: currentSpend >= previousSpend ? 'up' : 'down'
+      },
+      posts: {
+        current: currentPosts,
+        previous: previousPosts,
+        change: parseFloat(postsChange.toFixed(1)),
+        trend: currentPosts >= previousPosts ? 'up' : 'down'
+      }
+    };
 
     console.log(`Dashboard metrics fetched successfully for period: ${period}`);
     res.json(metrics);
