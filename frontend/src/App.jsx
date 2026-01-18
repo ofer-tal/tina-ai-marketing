@@ -335,6 +335,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/content/library', icon: '📝', label: 'Content' },
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
+    { path: '/todos', icon: '📋', label: 'Todos' },
     { path: '/ads/campaigns', icon: '📢', label: 'Campaigns' },
     { path: '/ads/revenue-test', icon: '💰', label: 'Revenue' },
     { path: '/revenue/weekly', icon: '📅', label: 'Weekly' },
