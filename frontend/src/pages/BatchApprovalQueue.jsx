@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
+import { showSuccessToast, showErrorToast } from '../components/Toast';
 
 const PageContainer = styled.div`
   padding: 0;
@@ -590,13 +591,27 @@ function BatchApprovalQueue() {
 
   const handleQuickApprove = async (postId) => {
     try {
-      await fetch(`http://localhost:3001/api/content/posts/${postId}/approve`, {
+      const response = await fetch(`http://localhost:3001/api/content/posts/${postId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
-      fetchPosts();
+
+      if (response.ok) {
+        const post = posts.find(p => p._id === postId);
+        showSuccessToast(
+          `Content approved successfully!`,
+          {
+            title: post?.title || 'Post',
+            duration: 3000
+          }
+        );
+        fetchPosts();
+      } else {
+        throw new Error('Failed to approve post');
+      }
     } catch (error) {
       console.error('Error approving post:', error);
+      showErrorToast('Failed to approve content. Please try again.');
       // Optimistic update
       setPosts(posts.map(p => p._id === postId ? { ...p, status: 'approved' } : p));
     }
