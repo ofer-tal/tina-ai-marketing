@@ -288,12 +288,167 @@ const LoadingState = styled.div`
   color: #a0a0a0;
 `;
 
+// Rejection Modal Components
+const RejectModalOverlay = styled.div`
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+`;
+
+const RejectModalContent = styled.div`
+  background: #16213e;
+  border-radius: 12px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+`;
+
+const RejectModalTitle = styled.h3`
+  margin: 0 0 1rem 0;
+  color: #ff6b6b;
+  font-size: 1.5rem;
+`;
+
+const RejectModalLabel = styled.label`
+  display: block;
+  margin: 1.5rem 0 0.5rem 0;
+  color: #eaeaea;
+  font-weight: 500;
+  font-size: 0.95rem;
+`;
+
+const RejectModalTextarea = styled.textarea`
+  width: 100%;
+  min-height: 100px;
+  padding: 0.75rem;
+  background: #1e2a4a;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+
+  &:focus {
+    outline: none;
+    border-color: #e94560;
+  }
+
+  &::placeholder {
+    color: #666;
+  }
+`;
+
+const RejectModalCheckbox = styled.label`
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0 0;
+  padding: 1rem;
+  background: ${props => props.$checked ? '#1e2a4a' : 'transparent'};
+  border: 1px solid ${props => props.$checked ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  input[type="checkbox"] {
+    margin-top: 0.25rem;
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+  }
+`;
+
+const RejectModalCheckboxLabel = styled.div`
+  flex: 1;
+
+  strong {
+    display: block;
+    color: #eaeaea;
+    margin-bottom: 0.25rem;
+  }
+
+  div {
+    color: #a0a0a0;
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+`;
+
+const RejectModalWarning = styled.div`
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(233, 69, 96, 0.1);
+  border-left: 3px solid #e94560;
+  border-radius: 4px;
+  color: #ff9999;
+  font-size: 0.85rem;
+  line-height: 1.4;
+`;
+
+const RejectModalActions = styled.div`
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 2rem;
+`;
+
+const RejectModalButton = styled.button`
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &.cancel {
+    background: #2d3561;
+    color: #eaeaea;
+
+    &:hover {
+      background: #3d4571;
+    }
+  }
+
+  &.confirm {
+    background: #e94560;
+    color: white;
+
+    &:hover {
+      background: #d63850;
+    }
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+`;
+
 function BatchApprovalQueue() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [platformFilter, setPlatformFilter] = useState('all');
   const [selectedPosts, setSelectedPosts] = useState(new Set());
+  const [rejectModal, setRejectModal] = useState({
+    isOpen: false,
+    postId: null,
+    reason: '',
+    blacklistStory: false
+  });
 
   useEffect(() => {
     fetchPosts();
@@ -447,21 +602,85 @@ function BatchApprovalQueue() {
     }
   };
 
-  const handleQuickReject = async (postId) => {
-    const reason = prompt('Enter rejection reason:');
-    if (!reason) return;
+  const handleQuickReject = (postId) => {
+    // Open the rejection modal
+    setRejectModal({
+      isOpen: true,
+      postId,
+      reason: '',
+      blacklistStory: false
+    });
+  };
+
+  const handleCloseRejectModal = () => {
+    setRejectModal({
+      isOpen: false,
+      postId: null,
+      reason: '',
+      blacklistStory: false
+    });
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectModal.reason.trim()) {
+      alert('Please provide a rejection reason.');
+      return;
+    }
+
+    const post = posts.find(p => p._id === rejectModal.postId);
+    if (!post) return;
 
     try {
-      await fetch(`http://localhost:3001/api/content/posts/${postId}/reject`, {
+      // Try API call first for rejection
+      const rejectResponse = await fetch(`http://localhost:3001/api/content/posts/${rejectModal.postId}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason })
+        body: JSON.stringify({ reason: rejectModal.reason })
       });
-      fetchPosts();
+
+      if (!rejectResponse.ok) {
+        throw new Error('Failed to reject post');
+      }
+
+      // If blacklist is checked, call blacklist API
+      if (rejectModal.blacklistStory && post.storyId) {
+        try {
+          const blacklistResponse = await fetch('http://localhost:3001/api/blacklist', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              storyId: post.storyId,
+              reason: rejectModal.reason,
+              blacklistedBy: 'user'
+            })
+          });
+
+          if (blacklistResponse.ok) {
+            console.log('Story added to blacklist successfully');
+          } else {
+            console.warn('Failed to add story to blacklist, but post was rejected');
+          }
+        } catch (blacklistErr) {
+          console.error('Error blacklisting story:', blacklistErr);
+          // Continue even if blacklist fails
+        }
+      }
+
+      // Update local state
+      setPosts(posts.map(p => p._id === rejectModal.postId ? { ...p, status: 'rejected' } : p));
+
+      handleCloseRejectModal();
+
+      if (rejectModal.blacklistStory) {
+        alert('❌ Post rejected and story blacklisted.');
+      } else {
+        alert('❌ Post rejected.');
+      }
     } catch (error) {
       console.error('Error rejecting post:', error);
       // Optimistic update
-      setPosts(posts.map(p => p._id === postId ? { ...p, status: 'rejected' } : p));
+      setPosts(posts.map(p => p._id === rejectModal.postId ? { ...p, status: 'rejected' } : p));
+      handleCloseRejectModal();
     }
   };
 
@@ -596,8 +815,58 @@ function BatchApprovalQueue() {
           ))}
         </QueueList>
       )}
+
+      {/* Rejection Modal */}
+      {rejectModal.isOpen && (
+        <RejectModalOverlay onClick={handleCloseRejectModal}>
+          <RejectModalContent onClick={(e) => e.stopPropagation()}>
+            <RejectModalTitle>❌ Reject Content</RejectModalTitle>
+
+            <RejectModalLabel htmlFor="reject-reason">
+              Rejection Reason <span style={{color: '#e94560'}}>*</span>
+            </RejectModalLabel>
+            <RejectModalTextarea
+              id="reject-reason"
+              placeholder="Please explain why this content is being rejected... (e.g., Low quality, inappropriate content, poor engagement potential)"
+              value={rejectModal.reason}
+              onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+              autoFocus
+            />
+
+            <RejectModalCheckbox $checked={rejectModal.blacklistStory}>
+              <input
+                type="checkbox"
+                checked={rejectModal.blacklistStory}
+                onChange={(e) => setRejectModal(prev => ({ ...prev, blacklistStory: e.target.checked }))}
+              />
+              <RejectModalCheckboxLabel>
+                <strong>🚫 Blacklist this story</strong>
+                <div>Prevent this story from being used for future content generation</div>
+                {rejectModal.blacklistStory && (
+                  <RejectModalWarning>
+                    ⚠️ This story will not be used for any future content. This action helps AI learn what content to avoid.
+                  </RejectModalWarning>
+                )}
+              </RejectModalCheckboxLabel>
+            </RejectModalCheckbox>
+
+            <RejectModalActions>
+              <RejectModalButton className="cancel" onClick={handleCloseRejectModal}>
+                Cancel
+              </RejectModalButton>
+              <RejectModalButton
+                className="confirm"
+                onClick={handleConfirmReject}
+              >
+                ❌ Reject
+              </RejectModalButton>
+            </RejectModalActions>
+          </RejectModalContent>
+        </RejectModalOverlay>
+      )}
     </PageContainer>
   );
 }
 
 export default BatchApprovalQueue;
+ 
