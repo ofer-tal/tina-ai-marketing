@@ -428,6 +428,7 @@ function Todos() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showSnoozeModal, setShowSnoozeModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedTodo, setSelectedTodo] = useState(null);
   const [snoozeUntil, setSnoozeUntil] = useState('');
   const [filters, setFilters] = useState({
@@ -583,7 +584,7 @@ function Todos() {
     if (!selectedTodo || !snoozeUntil) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}/snooze`, {
+      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo._id || selectedTodo.id}/snooze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -602,6 +603,34 @@ function Todos() {
       }
     } catch (error) {
       console.error('Error snoozing todo:', error);
+    }
+  };
+
+  const handleDeleteClick = (todo) => {
+    setSelectedTodo(todo);
+    setShowDeleteModal(true);
+    setShowDetailModal(false);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!selectedTodo) return;
+
+    try {
+      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        await fetchTodos();
+        setShowDeleteModal(false);
+        setSelectedTodo(null);
+      }
+    } catch (error) {
+      console.error('Error deleting todo:', error);
     }
   };
 
@@ -935,7 +964,7 @@ function Todos() {
                 onChange={async (e) => {
                   const newStatus = e.target.value;
                   try {
-                    const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                    const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ status: newStatus })
@@ -966,7 +995,7 @@ function Todos() {
                     $primary
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'in_progress' })
@@ -990,7 +1019,7 @@ function Todos() {
                   <Button
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'cancelled' })
@@ -1014,7 +1043,7 @@ function Todos() {
                     $primary
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'completed' })
@@ -1038,7 +1067,7 @@ function Todos() {
                   <Button
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'pending' })
@@ -1060,7 +1089,7 @@ function Todos() {
                 <Button
                   onClick={async () => {
                     try {
-                      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo.id}`, {
+                      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'pending' })
@@ -1077,6 +1106,12 @@ function Todos() {
                   🔄 Reopen
                 </Button>
               )}
+              <Button
+                onClick={() => handleDeleteClick(selectedTodo)}
+                style={{ backgroundColor: '#dc3545', color: 'white' }}
+              >
+                🗑️ Delete
+              </Button>
               <Button onClick={() => setShowDetailModal(false)}>
                 Close
               </Button>
@@ -1113,6 +1148,30 @@ function Todos() {
                 ✅ Confirm Snooze
               </Button>
               <Button onClick={() => setShowSnoozeModal(false)}>
+                Cancel
+              </Button>
+            </ButtonGroup>
+          </ModalContent>
+        </ModalOverlay>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedTodo && (
+        <ModalOverlay onClick={() => setShowDeleteModal(false)}>
+          <ModalContent onClick={(e) => e.stopPropagation()}>
+            <ModalTitle>🗑️ Delete Task</ModalTitle>
+            <p style={{ color: '#a0a0a0', marginBottom: '1.5rem' }}>
+              Are you sure you want to delete "{selectedTodo.title}"? This action cannot be undone.
+            </p>
+
+            <ButtonGroup>
+              <Button
+                onClick={handleDeleteConfirm}
+                style={{ backgroundColor: '#dc3545', color: 'white' }}
+              >
+                🗑️ Delete
+              </Button>
+              <Button onClick={() => setShowDeleteModal(false)}>
                 Cancel
               </Button>
             </ButtonGroup>

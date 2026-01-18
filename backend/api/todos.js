@@ -361,7 +361,7 @@ router.delete("/:id", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (status.isConnected && status.readyState === 1) {
-      await mongoose.connection.collection("marketing_tasks").deleteOne({ _id: id });
+      await mongoose.connection.collection("marketing_tasks").deleteOne({ _id: new ObjectId(id) });
     }
 
     res.json({
