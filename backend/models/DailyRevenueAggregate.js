@@ -339,12 +339,17 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
         subscriptionTypeMap.set(subType, {
           type: subType,
           count: 0,
-          revenue: 0
+          revenue: 0,
+          uniqueSubscriptions: new Set()
         });
       }
       const sub = subscriptionTypeMap.get(subType);
       sub.count++;
       sub.revenue += tx.revenue.netAmount || 0;
+      // Track unique subscription IDs for MRR calculation
+      if (tx.customer?.subscriptionId) {
+        sub.uniqueSubscriptions.add(tx.customer.subscriptionId);
+      }
     }
 
     // Regional breakdown
@@ -376,13 +381,15 @@ dailyRevenueAggregateSchema.statics.aggregateForDate = async function(dateObj) {
   let mrr = 0;
   for (const [type, data] of subscriptionTypeMap.entries()) {
     if (type === 'monthly') {
-      // Monthly subscribers: count × average monthly price
+      // Monthly subscribers: unique count × average monthly price
+      const uniqueMonthlyCount = data.uniqueSubscriptions?.size || data.count;
       const avgMonthlyPrice = data.count > 0 ? data.revenue / data.count : 0;
-      mrr += data.count * avgMonthlyPrice;
+      mrr += uniqueMonthlyCount * avgMonthlyPrice;
     } else if (type === 'annual') {
-      // Annual subscribers: count × (average annual price / 12)
+      // Annual subscribers: unique count × (average annual price / 12)
+      const uniqueAnnualCount = data.uniqueSubscriptions?.size || data.count;
       const avgAnnualPrice = data.count > 0 ? data.revenue / data.count : 0;
-      mrr += data.count * (avgAnnualPrice / 12);
+      mrr += uniqueAnnualCount * (avgAnnualPrice / 12);
     }
     // Trials are not counted in MRR
   }

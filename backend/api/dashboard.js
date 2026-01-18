@@ -2,6 +2,7 @@ import express from 'express';
 import { cacheMiddleware } from '../middleware/cache.js';
 import MarketingRevenue from '../models/MarketingRevenue.js';
 import MarketingPost from '../models/MarketingPost.js';
+import DailyRevenueAggregate from '../models/DailyRevenueAggregate.js';
 
 const router = express.Router();
 
@@ -54,40 +55,25 @@ router.get('/metrics', cacheMiddleware('dashboardMetrics'), async (req, res) => 
       previousStartTime = new Date(startTime.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    // Fetch MRR from MarketingRevenue collection (current period)
-    const currentMRRResult = await MarketingRevenue.aggregate([
-      {
-        $match: {
-          transactionDate: { $gte: startTime, $lte: now }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$revenue.netAmount' },
-          transactionCount: { $sum: 1 }
-        }
-      }
-    ]);
+    // Fetch MRR from DailyRevenueAggregate (uses proper MRR calculation from subscriptions)
+    // Get the latest daily aggregate for current MRR
+    const latestAggregate = await DailyRevenueAggregate.findOne()
+      .sort({ date: -1 })
+      .limit(1);
 
-    // Fetch MRR from previous period
-    const previousMRRResult = await MarketingRevenue.aggregate([
-      {
-        $match: {
-          transactionDate: { $gte: previousStartTime, $lt: startTime }
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$revenue.netAmount' },
-          transactionCount: { $sum: 1 }
-        }
-      }
-    ]);
+    const currentMRR = latestAggregate?.mrr || 0;
 
-    const currentMRR = currentMRRResult[0]?.totalRevenue || 0;
-    const previousMRR = previousMRRResult[0]?.totalRevenue || 0;
+    // Get previous MRR from a week ago for comparison
+    const previousDate = new Date(now);
+    previousDate.setDate(previousDate.getDate() - 7);
+
+    const previousAggregate = await DailyRevenueAggregate.findOne({
+      dateObj: { $lt: previousDate }
+    })
+      .sort({ date: -1 })
+      .limit(1);
+
+    const previousMRR = previousAggregate?.mrr || 0;
     const mrrChange = previousMRR > 0 ? ((currentMRR - previousMRR) / previousMRR * 100) : 0;
 
     // Fetch posted posts count (current period)
