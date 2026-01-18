@@ -338,7 +338,8 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/content/approval', icon: '✅', label: 'Approvals' },
     { path: '/chat', icon: '🤖', label: 'AI Chat' },
     { path: '/todos', icon: '📋', label: 'Todos' },
-    { path: '/ads/campaigns', icon: '📢', label: 'Campaigns' },
+    { path: '/ads', icon: '📢', label: 'Ads' },
+    { path: '/ads/campaigns', icon: '🎯', label: 'Campaigns' },
     { path: '/ads/revenue-test', icon: '💰', label: 'Revenue' },
     { path: '/revenue/weekly', icon: '📅', label: 'Weekly' },
     { path: '/settings', icon: '⚙️', label: 'Settings' },
@@ -448,6 +449,7 @@ function App() {
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
+                <Route path="/ads" element={<PageWithBreadcrumbs><Campaigns /></PageWithBreadcrumbs>} />
                 <Route path="/ads/campaigns" element={<PageWithBreadcrumbs><Campaigns /></PageWithBreadcrumbs>} />
                 <Route path="/ads/revenue-test" element={<PageWithBreadcrumbs><RevenueAttributionTest /></PageWithBreadcrumbs>} />
                 <Route path="/revenue/weekly" element={<PageWithBreadcrumbs><WeeklyRevenueAggregates /></PageWithBreadcrumbs>} />
