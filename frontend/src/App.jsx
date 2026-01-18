@@ -85,9 +85,13 @@ const SidebarNav = styled.nav`
     left: 0;
     top: 0;
     height: 100vh;
-    z-index: ${cssVar('--z-index-fixed')};
-    transform: translateX(${props => props.$collapsed ? '-100%' : '0'});
+    width: 280px;
+    z-index: calc(${cssVar('--z-index-fixed')} + 1);
+    transform: translateX(${props => props.$mobileOpen ? '0' : '-100%'});
     transition: transform ${cssVar('--transition-base')};
+    padding: ${cssVar('--spacing-md')};
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 `;
 
@@ -106,6 +110,13 @@ const SidebarNavLink = styled(Link)`
   gap: ${cssVar('--spacing-sm')};
   white-space: nowrap;
   overflow: hidden;
+  min-height: 44px; // Ensure touch target is large enough
+
+  @media (max-width: 768px) {
+    padding: 1rem;
+    min-height: 48px; // Larger touch target on mobile
+    font-size: 1rem;
+  }
 
   &:hover {
     background: ${cssVar('--color-primary')};
@@ -138,6 +149,14 @@ const PageContent = styled.div`
 
   @media (max-width: 768px) {
     max-width: 100vw;
+    padding: ${cssVar('--spacing-md')};
+  }
+
+  // Ensure content stacks vertically on mobile
+  @media (max-width: 768px) {
+    & > * {
+      flex-direction: column;
+    }
   }
 `;
 
@@ -178,6 +197,53 @@ const SidebarToggle = styled.button`
 
   @media (max-width: 768px) {
     display: none;
+  }
+`;
+
+const MobileMenuButton = styled.button`
+  display: none;
+  position: fixed;
+  top: ${cssVar('--spacing-md')};
+  left: ${cssVar('--spacing-md')};
+  z-index: ${cssVar('--z-index-fixed')};
+  background: ${cssVar('--color-surface')};
+  border: 2px solid ${cssVar('--color-border')};
+  border-radius: ${cssVar('--radius-md')};
+  padding: 0.75rem;
+  cursor: pointer;
+  min-width: 48px;
+  min-height: 48px;
+  font-size: 1.5rem;
+  align-items: center;
+  justify-content: center;
+  transition: all ${cssVar('--transition-base')};
+
+  &:hover {
+    background: ${cssVar('--color-primary')};
+    border-color: ${cssVar('--color-primary')};
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  @media (max-width: 768px) {
+    display: flex;
+  }
+`;
+
+const MobileOverlay = styled.div`
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: ${props => props.$open ? cssVar('--z-index-fixed') : '-1'};
+  opacity: ${props => props.$open ? '1' : '0'};
+  transition: opacity ${cssVar('--transition-base')};
+  pointer-events: ${props => props.$open ? 'auto' : 'none'};
+
+  @media (max-width: 768px) {
+    display: block;
   }
 `;
 
@@ -303,7 +369,7 @@ function HomePage() {
 }
 
 // Sidebar component with collapse functionality
-function Sidebar({ collapsed, onToggle }) {
+function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle }) {
   const location = useLocation();
 
   const menuItems = [
@@ -345,15 +411,39 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/settings', icon: '⚙️', label: 'Settings' },
   ];
 
+  const handleNavClick = () => {
+    // Close mobile menu after navigation
+    if (window.innerWidth <= 768) {
+      onMobileToggle(false);
+    }
+  };
+
   return (
     <>
-      <SidebarNav $collapsed={collapsed} aria-label="Main navigation">
+      <MobileOverlay
+        $open={mobileOpen}
+        onClick={() => onMobileToggle(false)}
+        aria-hidden="true"
+      />
+      <MobileMenuButton
+        onClick={() => onMobileToggle(!mobileOpen)}
+        aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+        aria-expanded={mobileOpen}
+      >
+        {mobileOpen ? '✕' : '☰'}
+      </MobileMenuButton>
+      <SidebarNav
+        $collapsed={collapsed}
+        $mobileOpen={mobileOpen}
+        aria-label="Main navigation"
+      >
         {menuItems.map(item => (
           <SidebarNavLink
             key={item.path}
             to={item.path}
             $collapsed={collapsed}
             className={location.pathname === item.path ? 'active' : ''}
+            onClick={handleNavClick}
             aria-label={item.label}
             aria-current={location.pathname === item.path ? 'page' : undefined}
           >
@@ -392,6 +482,8 @@ function App() {
     return saved ? JSON.parse(saved) : false;
   });
 
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   // Persist sidebar state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
@@ -399,6 +491,10 @@ function App() {
 
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => !prev);
+  };
+
+  const toggleMobileMenu = (isOpen) => {
+    setMobileMenuOpen(isOpen);
   };
 
   return (
@@ -414,7 +510,12 @@ function App() {
         </Header>
 
         <MainLayout>
-          <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebar} />
+          <Sidebar
+            collapsed={sidebarCollapsed}
+            onToggle={toggleSidebar}
+            mobileOpen={mobileMenuOpen}
+            onMobileToggle={toggleMobileMenu}
+          />
 
           <MainContentArea>
             <PageContent $sidebarCollapsed={sidebarCollapsed}>
