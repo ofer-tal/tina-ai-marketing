@@ -1,0 +1,42 @@
+CRITICAL BUGS FIXED - Require Server Restart to Apply
+=====================================================
+
+The chat search functionality has TWO critical bugs that have been fixed in the code,
+but the backend server needs to be RESTARTED for the fixes to take effect.
+
+BUG #1: Frontend - Missing Import
+----------------------------------
+File: frontend/src/pages/Chat.jsx
+Issue: LoadingSpinner component was used but not imported
+Fix: Added "import LoadingSpinner from '../components/LoadingSpinner.jsx';" at line 3
+
+BUG #2: Backend - Dynamic Import Not Sharing Connection
+--------------------------------------------------------
+File: backend/api/chat.js
+Issue: Using "await import('mongoose')" created a fresh mongoose instance
+       that wasn't connected to the database. All calls to .collection() failed.
+Fixes Applied:
+1. Added "import mongoose from 'mongoose';" at top of file (line 3)
+2. Replaced all "await import('mongoose')" with comment
+3. Changed all "mongoose.connection.collection(...)" to "mongoose.connection.db.collection(...)"
+
+FILES CHANGED:
+- frontend/src/pages/Chat.jsx (1 line added)
+- backend/api/chat.js (multiple lines fixed)
+- backend/server.js (1 comment added to trigger restart - didn't work)
+
+TO APPLY THESE FIXES:
+--------------------
+You MUST restart the backend server:
+1. Stop the current server process
+2. Run: npm run dev
+3. Or if using nodemon: nodemon backend/server.js
+
+The server is currently running with the old code, so search will fail until restarted.
+
+VERIFICATION:
+------------
+After restart, test with:
+curl "http://localhost:3001/api/chat/search?q=strategy"
+
+Expected result: JSON with search results (not an error)

@@ -610,3 +610,45 @@ maximize their screen space for data analysis and content management.
 
 ═══════════════════════════════════════════════════════════════
 
+
+═══════════════════════════════════════════════════════════════
+REGRESSION DETECTED - Feature #48 (Chat history search)
+═══════════════════════════════════════════════════════════════
+
+STATUS: 🔴 CRITICAL BUG FOUND - Fixes applied but NOT生效 (not active yet)
+
+FEATURE: #48 - Chat history search and reference
+
+BUGS FOUND:
+1. Frontend: LoadingSpinner not imported in Chat.jsx
+   - Error: "ReferenceError: LoadingSpinner is not defined"
+   - Fix: Added import statement
+   
+2. Backend: Dynamic mongoose import creates unconnected instance
+   - Error: "Cannot read properties of undefined (reading 'collection')"
+   - Root cause: await import('mongoose') gets fresh instance
+   - Fix: Added proper import at top of file
+
+FIXES APPLIED:
+✅ frontend/src/pages/Chat.jsx - Added LoadingSpinner import
+✅ backend/api/chat.js - Added mongoose import at top
+✅ backend/api/chat.js - Removed all dynamic imports
+✅ backend/api/chat.js - Fixed .collection() to .db.collection()
+
+⚠️ SERVER RESTART REQUIRED:
+The backend server was started with `node` instead of `nodemon`,
+so file changes are NOT being picked up automatically.
+Current uptime: 3h 13m (server needs manual restart)
+
+AFFECTED FEATURES:
+- Feature #48: Chat history search (REGRESSION from passing to broken)
+- Potentially other chat features that use database
+
+NEXT STEPS:
+1. User must restart backend server to apply fixes
+2. Re-verify Feature #48 after restart
+3. Check for other affected chat features
+
+DOCUMENTATION: See BUG_FIXES_REQUIRED.txt for detailed fix instructions
+
+═══════════════════════════════════════════════════════════════

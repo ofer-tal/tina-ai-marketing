@@ -1,5 +1,6 @@
 import express from "express";
 import databaseService from "../services/database.js";
+import mongoose from "mongoose";
 
 const router = express.Router();
 
@@ -1242,7 +1243,7 @@ router.get("/history", async (req, res) => {
       });
     }
 
-    const mongoose = await import('mongoose');
+    // mongoose already imported at top of file
     const conversations = await mongoose.connection
       .collection("marketing_strategy")
       .find({ type: "chat" })
@@ -1355,11 +1356,11 @@ router.get("/search", async (req, res) => {
       });
     }
 
-    const mongoose = await import('mongoose');
+    // mongoose already imported at top of file
     const searchQuery = q.toLowerCase();
 
     // Search in title, content, reasoning, and messages array
-    const conversations = await mongoose.connection
+    const conversations = await mongoose.connection.db
       .collection("marketing_strategy")
       .find({
         type: "chat",
@@ -1468,8 +1469,8 @@ Always base recommendations on actual data when available.`
       if (status.isConnected && status.readyState === 1) {
         // Database mode: load from MongoDB
         try {
-          const mongoose = await import('mongoose');
-          const collection = mongoose.connection.collection("marketing_strategy");
+          // mongoose already imported at top of file
+          const collection = mongoose.connection.db.collection("marketing_strategy");
           existingConversation = await collection.findOne({ _id: new mongoose.Types.ObjectId(conversationId) });
 
           // Add previous messages to context for multi-turn conversation
@@ -1503,8 +1504,8 @@ Always base recommendations on actual data when available.`
 
     if (status.isConnected && status.readyState === 1) {
       try {
-        const mongoose = await import('mongoose');
-        const collection = mongoose.connection.collection("marketing_strategy");
+        // mongoose already imported at top of file
+        const collection = mongoose.connection.db.collection("marketing_strategy");
 
         // Check if this is a campaign review
         if (aiResponse.campaignReview) {
@@ -1699,8 +1700,8 @@ router.post("/feedback", async (req, res) => {
     }
 
     // Update conversation with feedback
-    const mongoose = await import('mongoose');
-    await mongoose.connection.collection("marketing_strategy").updateOne(
+    // mongoose already imported at top of file
+    await mongoose.connection.db.collection("marketing_strategy").updateOne(
       { _id: conversationId },
       {
         $set: {
@@ -1737,8 +1738,8 @@ router.delete("/history", async (req, res) => {
       });
     }
 
-    const mongoose = await import('mongoose');
-    await mongoose.connection.collection("marketing_strategy").deleteMany({ type: "chat" });
+    // mongoose already imported at top of file
+    await mongoose.connection.db.collection("marketing_strategy").deleteMany({ type: "chat" });
 
     res.json({
       success: true,
@@ -1770,7 +1771,7 @@ router.post("/create-todo", async (req, res) => {
 
     if (status.isConnected && status.readyState === 1) {
       try {
-        const mongoose = await import('mongoose');
+        // mongoose already imported at top of file
         const todo = {
           title,
           description: description || "",
@@ -1789,7 +1790,7 @@ router.post("/create-todo", async (req, res) => {
           updatedAt: new Date()
         };
 
-        const result = await mongoose.connection.collection("marketing_tasks").insertOne(todo);
+        const result = await mongoose.connection.db.collection("marketing_tasks").insertOne(todo);
         createdTodo = {
           id: result.insertedId,
           ...todo
@@ -1853,7 +1854,7 @@ router.post("/approve", async (req, res) => {
     // Save approved proposal to database
     if (status.isConnected && status.readyState === 1) {
       try {
-        const mongoose = await import('mongoose');
+        // mongoose already imported at top of file
         const approvedProposal = {
           type: "decision",
           title: `Budget Change: ${proposal.current.total} → ${proposal.proposed.total}`,
@@ -1873,7 +1874,7 @@ router.post("/approve", async (req, res) => {
           updatedAt: new Date()
         };
 
-        await mongoose.connection.collection("marketing_strategy").insertOne(approvedProposal);
+        await mongoose.connection.db.collection("marketing_strategy").insertOne(approvedProposal);
       } catch (dbError) {
         console.error("Error saving approved proposal to database:", dbError);
       }
@@ -1914,7 +1915,7 @@ router.post("/reject", async (req, res) => {
     // Save rejected proposal to database
     if (status.isConnected && status.readyState === 1) {
       try {
-        const mongoose = await import('mongoose');
+        // mongoose already imported at top of file
         const rejectedProposal = {
           type: "decision",
           title: `Budget Change Rejected`,
@@ -1935,7 +1936,7 @@ router.post("/reject", async (req, res) => {
           updatedAt: new Date()
         };
 
-        await mongoose.connection.collection("marketing_strategy").insertOne(rejectedProposal);
+        await mongoose.connection.db.collection("marketing_strategy").insertOne(rejectedProposal);
       } catch (dbError) {
         console.error("Error saving rejected proposal to database:", dbError);
       }
@@ -2118,8 +2119,8 @@ router.post("/decision/implement", async (req, res) => {
       });
     }
 
-    const mongoose = await import('mongoose');
-    const result = await mongoose.connection.collection("marketing_strategy").updateOne(
+    // mongoose already imported at top of file
+    const result = await mongoose.connection.db.collection("marketing_strategy").updateOne(
       { _id: decisionId },
       {
         $set: {
@@ -2255,7 +2256,7 @@ router.get("/decisions", async (req, res) => {
       });
     }
 
-    const mongoose = await import('mongoose');
+    // mongoose already imported at top of file
     const decisions = await mongoose.connection
       .collection("marketing_strategy")
       .find(filter)
@@ -2292,3 +2293,4 @@ router.get("/decisions", async (req, res) => {
 });
 
 export default router;
+

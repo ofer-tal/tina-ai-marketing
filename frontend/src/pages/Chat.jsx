@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
+import LoadingSpinner from '../components/LoadingSpinner.jsx';
 
 const ChatContainer = styled.div`
   display: flex;
