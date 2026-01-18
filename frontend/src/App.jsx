@@ -24,6 +24,7 @@ import ABTestStatistics from './pages/ABTestStatistics';
 import ROIOptimization from './pages/ROIOptimization';
 import ChurnPrediction from './pages/ChurnPrediction';
 import LTVModeling from './pages/LTVModeling';
+import ASO from './pages/ASO';
 import BlogPostGenerator from './pages/BlogPostGenerator';
 import MediumArticleGenerator from './pages/MediumArticleGenerator';
 import PressReleaseGenerator from './pages/PressReleaseGenerator';
@@ -309,6 +310,7 @@ function Sidebar({ collapsed, onToggle }) {
     { path: '/', icon: '🏠', label: 'Home' },
     { path: '/dashboard', icon: '📊', label: 'Dashboard' },
     { path: '/dashboard/strategic', icon: '📈', label: 'Strategic' },
+    { path: '/aso', icon: '🍎', label: 'ASO' },
     { path: '/analytics/channels', icon: '🎯', label: 'Channels' },
     { path: '/analytics/engagement', icon: '🔍', label: 'Engagement' },
     { path: '/analytics/posting-times', icon: '⏰', label: 'Best Times' },
@@ -419,6 +421,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/dashboard" element={<PageWithBreadcrumbs><Dashboard /></PageWithBreadcrumbs>} />
                 <Route path="/dashboard/strategic" element={<PageWithBreadcrumbs><StrategicDashboard /></PageWithBreadcrumbs>} />
+                <Route path="/aso" element={<PageWithBreadcrumbs><ASO /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/channels" element={<PageWithBreadcrumbs><ChannelPerformance /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/engagement" element={<PageWithBreadcrumbs><ContentEngagement /></PageWithBreadcrumbs>} />
                 <Route path="/analytics/posting-times" element={<PageWithBreadcrumbs><OptimalPostingTime /></PageWithBreadcrumbs>} />
