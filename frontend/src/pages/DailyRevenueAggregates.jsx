@@ -109,6 +109,34 @@ const AggregateDetailValue = styled.div`
   color: ${props => props.color || '#eaeaea'};
 `;
 
+const RevenueBreakdown = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid #2d3561;
+`;
+
+const BreakdownItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const BreakdownLabel = styled.div`
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+`;
+
+const BreakdownValue = styled.div`
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: ${props => props.color || '#eaeaea'};
+`;
+
 const RevenueSummary = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -322,7 +350,7 @@ function DailyRevenueAggregates() {
       <PageContainer>
         <PageHeader>
           <PageTitle>📅 Daily Revenue Aggregates</PageTitle>
-          <PageSubtitle>Feature #152: Revenue aggregation by day with drill-down to transactions</PageSubtitle>
+          <PageSubtitle>Feature #152: Revenue aggregation by day • Feature #158: One-time purchase tracking</PageSubtitle>
         </PageHeader>
         <LoadingState>Loading daily aggregates...</LoadingState>
       </PageContainer>
@@ -385,6 +413,20 @@ function DailyRevenueAggregates() {
                       </AggregateDetailValue>
                     </AggregateDetailItem>
                   </AggregateDetails>
+                  <RevenueBreakdown>
+                    <BreakdownItem>
+                      <BreakdownLabel>Subscription</BreakdownLabel>
+                      <BreakdownValue color="#7b2cbf">
+                        ${(aggregate.breakdown?.subscriptionRevenue || 0).toFixed(2)}
+                      </BreakdownValue>
+                    </BreakdownItem>
+                    <BreakdownItem>
+                      <BreakdownLabel>One-Time</BreakdownLabel>
+                      <BreakdownValue color="#00d26a">
+                        ${(aggregate.breakdown?.oneTimePurchaseRevenue || 0).toFixed(2)}
+                      </BreakdownValue>
+                    </BreakdownItem>
+                  </RevenueBreakdown>
                 </DailyAggregateCard>
               ))}
             </DailyAggregateGrid>
@@ -394,6 +436,18 @@ function DailyRevenueAggregates() {
                 <SummaryLabel>Total Net Revenue</SummaryLabel>
                 <SummaryValue color="#00d26a">
                   ${dailyAggregates.reduce((sum, item) => sum + item.revenue.netRevenue, 0).toFixed(2)}
+                </SummaryValue>
+              </SummaryCard>
+              <SummaryCard>
+                <SummaryLabel>Subscription Revenue</SummaryLabel>
+                <SummaryValue color="#7b2cbf">
+                  ${dailyAggregates.reduce((sum, item) => sum + (item.breakdown?.subscriptionRevenue || 0), 0).toFixed(2)}
+                </SummaryValue>
+              </SummaryCard>
+              <SummaryCard>
+                <SummaryLabel>One-Time Purchase Revenue</SummaryLabel>
+                <SummaryValue color="#00d26a">
+                  ${dailyAggregates.reduce((sum, item) => sum + (item.breakdown?.oneTimePurchaseRevenue || 0), 0).toFixed(2)}
                 </SummaryValue>
               </SummaryCard>
               <SummaryCard>
@@ -430,6 +484,17 @@ function DailyRevenueAggregates() {
         </ul>
       </RevenueSection>
 
+      <RevenueSection>
+        <SectionTitle>💳 Feature #158: One-Time Purchase Tracking</SectionTitle>
+        <ul style={{ color: '#a0a0a0', lineHeight: '1.8' }}>
+          <li>✅ Step 1: Filter transactions by one-time purchase - Backend aggregates non-subscription transactions</li>
+          <li>✅ Step 2: Aggregate purchase revenue - Stored in breakdown.oneTimePurchaseRevenue</li>
+          <li>✅ Step 3: Store in marketing_revenue - DailyRevenueAggregate model includes breakdown</li>
+          <li>✅ Step 4: Display in dashboard - Cards show subscription vs one-time purchase revenue</li>
+          <li>✅ Step 5: Compare to subscription revenue - Side-by-side breakdown in summary</li>
+        </ul>
+      </RevenueSection>
+
       <Modal show={showModal} onClick={() => setShowModal(false)}>
         <ModalContent onClick={(e) => e.stopPropagation()}>
           <ModalHeader>
@@ -446,6 +511,18 @@ function DailyRevenueAggregates() {
                   <SummaryLabel>Net Revenue</SummaryLabel>
                   <SummaryValue color="#00d26a">
                     ${selectedDate.revenue.netRevenue.toFixed(2)}
+                  </SummaryValue>
+                </SummaryCard>
+                <SummaryCard>
+                  <SummaryLabel>Subscription Revenue</SummaryLabel>
+                  <SummaryValue color="#7b2cbf">
+                    ${(selectedDate.breakdown?.subscriptionRevenue || 0).toFixed(2)}
+                  </SummaryValue>
+                </SummaryCard>
+                <SummaryCard>
+                  <SummaryLabel>One-Time Purchase Revenue</SummaryLabel>
+                  <SummaryValue color="#00d26a">
+                    ${(selectedDate.breakdown?.oneTimePurchaseRevenue || 0).toFixed(2)}
                   </SummaryValue>
                 </SummaryCard>
                 <SummaryCard>
