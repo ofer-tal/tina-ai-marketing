@@ -153,6 +153,125 @@ const Button = styled.button`
   }
 `;
 
+// Bulk Action Components
+const BulkActionsBar = styled.div`
+  display: ${props => props.$visible ? 'flex' : 'none'};
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  background: linear-gradient(135deg, #1a1a3e 0%, #16213e 100%);
+  border: 2px solid #7b2cbf;
+  border-radius: 12px;
+  animation: slideDown 0.3s ease-out;
+
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+`;
+
+const BulkActionsInfo = styled.div`
+  flex: 1;
+  color: #eaeaea;
+  font-weight: 600;
+`;
+
+const BulkActionsCount = styled.span`
+  background: #7b2cbf;
+  padding: 0.25rem 0.75rem;
+  border-radius: 12px;
+  margin-left: 0.5rem;
+`;
+
+const BulkActionButton = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: ${props => {
+    const colors = {
+      approve: '#28a745',
+      reject: '#dc3545',
+      delete: '#ff6b6b',
+      export: '#667eea'
+    };
+    return colors[props.$action] || '#7b2cbf';
+  }};
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(123, 44, 191, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const BulkActionsClear = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: transparent;
+  border: 2px solid #6c757d;
+  border-radius: 8px;
+  color: #a0a0a0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    color: #e94560;
+  }
+`;
+
+const CheckboxContainer = styled.div`
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 10;
+`;
+
+const BulkCheckbox = styled.input`
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  accent-color: #7b2cbf;
+
+  &:checked {
+    background-color: #7b2cbf;
+  }
+`;
+
+const SelectAllContainer = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #16213e;
+  border: 1px solid #2d3561;
+  border-radius: 8px;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+`;
+
 const ContentGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -2021,6 +2140,8 @@ function ContentLibrary() {
     isOpen: false,
     data: null
   });
+  const [bulkSelected, setBulkSelected] = useState([]);
+  const [selectAll, setSelectAll] = useState(false);
 
   useEffect(() => {
     fetchPosts();
@@ -3080,6 +3201,150 @@ function ContentLibrary() {
     }
   };
 
+  // Bulk Action Handlers
+  const handleToggleSelect = (postId) => {
+    setBulkSelected(prev => {
+      if (prev.includes(postId)) {
+        return prev.filter(id => id !== postId);
+      } else {
+        return [...prev, postId];
+      }
+    });
+  };
+
+  const handleToggleSelectAll = () => {
+    if (selectAll) {
+      setBulkSelected([]);
+    } else {
+      setBulkSelected(posts.map(post => post._id));
+    }
+    setSelectAll(!selectAll);
+  };
+
+  const handleClearSelection = () => {
+    setBulkSelected([]);
+    setSelectAll(false);
+  };
+
+  const handleBulkDelete = async () => {
+    if (bulkSelected.length === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${bulkSelected.length} post(s)?\n\nThis action cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const response = await fetch('http://localhost:3001/api/content/posts/bulk/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: bulkSelected })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`✅ ${result.message}`);
+        handleClearSelection();
+        fetchPosts();
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Bulk delete error:', err);
+      alert(`❌ Error deleting posts: ${err.message}`);
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    if (bulkSelected.length === 0) return;
+
+    try {
+      const response = await fetch('http://localhost:3001/api/content/posts/bulk/approve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: bulkSelected })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`✅ ${result.message}`);
+        handleClearSelection();
+        fetchPosts();
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Bulk approve error:', err);
+      alert(`❌ Error approving posts: ${err.message}`);
+    }
+  };
+
+  const handleBulkReject = async () => {
+    if (bulkSelected.length === 0) return;
+
+    const reason = prompt('Enter rejection reason (optional):');
+    if (reason === null) return; // User cancelled
+
+    try {
+      const response = await fetch('http://localhost:3001/api/content/posts/bulk/reject', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: bulkSelected, reason })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`✅ ${result.message}`);
+        handleClearSelection();
+        fetchPosts();
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Bulk reject error:', err);
+      alert(`❌ Error rejecting posts: ${err.message}`);
+    }
+  };
+
+  const handleBulkExport = async () => {
+    if (bulkSelected.length === 0) return;
+
+    try {
+      const response = await fetch('http://localhost:3001/api/content/posts/bulk/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: bulkSelected })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Download as JSON file
+        const dataStr = JSON.stringify(result.data.posts, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = URL.createObjectURL(dataBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `bulk-export-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        alert(`✅ Exported ${result.data.exportCount} posts`);
+      } else {
+        alert(`❌ Error: ${result.error}`);
+      }
+    } catch (err) {
+      console.error('Bulk export error:', err);
+      alert(`❌ Error exporting posts: ${err.message}`);
+    }
+  };
+
   if (loading) {
     return (
       <LibraryContainer>
@@ -3186,6 +3451,41 @@ function ContentLibrary() {
         )}
       </FilterBar>
 
+      {/* Select All Checkbox */}
+      {posts.length > 0 && (
+        <SelectAllContainer>
+          <BulkCheckbox
+            type="checkbox"
+            checked={selectAll}
+            onChange={handleToggleSelectAll}
+          />
+          <span>Select All ({posts.length} posts)</span>
+        </SelectAllContainer>
+      )}
+
+      {/* Bulk Actions Bar */}
+      <BulkActionsBar $visible={bulkSelected.length > 0}>
+        <BulkActionsInfo>
+          {bulkSelected.length} post{bulkSelected.length !== 1 ? 's' : ''} selected
+          <BulkActionsCount>{bulkSelected.length}</BulkActionsCount>
+        </BulkActionsInfo>
+        <BulkActionButton $action="approve" onClick={handleBulkApprove}>
+          ✅ Approve All
+        </BulkActionButton>
+        <BulkActionButton $action="reject" onClick={handleBulkReject}>
+          ❌ Reject All
+        </BulkActionButton>
+        <BulkActionButton $action="export" onClick={handleBulkExport}>
+          📤 Export All
+        </BulkActionButton>
+        <BulkActionButton $action="delete" onClick={handleBulkDelete}>
+          🗑️ Delete All
+        </BulkActionButton>
+        <BulkActionsClear onClick={handleClearSelection}>
+          Clear Selection
+        </BulkActionsClear>
+      </BulkActionsBar>
+
       {error && (
         <div style={{
           padding: '1rem',
@@ -3209,6 +3509,14 @@ function ContentLibrary() {
           <ContentGrid>
             {posts.map(post => (
               <ContentCard key={post._id}>
+                <CheckboxContainer>
+                  <BulkCheckbox
+                    type="checkbox"
+                    checked={bulkSelected.includes(post._id)}
+                    onChange={() => handleToggleSelect(post._id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </CheckboxContainer>
                 <ThumbnailContainer onClick={() => handleThumbnailClick(post)}>
                   <Thumbnail platform={post.platform}>
                     {getPlatformEmoji(post.platform)}

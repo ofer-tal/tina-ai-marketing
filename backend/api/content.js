@@ -1845,6 +1845,212 @@ router.get('/posts/:id', async (req, res) => {
 });
 
 /**
+ * POST /api/content/posts/bulk/delete
+ * Bulk delete marketing posts
+ */
+router.post('/posts/bulk/delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk deleting marketing posts', { count: ids.length });
+
+    const result = await MarketingPost.deleteMany({
+      _id: { $in: ids }
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} posts`,
+      data: {
+        deletedCount: result.deletedCount,
+        ids
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk delete marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/approve
+ * Bulk approve marketing posts
+ */
+router.post('/posts/bulk/approve', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk approving marketing posts', { count: ids.length });
+
+    const posts = await MarketingPost.find({
+      _id: { $in: ids }
+    });
+
+    const updatePromises = posts.map(post => post.markAsApproved());
+    await Promise.all(updatePromises);
+
+    res.json({
+      success: true,
+      message: `Successfully approved ${posts.length} posts`,
+      data: {
+        approvedCount: posts.length,
+        ids
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk approve marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/export
+ * Bulk export marketing posts data
+ */
+router.post('/posts/bulk/export', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk exporting marketing posts', { count: ids.length });
+
+    const posts = await MarketingPost.find({
+      _id: { $in: ids }
+    }).populate('storyId', 'title coverPath spiciness category');
+
+    // Format data for export
+    const exportData = posts.map(post => ({
+      id: post._id,
+      title: post.title,
+      description: post.description,
+      platform: post.platform,
+      status: post.status,
+      contentType: post.contentType,
+      caption: post.caption,
+      hashtags: post.hashtags,
+      hook: post.hook,
+      storyName: post.storyName,
+      storyCategory: post.storyCategory,
+      storySpiciness: post.storySpiciness,
+      scheduledAt: post.scheduledAt,
+      postedAt: post.postedAt,
+      performanceMetrics: post.performanceMetrics,
+      videoPath: post.videoPath,
+      imagePath: post.imagePath
+    }));
+
+    res.json({
+      success: true,
+      message: `Successfully exported ${exportData.length} posts`,
+      data: {
+        exportCount: exportData.length,
+        posts: exportData
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk export marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/reject
+ * Bulk reject marketing posts with optional reason
+ */
+router.post('/posts/bulk/reject', async (req, res) => {
+  try {
+    const { ids, reason } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk rejecting marketing posts', { count: ids.length, reason });
+
+    const posts = await MarketingPost.find({
+      _id: { $in: ids }
+    });
+
+    const updatePromises = posts.map(post => {
+      post.status = 'rejected';
+      post.rejectedAt = new Date();
+      post.rejectionReason = reason || 'Bulk rejected';
+      return post.save();
+    });
+
+    await Promise.all(updatePromises);
+
+    res.json({
+      success: true,
+      message: `Successfully rejected ${posts.length} posts`,
+      data: {
+        rejectedCount: posts.length,
+        ids,
+        reason
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk reject marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
  * PUT /api/content/posts/:id
  * Update a marketing post (caption, hashtags, etc.)
  */
@@ -3070,6 +3276,212 @@ router.get('/batch/schedule/status', async (req, res) => {
 
   } catch (error) {
     logger.error('Batch scheduler status API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/delete
+ * Bulk delete marketing posts
+ */
+router.post('/posts/bulk/delete', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk deleting marketing posts', { count: ids.length });
+
+    const result = await MarketingPost.deleteMany({
+      _id: { $in: ids }
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully deleted ${result.deletedCount} posts`,
+      data: {
+        deletedCount: result.deletedCount,
+        ids
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk delete marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/approve
+ * Bulk approve marketing posts
+ */
+router.post('/posts/bulk/approve', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk approving marketing posts', { count: ids.length });
+
+    const posts = await MarketingPost.find({
+      _id: { $in: ids }
+    });
+
+    const updatePromises = posts.map(post => post.markAsApproved());
+    await Promise.all(updatePromises);
+
+    res.json({
+      success: true,
+      message: `Successfully approved ${posts.length} posts`,
+      data: {
+        approvedCount: posts.length,
+        ids
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk approve marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/export
+ * Bulk export marketing posts data
+ */
+router.post('/posts/bulk/export', async (req, res) => {
+  try {
+    const { ids } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk exporting marketing posts', { count: ids.length });
+
+    const posts = await MarketingPost.find({
+      _id: { $in: ids }
+    }).populate('storyId', 'title coverPath spiciness category');
+
+    // Format data for export
+    const exportData = posts.map(post => ({
+      id: post._id,
+      title: post.title,
+      description: post.description,
+      platform: post.platform,
+      status: post.status,
+      contentType: post.contentType,
+      caption: post.caption,
+      hashtags: post.hashtags,
+      hook: post.hook,
+      storyName: post.storyName,
+      storyCategory: post.storyCategory,
+      storySpiciness: post.storySpiciness,
+      scheduledAt: post.scheduledAt,
+      postedAt: post.postedAt,
+      performanceMetrics: post.performanceMetrics,
+      videoPath: post.videoPath,
+      imagePath: post.imagePath
+    }));
+
+    res.json({
+      success: true,
+      message: `Successfully exported ${exportData.length} posts`,
+      data: {
+        exportCount: exportData.length,
+        posts: exportData
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk export marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/bulk/reject
+ * Bulk reject marketing posts with optional reason
+ */
+router.post('/posts/bulk/reject', async (req, res) => {
+  try {
+    const { ids, reason } = req.body;
+
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'ids array is required'
+      });
+    }
+
+    logger.info('Bulk rejecting marketing posts', { count: ids.length, reason });
+
+    const posts = await MarketingPost.find({
+      _id: { $in: ids }
+    });
+
+    const updatePromises = posts.map(post => {
+      post.status = 'rejected';
+      post.rejectedAt = new Date();
+      post.rejectionReason = reason || 'Bulk rejected';
+      return post.save();
+    });
+
+    await Promise.all(updatePromises);
+
+    res.json({
+      success: true,
+      message: `Successfully rejected ${posts.length} posts`,
+      data: {
+        rejectedCount: posts.length,
+        ids,
+        reason
+      }
+    });
+
+  } catch (error) {
+    logger.error('Bulk reject marketing posts API error', {
       error: error.message,
       stack: error.stack
     });
