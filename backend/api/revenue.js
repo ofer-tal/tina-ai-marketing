@@ -833,4 +833,139 @@ router.get('/monthly/aggregates/recent', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/revenue/mrr
+ * Get current MRR (Monthly Recurring Revenue)
+ */
+router.get('/mrr', async (req, res) => {
+  try {
+    // Get the most recent daily aggregate
+    const latestAggregate = await DailyRevenueAggregate.findOne()
+      .sort({ date: -1 })
+      .limit(1);
+
+    if (!latestAggregate) {
+      return res.json({
+        success: true,
+        data: {
+          mrr: 0,
+          date: null,
+          subscribers: {
+            monthly: 0,
+            annual: 0,
+            total: 0
+          },
+          breakdown: {
+            monthlyMRR: 0,
+            annualMRR: 0
+          }
+        }
+      });
+    }
+
+    // Get subscription breakdown
+    const monthlySubs = latestAggregate.bySubscriptionType?.find(s => s.type === 'monthly');
+    const annualSubs = latestAggregate.bySubscriptionType?.find(s => s.type === 'annual');
+
+    const monthlyCount = monthlySubs?.count || 0;
+    const annualCount = annualSubs?.count || 0;
+    const monthlyRevenue = monthlySubs?.revenue || 0;
+    const annualRevenue = annualSubs?.revenue || 0;
+
+    // Calculate MRR breakdown
+    const monthlyMRR = monthlyCount > 0 ? monthlyRevenue : 0;
+    const annualMRR = annualCount > 0 ? (annualRevenue / 12) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        mrr: latestAggregate.mrr || 0,
+        date: latestAggregate.date,
+        subscribers: {
+          monthly: monthlyCount,
+          annual: annualCount,
+          total: monthlyCount + annualCount
+        },
+        breakdown: {
+          monthlyMRR: Math.round(monthlyMRR * 100) / 100,
+          annualMRR: Math.round(annualMRR * 100) / 100
+        },
+        netRevenue: latestAggregate.revenue?.netRevenue || 0,
+        calculatedAt: latestAggregate.dataQuality?.lastSyncAt || new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching MRR:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: {
+        mrr: 0,
+        date: null
+      }
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/mrr/history
+ * Get MRR history over time
+ * Query params:
+ * - period: 'daily', 'weekly', or 'monthly' (default: 'daily')
+ * - limit: Number of data points to return (default: 30)
+ */
+router.get('/mrr/history', async (req, res) => {
+  try {
+    const { period = 'daily', limit = 30 } = req.query;
+    const limitNum = parseInt(limit);
+
+    let data = [];
+
+    if (period === 'daily') {
+      data = await DailyRevenueAggregate.find()
+        .sort({ date: -1 })
+        .limit(limitNum)
+        .select('date mrr revenue.netRevenue bySubscriptionType');
+    } else if (period === 'weekly') {
+      data = await WeeklyRevenueAggregate.find()
+        .sort({ weekStart: -1 })
+        .limit(limitNum)
+        .select('weekIdentifier weekStart weekEnd mrr revenue.netRevenue');
+    } else if (period === 'monthly') {
+      data = await MonthlyRevenueAggregate.find()
+        .sort({ monthStart: -1 })
+        .limit(limitNum)
+        .select('monthIdentifier monthStart monthEnd mrr revenue.netRevenue');
+    }
+
+    // Reverse to get chronological order
+    data = data.reverse();
+
+    res.json({
+      success: true,
+      data: {
+        period,
+        history: data.map(d => ({
+          date: d.date || d.weekIdentifier || d.monthIdentifier,
+          mrr: d.mrr || 0,
+          netRevenue: d.revenue?.netRevenue || 0,
+          subscribers: d.bySubscriptionType?.reduce((total, sub) => {
+            if (sub.type === 'monthly' || sub.type === 'annual') {
+              return total + sub.count;
+            }
+            return total;
+          }, 0) || 0
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching MRR history:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: { period: 'daily', history: [] }
+    });
+  }
+});
+
 export default router;

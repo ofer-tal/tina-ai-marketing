@@ -87,6 +87,12 @@ const monthlyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // MRR (Monthly Recurring Revenue)
+  mrr: {
+    type: Number,
+    default: 0
+  },
+
   // Customer metrics
   customers: {
     newCount: {
@@ -462,6 +468,19 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
   const daysInMonth = new Date(year, month, 0).getDate();
   const dailyAverageRevenue = aggregate.netRevenue / daysInMonth;
 
+  // Calculate MRR (Monthly Recurring Revenue)
+  // MRR = (monthly subscribers × monthly price) + (annual subscribers × annual price / 12)
+  let mrr = 0;
+  if (aggregate.monthlyCount > 0) {
+    const avgMonthlyPrice = aggregate.monthlyRevenue / aggregate.monthlyCount;
+    mrr += aggregate.monthlyCount * avgMonthlyPrice;
+  }
+  if (aggregate.annualCount > 0) {
+    const avgAnnualPrice = aggregate.annualRevenue / aggregate.annualCount;
+    mrr += aggregate.annualCount * (avgAnnualPrice / 12);
+  }
+  aggregate.mrr = Math.round(mrr * 100) / 100; // Round to 2 decimal places
+
   // Generate month identifier
   const monthIdentifier = `${year}-${month.toString().padStart(2, '0')}`;
 
@@ -543,6 +562,7 @@ monthlyRevenueAggregateSchema.statics.aggregateForMonth = async function(year, m
         oneTimePurchaseRevenue: aggregate.oneTimePurchaseRevenue,
         trialRevenue: aggregate.trialRevenue
       },
+      mrr: aggregate.mrr || 0,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,

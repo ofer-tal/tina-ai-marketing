@@ -81,6 +81,12 @@ const weeklyRevenueAggregateSchema = new mongoose.Schema({
     }
   },
 
+  // MRR (Monthly Recurring Revenue)
+  mrr: {
+    type: Number,
+    default: 0
+  },
+
   // Customer metrics
   customers: {
     newCount: {
@@ -435,6 +441,19 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
     ? aggregate.netRevenue / aggregate.totalActive
     : 0;
 
+  // Calculate MRR (Monthly Recurring Revenue)
+  // MRR = (monthly subscribers × monthly price) + (annual subscribers × annual price / 12)
+  let mrr = 0;
+  if (aggregate.monthlyCount > 0) {
+    const avgMonthlyPrice = aggregate.monthlyRevenue / aggregate.monthlyCount;
+    mrr += aggregate.monthlyCount * avgMonthlyPrice;
+  }
+  if (aggregate.annualCount > 0) {
+    const avgAnnualPrice = aggregate.annualRevenue / aggregate.annualCount;
+    mrr += aggregate.annualCount * (avgAnnualPrice / 12);
+  }
+  aggregate.mrr = Math.round(mrr * 100) / 100; // Round to 2 decimal places
+
   // Generate week identifier
   const weekIdentifier = `${year}-W${weekNumber.toString().padStart(2, '0')}`;
 
@@ -492,6 +511,7 @@ weeklyRevenueAggregateSchema.statics.aggregateForWeek = async function(year, wee
         oneTimePurchaseRevenue: aggregate.oneTimePurchaseRevenue,
         trialRevenue: aggregate.trialRevenue
       },
+      mrr: aggregate.mrr || 0,
       customers: {
         newCount: aggregate.newCount,
         returningCount: aggregate.returningCount,
