@@ -10,6 +10,7 @@ import BatchApprovalQueue from './pages/BatchApprovalQueue';
 import Campaigns from './pages/Campaigns';
 import RevenueAttributionTest from './pages/RevenueAttributionTest';
 import WeeklyRevenueAggregates from './pages/WeeklyRevenueAggregates';
+import MonthlyRevenueAggregates from './pages/MonthlyRevenueAggregates';
 import ChannelPerformance from './pages/ChannelPerformance';
 import ContentEngagement from './pages/ContentEngagement';
 import OptimalPostingTime from './pages/OptimalPostingTime';
@@ -408,6 +409,7 @@ function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle }) {
     { path: '/ads/campaigns', icon: '🎯', label: 'Campaigns' },
     { path: '/ads/revenue-test', icon: '💰', label: 'Revenue' },
     { path: '/revenue/weekly', icon: '📅', label: 'Weekly' },
+    { path: '/revenue/monthly', icon: '📆', label: 'Monthly' },
     { path: '/settings', icon: '⚙️', label: 'Settings' },
   ];
 
@@ -554,6 +556,7 @@ function App() {
                 <Route path="/ads/campaigns" element={<PageWithBreadcrumbs><Campaigns /></PageWithBreadcrumbs>} />
                 <Route path="/ads/revenue-test" element={<PageWithBreadcrumbs><RevenueAttributionTest /></PageWithBreadcrumbs>} />
                 <Route path="/revenue/weekly" element={<PageWithBreadcrumbs><WeeklyRevenueAggregates /></PageWithBreadcrumbs>} />
+                <Route path="/revenue/monthly" element={<PageWithBreadcrumbs><MonthlyRevenueAggregates /></PageWithBreadcrumbs>} />
                 <Route path="/todos" element={<PageWithBreadcrumbs><Todos /></PageWithBreadcrumbs>} />
                 <Route path="/settings" element={<PageWithBreadcrumbs><Settings /></PageWithBreadcrumbs>} />
                 <Route path="/test/toasts" element={<PageWithBreadcrumbs><ToastTest /></PageWithBreadcrumbs>} />

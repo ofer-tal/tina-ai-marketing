@@ -3,6 +3,7 @@ import revenueAttributionService from '../services/revenueAttributionService.js'
 import MarketingRevenue from '../models/MarketingRevenue.js';
 import DailyRevenueAggregate from '../models/DailyRevenueAggregate.js';
 import WeeklyRevenueAggregate from '../models/WeeklyRevenueAggregate.js';
+import MonthlyRevenueAggregate from '../models/MonthlyRevenueAggregate.js';
 
 const router = express.Router();
 
@@ -636,5 +637,200 @@ function getISOWeek(date) {
   const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
   return { year: d.getUTCFullYear(), weekNumber: weekNo };
 }
+
+// ============================================================
+// MONTHLY REVENUE AGGREGATION ENDPOINTS
+// ============================================================
+
+/**
+ * POST /api/revenue/monthly/aggregate
+ * Manually trigger monthly aggregation for a specific month
+ * Body params:
+ * - year: Year (optional, defaults to current year)
+ * - month: Month number 1-12 (optional, defaults to current month)
+ */
+router.post('/monthly/aggregate', async (req, res) => {
+  try {
+    const { year, month } = req.body;
+
+    // Default to current month if not provided
+    const now = new Date();
+    const targetYear = year || now.getFullYear();
+    const targetMonth = month || now.getMonth() + 1;
+
+    if (targetMonth < 1 || targetMonth > 12) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid month. Month must be between 1 and 12.'
+      });
+    }
+
+    console.log(`Aggregating revenue for month ${targetMonth} of ${targetYear}`);
+
+    const aggregate = await MonthlyRevenueAggregate.aggregateForMonth(targetYear, targetMonth);
+
+    if (!aggregate) {
+      return res.json({
+        success: true,
+        message: 'No transactions found for this month',
+        data: null
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Monthly aggregation completed successfully',
+      data: aggregate
+    });
+  } catch (error) {
+    console.error('Error aggregating monthly revenue:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/monthly/aggregates
+ * Get monthly aggregates for a date range
+ * Query params:
+ * - startDate: ISO date string
+ * - endDate: ISO date string
+ */
+router.get('/monthly/aggregates', async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 12 * 30 * 24 * 60 * 60 * 1000); // Default to ~12 months
+
+    const aggregates = await MonthlyRevenueAggregate.getForDateRange(start, end);
+
+    res.json({
+      success: true,
+      data: aggregates
+    });
+  } catch (error) {
+    console.error('Error fetching monthly aggregates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: []
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/monthly/aggregate/:year/:month
+ * Get monthly aggregate for a specific month
+ * Path params:
+ * - year: Year
+ * - month: Month number (1-12)
+ */
+router.get('/monthly/aggregate/:year/:month', async (req, res) => {
+  try {
+    const { year, month } = req.params;
+
+    const aggregate = await MonthlyRevenueAggregate.findOne({
+      year: parseInt(year),
+      month: parseInt(month)
+    });
+
+    if (!aggregate) {
+      return res.status(404).json({
+        success: false,
+        error: 'No aggregate found for this month'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: aggregate
+    });
+  } catch (error) {
+    console.error('Error fetching monthly aggregate:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/monthly/:year/:month/transactions
+ * Get all transactions for a specific month (drill-down)
+ * Path params:
+ * - year: Year
+ * - month: Month number (1-12)
+ */
+router.get('/monthly/:year/:month/transactions', async (req, res) => {
+  try {
+    const { year, month } = req.params;
+
+    const monthlyAggregate = await MonthlyRevenueAggregate.findOne({
+      year: parseInt(year),
+      month: parseInt(month)
+    });
+
+    if (!monthlyAggregate) {
+      return res.status(404).json({
+        success: false,
+        error: 'No aggregate found for this month'
+      });
+    }
+
+    // Fetch transactions for this month
+    const transactions = await MarketingRevenue.find({
+      transactionDate: {
+        $gte: monthlyAggregate.monthStart,
+        $lte: monthlyAggregate.monthEnd
+      }
+    }).sort({ transactionDate: -1 });
+
+    res.json({
+      success: true,
+      data: {
+        monthlyAggregate,
+        transactions,
+        count: transactions.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching monthly transactions:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: { transactions: [], count: 0 }
+    });
+  }
+});
+
+/**
+ * GET /api/revenue/monthly/aggregates/recent
+ * Get recent monthly aggregates
+ * Query params:
+ * - months: Number of months to retrieve (default: 12)
+ */
+router.get('/monthly/aggregates/recent', async (req, res) => {
+  try {
+    const { months } = req.query;
+    const monthsCount = months ? parseInt(months) : 12;
+
+    const aggregates = await MonthlyRevenueAggregate.getRecentMonths(monthsCount);
+
+    res.json({
+      success: true,
+      data: aggregates
+    });
+  } catch (error) {
+    console.error('Error fetching recent monthly aggregates:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: []
+    });
+  }
+});
 
 export default router;
