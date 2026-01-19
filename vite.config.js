@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   plugins: [react()],
+  root: '.', // Explicitly set root to current directory
+  publicDir: 'frontend/public', // Public assets directory
   server: {
     port: 5173,
     host: true,
