@@ -9,11 +9,11 @@ import mongoose from 'mongoose';
 
 const dailySpendSchema = new mongoose.Schema({
   // Date identifier (YYYY-MM-DD format for easy querying)
+  // Note: Not unique - we can have multiple records per date (one per campaign)
   date: {
     type: String,
     required: true,
     index: true,
-    unique: true,
     validate: {
       validator: function(v) {
         // Validate YYYY-MM-DD format
@@ -27,6 +27,12 @@ const dailySpendSchema = new mongoose.Schema({
   campaignId: {
     type: String,
     index: true,
+    required: false
+  },
+
+  // Campaign name for reference
+  campaignName: {
+    type: String,
     required: false
   },
 
@@ -221,6 +227,9 @@ const dailySpendSchema = new mongoose.Schema({
 dailySpendSchema.index({ date: -1, platform: 1 });
 dailySpendSchema.index({ campaignId: 1, date: -1 });
 dailySpendSchema.index({ date: -1, budgetStatus: 1 });
+
+// Compound unique index to prevent duplicates while allowing multiple campaigns per date
+dailySpendSchema.index({ date: 1, campaignId: 1, platform: 1 }, { unique: true });
 
 // Instance methods
 
@@ -426,6 +435,6 @@ dailySpendSchema.statics.getSpendSummary = async function(startDate, endDate, pl
   return result.length > 0 ? result[0] : null;
 };
 
-const DailySpend = mongoose.model('DailySpend', dailySpendSchema);
+const DailySpend = mongoose.model('DailySpend', dailySpendSchema, 'marketing_daily_spends');
 
 export default DailySpend;

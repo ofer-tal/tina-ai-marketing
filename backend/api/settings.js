@@ -3,38 +3,52 @@ import configService from "../services/config.js";
 import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
-// GET /api/settings - Get all settings (with sensitive values masked)
-router.get("/", (req, res) => {
+// Helper to reload .env file and return current settings
+async function getCurrentSettings() {
+  const projectRoot = path.resolve(__dirname, '..', '..');
+  const envPath = path.join(projectRoot, '.env');
+
+  // Read and parse .env file directly to get current values
   try {
-    const config = configService.getAll();
+    const envContent = await fs.readFile(envPath, 'utf-8');
+    const settings = {};
 
-    // Mask sensitive values
-    const sanitizedConfig = {};
-    for (const [key, value] of Object.entries(config)) {
-      const sensitiveKeys = ['SECRET', 'KEY', 'PASSWORD', 'TOKEN', 'PRIVATE_KEY', 'CREDENTIALS'];
-      const isSensitive = sensitiveKeys.some(sensitiveKey => key.includes(sensitiveKey));
-
-      if (isSensitive && value && typeof value === 'string') {
-        // Show only last 4 characters
-        if (value.length > 4) {
-          sanitizedConfig[key] = '*'.repeat(value.length - 4) + value.slice(-4);
-        } else {
-          sanitizedConfig[key] = '****';
-        }
-      } else {
-        sanitizedConfig[key] = value;
+    for (const line of envContent.split('\n')) {
+      if (line && !line.startsWith('#') && line.includes('=')) {
+        const [key, ...valueParts] = line.split('=');
+        const value = valueParts.join('=');
+        settings[key] = value;
       }
     }
 
+    return settings;
+  } catch (error) {
+    // If file doesn't exist, return process.env
+    const schema = configService.getSchema();
+    const settings = {};
+    for (const key of Object.keys(schema)) {
+      settings[key] = process.env[key] || '';
+    }
+    return settings;
+  }
+}
+
+// GET /api/settings - Get all settings (return actual values, no masking)
+router.get("/", async (req, res) => {
+  try {
+    // Read directly from .env file to get current values
+    const settings = await getCurrentSettings();
+
     res.json({
       success: true,
-      settings: sanitizedConfig
+      settings
     });
   } catch (error) {
     res.status(500).json({
@@ -49,6 +63,15 @@ router.put("/:key", async (req, res) => {
   try {
     const { key } = req.params;
     const { value, confirmed } = req.body;
+
+    // DEBUG: Log incoming requests
+    console.log(`=== PUT /api/settings/${key} ===`);
+    console.log('Received value:', value);
+    console.log('Value type:', typeof value);
+    console.log('Value length:', value?.length);
+    console.log('Value first 50 chars:', value?.substring(0, 50));
+    console.log('Value last 50 chars:', value?.substring(Math.max(0, value?.length - 50)));
+    console.log('==================================');
 
     if (value === undefined || value === null) {
       return res.status(400).json({
@@ -117,8 +140,8 @@ router.put("/:key", async (req, res) => {
       });
     }
 
-    // Update the .env file
-    const envPath = path.join(process.cwd(), '.env');
+    // Update the .env file at project root (parent of backend/)
+    const envPath = path.join(process.cwd(), '..', '.env');
     let envContent = '';
 
     try {
@@ -156,24 +179,22 @@ router.put("/:key", async (req, res) => {
       lines.push(`${key}=${stringValue}`);
     }
 
+    // Log what we're about to write
+    console.log(`Writing to .env: ${key}="${stringValue?.substring(0, 30)}${stringValue?.length > 30 ? '...' : ''}" (was ${keyFound ? 'updated' : 'added'})`);
+
     // Write back to .env
     await fs.writeFile(envPath, lines.join('\n'), 'utf-8');
+
+    console.log(`Successfully wrote ${key} to .env`);
 
     // Update the environment variable in the current process
     process.env[key] = stringValue;
 
-    // Return the masked value
-    const sensitiveKeys = ['SECRET', 'KEY', 'PASSWORD', 'TOKEN', 'PRIVATE_KEY', 'CREDENTIALS'];
-    const isSensitive = sensitiveKeys.some(sensitiveKey => key.includes(sensitiveKey));
-
-    const responseValue = (isSensitive && stringValue && stringValue.length > 4)
-      ? '*'.repeat(stringValue.length - 4) + stringValue.slice(-4)
-      : stringValue;
-
+    // Return the actual value (not masked)
     res.json({
       success: true,
       key,
-      value: responseValue,
+      value: stringValue,
       message: `Setting ${key} updated successfully`
     });
   } catch (error) {

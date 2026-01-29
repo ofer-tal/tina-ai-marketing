@@ -48,12 +48,13 @@ class RevenueSyncJob {
       logger.info(`Fetched ${transactions.length} transactions from App Store Connect`);
 
       if (transactions.length === 0) {
-        logger.info('No transactions to sync, exiting');
+        logger.info('No transactions to sync (this may be normal if no sales occurred in the date range)');
         return {
           success: true,
           transactionCount: 0,
           storedCount: 0,
-          metrics: null
+          metrics: null,
+          message: 'No transactions found in the specified date range'
         };
       }
 
@@ -104,55 +105,70 @@ class RevenueSyncJob {
 
   /**
    * Fetch transactions from App Store Connect API
-   * Fetches daily reports for the last N days
+   * Fetches daily sales reports (SALES + SUBSCRIPTION_EVENT) for the last N days
+   *
+   * Uses fetchAllRevenueReports to get both SALES and SUBSCRIPTION_EVENT data
+   * to ensure we capture paid subscriptions, renewals, and conversions.
+   *
+   * API Documentation: https://developer.apple.com/documentation/appstoreconnectapi/sales_reports
    */
   async fetchTransactionsFromAppStore() {
     try {
       const transactions = [];
       const endDate = new Date();
-      const startDate = new Date();
+      // Go back to yesterday (sales reports have ~24 hour delay)
+      endDate.setDate(endDate.getDate() - 1);
+      const startDate = new Date(endDate);
       startDate.setDate(startDate.getDate() - this.daysToSync);
 
       logger.info(`Fetching transactions from ${startDate.toISOString().split('T')[0]} to ${endDate.toISOString().split('T')[0]}`);
 
       // Check if App Store Connect service is configured
       if (!appStoreConnectService.isConfigured()) {
-        logger.warn('App Store Connect API not configured, using mock data');
-        return this.generateMockTransactions(startDate, endDate);
+        logger.error('App Store Connect API not configured. Please set the following environment variables:');
+        logger.error('  - APP_STORE_CONNECT_KEY_ID');
+        logger.error('  - APP_STORE_CONNECT_ISSUER_ID');
+        logger.error('  - APP_STORE_CONNECT_PRIVATE_KEY_PATH');
+        logger.error('  - APP_STORE_CONNECT_VENDOR_NUMBER');
+        throw new Error('App Store Connect API not configured.');
       }
 
-      // Fetch daily reports for each day
-      const currentDate = new Date(startDate);
-      while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split('T')[0];
+      // Fetch reports for each day (API limitation - one day at a time)
+      let totalPaidRevenue = 0;
+      for (let date = new Date(startDate); date <= endDate; date.setDate(date.getDate() + 1)) {
+        const dateStr = date.toISOString().split('T')[0];
 
         try {
-          // Call App Store Connect API to get finance reports
-          const report = await appStoreConnectService.getFinanceReports({
+          // Fetch all revenue reports for this date (SALES + SUBSCRIPTION_EVENT)
+          const report = await appStoreConnectService.fetchAllRevenueReports({
             frequency: 'DAILY',
-            reportType: 'SALES',
-            reportSubType: 'SUMMARY',
             reportDate: dateStr
           });
 
-          // Parse report and extract transactions
-          if (report && report.data) {
-            const dayTransactions = this.parseFinanceReport(report.data, dateStr);
-            transactions.push(...dayTransactions);
-            logger.info(`Fetched ${dayTransactions.length} transactions for ${dateStr}`);
-          }
+          if (report && report.transactions && report.transactions.length > 0) {
+            transactions.push(...report.transactions);
 
-        } catch (error) {
-          logger.error(`Failed to fetch report for ${dateStr}`, {
-            error: error.message
-          });
+            // Track paid revenue
+            const dayRevenue = report.totals?.netRevenue || 0;
+            if (dayRevenue > 0) {
+              totalPaidRevenue += dayRevenue;
+              logger.info(`Fetched ${report.transactions.length} transactions for ${dateStr} ($${dayRevenue.toFixed(2)} revenue)`);
+            } else {
+              logger.debug(`Fetched ${report.transactions.length} transactions for ${dateStr} (no paid revenue)`);
+            }
+          }
+        } catch (err) {
+          logger.warn(`Failed to fetch report for ${dateStr}: ${err.message}`);
           // Continue with next day
         }
+      }
 
-        currentDate.setDate(currentDate.getDate() + 1);
+      if (totalPaidRevenue > 0) {
+        logger.info(`Total paid revenue fetched: $${totalPaidRevenue.toFixed(2)}`);
       }
 
       logger.info(`Total transactions fetched: ${transactions.length}`);
+
       return transactions;
 
     } catch (error) {
@@ -161,12 +177,7 @@ class RevenueSyncJob {
         stack: error.stack
       });
 
-      // Fallback to mock data if API fails
-      logger.warn('Falling back to mock transaction data');
-      const endDate = new Date();
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - this.daysToSync);
-      return this.generateMockTransactions(startDate, endDate);
+      throw new Error(`Failed to fetch transactions from App Store Connect: ${error.message}`);
     }
   }
 
@@ -233,10 +244,41 @@ class RevenueSyncJob {
       'freetrial': 'trial',
       'auto-renewable': 'monthly',
       'non-renewing': 'monthly',
-      'annual': 'annual'
+      'annual': 'annual',
+      'com.blush.monthly': 'monthly',
+      'com.blush.annual': 'annual',
+      'com.blush.premium': 'lifetime',
+      'subscription': 'monthly'
     };
 
+    if (!productType) return 'monthly';
+
+    // Check for direct match
+    if (typeMap[productType]) {
+      return typeMap[productType];
+    }
+
+    // Check for partial match (e.g., contains 'annual', 'monthly', etc.)
+    const lowerType = productType.toLowerCase();
+    if (lowerType.includes('annual') || lowerType.includes('yearly')) {
+      return 'annual';
+    }
+    if (lowerType.includes('trial')) {
+      return 'trial';
+    }
+    if (lowerType.includes('lifetime') || lowerType.includes('premium')) {
+      return 'lifetime';
+    }
+
     return typeMap[productType] || 'monthly';
+  }
+
+  /**
+   * Map subscription type from product ID or type
+   * Used for parsing App Store Connect API responses
+   */
+  mapSubscriptionTypeFromProductType(productType) {
+    return this.mapSubscriptionType(productType);
   }
 
   /**
@@ -320,7 +362,8 @@ class RevenueSyncJob {
 
   /**
    * Store transactions in database
-   * Uses bulk upsert to handle duplicates
+   * Uses findOneAndUpdate with overwrite to ensure full document replacement
+   * Matches the approach used in the backfill script
    */
   async storeTransactions(transactions) {
     try {
@@ -328,21 +371,25 @@ class RevenueSyncJob {
         return 0;
       }
 
-      // Bulk upsert with transactionId as unique key
-      const operations = transactions.map(transaction => ({
-        updateOne: {
-          filter: { transactionId: transaction.transactionId },
-          update: { $set: transaction },
-          upsert: true
-        }
-      }));
+      let storedCount = 0;
 
-      const result = await MarketingRevenue.bulkWrite(operations);
-      const storedCount = result.upsertedCount + result.modifiedCount;
+      // Store each transaction individually with overwrite option
+      for (const transaction of transactions) {
+        try {
+          const result = await MarketingRevenue.findOneAndUpdate(
+            { transactionId: transaction.transactionId },
+            transaction,
+            { upsert: true, new: true, overwrite: true }
+          );
+          storedCount++;
+        } catch (err) {
+          logger.warn(`Failed to store transaction ${transaction.transactionId}: ${err.message}`);
+        }
+      }
 
       logger.info(`Stored ${storedCount} transactions in database`, {
-        upserted: result.upsertedCount,
-        modified: result.modifiedCount
+        total: transactions.length,
+        failed: transactions.length - storedCount
       });
 
       return storedCount;
@@ -503,12 +550,19 @@ class RevenueSyncJob {
   /**
    * Start the revenue sync scheduler
    */
-  start() {
+  async start() {
     const cronSchedule = this.syncSchedule || '0 2 * * *';
-    schedulerService.scheduleJob(
+    await schedulerService.schedule(
       this.jobName,
       cronSchedule,
-      () => this.execute()
+      () => this.execute(),
+      {
+        timezone: this.timezone,
+        metadata: {
+          daysToSync: this.daysToSync,
+          jobType: 'revenue-sync'
+        }
+      }
     );
     logger.info('Revenue sync job started', {
       schedule: cronSchedule,

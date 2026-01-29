@@ -910,6 +910,6 @@ weeklyRevenueAggregateSchema.statics.getForDateRange = async function(startDate,
   }).sort({ weekStart: 1 });
 };
 
-const WeeklyRevenueAggregate = mongoose.model('WeeklyRevenueAggregate', weeklyRevenueAggregateSchema);
+const WeeklyRevenueAggregate = mongoose.model('WeeklyRevenueAggregate', weeklyRevenueAggregateSchema, 'marketing_weekly_revenue_aggregates');
 
 export default WeeklyRevenueAggregate;

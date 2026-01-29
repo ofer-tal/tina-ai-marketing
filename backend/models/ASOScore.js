@@ -383,4 +383,4 @@ asoScoreSchema.methods.getScoreGrade = function() {
   return { grade: 'F', label: 'Critical', color: '#f8312f' };
 };
 
-export default mongoose.model('ASOScore', asoScoreSchema);
+export default mongoose.model('ASOScore', asoScoreSchema, 'marketing_aso_scores');

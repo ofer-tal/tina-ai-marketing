@@ -1008,6 +1008,6 @@ monthlyRevenueAggregateSchema.statics.getRecentMonths = async function(monthsCou
   return aggregates;
 };
 
-const MonthlyRevenueAggregate = mongoose.model('MonthlyRevenueAggregate', monthlyRevenueAggregateSchema);
+const MonthlyRevenueAggregate = mongoose.model('MonthlyRevenueAggregate', monthlyRevenueAggregateSchema, 'marketing_monthly_revenue_aggregates');
 
 export default MonthlyRevenueAggregate;

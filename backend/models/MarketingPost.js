@@ -560,6 +560,6 @@ marketingPostSchema.statics.getUpcoming = function(days = 7) {
     .populate('storyId', 'title coverPath spiciness category');
 };
 
-const MarketingPost = mongoose.model('MarketingPost', marketingPostSchema);
+const MarketingPost = mongoose.model('MarketingPost', marketingPostSchema, 'marketing_posts');
 
 export default MarketingPost;

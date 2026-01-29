@@ -8,6 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import databaseService from "./services/database.js";
 import configService, { configSchema } from "./services/config.js";
+import schedulerService from "./services/scheduler.js";
 import settingsRouter from "./api/settings.js";
 import storageRouter from "./api/storage.js";
 import dashboardRouter from "./api/dashboard.js";
@@ -20,6 +21,7 @@ import audioRouter from "./api/audio.js";
 import hooksRouter from "./api/hooks.js";
 import blacklistRouter from "./api/blacklist.js";
 import tiktokRouter from "./api/tiktok.js";
+import tiktokCallbackRouter from "./api/tiktok-callback.js";
 import instagramRouter from "./api/instagram.js";
 import youtubeRouter from "./api/youtube.js";
 import rateLimitsRouter from "./api/rateLimits.js";
@@ -37,6 +39,7 @@ import budgetGuardRouter from "./api/budgetGuard.js";
 import revenueRouter from "./api/revenue.js";
 import dashboardTestRouter from "./api/dashboard-test.js";
 import testDbAccessRouter from "./api/testDbAccess.js";
+import tiktokPostingService from "./services/tiktokPostingService.js";
 import googleAnalyticsRouter from "./api/googleAnalytics.js";
 import glmRouter from "./api/glm.js";
 import cacheRouter from "./api/cache.js";
@@ -100,8 +103,19 @@ import revenueSyncJob from "./jobs/revenueSyncJob.js";
 import keywordRankingCheckJob from "./jobs/keywordRankingCheckJob.js";
 import abTestDurationMonitorJob from "./jobs/abTestDurationMonitor.js";
 import logRotationJob from "./jobs/logRotationJob.js";
+import appleSearchAdsSyncJob from "./jobs/appleSearchAdsSyncJob.js";
+import appStoreAnalyticsJob from "./jobs/appStoreAnalyticsJob.js";
+import contentMetricsSyncJob from "./jobs/contentMetricsSyncJob.js";
+import metricsAggregationJob from "./jobs/metricsAggregationJob.js";
+import googleAnalyticsSyncJob from "./jobs/googleAnalyticsSyncJob.js";
+import retentionAnalyticsSyncJob from "./jobs/firebaseAnalyticsSyncJob.js";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from parent directory (project root) since server runs from backend/ directory
+const projectRoot = path.resolve(__dirname, '..');
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 // Validate environment variables on startup
 console.log("Validating environment configuration...");
@@ -120,9 +134,6 @@ if (!configValidation.valid) {
     process.exit(1);
   }
 }
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = configService.get('PORT', 3001);
@@ -146,10 +157,15 @@ app.get("/api/health", async (req, res) => {
         keyIdConfigured: !!process.env.APP_STORE_CONNECT_KEY_ID,
       },
       appleSearchAds: {
-        configured: !!(process.env.APPLE_SEARCH_ADS_CLIENT_ID &&
-                       process.env.APPLE_SEARCH_ADS_CLIENT_SECRET &&
-                       process.env.APPLE_SEARCH_ADS_ORGANIZATION_ID),
-        clientIdConfigured: !!process.env.APPLE_SEARCH_ADS_CLIENT_ID,
+        configured: !!(process.env.SEARCH_ADS_CLIENT_ID &&
+                       process.env.SEARCH_ADS_TEAM_ID &&
+                       process.env.SEARCH_ADS_KEY_ID &&
+                       process.env.SEARCH_ADS_PRIVATE_KEY_PATH &&
+                       process.env.SEARCH_ADS_ORGANIZATION_ID),
+        clientIdConfigured: !!process.env.SEARCH_ADS_CLIENT_ID,
+        teamIdConfigured: !!process.env.SEARCH_ADS_TEAM_ID,
+        keyIdConfigured: !!process.env.SEARCH_ADS_KEY_ID,
+        privateKeyPathConfigured: !!process.env.SEARCH_ADS_PRIVATE_KEY_PATH,
       },
       tiktok: {
         configured: !!(process.env.TIKTOK_APP_KEY &&
@@ -257,6 +273,7 @@ app.use("/api/audio", audioRouter);
 app.use("/api/hooks", hooksRouter);
 app.use("/api/blacklist", blacklistRouter);
 app.use("/api/tiktok", tiktokRouter);
+app.use("/auth/tiktok", tiktokCallbackRouter);
 app.use("/api/instagram", instagramRouter);
 app.use("/api/youtube", youtubeRouter);
 app.use("/api/rate-limits", rateLimitsRouter);
@@ -410,6 +427,13 @@ async function startServer() {
     await databaseService.connect();
     console.log("MongoDB connection established");
 
+    // Initialize TikTok tokens (load from database)
+    try {
+      await tiktokPostingService.initialize();
+    } catch (error) {
+      console.error('Failed to initialize TikTok posting service:', error.message);
+    }
+
     // Start the posting scheduler job after MongoDB connects
     postingSchedulerJob.start();
     console.log("Posting scheduler job started");
@@ -458,8 +482,12 @@ async function startServer() {
     storyRefreshJob.start();
     console.log("Story database refresh job started");
 
+    // Start the scheduler service (checks for missed jobs on startup)
+    await schedulerService.start();
+    console.log("Scheduler service started");
+
     // Start the revenue sync job
-    revenueSyncJob.start();
+    await revenueSyncJob.start();
     console.log("Revenue sync job started");
 
     // Start the keyword ranking check job
@@ -473,6 +501,30 @@ async function startServer() {
     // Start the log rotation job
     logRotationJob.start();
     console.log("Log rotation job started");
+
+    // Start the Apple Search Ads sync job
+    await appleSearchAdsSyncJob.initialize();
+    console.log("Apple Search Ads sync job initialized");
+
+    // Start the App Store Analytics sync job (weekly on Sunday 7 AM)
+    await appStoreAnalyticsJob.initialize();
+    console.log("App Store Analytics sync job initialized");
+
+    // Start the Content Metrics sync job (every 2 hours)
+    await contentMetricsSyncJob.initialize();
+    console.log("Content Metrics sync job initialized");
+
+    // Start the metrics aggregation job
+    await metricsAggregationJob.start();
+    console.log("Metrics aggregation job started");
+
+    // Start the Google Analytics sync job (hourly)
+    await googleAnalyticsSyncJob.initialize();
+    console.log("Google Analytics sync job initialized");
+
+    // Start the Retention Analytics sync job (daily at 6 AM)
+    await retentionAnalyticsSyncJob.initialize();
+    console.log("Retention Analytics sync job initialized");
   } catch (error) {
     console.error("Failed to connect to MongoDB:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -530,6 +582,12 @@ const gracefulShutdown = async (signal) => {
     keywordRankingCheckJob.stop();
     abTestDurationMonitorJob.stop();
     logRotationJob.stop();
+    appleSearchAdsSyncJob.stop();
+    appStoreAnalyticsJob.stop();
+    contentMetricsSyncJob.stop();
+    metricsAggregationJob.stop();
+    googleAnalyticsSyncJob.stop();
+    retentionAnalyticsSyncJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)

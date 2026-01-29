@@ -478,4 +478,176 @@ router.get('/health', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/tiktok/sync-videos
+ * Sync all TikTok videos and update metrics in database
+ */
+router.post('/sync-videos', async (req, res) => {
+  try {
+    logger.info('Syncing TikTok videos...');
+
+    // Fetch all videos from TikTok
+    const result = await tiktokPostingService.fetchUserVideos();
+
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        error: 'Failed to fetch videos from TikTok',
+      });
+    }
+
+    const videos = result.videos;
+    const updatedPosts = [];
+    const importedPosts = [];
+
+    // Get existing posts
+    const existingPosts = await MarketingPost.find({ platform: 'tiktok' });
+
+    for (const video of videos) {
+      const existingPost = existingPosts.find(p => p.tiktokVideoId === video.id);
+
+      if (existingPost) {
+        // Update metrics for existing post
+        const views = video.view_count || 0;
+        const likes = video.like_count || 0;
+        const comments = video.comment_count || 0;
+        const shares = video.share_count || 0;
+        let engagementRate = '0';
+        if (views > 0) {
+          engagementRate = (((likes + comments + shares) / views) * 100).toFixed(2);
+        }
+
+        existingPost.title = (video.title || video.video_description || existingPost.title).substring(0, 100);
+        existingPost.caption = video.video_description || video.title || existingPost.caption;
+        existingPost.tiktokShareUrl = video.share_url || existingPost.tiktokShareUrl;
+        existingPost.performanceMetrics = {
+          views,
+          likes,
+          comments,
+          shares,
+          engagementRate
+        };
+        existingPost.metricsLastFetchedAt = new Date();
+        existingPost.updatedAt = new Date();
+
+        await existingPost.save();
+        updatedPosts.push({
+          id: existingPost._id,
+          tiktokVideoId: video.id,
+          views,
+          likes,
+        });
+      } else {
+        // Import new post
+        const postedAt = new Date(parseInt(video.create_time) * 1000);
+        const views = video.view_count || 0;
+        const likes = video.like_count || 0;
+        const comments = video.comment_count || 0;
+        const shares = video.share_count || 0;
+        let engagementRate = '0';
+        if (views > 0) {
+          engagementRate = (((likes + comments + shares) / views) * 100).toFixed(2);
+        }
+
+        const newPost = new MarketingPost({
+          title: (video.title || video.video_description || 'TikTok Post').substring(0, 100),
+          description: 'Imported from TikTok',
+          platform: 'tiktok',
+          status: 'posted',
+          contentType: 'video',
+          caption: video.video_description || video.title || '',
+          hashtags: [],
+          scheduledAt: postedAt,
+          postedAt: postedAt,
+          storyId: existingPosts[0]?.storyId || null,
+          storyName: 'Imported from TikTok',
+          storyCategory: 'imported',
+          storySpiciness: 1,
+          generatedAt: postedAt,
+          approvedBy: 'System',
+          tiktokVideoId: video.id.toString(),
+          tiktokShareUrl: video.share_url,
+          performanceMetrics: {
+            views,
+            likes,
+            comments,
+            shares,
+            engagementRate
+          },
+          metricsLastFetchedAt: new Date(),
+        });
+
+        await newPost.save();
+        importedPosts.push({
+          id: newPost._id,
+          tiktokVideoId: video.id,
+          views,
+        });
+      }
+    }
+
+    logger.info('TikTok sync complete', {
+      totalVideos: videos.length,
+      updated: updatedPosts.length,
+      imported: importedPosts.length,
+    });
+
+    res.json({
+      success: true,
+      message: 'TikTok videos synced successfully',
+      data: {
+        totalVideos: videos.length,
+        updatedPosts: updatedPosts.length,
+        importedPosts: importedPosts.length,
+        updated: updatedPosts,
+        imported: importedPosts,
+      },
+    });
+  } catch (error) {
+    logger.error('TikTok sync failed', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/tiktok/videos
+ * Get list of TikTok videos from API
+ */
+router.get('/videos', async (req, res) => {
+  try {
+    logger.info('Fetching TikTok videos...');
+
+    const result = await tiktokPostingService.fetchUserVideos();
+
+    if (result.success) {
+      res.json({
+        success: true,
+        data: result,
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: 'Failed to fetch videos',
+      });
+    }
+  } catch (error) {
+    logger.error('Failed to fetch TikTok videos', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
 export default router;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import Settings from './pages/Settings';
 import Dashboard from './pages/Dashboard';
@@ -68,10 +68,11 @@ const AppContainer = styled.div`
 const MainLayout = styled.div`
   display: flex;
   flex: 1;
+  position: relative;
 `;
 
 const SidebarNav = styled.nav`
-  width: ${props => props.$collapsed ? '60px' : '200px'};
+  width: ${props => props.$collapsed ? '60px' : '280px'};
   background: ${cssVar('--color-surface')};
   border-right: 1px solid ${cssVar('--color-border')};
   padding: ${props => props.$collapsed ? cssVar('--spacing-sm') : cssVar('--spacing-md')};
@@ -80,6 +81,8 @@ const SidebarNav = styled.nav`
   gap: ${cssVar('--spacing-sm')};
   transition: width ${cssVar('--transition-base')};
   position: relative;
+  overflow-y: auto;
+  max-height: calc(100vh - 100px);
 
   @media (max-width: 768px) {
     position: fixed;
@@ -91,19 +94,129 @@ const SidebarNav = styled.nav`
     transform: translateX(${props => props.$mobileOpen ? '0' : '-100%'});
     transition: transform ${cssVar('--transition-base')};
     padding: ${cssVar('--spacing-md')};
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+  }
+`;
+
+// Quick Actions Container (sidebar - hidden on large screens)
+const QuickActions = styled.div`
+  display: ${props => props.$collapsed ? 'none' : 'flex'};
+  flex-direction: column;
+  gap: ${cssVar('--spacing-xs')};
+  padding: ${cssVar('--spacing-sm')};
+  background: ${cssVar('--color-primary')};
+  border-radius: ${cssVar('--radius-md')};
+  margin-bottom: ${cssVar('--spacing-md')};
+
+  @media (min-width: 1024px) {
+    display: none;
+  }
+`;
+
+const QuickActionsLabel = styled.span`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0 ${cssVar('--spacing-xs')};
+`;
+
+const QuickActionButton = styled(Link)`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.6rem ${cssVar('--spacing-sm')};
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  border-radius: ${cssVar('--radius-sm')};
+  color: white;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all ${cssVar('--transition-fast')};
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateX(2px);
+  }
+
+  .badge {
+    background: ${cssVar('--color-accent')};
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+  }
+`;
+
+// Navigation Section (collapsible)
+const NavSection = styled.div`
+  margin-bottom: ${cssVar('--spacing-xs')};
+`;
+
+const NavSectionHeader = styled.button`
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: ${props => props.$collapsed ? 'center' : 'space-between'};
+  padding: ${props => props.$collapsed ? '0.5rem' : '0.75rem'};
+  background: ${props => props.$open ? 'rgba(233, 69, 96, 0.1)' : 'transparent'};
+  border: ${props => props.$open ? '1px solid rgba(233, 69, 96, 0.3)' : '1px solid transparent'};
+  border-radius: ${cssVar('--radius-md')};
+  color: ${props => props.$open ? cssVar('--color-primary') : cssVar('--color-text-secondary')};
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all ${cssVar('--transition-base')};
+  margin-bottom: ${props => props.$collapsed ? '0' : props.$open ? cssVar('--spacing-xs') : '0'};
+
+  &:hover {
+    background: ${props => props.$collapsed ? 'transparent' : 'rgba(233, 69, 96, 0.08)'};
+    color: ${cssVar('--color-primary')};
+    border-color: ${props => props.$open ? 'rgba(233, 69, 96, 0.5)' : 'rgba(233, 69, 96, 0.2)'};
+  }
+
+  .chevron {
+    transition: transform ${cssVar('--transition-base')};
+    transform: rotate(${props => props.$open ? '180deg' : '0deg'});
+    font-size: 0.7rem;
+    opacity: ${props => props.$open ? '1' : '0.7'};
+  }
+
+  .icon {
+    font-size: 1rem;
+    opacity: ${props => props.$collapsed ? '1' : '0.8'};
+  }
+
+  .label {
+    display: ${props => props.$collapsed ? 'none' : 'block'};
+  }
+`;
+
+const NavSectionContent = styled.div`
+  display: ${props => props.$open ? 'block' : 'none'};
+  padding-left: ${props => props.$collapsed ? '0' : cssVar('--spacing-sm')};
+
+  @media (max-width: 768px) {
+    padding-left: ${cssVar('--spacing-sm')};
   }
 `;
 
 const SidebarNavLink = styled(Link)`
-  padding: ${props => props.$collapsed ? '0.75rem' : '0.75rem 1rem'};
+  padding: ${props => props.$collapsed ? '0.5rem' : '0.6rem 0.75rem'};
   background: transparent;
   border: 1px solid transparent;
   border-radius: ${cssVar('--radius-md')};
   color: ${cssVar('--color-text')};
   text-decoration: none;
   font-weight: 500;
+  font-size: 0.9rem;
   transition: all ${cssVar('--transition-base')};
   display: flex;
   align-items: center;
@@ -111,18 +224,12 @@ const SidebarNavLink = styled(Link)`
   gap: ${cssVar('--spacing-sm')};
   white-space: nowrap;
   overflow: hidden;
-  min-height: 44px; // Ensure touch target is large enough
-
-  @media (max-width: 768px) {
-    padding: 1rem;
-    min-height: 48px; // Larger touch target on mobile
-    font-size: 1rem;
-  }
+  min-height: 40px;
 
   &:hover {
     background: ${cssVar('--color-primary')};
     border-color: ${cssVar('--color-primary')};
-    transform: ${props => props.$collapsed ? 'none' : 'translateX(4px)'};
+    transform: ${props => props.$collapsed ? 'none' : 'translateX(2px)'};
   }
 
   &.active {
@@ -130,10 +237,174 @@ const SidebarNavLink = styled(Link)`
     border-color: ${cssVar('--color-primary')};
   }
 
-  span {
+  span.label {
     opacity: ${props => props.$collapsed ? '0' : '1'};
-    transition: opacity ${cssVar('--transition-base')};
   }
+
+  span.icon {
+    font-size: 1rem;
+    min-width: 20px;
+    text-align: center;
+  }
+`;
+
+// Chat Panel
+const ChatPanelToggle = styled.button`
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 80px;
+  background: ${cssVar('--color-primary')};
+  border: none;
+  border-radius: ${cssVar('--radius-md')} 0 0 ${cssVar('--radius-md')};
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all ${cssVar('--transition-base')};
+  z-index: ${cssVar('--z-index-sticky')};
+  color: white;
+  font-size: 1.2rem;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+
+  &:hover {
+    background: ${cssVar('--color-primary-hover')};
+    width: 36px;
+  }
+
+  @media (max-width: 768px) {
+    width: 40px;
+    height: 48px;
+    top: auto;
+    bottom: 80px;
+    transform: none;
+    border-radius: ${cssVar('--radius-md')} 0 0 ${cssVar('--radius-md')};
+  }
+`;
+
+const ChatPanel = styled.aside`
+  position: fixed;
+  right: 0;
+  top: 0;
+  width: ${props => props.$width}px;
+  height: 100vh;
+  background: ${cssVar('--color-surface')};
+  border-left: 1px solid ${cssVar('--color-border')};
+  box-shadow: -4px 0 16px rgba(0, 0, 0, 0.1);
+  transform: translateX(${props => props.$open ? '0' : '100%'});
+  transition: transform ${cssVar('--transition-base')}, width 0.05s ease-out;
+  z-index: calc(${cssVar('--z-index-fixed')} + 2);
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  max-width: 80vw;
+
+  ${props => props.$isResizing && `
+    transition: none;
+    user-select: none;
+  `}
+
+  @media (max-width: 768px) {
+    width: 100% !important;
+    min-width: 100%;
+  }
+`;
+
+const ChatResizeHandle = styled.div`
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background ${cssVar('--transition-fast')};
+  z-index: 1;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 40px;
+    background: ${cssVar('--color-border')};
+    border-radius: 1px;
+    opacity: 0.5;
+    transition: all ${cssVar('--transition-fast')};
+  }
+
+  &:hover::before {
+    background: ${cssVar('--color-primary')};
+    width: 3px;
+    left: 1.5px;
+    opacity: 1;
+    box-shadow: 0 0 8px ${cssVar('--color-primary')};
+  }
+
+  &:hover {
+    background: rgba(233, 69, 96, 0.05);
+  }
+
+  ${props => props.$isResizing && `
+    background: rgba(233, 69, 96, 0.1);
+    cursor: ew-resize;
+
+    &::before {
+      background: ${cssVar('--color-primary')};
+      opacity: 1;
+    }
+  `}
+
+  @media (max-width: 768px) {
+    display: none;
+  }
+`;
+
+const ChatPanelHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: ${cssVar('--spacing-md')};
+  border-bottom: 1px solid ${cssVar('--color-border')};
+  background: ${cssVar('--color-primary')};
+  color: white;
+`;
+
+const ChatPanelTitle = styled.h3`
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: ${cssVar('--spacing-sm')};
+`;
+
+const ChatPanelClose = styled.button`
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: ${cssVar('--radius-sm')};
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: background ${cssVar('--transition-fast')};
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+`;
+
+const ChatPanelContent = styled.div`
+  flex: 1;
+  overflow: hidden;
 `;
 
 const MainContentArea = styled.main`
@@ -146,18 +417,12 @@ const PageContent = styled.div`
   flex: 1;
   padding: ${cssVar('--spacing-xl')};
   overflow-y: auto;
-  max-width: calc(100vw - ${props => props.$sidebarCollapsed ? '380px' : '520px'}); // Subtract sidebar and todo sidebar
+  max-width: calc(100vw - ${props => props.$sidebarCollapsed ? '60px' : '280px'});
+  transition: max-width ${cssVar('--transition-base')};
 
   @media (max-width: 768px) {
     max-width: 100vw;
     padding: ${cssVar('--spacing-md')};
-  }
-
-  // Ensure content stacks vertically on mobile
-  @media (max-width: 768px) {
-    & > * {
-      flex-direction: column;
-    }
   }
 `;
 
@@ -175,7 +440,7 @@ const Header = styled.header`
 
 const SidebarToggle = styled.button`
   position: fixed;
-  left: ${props => props.$collapsed ? '60px' : '200px'};
+  left: ${props => props.$collapsed ? '60px' : '280px'};
   top: 50%;
   transform: translateY(-50%);
   width: 24px;
@@ -252,52 +517,85 @@ const HeaderLeft = styled.div`
   text-align: center;
 `;
 
+const HeaderRight = styled.div`
+  display: none;
+  align-items: center;
+  gap: ${cssVar('--spacing-md')};
+
+  @media (min-width: 1024px) {
+    display: flex;
+  }
+`;
+
+const HeaderQuickActions = styled.div`
+  display: flex;
+  align-items: center;
+  gap: ${cssVar('--spacing-sm')};
+  padding: ${cssVar('--spacing-sm')} ${cssVar('--spacing-md')};
+  background: ${cssVar('--color-surface')};
+  border: 1px solid ${cssVar('--color-border')};
+  border-radius: ${cssVar('--radius-lg')};
+`;
+
+const HeaderQuickActionLink = styled(Link)`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.5rem ${cssVar('--spacing-md')};
+  background: transparent;
+  border: none;
+  border-radius: ${cssVar('--radius-md')};
+  color: ${cssVar('--color-text-secondary')};
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all ${cssVar('--transition-fast')};
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    background: rgba(233, 69, 96, 0.1);
+    color: ${cssVar('--color-primary')};
+  }
+
+  &.active {
+    background: rgba(233, 69, 96, 0.15);
+    color: ${cssVar('--color-primary')};
+  }
+
+  .badge {
+    background: ${cssVar('--color-primary')};
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 10px;
+    min-width: 18px;
+    text-align: center;
+  }
+`;
+
 const Title = styled.h1`
-  font-size: 2.5rem;
+  font-size: 2rem;
   margin: 0 0 0.5rem 0;
   background: ${cssVar('--gradient-primary')};
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+
+  @media (max-width: 768px) {
+    font-size: 1.5rem;
+  }
 `;
 
 const Subtitle = styled.p`
   color: ${cssVar('--color-text-secondary')};
-  font-size: 1.1rem;
+  font-size: 1rem;
   margin: 0;
-`;
 
-const Nav = styled.nav`
-  display: flex;
-  gap: ${cssVar('--spacing-md')};
-`;
-
-const NavLink = styled(Link)`
-  padding: 0.75rem 1.5rem;
-  background: ${cssVar('--color-surface')};
-  border: 1px solid ${cssVar('--color-border')};
-  border-radius: ${cssVar('--radius-md')};
-  color: ${cssVar('--color-text')};
-  text-decoration: none;
-  font-weight: 500;
-  transition: all ${cssVar('--transition-base')};
-
-  &:hover {
-    background: ${cssVar('--color-primary')};
-    border-color: ${cssVar('--color-primary')};
-    transform: translateY(-2px);
+  @media (max-width: 768px) {
+    font-size: 0.9rem;
   }
-
-  &.active {
-    background: ${cssVar('--color-primary')};
-    border-color: ${cssVar('--color-primary')};
-  }
-`;
-
-const Content = styled.main`
-  padding: ${cssVar('--spacing-xl')};
-  max-width: 1200px;
-  margin: 0 auto;
 `;
 
 const WelcomeCard = styled.div`
@@ -343,6 +641,97 @@ const StatusItem = styled.li`
   }
 `;
 
+// Navigation sections configuration
+const NAV_SECTIONS = [
+  {
+    id: 'dashboard',
+    icon: '⧉',
+    label: 'Dashboard',
+    items: [
+      { path: '/', icon: '⌂', label: 'Home' },
+      { path: '/dashboard', icon: '◫', label: 'Tactical' },
+      { path: '/dashboard/strategic', icon: '⇶', label: 'Strategic' },
+    ]
+  },
+  {
+    id: 'content',
+    icon: '◐',
+    label: 'Content',
+    items: [
+      { path: '/content/library', icon: '◫', label: 'All Content' },
+      { path: '/content/approval', icon: '✓', label: 'Approvals' },
+      { path: '/content/calendar', icon: '◷', label: 'Calendar' },
+    ]
+  },
+  {
+    id: 'generators',
+    icon: '✎',
+    label: 'Generators',
+    items: [
+      { path: '/content/blog-generator', icon: '◫', label: 'Blog Posts' },
+      { path: '/content/medium-generator', icon: '▥', label: 'Medium Articles' },
+      { path: '/content/press-release', icon: '◉', label: 'Press Releases' },
+      { path: '/content/seo-suggestions', icon: '⌕', label: 'SEO Ideas' },
+      { path: '/content/trending-topics', icon: '▲', label: 'Trending' },
+      { path: '/content/keyword-recommendations', icon: '◈', label: 'Keywords' },
+    ]
+  },
+  {
+    id: 'analytics',
+    icon: '▤',
+    label: 'Analytics',
+    items: [
+      { path: '/analytics/channels', icon: '◎', label: 'Channel Performance' },
+      { path: '/analytics/engagement', icon: '♥', label: 'Engagement' },
+      { path: '/analytics/posting-times', icon: '⏱', label: 'Best Times' },
+      { path: '/analytics/content-performance', icon: '⧉', label: 'Content Performance' },
+      { path: '/analytics/website-traffic', icon: '◎', label: 'Website Traffic' },
+    ]
+  },
+  {
+    id: 'insights',
+    icon: '◉',
+    label: 'Insights',
+    items: [
+      { path: '/analytics/categories', icon: '◫', label: 'Story Categories' },
+      { path: '/analytics/hashtags', icon: '#', label: 'Hashtags' },
+      { path: '/analytics/video-styles', icon: '▣', label: 'Video Styles' },
+      { path: '/analytics/cohort-analysis', icon: '👥', label: 'Cohorts' },
+    ]
+  },
+  {
+    id: 'advanced',
+    icon: '⚡',
+    label: 'Advanced',
+    items: [
+      { path: '/analytics/attribution', icon: '◎', label: 'Attribution' },
+      { path: '/analytics/forecast', icon: '◆', label: 'Forecast' },
+      { path: '/analytics/anomaly-detection', icon: '⚠', label: 'Anomaly Detection' },
+      { path: '/analytics/roi-optimization', icon: '◆', label: 'ROI Opt' },
+      { path: '/analytics/churn-prediction', icon: '▼', label: 'Churn' },
+      { path: '/analytics/ab-test-statistics', icon: '⚗', label: 'A/B Tests' },
+      { path: '/analytics/ltv-modeling', icon: '◆', label: 'LTV' },
+    ]
+  },
+  {
+    id: 'aso',
+    icon: '◈',
+    label: 'ASO',
+    items: [
+      { path: '/aso', icon: '⌕', label: 'Keyword Tracking' },
+    ]
+  },
+  {
+    id: 'ads',
+    icon: '◉',
+    label: 'Ads',
+    items: [
+      { path: '/ads', icon: '◉', label: 'Campaigns' },
+      { path: '/ads/revenue-test', icon: '◆', label: 'Revenue Test' },
+    ]
+  },
+];
+
 function HomePage() {
   return (
     <WelcomeCard>
@@ -369,56 +758,36 @@ function HomePage() {
   );
 }
 
-// Sidebar component with collapse functionality
-function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle }) {
+// Sidebar component with grouped navigation
+function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle, chatOpen, onChatToggle, chatDrawerWidth, onDrawerResizeStart, isResizingDrawer }) {
   const location = useLocation();
+  const [openSections, setOpenSections] = useState(() => {
+    // Load from localStorage
+    const saved = localStorage.getItem('navSections');
+    return saved ? JSON.parse(saved) : { content: true, analytics: true };
+  });
 
-  const menuItems = [
-    { path: '/', icon: '🏠', label: 'Home' },
-    { path: '/dashboard', icon: '📊', label: 'Dashboard' },
-    { path: '/dashboard/strategic', icon: '📈', label: 'Strategic' },
-    { path: '/aso', icon: '🍎', label: 'ASO' },
-    { path: '/analytics/channels', icon: '🎯', label: 'Channels' },
-    { path: '/analytics/engagement', icon: '🔍', label: 'Engagement' },
-    { path: '/analytics/posting-times', icon: '⏰', label: 'Best Times' },
-    { path: '/analytics/categories', icon: '📚', label: 'Categories' },
-    { path: '/analytics/hashtags', icon: '#️⃣', label: 'Hashtags' },
-    { path: '/analytics/video-styles', icon: '🎬', label: 'Video Styles' },
-    { path: '/analytics/cohort-analysis', icon: '📊', label: 'Cohorts' },
-    { path: '/analytics/attribution', icon: '🎯', label: 'Attribution' },
-    { path: '/analytics/forecast', icon: '🔮', label: 'Forecast' },
-    { path: '/analytics/anomaly-detection', icon: '🔍', label: 'Anomaly Detection' },
-    { path: '/analytics/roi-optimization', icon: '💰', label: 'ROI Optimization' },
-    { path: '/analytics/churn-prediction', icon: '📉', label: 'Churn Prediction' },
-    { path: '/analytics/ab-test-statistics', icon: '📈', label: 'A/B Test Stats' },
-    { path: '/analytics/ltv-modeling', icon: '💎', label: 'LTV Modeling' },
-    { path: '/content/blog-generator', icon: '✍️', label: 'Blog Generator' },
-    { path: '/content/medium-generator', icon: '📰', label: 'Medium Articles' },
-    { path: '/content/press-release', icon: '📰', label: 'Press Releases' },
-    { path: '/content/seo-suggestions', icon: '🔍', label: 'SEO Suggestions' },
-    { path: '/content/calendar', icon: '📅', label: 'Calendar' },
-    { path: '/analytics/website-traffic', icon: '🌐', label: 'Traffic' },
-    { path: '/analytics/content-performance', icon: '📊', label: 'Performance' },
-    { path: '/content/trending-topics', icon: '🔥', label: 'Trending Topics' },
-    { path: '/content/keyword-recommendations', icon: '🔍', label: 'Keywords' },
-    { path: '/content/library', icon: '📝', label: 'Content' },
-    { path: '/content/approval', icon: '✅', label: 'Approvals' },
-    { path: '/chat', icon: '🤖', label: 'AI Chat' },
-    { path: '/todos', icon: '📋', label: 'Todos' },
-    { path: '/ads', icon: '📢', label: 'Ads' },
-    { path: '/ads/campaigns', icon: '🎯', label: 'Campaigns' },
-    { path: '/ads/revenue-test', icon: '💰', label: 'Revenue' },
-    { path: '/revenue/weekly', icon: '📅', label: 'Weekly' },
-    { path: '/revenue/monthly', icon: '📆', label: 'Monthly' },
-    { path: '/settings', icon: '⚙️', label: 'Settings' },
-  ];
+  // Persist section state
+  useEffect(() => {
+    localStorage.setItem('navSections', JSON.stringify(openSections));
+  }, [openSections]);
+
+  const toggleSection = (sectionId) => {
+    setOpenSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }));
+  };
 
   const handleNavClick = () => {
-    // Close mobile menu after navigation
     if (window.innerWidth <= 768) {
       onMobileToggle(false);
     }
   };
+
+  // Get all paths to find active route
+  const allPaths = NAV_SECTIONS.flatMap(section => section.items).map(item => item.path);
+  const isActive = (path) => location.pathname === path;
 
   return (
     <>
@@ -439,20 +808,86 @@ function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle }) {
         $mobileOpen={mobileOpen}
         aria-label="Main navigation"
       >
-        {menuItems.map(item => (
-          <SidebarNavLink
-            key={item.path}
-            to={item.path}
-            $collapsed={collapsed}
-            className={location.pathname === item.path ? 'active' : ''}
-            onClick={handleNavClick}
-            aria-label={item.label}
-            aria-current={location.pathname === item.path ? 'page' : undefined}
-          >
-            <span aria-hidden="true">{item.icon}</span>
-            <span>{item.label}</span>
-          </SidebarNavLink>
+        {/* Quick Actions */}
+        {!collapsed && (
+          <QuickActions>
+            <QuickActionsLabel>Quick Actions</QuickActionsLabel>
+            <QuickActionButton to="/content/approval" onClick={handleNavClick}>
+              <span>✓ Approve Content</span>
+              <span className="badge">3</span>
+            </QuickActionButton>
+            <QuickActionButton to="/dashboard" onClick={handleNavClick}>
+              <span>⧉ Dashboard</span>
+            </QuickActionButton>
+            <QuickActionButton to="/content/library" onClick={handleNavClick}>
+              <span>◫ All Content</span>
+            </QuickActionButton>
+            <QuickActionButton to="/chat" onClick={(e) => { e.preventDefault(); onChatToggle(!chatOpen); }}>
+              <span>◈ Open AI Chat</span>
+            </QuickActionButton>
+          </QuickActions>
+        )}
+
+        {/* Navigation Sections */}
+        {NAV_SECTIONS.map(section => (
+          <NavSection key={section.id}>
+            <NavSectionHeader
+              $collapsed={collapsed}
+              $open={!collapsed && openSections[section.id]}
+              onClick={() => !collapsed && toggleSection(section.id)}
+              aria-label={`${collapsed ? '' : openSections[section.id] ? 'Collapse' : 'Expand'} ${section.label}`}
+              aria-expanded={!collapsed && openSections[section.id]}
+            >
+              <span style={{ display: 'flex', alignItems: 'center', gap: collapsed ? 0 : '8px' }}>
+                <span className="icon">{section.icon}</span>
+                <span className="label">{section.label}</span>
+              </span>
+              {!collapsed && (
+                <span className="chevron">▶</span>
+              )}
+            </NavSectionHeader>
+            <NavSectionContent $open={!collapsed && openSections[section.id]}>
+              {section.items.map(item => (
+                <SidebarNavLink
+                  key={item.path}
+                  to={item.path}
+                  $collapsed={collapsed}
+                  className={isActive(item.path) ? 'active' : ''}
+                  onClick={handleNavClick}
+                  aria-label={item.label}
+                  aria-current={isActive(item.path) ? 'page' : undefined}
+                >
+                  <span className="icon">{item.icon}</span>
+                  <span className="label">{item.label}</span>
+                </SidebarNavLink>
+              ))}
+            </NavSectionContent>
+          </NavSection>
         ))}
+
+        {/* Bottom links */}
+        <NavSection style={{ marginTop: 'auto' }}>
+          <NavSectionContent $open={!collapsed}>
+            <SidebarNavLink
+              to="/todos"
+              $collapsed={collapsed}
+              className={isActive('/todos') ? 'active' : ''}
+              onClick={handleNavClick}
+            >
+              <span className="icon">📋</span>
+              <span className="label">Todos</span>
+            </SidebarNavLink>
+            <SidebarNavLink
+              to="/settings"
+              $collapsed={collapsed}
+              className={isActive('/settings') ? 'active' : ''}
+              onClick={handleNavClick}
+            >
+              <span className="icon">⚙️</span>
+              <span className="label">Settings</span>
+            </SidebarNavLink>
+          </NavSectionContent>
+        </NavSection>
       </SidebarNav>
       <SidebarToggle
         $collapsed={collapsed}
@@ -461,6 +896,41 @@ function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle }) {
       >
         {collapsed ? '▶' : '◀'}
       </SidebarToggle>
+
+      {/* Chat Panel Toggle */}
+      <ChatPanelToggle
+        onClick={() => onChatToggle(!chatOpen)}
+        aria-label={chatOpen ? 'Close AI Chat' : 'Open AI Chat'}
+        aria-expanded={chatOpen}
+      >
+        💬
+      </ChatPanelToggle>
+
+      {/* Chat Panel */}
+      <ChatPanel
+        $open={chatOpen}
+        $width={chatDrawerWidth}
+        $isResizing={isResizingDrawer}
+        aria-label="AI Chat Panel"
+      >
+        <ChatResizeHandle
+          $isResizing={isResizingDrawer}
+          onMouseDown={onDrawerResizeStart}
+          aria-label="Resize chat panel"
+        />
+        <ChatPanelHeader>
+          <ChatPanelTitle>👩‍💼 Tina</ChatPanelTitle>
+          <ChatPanelClose
+            onClick={() => onChatToggle(false)}
+            aria-label="Close chat"
+          >
+            ✕
+          </ChatPanelClose>
+        </ChatPanelHeader>
+        <ChatPanelContent>
+          <Chat />
+        </ChatPanelContent>
+      </ChatPanel>
     </>
   );
 }
@@ -477,19 +947,71 @@ function PageWithBreadcrumbs({ children }) {
   );
 }
 
+// Helper to calculate initial drawer width based on screen size
+const getInitialDrawerWidth = () => {
+  const saved = localStorage.getItem('chatDrawerWidth');
+  if (saved) {
+    const width = parseInt(saved, 10);
+    // Validate the saved width is within reasonable bounds
+    if (width >= 320 && width <= window.innerWidth * 0.8) {
+      return width;
+    }
+  }
+
+  // Default responsive width based on screen size
+  const screenWidth = window.innerWidth;
+  if (screenWidth >= 1920) return 600;      // Very wide screens
+  if (screenWidth >= 1440) return 500;      // Wide screens
+  if (screenWidth >= 1200) return 450;      // Laptops
+  return 400;                                // Smaller screens
+};
+
 function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
-    // Load from localStorage on mount
     const saved = localStorage.getItem('sidebarCollapsed');
     return saved ? JSON.parse(saved) : false;
   });
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatDrawerWidth, setChatDrawerWidth] = useState(() => getInitialDrawerWidth());
+  const [isResizingDrawer, setIsResizingDrawer] = useState(false);
 
-  // Persist sidebar state to localStorage
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(sidebarCollapsed));
   }, [sidebarCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem('chatDrawerWidth', chatDrawerWidth.toString());
+  }, [chatDrawerWidth]);
+
+  // Handle drawer resize
+  const handleDrawerResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizingDrawer(true);
+
+    const startX = e.clientX;
+    const startWidth = chatDrawerWidth;
+
+    const handleMouseMove = (moveEvent) => {
+      const deltaX = startX - moveEvent.clientX; // Negative because we're resizing from left
+      const newWidth = Math.max(320, Math.min(window.innerWidth * 0.8, startWidth + deltaX));
+      setChatDrawerWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingDrawer(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    document.body.style.cursor = 'ew-resize';
+    document.body.style.userSelect = 'none';
+  };
 
   const toggleSidebar = () => {
     setSidebarCollapsed(prev => !prev);
@@ -497,6 +1019,10 @@ function App() {
 
   const toggleMobileMenu = (isOpen) => {
     setMobileMenuOpen(isOpen);
+  };
+
+  const toggleChat = (isOpen) => {
+    setChatOpen(isOpen);
   };
 
   return (
@@ -509,6 +1035,22 @@ function App() {
             <Title>Blush Marketing Operations Center</Title>
             <Subtitle>AI-Powered Marketing Automation for the Blush iPhone App</Subtitle>
           </HeaderLeft>
+          <HeaderRight>
+            <HeaderQuickActions>
+              <HeaderQuickActionLink to="/content/approval">
+                <span>✓</span> Approve <span className="badge">3</span>
+              </HeaderQuickActionLink>
+              <HeaderQuickActionLink to="/dashboard">
+                <span>⧉</span> Dashboard
+              </HeaderQuickActionLink>
+              <HeaderQuickActionLink to="/content/library">
+                <span>◫</span> Content
+              </HeaderQuickActionLink>
+              <HeaderQuickActionLink to="/chat" onClick={(e) => { e.preventDefault(); toggleChat(!chatOpen); }}>
+                <span>◈</span> Chat
+              </HeaderQuickActionLink>
+            </HeaderQuickActions>
+          </HeaderRight>
         </Header>
 
         <MainLayout>
@@ -517,6 +1059,11 @@ function App() {
             onToggle={toggleSidebar}
             mobileOpen={mobileMenuOpen}
             onMobileToggle={toggleMobileMenu}
+            chatOpen={chatOpen}
+            onChatToggle={toggleChat}
+            chatDrawerWidth={chatDrawerWidth}
+            onDrawerResizeStart={handleDrawerResizeStart}
+            isResizingDrawer={isResizingDrawer}
           />
 
           <MainContentArea>

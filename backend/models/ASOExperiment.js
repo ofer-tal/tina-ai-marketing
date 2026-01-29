@@ -362,4 +362,4 @@ asoExperimentSchema.pre('save', function(next) {
   next();
 });
 
-export default mongoose.model('ASOExperiment', asoExperimentSchema);
+export default mongoose.model('ASOExperiment', asoExperimentSchema, 'marketing_aso_experiments');

@@ -125,4 +125,4 @@ strategySchema.pre('save', function(next) {
   next();
 });
 
-export default mongoose.model('Strategy', strategySchema);
+export default mongoose.model('Strategy', strategySchema, 'marketing_strategy');

@@ -466,39 +466,7 @@ function BatchApprovalQueue() {
       setPosts(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching posts:', error);
-      // Use mock data for development
-      setPosts([
-        {
-          id: 1,
-          title: "The Billionaire's Secret Baby - Part 1",
-          storyName: "The Billionaire's Secret Baby",
-          caption: "Amazing story you need to read! 📚❤️ #romance #books",
-          platform: 'tiktok',
-          status: 'draft',
-          contentType: 'video',
-          scheduledFor: new Date(Date.now() + 3600000).toISOString()
-        },
-        {
-          id: 2,
-          title: "Falling for the CEO - Part 1",
-          storyName: "Falling for the CEO",
-          caption: "CEO romance that will make your heart melt! 💕 #romance #ceo",
-          platform: 'instagram',
-          status: 'ready',
-          contentType: 'image',
-          scheduledFor: new Date(Date.now() + 7200000).toISOString()
-        },
-        {
-          id: 3,
-          title: "Wedding Night Surprise - Part 1",
-          storyName: "Wedding Night Surprise",
-          caption: "Steamy wedding night content! 🔥 #romance #wedding",
-          platform: 'youtube',
-          status: 'draft',
-          contentType: 'video',
-          scheduledFor: new Date(Date.now() + 10800000).toISOString()
-        }
-      ]);
+      setPosts([]);
     } finally {
       setLoading(false);
     }

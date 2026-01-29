@@ -13,8 +13,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from .env file
-dotenv.config();
+// Load environment variables from .env file in project root (parent of backend/)
+const projectRoot = path.resolve(__dirname, '../..');
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 /**
  * Configuration validation schema
@@ -79,26 +80,53 @@ const configSchema = {
     errorMessage: 'File must exist at the specified path'
   },
 
-  // Apple Search Ads API
-  APPLE_SEARCH_ADS_CLIENT_ID: {
+  // Apple Search Ads API - JWT Authentication
+  // Documentation: https://developer.apple.com/documentation/apple_ads/implementing-oauth-for-the-apple-search-ads-api
+  SEARCH_ADS_CLIENT_ID: {
     required: false,
-    description: 'Apple Search Ads OAuth Client ID',
-    validate: (value) => !value || value.length > 0,
-    errorMessage: 'Must not be empty if provided'
+    description: 'Apple Search Ads Client ID (format: SEARCHADS.xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)',
+    validate: (value) => !value || /^SEARCHADS\.[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value),
+    errorMessage: 'Must be in format: SEARCHADS.xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
   },
 
-  APPLE_SEARCH_ADS_CLIENT_SECRET: {
+  SEARCH_ADS_TEAM_ID: {
     required: false,
-    description: 'Apple Search Ads OAuth Client Secret',
-    validate: (value) => !value || value.length > 0,
-    errorMessage: 'Must not be empty if provided'
+    description: 'Apple Search Ads Team ID (format: SEARCHADS.xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx OR numeric organization ID)',
+    validate: (value) => !value || /^SEARCHADS\.[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value) || /^\d+$/.test(value),
+    errorMessage: 'Must be in format: SEARCHADS.xxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx OR a numeric organization ID'
   },
 
-  APPLE_SEARCH_ADS_ORGANIZATION_ID: {
+  SEARCH_ADS_KEY_ID: {
     required: false,
-    description: 'Apple Search Ads Organization ID',
-    validate: (value) => !value || value.length > 0,
-    errorMessage: 'Must not be empty if provided'
+    description: 'Apple Search Ads Key ID (from the certificate/private key)',
+    validate: (value) => !value || /^[a-f0-9-]{36}$/i.test(value) || /^[A-Z0-9]{10}$/i.test(value),
+    errorMessage: 'Must be a valid Key ID (UUID or 10-character alphanumeric)'
+  },
+
+  SEARCH_ADS_PRIVATE_KEY_PATH: {
+    required: false,
+    description: 'Path to Apple Search Ads private key file (PEM format)',
+    validate: (value) => {
+      if (!value) return true;
+      const filePath = path.resolve(value);
+      return fs.existsSync(filePath);
+    },
+    errorMessage: 'PEM file must exist at the specified path'
+  },
+
+  SEARCH_ADS_ORGANIZATION_ID: {
+    required: false,
+    description: 'Apple Search Ads Organization ID (for API requests)',
+    validate: (value) => !value || /^\d+$/.test(value),
+    errorMessage: 'Must be a numeric Organization ID'
+  },
+
+  SEARCH_ADS_ENVIRONMENT: {
+    required: false,
+    default: 'sandbox',
+    description: 'Apple Search Ads Environment (sandbox or production)',
+    validate: (value) => !value || ['sandbox', 'production'].includes(value),
+    errorMessage: 'Must be either "sandbox" or "production"'
   },
 
   // TikTok API

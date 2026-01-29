@@ -8,6 +8,7 @@ import MarketingRevenue from '../models/MarketingRevenue.js';
 import DailySpend from '../models/DailySpend.js';
 import ASOKeyword from '../models/ASOKeyword.js';
 import { getLogger } from '../utils/logger.js';
+import { getBriefingPrompt } from '../services/tinaPersonality.js';
 
 const logger = getLogger('daily-briefing', 'daily-briefing');
 
@@ -445,33 +446,20 @@ class DailyBriefingJob {
       // Create AI prompt for briefing generation
       const prompt = this.createBriefingPrompt(briefingData);
 
-      // Call GLM service to generate briefing
-      const aiResponse = await glmService.chat({
+      // Call GLM service to generate briefing using Tina's personality
+      const aiResponse = await glmService.createMessage({
         messages: [
           {
             role: 'user',
             content: prompt
           }
         ],
-        system: `You are an AI Marketing Executive for the Blush iPhone app - a romantic/spicy AI story generator.
-Your task is to generate a concise, actionable daily briefing that highlights key metrics, identifies trends, and prioritizes action items.
-
-Tone: Professional, collaborative, strategic, and data-driven.
-Format: Structured markdown with clear sections.
-Focus: Actionable insights, not just data reporting.
-
-The briefing should include:
-1. Executive Summary (3-4 bullet points)
-2. Key Performance Highlights
-3. Areas Needing Attention
-4. Top 3 Priority Action Items
-5. Quick Wins (if any)
-
-Keep it brief and scannable - the founder reads this while having morning coffee.`
+        system: getBriefingPrompt(),
+        maxTokens: 2048
       });
 
       // Parse AI response
-      const briefingContent = aiResponse.content || aiResponse.text || 'Unable to generate briefing content.';
+      const briefingContent = aiResponse.content?.[0]?.text || aiResponse.text || 'Unable to generate briefing content.';
 
       const briefing = {
         date: metrics.date,

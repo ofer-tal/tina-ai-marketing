@@ -504,7 +504,7 @@ function TodoSidebar() {
           status: 'pending',
           scheduledAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
           resources: [
-            { type: 'link', url: '/content/library', description: 'View Content Library' },
+            { type: 'link', url: '/content/approval', description: 'Review Pending Approvals' },
             { type: 'video', url: '#', description: 'Watch Approval Tutorial' }
           ]
         },

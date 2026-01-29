@@ -124,6 +124,6 @@ storyBlacklistSchema.statics.getActiveBlacklistedIds = async function() {
   return entries.map(e => e.storyId);
 };
 
-const StoryBlacklist = mongoose.model('StoryBlacklist', storyBlacklistSchema);
+const StoryBlacklist = mongoose.model('StoryBlacklist', storyBlacklistSchema, 'marketing_story_blacklist');
 
 export default StoryBlacklist;

@@ -277,7 +277,7 @@ const ContentEngagement = () => {
   }
 
   // Prepare chart data
-  const categoryData = Object.entries(correlations.correlations?.byCategory || {})
+  const categoryData = Object.entries(correlations?.byCategory || {})
     .map(([category, stats]) => ({
       name: category,
       engagement: stats.avgEngagementRate,
@@ -285,7 +285,7 @@ const ContentEngagement = () => {
       count: stats.count
     }));
 
-  const spicinessData = Object.entries(correlations.correlations?.bySpiciness || {})
+  const spicinessData = Object.entries(correlations?.bySpiciness || {})
     .map(([level, stats]) => ({
       name: `Level ${level}`,
       engagement: stats.avgEngagementRate,
@@ -294,7 +294,7 @@ const ContentEngagement = () => {
     }))
     .sort((a, b) => parseInt(a.name) - parseInt(b.name));
 
-  const platformData = Object.entries(correlations.correlations?.byPlatform || {})
+  const platformData = Object.entries(correlations?.byPlatform || {})
     .map(([platform, stats]) => ({
       name: platform.charAt(0).toUpperCase() + platform.slice(1),
       engagement: stats.avgEngagementRate,

@@ -262,6 +262,6 @@ marketingCostSchema.pre('save', function(next) {
   next();
 });
 
-const MarketingCost = mongoose.model('MarketingCost', marketingCostSchema);
+const MarketingCost = mongoose.model('MarketingCost', marketingCostSchema, 'marketing_costs');
 
 export default MarketingCost;

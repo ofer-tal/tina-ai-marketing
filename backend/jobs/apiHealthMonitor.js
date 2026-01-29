@@ -322,11 +322,13 @@ class ApiHealthMonitorJob {
     const startTime = Date.now();
 
     try {
-      // Check if API is configured
+      // Check if API is configured with JWT credentials
       const isConfigured = !!(
-        process.env.APPLE_SEARCH_ADS_CLIENT_ID &&
-        process.env.APPLE_SEARCH_ADS_CLIENT_SECRET &&
-        process.env.APPLE_SEARCH_ADS_ORGANIZATION_ID
+        process.env.SEARCH_ADS_CLIENT_ID &&
+        process.env.SEARCH_ADS_TEAM_ID &&
+        process.env.SEARCH_ADS_KEY_ID &&
+        process.env.SEARCH_ADS_PRIVATE_KEY_PATH &&
+        process.env.SEARCH_ADS_ORGANIZATION_ID
       );
 
       if (!isConfigured) {

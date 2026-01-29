@@ -179,10 +179,24 @@ function TikTokSandboxConfig() {
   const [sandboxStatus, setSandboxStatus] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [authUrl, setAuthUrl] = useState(null);
 
   useEffect(() => {
     checkSandboxStatus();
+    fetchAuthUrl();
   }, []);
+
+  const fetchAuthUrl = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/tiktok/authorize-url?scopes=video.upload,video.publish');
+      const data = await response.json();
+      if (data.success) {
+        setAuthUrl(data.data.url);
+      }
+    } catch (err) {
+      console.error('Failed to fetch auth URL:', err);
+    }
+  };
 
   const checkSandboxStatus = async () => {
     try {
@@ -242,6 +256,38 @@ function TikTokSandboxConfig() {
     }
   };
 
+  const handleAuthorize = () => {
+    if (authUrl) {
+      window.open(authUrl, '_blank', 'width=600,height=700');
+    }
+  };
+
+  const checkForOAuthResult = () => {
+    const params = new URLSearchParams(window.location.search);
+    const tiktokStatus = params.get('tiktok');
+    const message = params.get('message');
+
+    if (tiktokStatus === 'success') {
+      // Clear URL params
+      window.history.replaceState({}, '', '/settings');
+      checkSandboxStatus();
+      // Show success message
+      setError(null);
+      setConnectionStatus('connected');
+      // You could show a toast notification here
+      alert(message || 'TikTok authentication successful!');
+    } else if (tiktokStatus === 'error') {
+      // Clear URL params
+      window.history.replaceState({}, '', '/settings');
+      setError(message || 'Authentication failed');
+      setConnectionStatus('error');
+    }
+  };
+
+  useEffect(() => {
+    checkForOAuthResult();
+  }, []);
+
   return (
     <Container>
       <Header>
@@ -287,13 +333,20 @@ function TikTokSandboxConfig() {
       )}
 
       <Section>
-        <SectionTitle>🧪 Test Connection</SectionTitle>
+        <SectionTitle>🧪 Authentication & Testing</SectionTitle>
+        <Button
+          onClick={handleAuthorize}
+          disabled={loading || !authUrl}
+          style={{ marginRight: '1rem' }}
+        >
+          🔐 Authorize with TikTok
+        </Button>
         <Button
           onClick={testConnection}
           disabled={loading}
         >
           {loading && <LoadingSpinner inline size="small" color="#ffffff" />}
-          {loading ? 'Testing...' : '🔄 Test Sandbox Connection'}
+          {loading ? 'Testing...' : '🔄 Test Connection'}
         </Button>
 
         {error && (
@@ -322,7 +375,7 @@ function TikTokSandboxConfig() {
           </InstructionItem>
           <InstructionItem>
             <strong>Configure Redirect URIs:</strong>{' '}
-            Add <CodeBlock>http://localhost:3001/api/tiktok/callback</CodeBlock> to your app's redirect URIs.
+            Add <CodeBlock>http://localhost:3001/auth/tiktok/callback</CodeBlock> to your app's redirect URIs.
           </InstructionItem>
           <InstructionItem>
             <strong>Get Credentials:</strong>{' '}
@@ -339,7 +392,7 @@ function TikTokSandboxConfig() {
           </InstructionItem>
           <InstructionItem>
             <strong>Authorize App:</strong>{' '}
-            Click the authorization link (will be provided after credentials are saved) to authorize your sandbox account.
+            Click the <strong>🔐 Authorize with TikTok</strong> button above to open TikTok's authorization page. Log in with your TikTok account and authorize the app.
           </InstructionItem>
           <InstructionItem>
             <strong>Test Connection:</strong>{' '}

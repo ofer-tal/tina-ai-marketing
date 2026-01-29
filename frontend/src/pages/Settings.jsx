@@ -289,6 +289,81 @@ const HiddenInput = styled.input`
   display: none;
 `;
 
+const DebugPanel = styled.div`
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 400px;
+  max-height: 300px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  color: #c9d1d9;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+`;
+
+const DebugHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #161b22;
+  border-bottom: 1px solid #30363d;
+  cursor: pointer;
+  user-select: none;
+
+  &:hover {
+    background: #21262d;
+  }
+`;
+
+const DebugTitle = styled.span`
+  font-weight: 600;
+  color: #e94560;
+`;
+
+const DebugClear = styled.button`
+  background: none;
+  border: none;
+  color: #8b949e;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+
+  &:hover {
+    background: #30363d;
+    color: #c9d1d9;
+  }
+`;
+
+const DebugContent = styled.div`
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+  white-space: pre-wrap;
+  word-break: break-all;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #0d1117;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #30363d;
+    border-radius: 3px;
+  }
+`;
+
 const categoryIcons = {
   server: '⚙️',
   database: '🗄️',
@@ -329,6 +404,7 @@ const categoryTitles = {
 function Settings() {
   const [schema, setSchema] = useState(null);
   const [settings, setSettings] = useState({});
+  const [formValues, setFormValues] = useState({}); // Local form state
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
   const [message, setMessage] = useState(null);
@@ -337,6 +413,8 @@ function Settings() {
   const [touchedFields, setTouchedFields] = useState({});
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [debugLog, setDebugLog] = useState([]); // Debug log that persists
+  const [debugCollapsed, setDebugCollapsed] = useState(false); // Debug panel collapsed state
   const fileInputRef = React.createRef();
 
   // Budget confirmation state
@@ -373,6 +451,8 @@ function Settings() {
       const data = await response.json();
       if (data.success) {
         setSettings(data.settings);
+        // Also update form values to match
+        setFormValues(data.settings);
       }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
@@ -461,16 +541,36 @@ function Settings() {
 
   const handleSubmit = async (category, event, confirmed = false) => {
     event.preventDefault();
-    const formData = new FormData(event.target);
 
+    // Use formValues state directly instead of FormData - this is more reliable
     const updates = {};
     const formErrors = {};
 
-    // First, validate all fields
-    for (const [key, value] of formData.entries()) {
-      updates[key] = value;
+    // Get all keys for this category from the schema
+    const categoryKeys = schema && schema[category] ? Object.keys(schema[category]) : [];
 
-      // Find config for this field
+    // Log to on-screen debug panel
+    const newLogs = [
+      `=== Saving ${category} ===`,
+      `Time: ${new Date().toLocaleTimeString()}`,
+      `Category keys: ${categoryKeys.length}`,
+      ''
+    ];
+
+    // Collect values from formValues state for this category
+    for (const key of categoryKeys) {
+      const value = formValues[key];
+      updates[key] = value;
+      const valueStr = String(value ?? '');
+      newLogs.push(`  ${key}: "${valueStr}" (type: ${typeof value})`);
+    }
+
+    newLogs.push('');
+    setDebugLog(prev => [...newLogs, ...prev].slice(0, 50)); // Keep last 50 lines
+
+    // Validate all fields in this category
+    for (const key of categoryKeys) {
+      const value = updates[key];
       let config = null;
       if (schema && schema[category]) {
         config = schema[category][key];
@@ -484,11 +584,17 @@ function Settings() {
       }
 
       if (key.includes('URI') || key.includes('URL') || key.includes('REDIRECT_URI')) {
-        validators.push(validateUrl);
+        // Only validate URL if value is not empty
+        if (value && value.trim()) {
+          validators.push(validateUrl);
+        }
       }
 
       if (key.includes('KEY') || key.includes('SECRET') || key.includes('TOKEN')) {
-        validators.push(validateApiKey);
+        // Only validate API keys/secrets if value is not empty
+        if (value && value.trim()) {
+          validators.push(validateApiKey);
+        }
       }
 
       if (key.includes('MONGODB_URI')) {
@@ -561,16 +667,36 @@ function Settings() {
         return;
       }
 
-      // Update each setting
-      const results = await Promise.all(
-        Object.entries(updates).map(([key, value]) =>
-          fetch(`/api/settings/${key}`, {
+      // Update each setting SEQUENTIALLY to avoid race conditions with .env file
+      // Log API requests to debug panel
+      setDebugLog(prev => ['--- Sending API requests ---', ...prev]);
+
+      const results = [];
+      for (const [key, value] of Object.entries(updates)) {
+        const valueStr = String(value ?? '');
+        setDebugLog(prev => [`  PUT ${key}: "${valueStr}"`, ...prev]);
+
+        try {
+          const response = await fetch(`/api/settings/${key}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ value, confirmed })
-          }).then(res => res.json())
-        )
-      );
+          });
+          const result = await response.json();
+          results.push(result);
+
+          if (result.success) {
+            setDebugLog(prev => [`    ✓ ${key} saved`, ...prev]);
+          } else {
+            setDebugLog(prev => [`    ✗ ${key} FAILED: ${result.error}`, ...prev]);
+          }
+        } catch (error) {
+          results.push({ success: false, error: error.message, key });
+          setDebugLog(prev => [`    ✗ ${key} ERROR: ${error.message}`, ...prev]);
+        }
+      }
+
+      setDebugLog(prev => ['--- API requests completed ---', '', ...prev]);
 
       const allSuccessful = results.every(r => r.success);
 
@@ -763,16 +889,21 @@ function Settings() {
   };
 
   const renderInput = (key, config, category) => {
-    const value = settings[key] || config.default || '';
-    const isPassword = key.includes('SECRET') || key.includes('PASSWORD') || key.includes('PRIVATE_KEY') || key.includes('TOKEN');
+    // Use formValues for controlled components - this ensures the value is always correct
+    const value = formValues[key] !== undefined ? formValues[key] : (settings[key] || config.default || '');
     const hasError = !!fieldErrors[key];
     const hasSuccess = !!fieldSuccess[key];
+
+    const handleChange = (newValue) => {
+      setFormValues(prev => ({ ...prev, [key]: newValue }));
+      handleFieldChange(key, newValue, config);
+    };
 
     if (config.validate && config.validate.toString().includes('development') || config.validate && config.validate.toString().includes('production')) {
       // Enum select
       const options = ['development', 'production', 'test'];
       return (
-        <Select name={key} defaultValue={value}>
+        <Select name={key} value={value} autoComplete="off" onChange={(e) => handleChange(e.target.value)}>
           {options.map(opt => (
             <option key={opt} value={opt}>{opt}</option>
           ))}
@@ -781,8 +912,9 @@ function Settings() {
     }
 
     if (config.validate && config.validate.toString().includes('boolean')) {
+      const boolValue = value !== undefined ? String(value) : 'true';
       return (
-        <Select name={key} defaultValue={value !== undefined ? value.toString() : 'true'}>
+        <Select name={key} value={boolValue} autoComplete="off" onChange={(e) => handleChange(e.target.value)}>
           <option value="true">Enabled</option>
           <option value="false">Disabled</option>
         </Select>
@@ -792,19 +924,26 @@ function Settings() {
     return (
       <>
         <Input
-          type={isPassword ? 'password' : 'text'}
+          id={key}
+          type="text"
           name={key}
-          defaultValue={value}
-          placeholder={isPassword ? '••••••••' : config.default || ''}
+          value={value}
+          placeholder={config.default || ''}
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          data-form-type="settings"
+          data-setting-key={key}
           $hasError={hasError}
           $hasSuccess={hasSuccess}
-          onChange={(e) => handleFieldChange(key, e.target.value, config)}
+          onChange={(e) => handleChange(e.target.value)}
           onBlur={(e) => {
             setTouchedFields(prev => ({ ...prev, [key]: true }));
             validateField(key, e.target.value, config);
           }}
         />
-        {hasSuccess && !isPassword && <SuccessIndicator>✓</SuccessIndicator>}
+        {hasSuccess && <SuccessIndicator>✓</SuccessIndicator>}
         {hasError && <ErrorText>{fieldErrors[key]}</ErrorText>}
       </>
     );
@@ -906,7 +1045,7 @@ function Settings() {
               <CardIcon>{categoryIcons[category] || '⚙️'}</CardIcon>
               {categoryTitles[category] || category}
             </CardTitle>
-            <Form onSubmit={(e) => handleSubmit(category, e)}>
+            <Form onSubmit={(e) => handleSubmit(category, e)} autoComplete="off">
               {Object.entries(keys).map(([key, config]) => (
                 <FormGroup key={key}>
                   <Label htmlFor={key}>
@@ -941,6 +1080,23 @@ function Settings() {
         cancelText="Cancel"
         variant="warning"
       />
+
+      {/* Debug Panel */}
+      {debugLog.length > 0 && (
+        <DebugPanel>
+          <DebugHeader onClick={() => setDebugCollapsed(!debugCollapsed)}>
+            <DebugTitle>🐛 Debug Log ({debugLog.length})</DebugTitle>
+            <DebugClear onClick={(e) => { e.stopPropagation(); setDebugLog([]); }}>Clear</DebugClear>
+          </DebugHeader>
+          {!debugCollapsed && (
+            <DebugContent>
+              {debugLog.map((log, i) => (
+                <div key={i}>{log}</div>
+              ))}
+            </DebugContent>
+          )}
+        </DebugPanel>
+      )}
     </SettingsContainer>
   );
 }

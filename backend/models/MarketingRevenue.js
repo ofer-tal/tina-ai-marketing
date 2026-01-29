@@ -417,6 +417,6 @@ marketingRevenueSchema.pre('save', function(next) {
   next();
 });
 
-const MarketingRevenue = mongoose.model('MarketingRevenue', marketingRevenueSchema);
+const MarketingRevenue = mongoose.model('MarketingRevenue', marketingRevenueSchema, 'marketing_revenues');
 
 export default MarketingRevenue;

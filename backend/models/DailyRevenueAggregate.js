@@ -939,6 +939,6 @@ dailyRevenueAggregateSchema.pre('save', function(next) {
   next();
 });
 
-const DailyRevenueAggregate = mongoose.model('DailyRevenueAggregate', dailyRevenueAggregateSchema);
+const DailyRevenueAggregate = mongoose.model('DailyRevenueAggregate', dailyRevenueAggregateSchema, 'marketing_daily_revenue_aggregates');
 
 export default DailyRevenueAggregate;

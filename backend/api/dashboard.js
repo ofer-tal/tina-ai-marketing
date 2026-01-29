@@ -388,45 +388,47 @@ router.get('/mrr-trend', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // TODO: In production, fetch from MongoDB marketing_metrics collection
-    // For now, generate mock trend data
-    const data = [];
-    let currentMrr = 300;
-    const targetMrr = 10000;
+    // Fetch real data from DailyRevenueAggregate
+    const aggregates = await DailyRevenueAggregate.find({
+      dateObj: { $gte: startDate }
+    }).sort({ dateObj: 1 });
 
+    // Build data array from aggregates
+    const data = aggregates.map(agg => ({
+      date: agg.date,
+      mrr: agg.mrr || 0,
+      target: 0 // TODO: Add target calculation
+    }));
+
+    // Fill in missing dates with zeros
+    const resultMap = new Map(data.map(d => [d.date, d]));
     for (let i = 0; i <= days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-
-      // Simulate growth with some randomness
-      const progress = i / days;
-      const growth = (targetMrr - currentMrr) / (days - i + 1);
-      const randomFactor = (Math.random() - 0.4) * 50;
-      currentMrr = Math.max(300, currentMrr + growth + randomFactor);
-
-      data.push({
-        date: date.toISOString().split('T')[0],
-        mrr: Math.round(currentMrr),
-        target: Math.round(targetMrr * progress)
-      });
+      const dateStr = date.toISOString().split('T')[0];
+      if (!resultMap.has(dateStr)) {
+        resultMap.set(dateStr, { date: dateStr, mrr: 0, target: 0 });
+      }
     }
 
-    // Calculate summary metrics
-    const current = data[data.length - 1].mrr;
-    const previousIndex = Math.max(0, data.length - 8); // 7 days ago
-    const previous = data[previousIndex].mrr;
-    const change = ((current - previous) / previous * 100);
+    const sortedData = Array.from(resultMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Calculate summary
+    const currentMRR = sortedData.length > 0 ? sortedData[sortedData.length - 1].mrr : 0;
+    const previousMRR = sortedData.length > 7 ? sortedData[sortedData.length - 8].mrr : 0;
+    const change = previousMRR > 0 ? ((currentMRR - previousMRR) / previousMRR) * 100 : 0;
+    const trend = currentMRR >= previousMRR ? 'up' : 'down';
 
     const trendData = {
       range: range,
       startDate: startDate.toISOString(),
       endDate: new Date().toISOString(),
-      data: data,
+      data: sortedData,
       summary: {
-        current: Math.round(current),
-        previous: Math.round(previous),
-        change: parseFloat(change.toFixed(1)),
-        trend: current >= previous ? 'up' : 'down'
+        current: currentMRR,
+        previous: previousMRR,
+        change: change,
+        trend: trend
       }
     };
 
@@ -467,54 +469,56 @@ router.get('/user-growth', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // TODO: In production, fetch from MongoDB marketing_metrics collection
-    // For now, generate mock trend data simulating cumulative user growth
-    const data = [];
-    let cumulativeUsers = 850; // Starting user count
+    // Fetch real data from DailyRevenueAggregate
+    const aggregates = await DailyRevenueAggregate.find({
+      dateObj: { $gte: startDate }
+    }).sort({ dateObj: 1 });
 
-    for (let i = 0; i <= days; i++) {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + i);
+    // Build data array from aggregates - use cumulative subscriber count
+    const cumulativeSubscribers = [];
+    let runningTotal = 0;
 
-      // Simulate user growth with increasing acquisition over time
-      // Base growth + acceleration factor + randomness
-      const baseGrowth = 15; // Average daily new users
-      const acceleration = (i / days) * 20; // Growth accelerates over time
-      const randomFactor = (Math.random() - 0.5) * 10; // Random variation
-      const newUsers = Math.max(0, Math.round(baseGrowth + acceleration + randomFactor));
-
-      cumulativeUsers += newUsers;
-
-      data.push({
-        date: date.toISOString().split('T')[0],
-        users: cumulativeUsers,
-        newUsers: newUsers
+    for (const agg of aggregates) {
+      runningTotal += agg.transactions?.newCustomers || 0;
+      cumulativeSubscribers.push({
+        date: agg.date,
+        users: agg.subscriptions?.totalCount || 0,
+        newUsers: agg.transactions?.newCustomers || 0
       });
     }
 
-    // Calculate summary metrics
-    const current = data[data.length - 1].users;
-    const previousIndex = Math.max(0, data.length - 8); // 7 days ago
-    const previous = data[previousIndex].users;
-    const change = current - previous;
-    const changePercent = ((change / previous) * 100).toFixed(1);
+    // Fill in missing dates
+    const resultMap = new Map(cumulativeSubscribers.map(d => [d.date, d]));
+    for (let i = 0; i <= days; i++) {
+      const date = new Date(startDate);
+      date.setDate(date.getDate() + i);
+      const dateStr = date.toISOString().split('T')[0];
+      if (!resultMap.has(dateStr)) {
+        resultMap.set(dateStr, { date: dateStr, users: 0, newUsers: 0 });
+      }
+    }
 
-    // Calculate average daily new users
-    const totalNewUsers = data.reduce((sum, day) => sum + day.newUsers, 0);
-    const avgDailyNewUsers = Math.round(totalNewUsers / days);
+    const sortedData = Array.from(resultMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+    // Calculate summary
+    const currentUsers = sortedData.length > 0 ? sortedData[sortedData.length - 1].users : 0;
+    const previousUsers = sortedData.length > 7 ? sortedData[sortedData.length - 8].users : 0;
+    const change = previousUsers > 0 ? ((currentUsers - previousUsers) / previousUsers) * 100 : 0;
+    const avgDailyNewUsers = sortedData.reduce((sum, d) => sum + d.newUsers, 0) / sortedData.length;
+    const trend = currentUsers >= previousUsers ? 'up' : 'down';
 
     const trendData = {
       range: range,
       startDate: startDate.toISOString(),
       endDate: new Date().toISOString(),
-      data: data,
+      data: sortedData,
       summary: {
-        current: current,
-        previous: previous,
+        current: currentUsers,
+        previous: previousUsers,
         change: change,
-        changePercent: parseFloat(changePercent),
+        changePercent: change,
         avgDailyNewUsers: avgDailyNewUsers,
-        trend: change >= 0 ? 'up' : 'down'
+        trend: trend
       }
     };
 
@@ -555,49 +559,19 @@ router.get('/cac-trend', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // TODO: In production, fetch from MongoDB marketing_metrics collection
-    // For now, generate mock trend data simulating CAC optimization over time
+    // NO REAL DATA YET - Return empty structure
+    // TODO: Connect to real analytics source when available
     const data = [];
-    let cac = 45.00; // Starting CAC in dollars (high initial acquisition cost)
-    const targetCac = 15.00; // Target CAC as we optimize
-
     for (let i = 0; i <= days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-
-      // Simulate CAC decreasing over time as marketing improves
-      // Early days: higher CAC (poor targeting)
-      // Later days: lower CAC (better optimization, word-of-mouth)
-      const progress = i / days;
-      const optimization = (cac - targetCac) * (1 - Math.pow(progress, 0.5)); // Slower improvement at first
-      const randomFactor = (Math.random() - 0.5) * 3; // Random variation
-      cac = Math.max(targetCac, cac - optimization * 0.1 + randomFactor);
-
-      // Calculate marketing spend and new users for this day
-      const dailySpend = 25 + Math.random() * 50; // $25-75 per day
-      const dailyNewUsers = Math.round(dailySpend / cac);
-
       data.push({
         date: date.toISOString().split('T')[0],
-        cac: parseFloat(cac.toFixed(2)),
-        marketingSpend: parseFloat(dailySpend.toFixed(2)),
-        newUsers: dailyNewUsers
+        cac: 0,
+        marketingSpend: 0,
+        newUsers: 0
       });
     }
-
-    // Calculate summary metrics
-    const current = data[data.length - 1].cac;
-    const previousIndex = Math.max(0, data.length - 8); // 7 days ago
-    const previous = data[previousIndex].cac;
-    const change = current - previous;
-    const changePercent = ((change / previous) * 100).toFixed(1);
-
-    // Calculate average CAC over the period
-    const avgCac = data.reduce((sum, day) => sum + day.cac, 0) / data.length;
-
-    // Calculate total spend and total users for the period
-    const totalSpend = data.reduce((sum, day) => sum + day.marketingSpend, 0);
-    const totalNewUsers = data.reduce((sum, day) => sum + day.newUsers, 0);
 
     const trendData = {
       range: range,
@@ -605,14 +579,14 @@ router.get('/cac-trend', async (req, res) => {
       endDate: new Date().toISOString(),
       data: data,
       summary: {
-        current: parseFloat(current.toFixed(2)),
-        previous: parseFloat(previous.toFixed(2)),
-        change: parseFloat(change.toFixed(2)),
-        changePercent: parseFloat(changePercent),
-        average: parseFloat(avgCac.toFixed(2)),
-        totalSpend: parseFloat(totalSpend.toFixed(2)),
-        totalNewUsers: totalNewUsers,
-        trend: change <= 0 ? 'down' : 'up' // Down is good for CAC
+        current: 0,
+        previous: 0,
+        change: 0,
+        changePercent: 0,
+        average: 0,
+        totalSpend: 0,
+        totalNewUsers: 0,
+        trend: 'neutral'
       }
     };
 
@@ -653,55 +627,21 @@ router.get('/acquisition-split', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // TODO: In production, fetch from MongoDB marketing_metrics collection
-    // For now, generate mock data showing organic vs paid split
-    // Organic: App Store searches, word-of-mouth, social media organic
-    // Paid: Apple Search Ads, TikTok ads, Instagram ads
-
-    // Simulate improving organic ratio over time (as brand awareness grows)
+    // NO REAL DATA YET - Return empty structure
+    // TODO: Connect to real analytics source when available
     const data = [];
-    let organicRatio = 0.35; // Starting with 35% organic, 65% paid
-
     for (let i = 0; i <= days; i++) {
       const date = new Date(startDate);
       date.setDate(date.getDate() + i);
-
-      // Organic ratio improves over time (from 35% to 55%)
-      const progress = i / days;
-      organicRatio = 0.35 + (0.20 * progress); // 35% -> 55%
-
-      // Add some random variation
-      organicRatio += (Math.random() - 0.5) * 0.05;
-      organicRatio = Math.min(0.80, Math.max(0.20, organicRatio)); // Keep between 20-80%
-
-      // Daily new users (growing over time)
-      const baseUsers = 20 + (progress * 30); // 20 -> 50 users/day
-      const dailyNewUsers = Math.round(baseUsers + (Math.random() - 0.5) * 10);
-
-      const organicUsers = Math.round(dailyNewUsers * organicRatio);
-      const paidUsers = dailyNewUsers - organicUsers;
-
       data.push({
         date: date.toISOString().split('T')[0],
-        totalUsers: dailyNewUsers,
-        organicUsers: organicUsers,
-        paidUsers: paidUsers,
-        organicPercent: parseFloat((organicRatio * 100).toFixed(1)),
-        paidPercent: parseFloat(((1 - organicRatio) * 100).toFixed(1))
+        totalUsers: 0,
+        organicUsers: 0,
+        paidUsers: 0,
+        organicPercent: 0,
+        paidPercent: 0
       });
     }
-
-    // Calculate summary metrics
-    const totalUsers = data.reduce((sum, day) => sum + day.totalUsers, 0);
-    const totalOrganic = data.reduce((sum, day) => sum + day.organicUsers, 0);
-    const totalPaid = data.reduce((sum, day) => sum + day.paidUsers, 0);
-    const avgOrganicPercent = parseFloat(((totalOrganic / totalUsers) * 100).toFixed(1));
-    const avgPaidPercent = parseFloat(((totalPaid / totalUsers) * 100).toFixed(1));
-
-    // Calculate previous period (same range, ending days ago)
-    const previousTotalUsers = totalUsers * 0.75; // Previous period had 25% fewer users
-    const previousOrganic = avgOrganicPercent - 5; // Previous period had 5% less organic
-    const previousPaid = 100 - previousOrganic;
 
     const splitData = {
       range: range,
@@ -709,16 +649,16 @@ router.get('/acquisition-split', async (req, res) => {
       endDate: new Date().toISOString(),
       data: data,
       summary: {
-        totalUsers: totalUsers,
-        organicUsers: totalOrganic,
-        paidUsers: totalPaid,
-        organicPercent: avgOrganicPercent,
-        paidPercent: avgPaidPercent,
+        totalUsers: 0,
+        organicUsers: 0,
+        paidUsers: 0,
+        organicPercent: 0,
+        paidPercent: 0,
         previous: {
-          organicPercent: parseFloat(previousOrganic.toFixed(1)),
-          paidPercent: parseFloat(previousPaid.toFixed(1))
+          organicPercent: 0,
+          paidPercent: 0
         },
-        trend: avgOrganicPercent > previousOrganic ? 'up' : 'down' // Up is good for organic
+        trend: 'neutral'
       }
     };
 
@@ -746,61 +686,54 @@ router.get('/posts/performance', async (req, res) => {
 
     console.log(`Fetching post performance metrics for ${limit} recent posts`);
 
-    // TODO: In production, fetch from MongoDB marketing_posts collection
-    // For now, generate mock data for recent posts with real-time metrics
-    const posts = [];
-    const platforms = ['tiktok', 'instagram', 'youtube_shorts'];
-    const statuses = ['posted', 'posted', 'posted', 'posted', 'posted']; // All posted for performance
+    // Fetch REAL data from MongoDB marketing_posts collection
+    const MarketingPost = (await import('../models/MarketingPost.js')).default;
 
-    for (let i = 0; i < limit; i++) {
-      const platform = platforms[Math.floor(Math.random() * platforms.length)];
-      const hoursAgo = i * 2 + Math.floor(Math.random() * 3); // 0-20 hours ago
+    const posts = await MarketingPost.find({ status: 'posted' })
+      .sort({ postedAt: -1 })
+      .limit(parseInt(limit));
 
-      // Simulate engagement metrics
-      const views = Math.floor(Math.random() * 50000) + 1000; // 1K - 50K views
-      const likes = Math.floor(views * (0.05 + Math.random() * 0.1)); // 5-15% like rate
-      const comments = Math.floor(likes * (0.01 + Math.random() * 0.03)); // 1-4% comment rate
-      const shares = Math.floor(likes * (0.02 + Math.random() * 0.05)); // 2-7% share rate
+    console.log(`Found ${posts.length} posted posts`);
 
-      // Calculate engagement rate
-      const engagementRate = ((likes + comments + shares) / views * 100).toFixed(2);
-
-      posts.push({
-        id: `post_${Date.now()}_${i}`,
-        title: `Spicy Romance Story Excerpt #${1000 + i}`,
-        platform: platform,
-        status: statuses[i % statuses.length],
-        thumbnail: `/thumbnails/post_${i}.jpg`,
-        postedAt: new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString(),
-        performanceMetrics: {
-          views: views,
-          likes: likes,
-          comments: comments,
-          shares: shares,
-          engagementRate: parseFloat(engagementRate)
-        }
-      });
-    }
+    // Format posts for response
+    const formattedPosts = posts.map(post => ({
+      id: post._id.toString(),
+      title: post.title || 'Untitled Post',
+      platform: post.platform,
+      status: post.status,
+      postedAt: post.postedAt,
+      tiktokVideoId: post.tiktokVideoId,
+      performanceMetrics: post.performanceMetrics || {
+        views: 0,
+        likes: 0,
+        comments: 0,
+        shares: 0,
+        engagementRate: 0
+      }
+    }));
 
     // Calculate aggregate stats
-    const totalViews = posts.reduce((sum, post) => sum + post.performanceMetrics.views, 0);
-    const totalLikes = posts.reduce((sum, post) => sum + post.performanceMetrics.likes, 0);
-    const totalComments = posts.reduce((sum, post) => sum + post.performanceMetrics.comments, 0);
-    const totalShares = posts.reduce((sum, post) => sum + post.performanceMetrics.shares, 0);
-    const avgEngagementRate = (posts.reduce((sum, post) => sum + post.performanceMetrics.engagementRate, 0) / posts.length).toFixed(2);
+    const totalViews = formattedPosts.reduce((sum, post) => sum + (post.performanceMetrics.views || 0), 0);
+    const totalLikes = formattedPosts.reduce((sum, post) => sum + (post.performanceMetrics.likes || 0), 0);
+    const totalComments = formattedPosts.reduce((sum, post) => sum + (post.performanceMetrics.comments || 0), 0);
+    const totalShares = formattedPosts.reduce((sum, post) => sum + (post.performanceMetrics.shares || 0), 0);
+    const totalEngagementRate = formattedPosts.reduce((sum, post) => sum + (post.performanceMetrics.engagementRate || 0), 0);
+    const avgEngagementRate = formattedPosts.length > 0 ? totalEngagementRate / formattedPosts.length : 0;
 
     const performanceData = {
-      posts: posts,
+      posts: formattedPosts,
       summary: {
-        totalPosts: posts.length,
+        totalPosts: formattedPosts.length,
         totalViews: totalViews,
         totalLikes: totalLikes,
         totalComments: totalComments,
         totalShares: totalShares,
-        avgEngagementRate: parseFloat(avgEngagementRate),
-        topPerformingPost: posts.reduce((best, post) =>
-          post.performanceMetrics.engagementRate > best.performanceMetrics.engagementRate ? post : best
-        )
+        avgEngagementRate: parseFloat(avgEngagementRate.toFixed(2)),
+        topPerformingPost: formattedPosts.length > 0
+          ? formattedPosts.reduce((best, post) =>
+              (post.performanceMetrics.engagementRate || 0) > (best.performanceMetrics.engagementRate || 0) ? post : best
+            )
+          : null
       },
       lastUpdated: new Date().toISOString()
     };
@@ -842,98 +775,81 @@ router.get('/revenue-spend-trend', async (req, res) => {
     const endDate = new Date();
     const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
 
-    // Generate mock data - revenue and spend over time
-    const data = [];
-    const totalRevenue = 0;
-    const totalSpend = 0;
+    // Fetch real data from DailyRevenueAggregate and DailySpend
+    const [revenueAggregates, spendAggregates] = await Promise.all([
+      DailyRevenueAggregate.find({
+        dateObj: { $gte: startDate }
+      }).sort({ dateObj: 1 }),
+      DailySpend.find({
+        date: { $gte: startDate.toISOString().split('T')[0] },
+        platform: 'all'
+      }).sort({ date: 1 })
+    ]);
 
-    // Starting values
-    let dailyRevenue = 15; // ~$450/month initially
-    let dailySpend = 45; // High initial spend
-    let cumulativeRevenue = 4000; // Starting MRR base
+    // Create maps for quick lookup
+    const revenueMap = new Map(revenueAggregates.map(r => [r.date, r.revenue?.net || 0]));
+    const spendMap = new Map(spendAggregates.map(s => [s.date, s.actualSpend || 0]));
+
+    // Build data array
+    let cumulativeRevenue = 0;
     let cumulativeSpend = 0;
+    const data = [];
 
     for (let i = 0; i <= days; i++) {
       const date = new Date(startDate.getTime() + i * 24 * 60 * 60 * 1000);
+      const dateStr = date.toISOString().split('T')[0];
 
-      // Simulate revenue growth with momentum
-      const revenueGrowth = 0.5 + (Math.random() * 1.5); // $0.50-$2.00 growth per day
-      dailyRevenue += revenueGrowth;
+      const revenue = revenueMap.get(dateStr) || 0;
+      const spend = spendMap.get(dateStr) || 0;
+      const profit = revenue - spend;
 
-      // Simulate spend optimization (decreasing then stabilizing)
-      if (i < days * 0.3) {
-        // Initial optimization phase
-        dailySpend -= 0.3 + (Math.random() * 0.5);
-      } else {
-        // Stabilization with slight variations
-        dailySpend += (Math.random() - 0.5) * 2;
-      }
-
-      // Ensure minimum spend
-      dailySpend = Math.max(dailySpend, 15);
-
-      // Add daily variation
-      const revenueVariation = (Math.random() - 0.5) * 3;
-      const spendVariation = (Math.random() - 0.5) * 5;
-
-      dailyRevenue = Math.max(dailyRevenue + revenueVariation, 10);
-      dailySpend = Math.max(dailySpend + spendVariation, 10);
-
-      // Calculate monthly values (multiply by ~30)
-      const monthlyRevenue = Math.round(dailyRevenue * 30);
-      const monthlySpend = Math.round(dailySpend * 30);
-
-      cumulativeSpend += dailySpend;
+      cumulativeRevenue += revenue;
+      cumulativeSpend += spend;
 
       data.push({
-        date: date.toISOString().split('T')[0], // YYYY-MM-DD
-        revenue: Math.round(monthlyRevenue),
-        spend: Math.round(monthlySpend),
-        profit: Math.round(monthlyRevenue - monthlySpend),
-        cumulativeRevenue: Math.round(cumulativeRevenue + (dailyRevenue * 30 * i / days)),
-        cumulativeSpend: Math.round(cumulativeSpend)
+        date: dateStr,
+        revenue: revenue,
+        spend: spend,
+        profit: profit,
+        cumulativeRevenue: cumulativeRevenue,
+        cumulativeSpend: cumulativeSpend
       });
     }
 
     // Calculate summary
-    const latest = data[data.length - 1];
-    const previous = data[Math.floor(data.length / 2)];
-    const revenueChange = ((latest.revenue - previous.revenue) / previous.revenue * 100).toFixed(1);
-    const spendChange = ((latest.spend - previous.spend) / previous.spend * 100).toFixed(1);
-    const profitMargin = ((latest.profit / latest.revenue) * 100).toFixed(1);
+    const current = data[data.length - 1];
+    const previous = data[Math.max(0, data.length - 8)]; // Compare to a week ago
 
-    const totalRevenueSum = data.reduce((sum, d) => sum + d.revenue, 0);
-    const totalSpendSum = data.reduce((sum, d) => sum + d.spend, 0);
-    const avgProfitMargin = ((totalRevenueSum - totalSpendSum) / totalRevenueSum * 100).toFixed(1);
+    const summary = {
+      current: {
+        revenue: current.revenue,
+        spend: current.spend,
+        profit: current.profit,
+        profitMargin: current.revenue > 0 ? (current.profit / current.revenue) * 100 : 0
+      },
+      previous: {
+        revenue: previous.revenue,
+        spend: previous.spend,
+        profit: previous.profit
+      },
+      change: {
+        revenue: previous.revenue > 0 ? ((current.revenue - previous.revenue) / previous.revenue) * 100 : 0,
+        spend: previous.spend > 0 ? ((current.spend - previous.spend) / previous.spend) * 100 : 0
+      },
+      averages: {
+        revenue: data.reduce((sum, d) => sum + d.revenue, 0) / data.length,
+        spend: data.reduce((sum, d) => sum + d.spend, 0) / data.length,
+        profitMargin: cumulativeRevenue > 0 ? ((cumulativeRevenue - cumulativeSpend) / cumulativeRevenue) * 100 : 0
+      },
+      totalProfit: cumulativeRevenue - cumulativeSpend
+    };
 
     res.json({
       range: range,
       startDate: startDate.toISOString().split('T')[0],
       endDate: endDate.toISOString().split('T')[0],
       data: data,
-      summary: {
-        current: {
-          revenue: latest.revenue,
-          spend: latest.spend,
-          profit: latest.profit,
-          profitMargin: parseFloat(profitMargin)
-        },
-        previous: {
-          revenue: previous.revenue,
-          spend: previous.spend,
-          profit: previous.profit
-        },
-        change: {
-          revenue: parseFloat(revenueChange),
-          spend: parseFloat(spendChange)
-        },
-        averages: {
-          revenue: Math.round(totalRevenueSum / data.length),
-          spend: Math.round(totalSpendSum / data.length),
-          profitMargin: parseFloat(avgProfitMargin)
-        },
-        totalProfit: totalRevenueSum - totalSpendSum
-      }
+      summary: summary
     });
 
   } catch (error) {
@@ -970,115 +886,24 @@ router.get('/roi-by-channel', async (req, res) => {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
-    // TODO: In production, fetch from MongoDB marketing_metrics collection
-    // For now, generate mock ROI data by channel
-    // Channels: Apple Search Ads, TikTok Ads, Instagram Ads, Organic (App Store), Social (Organic)
-
+    // NO REAL DATA YET - Return empty structure
+    // TODO: Connect to real analytics source when available
     const channels = [
-      {
-        id: 'apple_search_ads',
-        name: 'Apple Search Ads',
-        category: 'paid',
-        icon: '🍎',
-        color: '#00d26a'
-      },
-      {
-        id: 'tiktok_ads',
-        name: 'TikTok Ads',
-        category: 'paid',
-        icon: '🎵',
-        color: '#e94560'
-      },
-      {
-        id: 'instagram_ads',
-        name: 'Instagram Ads',
-        category: 'paid',
-        icon: '📸',
-        color: '#7b2cbf'
-      },
-      {
-        id: 'organic_app_store',
-        name: 'Organic (App Store)',
-        category: 'organic',
-        icon: '🔍',
-        color: '#00d4ff'
-      },
-      {
-        id: 'social_organic',
-        name: 'Social Organic',
-        category: 'organic',
-        icon: '💬',
-        color: '#ffb020'
-      }
+      { id: 'apple_search_ads', name: 'Apple Search Ads', category: 'paid', icon: '🍎', color: '#00d26a' },
+      { id: 'tiktok_ads', name: 'TikTok Ads', category: 'paid', icon: '🎵', color: '#e94560' },
+      { id: 'instagram_ads', name: 'Instagram Ads', category: 'paid', icon: '📸', color: '#7b2cbf' },
+      { id: 'organic_app_store', name: 'Organic (App Store)', category: 'organic', icon: '🔍', color: '#00d4ff' },
+      { id: 'social_organic', name: 'Social Organic', category: 'organic', icon: '💬', color: '#ffb020' }
     ];
 
-    const channelData = channels.map(channel => {
-      // Generate realistic ROI data based on channel type
-      let revenue, spend, users, avgCAC;
-
-      if (channel.category === 'paid') {
-        // Paid channels: higher spend, variable ROI
-        if (channel.id === 'apple_search_ads') {
-          // Apple Search Ads: Best ROI (high intent)
-          spend = 800 + Math.random() * 200;
-          users = Math.round(spend / 25); // CAC ~$25
-          revenue = users * 15; // $15/user/month
-        } else if (channel.id === 'tiktok_ads') {
-          // TikTok Ads: Good ROI but improving
-          spend = 500 + Math.random() * 300;
-          users = Math.round(spend / 35); // CAC ~$35
-          revenue = users * 12; // $12/user/month (lower retention)
-        } else {
-          // Instagram Ads: Moderate ROI
-          spend = 400 + Math.random() * 200;
-          users = Math.round(spend / 40); // CAC ~$40
-          revenue = users * 11; // $11/user/month
-        }
-      } else {
-        // Organic channels: zero spend, infinite ROI
-        spend = 0;
-        users = Math.round(50 + Math.random() * 150); // Organic users
-        revenue = users * 14; // $14/user/month
-      }
-
-      const profit = revenue - spend;
-      const roi = spend > 0 ? ((profit / spend) * 100) : 'Infinity';
-      const roas = spend > 0 ? (revenue / spend) : 'Infinity'; // Return on Ad Spend
-
-      return {
-        id: channel.id,
-        name: channel.name,
-        category: channel.category,
-        icon: channel.icon,
-        color: channel.color,
-        metrics: {
-          spend: parseFloat(spend.toFixed(2)),
-          revenue: parseFloat(revenue.toFixed(2)),
-          profit: parseFloat(profit.toFixed(2)),
-          users: users,
-          roi: roi === 'Infinity' ? 'Infinity' : parseFloat(roi.toFixed(1)),
-          roas: roas === 'Infinity' ? 'Infinity' : parseFloat(roas.toFixed(2)),
-          cac: parseFloat((spend / users).toFixed(2)) || 0,
-          ltv: parseFloat((revenue / users).toFixed(2)) || 0 // Lifetime Value (monthly)
-        }
-      };
-    });
-
-    // Calculate summary stats
-    const totalSpend = channelData.reduce((sum, ch) => sum + ch.metrics.spend, 0);
-    const totalRevenue = channelData.reduce((sum, ch) => sum + ch.metrics.revenue, 0);
-    const totalProfit = channelData.reduce((sum, ch) => sum + ch.metrics.profit, 0);
-    const totalUsers = channelData.reduce((sum, ch) => sum + ch.metrics.users, 0);
-    const overallROI = totalSpend > 0 ? ((totalProfit / totalSpend) * 100).toFixed(1) : 'N/A';
-    const overallROAS = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(2) : 'N/A';
-    const avgCAC = totalUsers > 0 ? (totalSpend / totalUsers).toFixed(2) : 'N/A';
-
-    // Sort by ROI (descending) - 'Infinity' should come first
-    channelData.sort((a, b) => {
-      const aRoi = a.metrics.roi === 'Infinity' ? Number.MAX_VALUE : a.metrics.roi;
-      const bRoi = b.metrics.roi === 'Infinity' ? Number.MAX_VALUE : b.metrics.roi;
-      return bRoi - aRoi;
-    });
+    const channelData = channels.map(channel => ({
+      id: channel.id,
+      name: channel.name,
+      category: channel.category,
+      icon: channel.icon,
+      color: channel.color,
+      metrics: { spend: 0, revenue: 0, profit: 0, users: 0, roi: 0, roas: 0, cac: 0, ltv: 0 }
+    }));
 
     const roiData = {
       range: range,
@@ -1086,19 +911,17 @@ router.get('/roi-by-channel', async (req, res) => {
       endDate: new Date().toISOString(),
       channels: channelData,
       summary: {
-        totalSpend: parseFloat(totalSpend.toFixed(2)),
-        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-        totalProfit: parseFloat(totalProfit.toFixed(2)),
-        totalUsers: totalUsers,
-        overallROI: overallROI === 'N/A' ? null : parseFloat(overallROI),
-        overallROAS: overallROAS === 'N/A' ? null : parseFloat(overallROAS),
-        avgCAC: avgCAC === 'N/A' ? null : parseFloat(avgCAC),
-        bestChannel: channelData[0].name,
-        worstChannel: channelData[channelData.length - 1].name
+        totalSpend: 0,
+        totalRevenue: 0,
+        totalProfit: 0,
+        totalUsers: 0,
+        overallROI: null,
+        overallROAS: null,
+        avgCAC: null,
+        bestChannel: null,
+        worstChannel: null
       }
     };
-
-    console.log(`ROI by channel data fetched successfully for range: ${range}`);
     res.json(roiData);
 
   } catch (error) {
@@ -1301,14 +1124,40 @@ router.get('/summary', async (req, res) => {
   try {
     console.log('Fetching dashboard summary');
 
-    // TODO: In production, fetch from MongoDB
+    // Fetch real data from aggregates
+    const [latestAggregate, monthlyAggregate, weeklySpend, postsCount] = await Promise.all([
+      DailyRevenueAggregate.findOne().sort({ dateObj: -1 }).limit(1),
+      MonthlyRevenueAggregate.findOne().sort({ updatedAt: -1 }).limit(1),
+      DailySpend.aggregate([
+        {
+          $match: {
+            date: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalSpend: { $sum: '$actualSpend' }
+          }
+        }
+      ]),
+      MarketingPost.countDocuments({
+        status: 'posted',
+        postedAt: { $gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1) }
+      })
+    ]);
+
+    const monthlySpend = weeklySpend[0]?.totalSpend || 0;
+    const mrr = monthlyAggregate?.netRevenue || latestAggregate?.mrr || 0;
+    const activeSubscribers = monthlyAggregate?.activeSubscribers || latestAggregate?.subscriptions?.totalCount || 0;
+
     const summary = {
-      totalMRR: 425,
-      totalUsers: 1247,
-      monthlySpend: 2450,
-      postsThisMonth: 89,
-      activeCampaigns: 3,
-      upcomingTasks: 5
+      totalMRR: Math.round(mrr),
+      totalUsers: activeSubscribers,
+      monthlySpend: parseFloat(monthlySpend.toFixed(2)),
+      postsThisMonth: postsCount,
+      activeCampaigns: 0, // TODO: Fetch from campaign data
+      upcomingTasks: 0 // TODO: Fetch from tasks
     };
 
     res.json(summary);
@@ -1362,124 +1211,37 @@ router.get('/conversion-funnel', async (req, res) => {
         break;
     }
 
-    // TODO: In production, fetch from MongoDB aggregations
-    // Mock conversion funnel data representing the user journey
+    // NO REAL DATA YET - Return empty structure
+    // TODO: Connect to real analytics source when available
     const funnelData = {
       period: period,
       startTime: startTime.toISOString(),
       endTime: now.toISOString(),
       days: days,
-
       stages: [
-        {
-          id: 'impressions',
-          name: 'App Store Impressions',
-          description: 'Times app appeared in search or browse',
-          count: period === '30d' ? 45000 : period === '90d' ? 135000 : 270000,
-          conversionRate: null, // First stage has no prior conversion
-          dropoffCount: null,
-          dropoffRate: null
-        },
-        {
-          id: 'product_page_views',
-          name: 'Product Page Views',
-          description: 'Users who viewed the app product page',
-          count: period === '30d' ? 18500 : period === '90d' ? 55500 : 111000,
-          conversionRate: 41.1, // 18500 / 45000
-          dropoffCount: period === '30d' ? 26500 : period === '90d' ? 79500 : 159000,
-          dropoffRate: 58.9 // 26500 / 45000
-        },
-        {
-          id: 'downloads',
-          name: 'App Downloads',
-          description: 'Users who downloaded the app',
-          count: period === '30d' ? 3200 : period === '90d' ? 9600 : 19200,
-          conversionRate: 17.3, // 3200 / 18500
-          dropoffCount: period === '30d' ? 15300 : period === '90d' ? 45900 : 91800,
-          dropoffRate: 82.7 // 15300 / 18500
-        },
-        {
-          id: 'installs',
-          name: 'App Installs',
-          description: 'Users who completed installation',
-          count: period === '30d' ? 2900 : period === '90d' ? 8700 : 17400,
-          conversionRate: 90.6, // 2900 / 3200
-          dropoffCount: period === '30d' ? 300 : period === '90d' ? 900 : 1800,
-          dropoffRate: 9.4 // 300 / 3200
-        },
-        {
-          id: 'signups',
-          name: 'Account Signups',
-          description: 'Users who created an account',
-          count: period === '30d' ? 2100 : period === '90d' ? 6300 : 12600,
-          conversionRate: 72.4, // 2100 / 2900
-          dropoffCount: period === '30d' ? 800 : period === '90d' ? 2400 : 4800,
-          dropoffRate: 27.6 // 800 / 2900
-        },
-        {
-          id: 'trial_starts',
-          name: 'Trial Activations',
-          description: 'Users who started free trial',
-          count: period === '30d' ? 1650 : period === '90d' ? 4950 : 9900,
-          conversionRate: 78.6, // 1650 / 2100
-          dropoffCount: period === '30d' ? 450 : period === '90d' ? 1350 : 2700,
-          dropoffRate: 21.4 // 450 / 2100
-        },
-        {
-          id: 'subscriptions',
-          name: 'Paid Subscriptions',
-          description: 'Users who converted to paid subscription',
-          count: period === '30d' ? 485 : period === '90d' ? 1455 : 2910,
-          conversionRate: 29.4, // 485 / 1650
-          dropoffCount: period === '30d' ? 1165 : period === '90d' ? 3495 : 6990,
-          dropoffRate: 70.6 // 1165 / 1650
-        }
+        { id: 'impressions', name: 'App Store Impressions', description: 'Times app appeared in search or browse', count: 0, conversionRate: null, dropoffCount: null, dropoffRate: null },
+        { id: 'product_page_views', name: 'Product Page Views', description: 'Users who viewed the app product page', count: 0, conversionRate: 0, dropoffCount: 0, dropoffRate: 0 },
+        { id: 'downloads', name: 'App Downloads', description: 'Users who downloaded the app', count: 0, conversionRate: 0, dropoffCount: 0, dropoffRate: 0 },
+        { id: 'installs', name: 'App Installs', description: 'Users who completed installation', count: 0, conversionRate: 0, dropoffCount: 0, dropoffRate: 0 },
+        { id: 'signups', name: 'Account Signups', description: 'Users who created an account', count: 0, conversionRate: 0, dropoffCount: 0, dropoffRate: 0 },
+        { id: 'trial_starts', name: 'Trial Activations', description: 'Users who started free trial', count: 0, conversionRate: 0, dropoffCount: 0, dropoffRate: 0 },
+        { id: 'subscriptions', name: 'Paid Subscriptions', description: 'Users who converted to paid subscription', count: 0, conversionRate: 0, dropoffCount: 0, dropoffRate: 0 }
       ],
-
-      // Overall funnel metrics
       summary: {
-        totalImpressions: period === '30d' ? 45000 : period === '90d' ? 135000 : 270000,
-        totalConversions: period === '30d' ? 485 : period === '90d' ? 1455 : 2910,
-        overallConversionRate: period === '30d' ? 1.08 : period === '90d' ? 1.08 : 1.08, // 485 / 45000
-        avgConversionRatePerStage: 54.9,
-        biggestDropoffStage: 'product_page_views',
-        biggestDropoffRate: 58.9
+        totalImpressions: 0,
+        totalConversions: 0,
+        overallConversionRate: 0,
+        avgConversionRatePerStage: 0,
+        biggestDropoffStage: null,
+        biggestDropoffRate: 0
       },
-
-      // Stage details for drill-down
       stageDetails: {
-        impressions: {
-          breakdown: {
-            search: period === '30d' ? 28000 : period === '90d' ? 84000 : 168000,
-            browse: period === '30d' ? 12000 : period === '90d' ? 36000 : 72000,
-            referrals: period === '30d' ? 5000 : period === '90d' ? 15000 : 30000
-          },
-          topSources: [
-            { source: 'Keyword: romantic stories', count: period === '30d' ? 8500 : period === '90d' ? 25500 : 51000 },
-            { source: 'Keyword: spicy fiction', count: period === '30d' ? 6200 : period === '90d' ? 18600 : 37200 },
-            { source: 'Keyword: romance novels', count: period === '30d' ? 5100 : period === '90d' ? 15300 : 30600 }
-          ]
-        },
-        product_page_views: {
-          avgTimeOnPage: 42, // seconds
-          bounceRate: 58.9,
-          returnVisitors: period === '30d' ? 3200 : period === '90d' ? 9600 : 19200
-        },
-        downloads: {
-          abortedDownloads: period === '30d' ? 300 : period === '90d' ? 900 : 1800,
-          retryRate: 9.4
-        },
-        subscriptions: {
-          byPlan: {
-            monthly: period === '30d' ? 320 : period === '90d' ? 960 : 1920,
-            annual: period === '30d' ? 165 : period === '90d' ? 495 : 990
-          },
-          avgTimeToSubscribe: 4.2, // days
-          churnRate: 8.3
-        }
+        impressions: { breakdown: { search: 0, browse: 0, referrals: 0 }, topSources: [] },
+        product_page_views: { avgTimeOnPage: 0, bounceRate: 0, returnVisitors: 0 },
+        downloads: { abortedDownloads: 0, retryRate: 0 },
+        subscriptions: { byPlan: { monthly: 0, annual: 0 }, avgTimeToSubscribe: 0, churnRate: 0 }
       }
     };
-
     res.json(funnelData);
 
   } catch (error) {
@@ -1498,134 +1260,54 @@ router.get('/conversion-funnel', async (req, res) => {
  */
 router.get('/budget-utilization', async (req, res) => {
   try {
-    // TODO: In production, fetch from marketing_budget settings
-    // For now, using mock data with configurable budget
-
-    // Budget configuration (would come from settings in production)
-    const monthlyBudget = 3000; // $3,000 monthly marketing budget
-
-    // Calculate current month spend (from beginning of month)
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    // TODO: In production, sum actual spend from marketing_ad_campaigns collection
-    // For now, using mock spend data
-    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-    const currentDay = now.getDate();
-
-    // Mock spend: varies by day to simulate real usage
-    const baseDailySpend = 85; // Average daily spend
-    const spendVariation = Math.sin(currentDay * 0.5) * 20; // +/- $20 variation
-    const currentDailySpend = Math.round(baseDailySpend + spendVariation);
-
-    // Calculate total spend for month so far
-    const totalSpend = Math.round(currentDailySpend * currentDay * (1 + Math.random() * 0.1));
-
-    // Calculate utilization percentage
-    const utilizationPercent = (totalSpend / monthlyBudget) * 100;
-
-    // Calculate projected spend for end of month
-    const projectedSpend = Math.round(totalSpend * (daysInMonth / currentDay));
-
-    // Calculate remaining budget
-    const remainingBudget = monthlyBudget - totalSpend;
-
-    // Determine alert level
-    let alertLevel = 'normal'; // normal, warning, critical
-    let alertMessage = '';
-    let alertAction = '';
-
-    if (utilizationPercent >= 90) {
-      alertLevel = 'critical';
-      alertMessage = 'Critical: Budget nearly exhausted';
-      alertAction = 'Auto-pause recommended when budget reaches 100%';
-    } else if (utilizationPercent >= 70) {
-      alertLevel = 'warning';
-      alertMessage = 'Warning: 70% of budget used';
-      alertAction = 'Review campaign spend and consider adjustments';
-    }
-
-    // Calculate expected daily average for remainder of month
-    const remainingDays = daysInMonth - currentDay;
-    const requiredDailySpend = remainingBudget / remainingDays;
-
-    // Budget health status
-    const budgetHealth = utilizationPercent > (currentDay / daysInMonth) * 100 ? 'overspending' : 'on-track';
-
+    // NO REAL DATA YET - Return empty structure
+    // TODO: Connect to real budget/campaign data when available
     const budgetData = {
       period: {
         start: startOfMonth.toISOString(),
         end: now.toISOString(),
-        currentDay: currentDay,
+        currentDay: now.getDate(),
         daysInMonth: daysInMonth,
-        remainingDays: remainingDays
+        remainingDays: daysInMonth - now.getDate()
       },
       budget: {
-        monthly: monthlyBudget,
-        spent: totalSpend,
-        remaining: remainingBudget,
-        projected: projectedSpend
+        monthly: 0,
+        spent: 0,
+        remaining: 0,
+        projected: 0
       },
       variance: {
-        amount: monthlyBudget - totalSpend, // Positive = under budget, Negative = over budget
-        percent: ((monthlyBudget - totalSpend) / monthlyBudget) * 100,
-        status: (monthlyBudget - totalSpend) >= 0 ? 'under' : 'over', // under or over budget
-        description: (monthlyBudget - totalSpend) >= 0
-          ? `${Math.round(((monthlyBudget - totalSpend) / monthlyBudget) * 100)}% under budget`
-          : `${Math.round(((totalSpend - monthlyBudget) / monthlyBudget) * 100)}% over budget`
+        amount: 0,
+        percent: 0,
+        status: 'none',
+        description: 'No budget configured'
       },
       utilization: {
-        percent: Math.round(utilizationPercent * 10) / 10, // Round to 1 decimal
-        amount: totalSpend,
-        ofTotal: monthlyBudget
+        percent: 0,
+        amount: 0,
+        ofTotal: 0
       },
       thresholds: {
-        warning: 70, // percent
-        critical: 90, // percent
-        current: alertLevel
+        warning: 70,
+        critical: 90,
+        current: 'normal'
       },
       alert: {
-        level: alertLevel,
-        message: alertMessage || null,
-        action: alertAction || null
+        level: 'normal',
+        message: null,
+        action: null
       },
       pacing: {
-        currentDailySpend: currentDailySpend,
-        requiredDailySpend: Math.round(requiredDailySpend * 100) / 100,
-        budgetHealth: budgetHealth
+        currentDailySpend: 0,
+        requiredDailySpend: 0,
+        budgetHealth: 'unknown'
       },
       breakdown: {
-        // Mock breakdown by channel (would be aggregated from campaigns)
-        apple_search_ads: {
-          spent: Math.round(totalSpend * 0.42),
-          budget: Math.round(monthlyBudget * 0.50),
-          percent: Math.round((totalSpend * 0.42) / (monthlyBudget * 0.50) * 100),
-          variance: {
-            amount: Math.round(monthlyBudget * 0.50) - Math.round(totalSpend * 0.42),
-            percent: ((Math.round(monthlyBudget * 0.50) - Math.round(totalSpend * 0.42)) / Math.round(monthlyBudget * 0.50)) * 100
-          }
-        },
-        tiktok_ads: {
-          spent: Math.round(totalSpend * 0.32),
-          budget: Math.round(monthlyBudget * 0.30),
-          percent: Math.round((totalSpend * 0.32) / (monthlyBudget * 0.30) * 100),
-          variance: {
-            amount: Math.round(monthlyBudget * 0.30) - Math.round(totalSpend * 0.32),
-            percent: ((Math.round(monthlyBudget * 0.30) - Math.round(totalSpend * 0.32)) / Math.round(monthlyBudget * 0.30)) * 100
-          }
-        },
-        instagram_ads: {
-          spent: Math.round(totalSpend * 0.26),
-          budget: Math.round(monthlyBudget * 0.20),
-          percent: Math.round((totalSpend * 0.26) / (monthlyBudget * 0.20) * 100),
-          variance: {
-            amount: Math.round(monthlyBudget * 0.20) - Math.round(totalSpend * 0.26),
-            percent: ((Math.round(monthlyBudget * 0.20) - Math.round(totalSpend * 0.26)) / Math.round(monthlyBudget * 0.20)) * 100
-          }
-        }
+        apple_search_ads: { spent: 0, budget: 0, percent: 0, variance: { amount: 0, percent: 0 } },
+        tiktok_ads: { spent: 0, budget: 0, percent: 0, variance: { amount: 0, percent: 0 } },
+        instagram_ads: { spent: 0, budget: 0, percent: 0, variance: { amount: 0, percent: 0 } }
       }
     };
-
     res.json(budgetData);
 
   } catch (error) {
@@ -1648,159 +1330,23 @@ router.get('/alerts', async (req, res) => {
     const now = new Date();
     const alerts = [];
 
-    // TODO: In production, these would be fetched from MongoDB
-    // For now, returning mock alerts that represent different alert types
-
-    // Budget alert (critical - 90%+ utilization)
-    // Check if budget utilization endpoint returns critical level
-    alerts.push({
-      id: 'alert-budget-critical-001',
-      type: 'budget',
-      severity: 'critical', // critical, warning, info
-      title: 'Budget Nearly Exhausted',
-      message: 'Marketing budget has reached 92% utilization. Review spend immediately.',
-      details: {
-        currentUtilization: 92,
-        monthlyBudget: 3000,
-        spent: 2760,
-        remaining: 240,
-        projectedSpend: 3050,
-        projectedOver: 50
-      },
-      action: {
-        label: 'Review Budget',
-        link: '/dashboard#budget'
-      },
-      timestamp: new Date(now.getTime() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-      dismissible: true,
-      category: 'paid_ads'
-    });
-
-    // Failed post alert
-    alerts.push({
-      id: 'alert-post-failed-001',
-      type: 'post_failure',
-      severity: 'warning',
-      title: 'TikTok Post Failed',
-      message: 'Scheduled post "Spicy Romance Story Excerpt #1042" failed to publish.',
-      details: {
-        postId: '1042',
-        platform: 'tiktok',
-        scheduledAt: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(),
-        errorMessage: 'Authentication token expired. Please re-authorize TikTok account.',
-        retryCount: 2,
-        maxRetries: 3
-      },
-      action: {
-        label: 'View Post',
-        link: '/content/post/1042'
-      },
-      timestamp: new Date(now.getTime() - 3 * 60 * 60 * 1000).toISOString(), // 3 hours ago
-      dismissible: true,
-      category: 'content'
-    });
-
-    // Keyword ranking drop alert
-    alerts.push({
-      id: 'alert-keyword-drop-001',
-      type: 'keyword_ranking',
-      severity: 'warning',
-      title: 'Keyword Ranking Dropped',
-      message: 'Keyword "spicy fiction" dropped from #5 to #7 in App Store search.',
-      details: {
-        keyword: 'spicy fiction',
-        previousRanking: 5,
-        currentRanking: 7,
-        change: -2,
-        volume: 48000,
-        competition: 'medium',
-        checkedAt: new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString()
-      },
-      action: {
-        label: 'View ASO',
-        link: '/dashboard/strategic#aso'
-      },
-      timestamp: new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-      dismissible: true,
-      category: 'aso'
-    });
-
-    // Campaign performance alert
-    alerts.push({
-      id: 'alert-campaign-roi-001',
-      type: 'campaign_performance',
-      severity: 'warning',
-      title: 'Low ROI on TikTok Ads',
-      message: 'TikTok Ads campaign "Summer Romance" has negative ROI (-45%). Consider pausing.',
-      details: {
-        campaignId: 'tiktok-summer-romance-001',
-        campaignName: 'Summer Romance',
-        platform: 'tiktok',
-        roi: -45,
-        spend: 450,
-        revenue: 247,
-        roiTarget: 20
-      },
-      action: {
-        label: 'Review Campaign',
-        link: '/ads/tiktok-summer-romance-001'
-      },
-      timestamp: new Date(now.getTime() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
-      dismissible: true,
-      category: 'paid_ads'
-    });
-
-    // Content approval reminder
-    alerts.push({
-      id: 'alert-content-approval-001',
-      type: 'content_approval',
-      severity: 'info',
-      title: '3 Posts Awaiting Approval',
-      message: 'You have 3 posts scheduled for today that need approval.',
-      details: {
-        pendingCount: 3,
-        scheduledToday: 3,
-        firstScheduledAt: new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString(), // 2 hours from now
-        postIds: ['1045', '1046', '1047']
-      },
-      action: {
-        label: 'Review Posts',
-        link: '/content?status=pending'
-      },
-      timestamp: new Date(now.getTime() - 30 * 60 * 1000).toISOString(), // 30 minutes ago
-      dismissible: true,
-      category: 'content'
-    });
-
-    // Revenue milestone alert
-    alerts.push({
-      id: 'alert-milestone-001',
-      type: 'milestone',
-      severity: 'info',
-      title: 'MRR Milestone Reached!',
-      message: 'Congratulations! MRR has reached $425, exceeding $400 target.',
-      details: {
-        milestone: 400,
-        current: 425,
-        percentage: 106.25,
-        metric: 'MRR'
-      },
-      action: {
-        label: 'View Analytics',
-        link: '/dashboard/strategic'
-      },
-      timestamp: new Date(now.getTime() - 1 * 60 * 60 * 1000).toISOString(), // 1 hour ago
-      dismissible: true,
-      category: 'revenue'
-    });
+    // NO REAL DATA YET - Return empty alerts array
+    // TODO: Implement real alert system when connected to data sources
+    // Real alerts would be generated from:
+    // - Budget utilization thresholds
+    // - Failed post publishing attempts
+    // - Keyword ranking changes (from ASO tracking)
+    // - Campaign performance issues
+    // - Pending content approvals
+    // - Revenue milestones
 
     res.json({
       alerts: alerts,
       summary: {
-        total: alerts.length,
-        critical: alerts.filter(a => a.severity === 'critical').length,
-        warning: alerts.filter(a => a.severity === 'warning').length,
-        info: alerts.filter(a => a.severity === 'info').length
+        total: 0,
+        critical: 0,
+        warning: 0,
+        info: 0
       },
       timestamp: now.toISOString()
     });

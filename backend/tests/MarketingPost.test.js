@@ -206,9 +206,9 @@ describe('MarketingPost Model', () => {
     // Clear the collection before each test
     await connection.db().listCollections().toArray()
       .then(collections => {
-        const marketingPostCollection = collections.find(c => c.collectionName === 'marketingposts');
+        const marketingPostCollection = collections.find(c => c.collectionName === 'marketing_posts');
         if (marketingPostCollection) {
-          return connection.collection('marketingposts').deleteMany({});
+          return connection.collection('marketing_posts').deleteMany({});
         }
       })
       .catch(() => {});

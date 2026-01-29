@@ -297,12 +297,12 @@ class ServiceDegradationHandler {
       [DegradationLevel.DEGRADED]: {
         type: 'warning',
         title: 'Some Services Unavailable',
-        message: `We're experiencing issues with ${unavailableServices.join(', ')}. Using cached data where possible.`
+        message: `We're experiencing issues with: ${unavailableServices.join(', ')}. Using cached data where possible.`
       },
       [DegradationLevel.SEVERE]: {
         type: 'error',
         title: 'Multiple Services Unavailable',
-        message: `Many external services are unavailable. Functionality is limited. We're working to restore full service.`
+        message: `The following services are unavailable: ${unavailableServices.join(', ')}. Functionality is limited.`
       },
       [DegradationLevel.OFFLINE]: {
         type: 'error',

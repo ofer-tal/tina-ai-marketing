@@ -2,6 +2,7 @@ import express from 'express';
 import apiHealthMonitorJob from '../jobs/apiHealthMonitor.js';
 import mongoose from 'mongoose';
 import { getLogger } from '../utils/logger.js';
+import schedulerService from '../services/scheduler.js';
 
 const logger = getLogger('api-health-api', 'api-health-api');
 const router = express.Router();
@@ -341,6 +342,122 @@ router.get('/reports/latest', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get latest API health report',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/api-health/jobs
+ * Get all scheduled jobs and their status
+ */
+router.get('/jobs', async (req, res) => {
+  try {
+    const jobs = await schedulerService.getAllJobs();
+    const schedulerStatus = schedulerService.getStatus();
+    const healthSummary = await schedulerService.getHealthSummary();
+
+    res.json({
+      success: true,
+      data: {
+        scheduler: schedulerStatus,
+        jobs: jobs.map(job => ({
+          name: job.name,
+          cronExpression: job.cronExpression,
+          scheduled: job.scheduled,
+          timezone: job.timezone,
+          stats: job.stats,
+          dbRecord: job.dbRecord || null
+        })),
+        healthSummary
+      }
+    });
+
+  } catch (error) {
+    logger.error('Failed to get scheduled jobs status', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get scheduled jobs status',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/api-health/jobs/:name
+ * Get status of a specific scheduled job
+ */
+router.get('/jobs/:name', async (req, res) => {
+  try {
+    const { name } = req.params;
+    const job = await schedulerService.getJob(name);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        message: `Job not found: ${name}`
+      });
+    }
+
+    res.json({
+      success: true,
+      data: job
+    });
+
+  } catch (error) {
+    logger.error('Failed to get job status', {
+      error: error.message,
+      jobName: req.params.name
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get job status',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/api-health/jobs/:name/trigger
+ * Manually trigger a job execution
+ */
+router.post('/jobs/:name/trigger', async (req, res) => {
+  try {
+    const { name } = req.params;
+
+    logger.info(`Manually triggering job: ${name}`);
+
+    // Execute in background
+    schedulerService.triggerJob(name).then(() => {
+      logger.info(`Manual job execution completed: ${name}`);
+    }).catch(error => {
+      logger.error(`Manual job execution failed: ${name}`, {
+        error: error.message
+      });
+    });
+
+    res.json({
+      success: true,
+      message: `Job "${name}" triggered`,
+      data: {
+        jobName: name,
+        triggeredAt: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    logger.error('Failed to trigger job', {
+      error: error.message,
+      jobName: req.params.name
+    });
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger job',
       error: error.message
     });
   }

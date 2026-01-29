@@ -3578,9 +3578,7 @@ function StrategicDashboard() {
     } catch (err) {
       console.error('Failed to fetch MRR trend:', err);
       setError('Failed to load MRR trend data. Please try again later.');
-      // Set mock data for development
-      const mockData = generateMockMrrData(dateRange);
-      setMrrData(mockData);
+      setMrrData(null);
     } finally {
       setLoading(false);
     }
@@ -3598,9 +3596,7 @@ function StrategicDashboard() {
       setUserGrowthData(data);
     } catch (err) {
       console.error('Failed to fetch user growth data:', err);
-      // Set mock data for development
-      const mockData = generateMockUserGrowthData(dateRange);
-      setUserGrowthData(mockData);
+      setUserGrowthData(null);
     }
   };
 
@@ -3616,9 +3612,7 @@ function StrategicDashboard() {
       setCacData(data);
     } catch (err) {
       console.error('Failed to fetch CAC trend data:', err);
-      // Set mock data for development
-      const mockData = generateMockCacData(dateRange);
-      setCacData(mockData);
+      setCacData(null);
     }
   };
 
@@ -3634,9 +3628,7 @@ function StrategicDashboard() {
       setAcquisitionData(data);
     } catch (err) {
       console.error('Failed to fetch acquisition split data:', err);
-      // Set mock data for development
-      const mockData = generateMockAcquisitionData(dateRange);
-      setAcquisitionData(mockData);
+      setAcquisitionData(null);
     }
   };
 
@@ -3652,9 +3644,7 @@ function StrategicDashboard() {
       setRevenueSpendData(data);
     } catch (err) {
       console.error('Failed to fetch revenue vs spend trend:', err);
-      // Set mock data for development
-      const mockData = generateMockRevenueSpendData(dateRange);
-      setRevenueSpendData(mockData);
+      setRevenueSpendData(null);
     }
   };
 
@@ -3670,115 +3660,8 @@ function StrategicDashboard() {
       setRoiData(data);
     } catch (err) {
       console.error('Failed to fetch ROI by channel data:', err);
-      // Set mock data for development
-      const mockData = generateMockRoiData(dateRange);
-      setRoiData(mockData);
+      setRoiData(null);
     }
-  };
-
-  const generateMockRoiData = (range) => {
-    const channels = [
-      {
-        id: 'apple_search_ads',
-        name: 'Apple Search Ads',
-        category: 'paid',
-        icon: '🍎',
-        color: '#00d26a'
-      },
-      {
-        id: 'tiktok_ads',
-        name: 'TikTok Ads',
-        category: 'paid',
-        icon: '🎵',
-        color: '#e94560'
-      },
-      {
-        id: 'instagram_ads',
-        name: 'Instagram Ads',
-        category: 'paid',
-        icon: '📸',
-        color: '#7b2cbf'
-      },
-      {
-        id: 'organic_app_store',
-        name: 'Organic (App Store)',
-        category: 'organic',
-        icon: '🔍',
-        color: '#00d4ff'
-      },
-      {
-        id: 'social_organic',
-        name: 'Social Organic',
-        category: 'organic',
-        icon: '💬',
-        color: '#ffb020'
-      }
-    ];
-
-    const channelData = channels.map(channel => {
-      let revenue, spend, users;
-
-      if (channel.category === 'paid') {
-        if (channel.id === 'apple_search_ads') {
-          spend = 800 + Math.random() * 200;
-          users = Math.round(spend / 25);
-          revenue = users * 15;
-        } else if (channel.id === 'tiktok_ads') {
-          spend = 500 + Math.random() * 300;
-          users = Math.round(spend / 35);
-          revenue = users * 12;
-        } else {
-          spend = 400 + Math.random() * 200;
-          users = Math.round(spend / 40);
-          revenue = users * 11;
-        }
-      } else {
-        spend = 0;
-        users = Math.round(50 + Math.random() * 150);
-        revenue = users * 14;
-      }
-
-      const profit = revenue - spend;
-      const roi = spend > 0 ? ((profit / spend) * 100) : Infinity;
-
-      return {
-        id: channel.id,
-        name: channel.name,
-        category: channel.category,
-        icon: channel.icon,
-        color: channel.color,
-        metrics: {
-          spend: parseFloat(spend.toFixed(2)),
-          revenue: parseFloat(revenue.toFixed(2)),
-          profit: parseFloat(profit.toFixed(2)),
-          users: users,
-          roi: parseFloat(roi.toFixed(1)),
-          cac: parseFloat((spend / users).toFixed(2)) || 0,
-          ltv: parseFloat((revenue / users).toFixed(2)) || 0
-        }
-      };
-    });
-
-    const totalSpend = channelData.reduce((sum, ch) => sum + ch.metrics.spend, 0);
-    const totalRevenue = channelData.reduce((sum, ch) => sum + ch.metrics.revenue, 0);
-    const totalProfit = channelData.reduce((sum, ch) => sum + ch.metrics.profit, 0);
-    const totalUsers = channelData.reduce((sum, ch) => sum + ch.metrics.users, 0);
-    const overallROI = totalSpend > 0 ? ((totalProfit / totalSpend) * 100).toFixed(1) : 'N/A';
-
-    channelData.sort((a, b) => b.metrics.roi - a.metrics.roi);
-
-    return {
-      channels: channelData,
-      summary: {
-        totalSpend: parseFloat(totalSpend.toFixed(2)),
-        totalRevenue: parseFloat(totalRevenue.toFixed(2)),
-        totalProfit: parseFloat(totalProfit.toFixed(2)),
-        totalUsers: totalUsers,
-        overallROI: overallROI === 'N/A' ? null : parseFloat(overallROI),
-        bestChannel: channelData[0].name,
-        worstChannel: channelData[channelData.length - 1].name
-      }
-    };
   };
 
   const fetchConversionFunnel = async () => {
@@ -3803,9 +3686,7 @@ function StrategicDashboard() {
       }
     } catch (err) {
       console.error('Failed to fetch conversion funnel data:', err);
-      // Set mock data for development
-      const mockData = generateMockFunnelData(dateRange);
-      setFunnelData(mockData);
+      setFunnelData(null);
     }
   };
 

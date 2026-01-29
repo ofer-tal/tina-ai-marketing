@@ -16,7 +16,11 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { SignJWT, importPKCS8 } from 'jose';
+import { gunzip } from 'zlib';
+import { promisify } from 'util';
 import rateLimiterService from './rateLimiter.js';
+
+const gunzipAsync = promisify(gunzip);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,9 +57,11 @@ if (process.env.NODE_ENV !== 'production') {
  */
 class AppStoreConnectService {
   constructor() {
-    this.keyId = process.env.APP_STORE_CONNECT_KEY_ID;
-    this.issuerId = process.env.APP_STORE_CONNECT_ISSUER_ID;
-    this.privateKeyPath = process.env.APP_STORE_CONNECT_PRIVATE_KEY_PATH;
+    // Don't read env vars in constructor - read them dynamically when needed
+    this.keyId = null;
+    this.issuerId = null;
+    this.privateKeyPath = null;
+    this.vendorNumber = null;
     this.baseUrl = 'https://api.appstoreconnect.apple.com/v1';
 
     this.token = null;
@@ -63,22 +69,76 @@ class AppStoreConnectService {
   }
 
   /**
+   * Get environment variables dynamically
+   * This allows dotenv to be loaded before the service is used
+   */
+  _loadEnvVars() {
+    if (!this.keyId) {
+      this.keyId = process.env.APP_STORE_CONNECT_KEY_ID;
+    }
+    if (!this.issuerId) {
+      this.issuerId = process.env.APP_STORE_CONNECT_ISSUER_ID;
+    }
+    if (!this.privateKeyPath) {
+      this.privateKeyPath = process.env.APP_STORE_CONNECT_PRIVATE_KEY_PATH;
+    }
+    if (!this.vendorNumber) {
+      this.vendorNumber = process.env.APP_STORE_CONNECT_VENDOR_NUMBER;
+    }
+  }
+
+  /**
    * Check if service is configured
    */
   isConfigured() {
+    this._loadEnvVars();
     return !!(this.keyId && this.issuerId && this.privateKeyPath);
   }
 
   /**
    * Load private key from file
+   * Uses smart path resolution similar to Apple Search Ads service
    */
   loadPrivateKey() {
     if (!this.privateKeyPath) {
       throw new Error('APP_STORE_CONNECT_PRIVATE_KEY_PATH not configured');
     }
 
-    // Resolve relative paths from project root
-    const keyPath = path.resolve(process.cwd(), this.privateKeyPath);
+    // Get the current file's directory using fileURLToPath for Windows compatibility
+    const currentFilePath = fileURLToPath(import.meta.url);
+    const serviceDir = path.dirname(currentFilePath);
+    const backendDir = path.dirname(serviceDir);
+    const projectRoot = path.dirname(backendDir);
+
+    let keyPath;
+
+    // Check if the path is already absolute (including Windows drive letters)
+    if (path.isAbsolute(this.privateKeyPath)) {
+      keyPath = this.privateKeyPath;
+    } else {
+      // Try multiple path resolutions
+      const possiblePaths = [
+        // Relative to project root
+        path.resolve(projectRoot, this.privateKeyPath),
+        // Relative to backend directory
+        path.resolve(backendDir, this.privateKeyPath),
+        // Relative to current working directory
+        path.resolve(process.cwd(), this.privateKeyPath),
+      ];
+
+      // Find the first path that exists
+      for (const testPath of possiblePaths) {
+        if (fs.existsSync(testPath)) {
+          keyPath = testPath;
+          break;
+        }
+      }
+
+      // If no path was found, use the first one for the error message
+      if (!keyPath) {
+        keyPath = possiblePaths[0];
+      }
+    }
 
     if (!fs.existsSync(keyPath)) {
       throw new Error(`Private key file not found: ${keyPath}`);
@@ -234,8 +294,45 @@ class AppStoreConnectService {
     try {
       logger.info('Testing App Store Connect API connection');
 
-      // Check if private key file exists
-      const keyPath = path.resolve(process.cwd(), this.privateKeyPath);
+      // Check if private key file exists using smart path resolution
+      let keyPath;
+      try {
+        // Try to load the key (this will use smart path resolution)
+        const privateKey = this.loadPrivateKey();
+        if (!privateKey) {
+          throw new Error('Failed to load private key');
+        }
+        // Get the resolved path for logging
+        const currentFilePath = fileURLToPath(import.meta.url);
+        const serviceDir = path.dirname(currentFilePath);
+        const backendDir = path.dirname(serviceDir);
+        const projectRoot = path.dirname(backendDir);
+
+        if (path.isAbsolute(this.privateKeyPath)) {
+          keyPath = this.privateKeyPath;
+        } else {
+          // Try to find the actual path
+          const possiblePaths = [
+            path.resolve(projectRoot, this.privateKeyPath),
+            path.resolve(backendDir, this.privateKeyPath),
+            path.resolve(process.cwd(), this.privateKeyPath),
+          ];
+          for (const testPath of possiblePaths) {
+            if (fs.existsSync(testPath)) {
+              keyPath = testPath;
+              break;
+            }
+          }
+        }
+      } catch (keyError) {
+        return {
+          success: false,
+          error: keyError.message,
+          configured: true,
+          keyExists: false
+        };
+      }
+
       const keyExists = fs.existsSync(keyPath);
 
       if (!keyExists) {
@@ -532,9 +629,14 @@ class AppStoreConnectService {
       }
 
       // Build API endpoint for sales reports
-      // Note: Sales Reports API uses a different base URL
+      // Note: Sales Reports API uses a different base URL and requires vendorNumber
+      if (!this.vendorNumber) {
+        logger.warn('APP_STORE_CONNECT_VENDOR_NUMBER not configured, returning mock sales reports');
+        return this.getMockSalesReports(date, frequency);
+      }
+
       const salesReportsUrl = `https://api.appstoreconnect.apple.com/v1/salesReports`;
-      const endpoint = `?filter[frequency]=${frequency}&filter[reportType]=${reportType}&filter[reportSubType]=${reportSubType}&filter[reportDate]=${date}`;
+      const endpoint = `?filter[frequency]=${frequency}&filter[reportType]=${reportType}&filter[reportSubType]=${reportSubType}&filter[reportDate]=${date}&filter[vendorNumber]=${this.vendorNumber}`;
 
       const authHeader = await this.getAuthToken();
 
@@ -543,38 +645,779 @@ class AppStoreConnectService {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${authHeader}`,
-          'Content-Type': 'application/a-gzip'
+          'Accept': 'application/a-gzip'
         }
       });
 
       if (!response.ok) {
         if (response.status === 401) {
-          throw new Error('Authentication failed. Check API credentials.');
+          logger.warn('Authentication failed for sales reports API, returning mock data');
+          return this.getMockSalesReports(date, frequency);
         } else if (response.status === 404) {
-          throw new Error('No sales report found for the specified date');
+          logger.warn('No sales report found for specified date, returning mock data');
+          return this.getMockSalesReports(date, frequency);
         } else {
           const errorText = await response.text();
-          throw new Error(`Failed to fetch sales reports (${response.status}): ${errorText}`);
+          logger.error('Failed to fetch sales reports', {
+            status: response.status,
+            error: errorText
+          });
+          // Return mock data on error
+          return this.getMockSalesReports(date, frequency);
         }
       }
 
-      // Sales reports are returned as compressed files
-      // For now, return mock data since decompression and parsing is complex
-      logger.info('Sales reports API call successful, returning mock data for parsing');
-      return this.getMockSalesReports(date, frequency);
+      // Sales reports are returned as gzip-compressed TSV files
+      logger.info('Sales reports API call successful, decompressing and parsing TSV data');
+
+      // Get the response as a buffer for decompression
+      const buffer = await response.arrayBuffer();
+      const bufferUint8 = new Uint8Array(buffer);
+
+      // Decompress gzip data using Node.js streams
+      const tsvData = await this.decompressGzip(bufferUint8);
+
+      // Parse the TSV data and map to MarketingRevenue format
+      const parsedReport = await this.parseSalesReportTSV(tsvData, date, frequency);
+
+      logger.info('Sales reports parsed successfully', {
+        transactionCount: parsedReport.transactions.length,
+        totals: parsedReport.totals
+      });
+
+      return parsedReport;
 
     } catch (error) {
       logger.error('Failed to fetch sales reports', {
         error: error.message,
+        stack: error.stack,
         options
       });
 
-      // Fall back to mock data
+      // Fall back to mock data on any error
       return this.getMockSalesReports(
         reportDate || new Date().toISOString().split('T')[0],
         frequency
       );
     }
+  }
+
+  /**
+   * Fetch Subscription Event Reports
+   *
+   * Fetches SUBSCRIPTION_EVENT reports which contain:
+   * - Trial to paid conversions
+   * - Subscription renewals
+   * - Cancellations and refunds
+   *
+   * These reports contain actual paid subscription transactions.
+   *
+   * @param {Object} options - Query options
+   * @param {string} options.frequency - Report frequency (DAILY, WEEKLY, MONTHLY)
+   * @param {string} options.reportDate - Date in YYYY-MM-DD format
+   * @returns {Promise<Object>} Subscription event report with transactions
+   */
+  async fetchSubscriptionEvents(options = {}) {
+    const {
+      frequency = 'DAILY',
+      reportDate = null
+    } = options;
+
+    if (!this.isConfigured() || !this.vendorNumber) {
+      logger.warn('App Store Connect API not configured for subscription events');
+      return { transactions: [], totals: { netRevenue: 0, grossRevenue: 0 } };
+    }
+
+    try {
+      logger.info('Fetching subscription event reports', {
+        frequency,
+        reportDate
+      });
+
+      // Generate report date if not provided (yesterday for daily reports)
+      let date = reportDate;
+      if (!date) {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        date = yesterday.toISOString().split('T')[0];
+      }
+
+      const salesReportsUrl = `https://api.appstoreconnect.apple.com/v1/salesReports`;
+      // SUBSCRIPTION_EVENT report type contains paid renewals and conversions
+      const endpoint = `?filter[frequency]=${frequency}&filter[reportType]=SUBSCRIPTION_EVENT&filter[reportSubType]=SUMMARY&filter[reportDate]=${date}&filter[vendorNumber]=${this.vendorNumber}`;
+
+      const authHeader = await this.getAuthToken();
+
+      logger.info(`Fetching SUBSCRIPTION_EVENT report for ${date}`);
+
+      const response = await rateLimiterService.fetch(salesReportsUrl + endpoint, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authHeader}`,
+          'Accept': 'application/a-gzip'
+        }
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          logger.info('No subscription event report found for this date (may be normal)');
+          return { transactions: [], totals: { netRevenue: 0, grossRevenue: 0 } };
+        } else {
+          logger.warn('Failed to fetch subscription events', {
+            status: response.status,
+            error: await response.text()
+          });
+          return { transactions: [], totals: { netRevenue: 0, grossRevenue: 0 } };
+        }
+      }
+
+      // Decompress and parse
+      const buffer = await response.arrayBuffer();
+      const bufferUint8 = new Uint8Array(buffer);
+      const tsvData = await this.decompressGzip(bufferUint8);
+
+      // Parse using the same TSV parser as sales reports
+      const parsedReport = await this.parseSalesReportTSV(tsvData, date, frequency);
+
+      logger.info('Subscription events parsed successfully', {
+        transactionCount: parsedReport.transactions.length,
+        totals: parsedReport.totals
+      });
+
+      return parsedReport;
+
+    } catch (error) {
+      logger.error('Failed to fetch subscription events', {
+        error: error.message,
+        stack: error.stack
+      });
+      return { transactions: [], totals: { netRevenue: 0, grossRevenue: 0 } };
+    }
+  }
+
+  /**
+   * Fetch All Revenue Reports (SALES only)
+   *
+   * Uses only SALES reports to avoid double counting.
+   * SALES reports contain all revenue transactions including:
+   * - In-app purchases
+   * - Subscription purchases (initial)
+   * - Subscription renewals
+   * - Refunds (negative amounts)
+   *
+   * Note: SUBSCRIPTION_EVENT reports are NOT fetched to avoid
+   * duplicate transactions that may appear in both reports.
+   *
+   * @param {Object} options - Query options
+   * @returns {Promise<Object>} Sales report with transactions
+   */
+  async fetchAllRevenueReports(options = {}) {
+    try {
+      logger.info('Fetching revenue reports (SALES only to avoid double counting)');
+
+      // Only fetch SALES report - it contains all revenue transactions
+      const salesReport = await this.fetchSalesReports(options);
+
+      logger.info('Sales report fetched', {
+        transactionCount: salesReport.transactions?.length || 0,
+        totals: salesReport.totals
+      });
+
+      return salesReport;
+
+    } catch (error) {
+      logger.error('Failed to fetch revenue reports', {
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Decompress gzip data using Node.js zlib
+   * @param {Uint8Array} gzipData - The compressed gzip data
+   * @returns {Promise<string>} Decompressed string data
+   */
+  async decompressGzip(gzipData) {
+    try {
+      // Convert Uint8Array to Buffer if needed
+      const buffer = Buffer.isBuffer(gzipData) ? gzipData : Buffer.from(gzipData);
+
+      // Decompress using zlib.gunzip
+      const decompressed = await gunzipAsync(buffer);
+
+      return decompressed.toString('utf-8');
+    } catch (error) {
+      throw new Error(`Gzip decompression failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Parse App Store Connect Sales Report TSV data
+   * Maps Apple's column format to MarketingRevenue model format
+   *
+   * Apple Summary Sales Report columns (Version 1_3):
+   * Provider, Provider Country, SKU, Developer, Title, Version,
+   * Product Type Identifier, Units, Developer Proceeds, Begin Date, End Date,
+   * Customer Currency, Country Code, Currency of Proceeds, Apple Identifier,
+   * Customer Price, Promo Code, Parent Identifier, Subscription, Period,
+   * Category, CMB, Supported Platforms, Device, Preserved Pricing,
+   * Proceeds Reason, Client, Order Type
+   *
+   * @param {string} tsvData - Raw TSV data string
+   * @param {string} reportDate - Date of the report
+   * @param {string} frequency - Report frequency
+   * @returns {Object} Parsed report with transactions and totals
+   */
+  async parseSalesReportTSV(tsvData, reportDate, frequency = 'DAILY') {
+    try {
+      // Split into lines and remove empty lines
+      const lines = tsvData
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+      if (lines.length < 2) {
+        logger.warn('TSV data has no content, returning empty report');
+        return this.getEmptySalesReport(reportDate, frequency);
+      }
+
+      // First line is header - parse column names
+      const headers = lines[0].split('\t').map(h => h.trim().replace(/"/g, ''));
+      logger.debug('TSV headers', { headers });
+
+      // Map column indices
+      const colIndex = this.mapColumnIndices(headers);
+
+      // Parse data rows
+      const transactions = [];
+      let rowCount = 0;
+      let skippedRows = 0;
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = this.parseTSVRow(lines[i]);
+
+        // Debug: log first few raw rows
+        if (i <= 3) {
+          logger.info(`Raw TSV Row ${i}: ${lines[i].substring(0, 200)}`);
+          logger.info(`Parsed values (${values.length} cols): ${JSON.stringify(values.slice(0, 15))}`);
+          logger.info(`Column indices: units=${colIndex.units}, customerPrice=${colIndex.customerPrice}, developerProceeds=${colIndex.developerProceeds}`);
+        }
+
+        // Skip rows that don't have enough columns
+        if (values.length < headers.length - 5) {
+          skippedRows++;
+          continue;
+        }
+
+        const transaction = this.mapRowToTransaction(values, colIndex, reportDate);
+        if (transaction) {
+          transactions.push(transaction);
+          rowCount++;
+        }
+
+        // Debug: log the mapped transaction
+        if (i <= 3 && transaction) {
+          logger.info(`Mapped transaction: revenue=${JSON.stringify(transaction.revenue)}, customer=${JSON.stringify(transaction.customer)}`);
+        }
+      }
+
+      if (skippedRows > 0) {
+        logger.warn(`Skipped ${skippedRows} malformed rows in sales report`);
+      }
+
+      // Calculate totals
+      const totals = this.calculateTransactionTotals(transactions);
+
+      return {
+        reportDate: reportDate,
+        frequency: frequency,
+        transactions: transactions,
+        totals: totals,
+        source: 'app-store-connect',
+        parsedAt: new Date().toISOString(),
+        rowCount: rowCount,
+        skippedRows: skippedRows
+      };
+
+    } catch (error) {
+      logger.error('Failed to parse sales report TSV', {
+        error: error.message,
+        stack: error.stack
+      });
+      // Return mock data on parse error
+      return this.getMockSalesReports(reportDate, frequency);
+    }
+  }
+
+  /**
+   * Map column names to indices
+   * Apple column names may vary by version, so we find them dynamically
+   */
+  mapColumnIndices(headers) {
+    // Normalize headers for case-insensitive matching
+    const normalizedHeaders = headers.map(h => h.toLowerCase().replace(/\s+/g, ''));
+
+    const findIndex = (patterns) => {
+      for (const pattern of patterns) {
+        const idx = normalizedHeaders.findIndex(h => h.includes(pattern.toLowerCase()));
+        if (idx !== -1) return idx;
+      }
+      return -1;
+    };
+
+    return {
+      provider: findIndex(['Provider']),
+      providerCountry: findIndex(['ProviderCountry', 'ProviderCountry']),
+      sku: findIndex(['SKU']),
+      developer: findIndex(['Developer']),
+      title: findIndex(['Title']),
+      version: findIndex(['Version']),
+      productTypeIdentifier: findIndex(['ProductTypeIdentifier', 'ProductType']),
+      units: findIndex(['Units']),
+      developerProceeds: findIndex(['DeveloperProceeds', 'Proceeds']),
+      beginDate: findIndex(['BeginDate']),
+      endDate: findIndex(['EndDate']),
+      customerCurrency: findIndex(['CustomerCurrency']),
+      countryCode: findIndex(['CountryCode']),
+      currencyOfProceeds: findIndex(['CurrencyOfProceeds']),
+      appleIdentifier: findIndex(['AppleIdentifier', 'AppleID']),
+      customerPrice: findIndex(['CustomerPrice', 'CustomerPrice']),
+      promoCode: findIndex(['PromoCode', 'Promo']),
+      parentIdentifier: findIndex(['ParentIdentifier', 'Parent']),
+      subscription: findIndex(['Subscription']),
+      period: findIndex(['Period']),
+      category: findIndex(['Category']),
+      cmb: findIndex(['CMB']),
+      supportedPlatforms: findIndex(['SupportedPlatforms', 'Platforms']),
+      device: findIndex(['Device']),
+      preservedPricing: findIndex(['PreservedPricing']),
+      proceedsReason: findIndex(['ProceedsReason']),
+      client: findIndex(['Client']),
+      orderType: findIndex(['OrderType'])
+    };
+  }
+
+  /**
+   * Parse a TSV row, handling quoted values containing tabs
+   */
+  parseTSVRow(row) {
+    const values = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let i = 0; i < row.length; i++) {
+      const char = row[i];
+      const nextChar = row[i + 1];
+
+      if (char === '"') {
+        if (inQuotes && nextChar === '"') {
+          // Escaped quote
+          current += '"';
+          i++;
+        } else {
+          // Toggle quote mode
+          inQuotes = !inQuotes;
+        }
+      } else if (char === '\t' && !inQuotes) {
+        // Tab separator (not in quotes)
+        values.push(current);
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    // Add last value
+    values.push(current);
+
+    return values;
+  }
+
+  /**
+   * Map a TSV row to a MarketingRevenue transaction format
+   */
+  mapRowToTransaction(values, colIndex, reportDate) {
+    try {
+      // Extract values using column indices, defaulting to empty string
+      const getVal = (idx) => (idx >= 0 && idx < values.length) ? values[idx].trim() : '';
+      const getNum = (idx) => {
+        const val = getVal(idx);
+        return val ? parseFloat(val.replace(/[,"$]/g, '')) || 0 : 0;
+      };
+
+      const units = getNum(colIndex.units);
+      const customerPrice = getNum(colIndex.customerPrice);
+      const developerProceeds = getNum(colIndex.developerProceeds);
+      const productType = getVal(colIndex.productTypeIdentifier);
+      const countryCode = getVal(colIndex.countryCode);
+      const currencyOfProceeds = getVal(colIndex.currencyOfProceeds);
+      const subscription = getVal(colIndex.subscription);
+      const title = getVal(colIndex.title);
+      const sku = getVal(colIndex.sku);
+      const device = getVal(colIndex.device);
+      const version = getVal(colIndex.version);
+
+      // Debug: log first few rows to verify data extraction
+      if (logger.level === 'debug' || Math.random() < 0.05) {
+        logger.debug('TSV Row values', {
+          reportDate,
+          units,
+          customerPrice,
+          developerProceeds,
+          productType,
+          colIndex: {
+            units: colIndex.units,
+            customerPrice: colIndex.customerPrice,
+            developerProceeds: colIndex.developerProceeds
+          },
+          rawValues: {
+            units: getVal(colIndex.units),
+            customerPrice: getVal(colIndex.customerPrice),
+            developerProceeds: getVal(colIndex.developerProceeds)
+          }
+        });
+      }
+
+      // Skip update rows (Product Type 7F) and other non-revenue rows
+      // 7F = Free updates, 1-B = App Bundle (credits handled separately)
+      const nonRevenueTypes = ['7F', '7'];
+      if (nonRevenueTypes.includes(productType) || units === 0) {
+        return null;
+      }
+
+      // Skip zero-revenue transactions (free trials, free app downloads)
+      // We only want transactions that actually generated proceeds
+      if (developerProceeds <= 0 && customerPrice <= 0) {
+        logger.debug('Skipping zero-revenue transaction', {
+          productType,
+          title: title.substring(0, 50),
+          customerPrice,
+          developerProceeds
+        });
+        return null;
+      }
+
+      // Determine if subscription vs one-time purchase
+      // Product Type Identifiers:
+      // 1F =  iOS App (universal)
+      // 1 =   iPhone App
+      // 2 =   iPad App
+      // 7F =  iOS App Update
+      // 1A =  In-App Purchase (Consumable)
+      // 1B =  In-App Purchase (Non-Consumable)
+      // 1C =  In-App Purchase (Auto-Renewable Subscription)
+      // IA1 = In-App Purchase
+      // 1AY = Auto-Renewable Subscription
+      const isSubscription = ['1C', '1AY', 'AAY', 'IA7', 'F1C', 'F1AY', 'F7', 'A7', 'IA9']
+        .some(type => productType.includes(type)) || subscription.length > 0;
+
+      // Determine if new or renewal subscription
+      // Subscription column: 'New' for new, 'Renewal' for renewals
+      const subscriptionType = getVal(colIndex.subscription);
+      const isNewSubscription = subscriptionType.toLowerCase() === 'new';
+      const isRenewal = subscriptionType.toLowerCase() === 'renewal';
+
+      // Check for refund (negative units or negative proceeds)
+      const isRefund = units < 0 || developerProceeds < 0;
+
+      // Calculate Apple fee (15% standard, may vary)
+      // For refunds, preserve the negative sign to deduct from revenue
+      const signMultiplier = isRefund ? -1 : 1;
+
+      // IMPORTANT: In Apple's TSV format:
+      // - developerProceeds is the TOTAL proceeds for this row (not per-unit)
+      // - customerPrice is the per-unit price
+      // - So we should NOT multiply developerProceeds by units again
+      // Use developerProceeds directly as the net amount
+      const netAmount = signMultiplier * Math.abs(developerProceeds);
+
+      // For gross amount, multiply customerPrice by units (that's per-unit)
+      const grossAmount = signMultiplier * Math.abs(customerPrice * Math.abs(units));
+
+      // Apple fee is the difference
+      const appleFeeAmount = grossAmount - netAmount;
+      const appleFeeRate = grossAmount !== 0 ? appleFeeAmount / Math.abs(grossAmount) : 0.15;
+
+      // Determine subscription period
+      const period = getVal(colIndex.period);
+      let subscriptionTypeNormalized = null;
+      if (isSubscription) {
+        if (period.includes('7') || period.includes('Week')) {
+          subscriptionTypeNormalized = 'weekly';
+        } else if (period.includes('1') && period.includes('Month')) {
+          subscriptionTypeNormalized = 'monthly';
+        } else if (period.includes('2') && period.includes('Month')) {
+          subscriptionTypeNormalized = 'bimonthly';
+        } else if (period.includes('3') && period.includes('Month')) {
+          subscriptionTypeNormalized = 'quarterly';
+        } else if (period.includes('6') && period.includes('Month')) {
+          subscriptionTypeNormalized = 'semiannual';
+        } else if (period.includes('1') && period.includes('Year')) {
+          subscriptionTypeNormalized = 'annual';
+        } else {
+          subscriptionTypeNormalized = 'monthly'; // Default
+        }
+      }
+
+      // Map country to region
+      const regionMap = {
+        'US': 'AMERICAS',
+        'CA': 'AMERICAS',
+        'MX': 'AMERICAS',
+        'GB': 'EUROPE',
+        'DE': 'EUROPE',
+        'FR': 'EUROPE',
+        'IT': 'EUROPE',
+        'ES': 'EUROPE',
+        'JP': 'ASIA',
+        'CN': 'ASIA',
+        'AU': 'OCEANIA',
+        'IN': 'ASIA'
+      };
+
+      // Currency conversion rates to USD
+      // These are approximate average rates for 2025-2026
+      // In production, you'd want to use historical rates or fetch from an API
+      const currencyToUsdRates = {
+        'USD': 1.0,
+        'EUR': 1.10,      // 1 EUR = 1.10 USD
+        'GBP': 1.27,      // 1 GBP = 1.27 USD
+        'AUD': 0.65,      // 1 AUD = 0.65 USD
+        'CAD': 0.74,      // 1 CAD = 0.74 USD
+        'NOK': 0.094,     // 1 NOK = 0.094 USD
+        'DKK': 0.15,      // 1 DKK = 0.15 USD
+        'SEK': 0.095,     // 1 SEK = 0.095 USD
+        'CHF': 1.12,      // 1 CHF = 1.12 USD
+        'JPY': 0.0067,    // 1 JPY = 0.0067 USD
+        'CNY': 0.14,      // 1 CNY = 0.14 USD
+        'TWD': 0.032,     // 1 TWD = 0.032 USD
+        'HKD': 0.13,      // 1 HKD = 0.13 USD
+        'SGD': 0.74,      // 1 SGD = 0.74 USD
+        'NZD': 0.61,      // 1 NZD = 0.61 USD
+        'INR': 0.012,     // 1 INR = 0.012 USD
+        'BRL': 0.18,      // 1 BRL = 0.18 USD
+        'MXN': 0.059,     // 1 MXN = 0.059 USD
+        'COP': 0.00025,   // 1 COP = 0.00025 USD (1 USD = 4000 COP)
+        'CLP': 0.0011,    // 1 CLP = 0.0011 USD
+        'PEN': 0.27,      // 1 PEN = 0.27 USD
+        'ARS': 0.0011,    // 1 ARS = 0.0011 USD
+        'PHP': 0.018,     // 1 PHP = 0.018 USD
+        'MYR': 0.22,      // 1 MYR = 0.22 USD
+        'THB': 0.029,     // 1 THB = 0.029 USD
+        'IDR': 0.000065,  // 1 IDR = 0.000065 USD
+        'VND': 0.000041,  // 1 VND = 0.000041 USD
+        'KRW': 0.00075,   // 1 KRW = 0.00075 USD
+        'PLN': 0.26,      // 1 PLN = 0.26 USD
+        'RON': 0.22,      // 1 RON = 0.22 USD
+        'BGN': 0.55,      // 1 BGN = 0.55 USD
+        'CZK': 0.045,     // 1 CZK = 0.045 USD
+        'HUF': 0.0027,    // 1 HUF = 0.0027 USD
+        'RUB': 0.011,     // 1 RUB = 0.011 USD
+        'TRY': 0.031,     // 1 TRY = 0.031 USD
+        'ZAR': 0.054,     // 1 ZAR = 0.054 USD
+        'ILS': 0.27,      // 1 ILS = 0.27 USD
+        'AED': 0.27,      // 1 AED = 0.27 USD
+        'SAR': 0.27,      // 1 SAR = 0.27 USD
+        'QAR': 0.27       // 1 QAR = 0.27 USD
+      };
+
+      // Convert to USD if the currency is not USD
+      const conversionRate = currencyToUsdRates[currencyOfProceeds] || 1.0;
+      const originalCurrency = currencyOfProceeds || 'USD';
+      const originalNetAmount = netAmount;
+      const originalGrossAmount = grossAmount;
+
+      // Apply currency conversion
+      const netAmountUsd = netAmount * conversionRate;
+      const grossAmountUsd = grossAmount * conversionRate;
+      const appleFeeAmountUsd = appleFeeAmount * conversionRate;
+
+      // Store original values in metadata for reference
+      const originalAmounts = {
+        netAmount: originalNetAmount,
+        grossAmount: originalGrossAmount,
+        currency: originalCurrency,
+        conversionRate: conversionRate
+      };
+
+      // Generate a unique transaction ID
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      const transactionId = `asc_${reportDate.replace(/-/g, '')}_${sku}_${title.substring(0, 20).replace(/\s+/g, '_')}_${randomSuffix}`;
+
+      // Convert report date string to Date object
+      const transactionDateObj = new Date(reportDate);
+
+      return {
+        transactionId: transactionId,
+        transactionDate: transactionDateObj,
+
+        // Revenue - nested object matching model schema
+        // All amounts stored in USD after conversion
+        revenue: {
+          grossAmount: parseFloat(grossAmountUsd.toFixed(2)),
+          appleFee: parseFloat(appleFeeRate.toFixed(4)),
+          appleFeeAmount: parseFloat(appleFeeAmountUsd.toFixed(2)),
+          netAmount: parseFloat(netAmountUsd.toFixed(2)),
+          currency: 'USD',  // Always USD after conversion
+          originalCurrency: originalCurrency,
+          originalAmount: originalNetAmount
+        },
+
+        // Customer info - nested object matching model schema
+        customer: {
+          new: isNewSubscription || !isRenewal,
+          subscriptionType: subscriptionTypeNormalized || null,
+          subscriptionId: null
+        },
+
+        // Attribution - default to organic for ASC data
+        attributedTo: {
+          channel: 'organic',
+          campaignId: null,
+          campaignName: null
+        },
+
+        // Metadata - extra data stored here
+        metadata: {
+          source: 'app-store-connect',
+          appVersion: version || 'unknown',
+          region: regionMap[countryCode] || 'OTHER',
+          deviceType: device || 'iPhone',
+          // Store additional data not in schema
+          productId: sku || title || 'unknown',
+          productType: isSubscription ? 'subscription' : 'in-app-purchase',
+          quantity: Math.abs(units),
+          countryCode: countryCode || 'US',
+          productTypeIdentifier: productType,
+          title: title,
+          subscriptionStatus: subscription,
+          promoCode: getVal(colIndex.promoCode),
+          originalUnits: units,
+          isRefund: isRefund,
+          isRenewal: isRenewal,
+          // Currency conversion info
+          originalCurrency: originalCurrency,
+          originalNetAmount: originalNetAmount,
+          originalGrossAmount: originalGrossAmount,
+          currencyConversionRate: conversionRate
+        },
+
+        // Set attribution window default
+        attributionWindow: 7,
+        attributionConfidence: 100
+      };
+
+    } catch (error) {
+      logger.warn('Failed to map TSV row to transaction', {
+        error: error.message,
+        values: values.slice(0, 5)
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Calculate totals from parsed transactions
+   */
+  calculateTransactionTotals(transactions) {
+    const totals = transactions.reduce((acc, tx) => {
+      // Skip refunds for positive totals
+      if (tx.metadata?.isRefund) {
+        acc.refunds += tx.revenue?.netAmount || 0;
+        acc.refundCount += 1;
+        return acc;
+      }
+
+      const netAmount = tx.revenue?.netAmount || 0;
+      const grossAmount = tx.revenue?.grossAmount || 0;
+      const appleFee = tx.revenue?.appleFeeAmount || 0;
+
+      acc.grossRevenue += grossAmount;
+      acc.appleFees += appleFee;
+      acc.netRevenue += netAmount;
+      acc.transactionCount += 1;
+
+      if (tx.customer?.new) {
+        acc.newCustomerCount += 1;
+        acc.newCustomerRevenue += netAmount;
+      }
+
+      if (tx.metadata?.productType === 'subscription') {
+        acc.subscriptionCount += 1;
+        acc.subscriptionRevenue += netAmount;
+      } else {
+        acc.oneTimePurchaseCount += 1;
+        acc.oneTimePurchaseRevenue += netAmount;
+      }
+
+      return acc;
+    }, {
+      grossRevenue: 0,
+      appleFees: 0,
+      netRevenue: 0,
+      transactionCount: 0,
+      newCustomerCount: 0,
+      newCustomerRevenue: 0,
+      subscriptionCount: 0,
+      subscriptionRevenue: 0,
+      oneTimePurchaseCount: 0,
+      oneTimePurchaseRevenue: 0,
+      refunds: 0,
+      refundCount: 0
+    });
+
+    // Calculate average
+    const avgRevenue = totals.transactionCount > 0
+      ? totals.netRevenue / totals.transactionCount
+      : 0;
+
+    return {
+      grossRevenue: parseFloat(totals.grossRevenue.toFixed(2)),
+      appleFees: parseFloat(totals.appleFees.toFixed(2)),
+      netRevenue: parseFloat(totals.netRevenue.toFixed(2)),
+      transactionCount: totals.transactionCount,
+      newCustomerCount: totals.newCustomerCount,
+      newCustomerRevenue: parseFloat(totals.newCustomerRevenue.toFixed(2)),
+      subscriptionCount: totals.subscriptionCount,
+      subscriptionRevenue: parseFloat(totals.subscriptionRevenue.toFixed(2)),
+      oneTimePurchaseCount: totals.oneTimePurchaseCount,
+      oneTimePurchaseRevenue: parseFloat(totals.oneTimePurchaseRevenue.toFixed(2)),
+      averageRevenuePerTransaction: parseFloat(avgRevenue.toFixed(2)),
+      refunds: parseFloat(totals.refunds.toFixed(2)),
+      refundCount: totals.refundCount
+    };
+  }
+
+  /**
+   * Get empty sales report structure
+   */
+  getEmptySalesReport(reportDate, frequency) {
+    return {
+      reportDate: reportDate,
+      frequency: frequency,
+      transactions: [],
+      totals: {
+        grossRevenue: 0,
+        appleFees: 0,
+        netRevenue: 0,
+        transactionCount: 0,
+        newCustomerCount: 0,
+        newCustomerRevenue: 0,
+        subscriptionCount: 0,
+        subscriptionRevenue: 0,
+        oneTimePurchaseCount: 0,
+        oneTimePurchaseRevenue: 0,
+        averageRevenuePerTransaction: 0,
+        refunds: 0,
+        refundCount: 0
+      },
+      source: 'app-store-connect',
+      parsedAt: new Date().toISOString(),
+      rowCount: 0,
+      skippedRows: 0
+    };
   }
 
   /**
@@ -2303,6 +3146,728 @@ class AppStoreConnectService {
       ],
       total: 2,
       source: 'mock'
+    };
+  }
+
+  /**
+   * Create Analytics Report Request
+   * Creates a request for ongoing or one-time analytics reports
+   *
+   * @param {string} appId - The app ID
+   * @param {string} accessType - 'ONGOING' for daily reports or 'ONE_TIME_SNAPSHOT' for historical
+   * @returns {Promise<Object>} Report request response
+   */
+  async createAnalyticsReportRequest(appId, accessType = 'ONGOING') {
+    if (!this.isConfigured()) {
+      throw new Error('App Store Connect API not configured');
+    }
+
+    try {
+      logger.info('Creating analytics report request', { appId, accessType });
+
+      const response = await this.apiRequest('/analyticsReportRequests', {
+        method: 'POST',
+        body: {
+          data: {
+            type: 'analyticsReportRequests',
+            attributes: {
+              accessType: accessType
+            },
+            relationships: {
+              app: {
+                data: {
+                  type: 'apps',
+                  id: appId
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const reportRequestId = response.data?.id;
+      logger.info('Analytics report request created', { reportRequestId, accessType });
+
+      return {
+        success: true,
+        reportRequestId: reportRequestId,
+        accessType: accessType,
+        response: response.data
+      };
+
+    } catch (error) {
+      logger.error('Failed to create analytics report request', {
+        appId,
+        accessType,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get Analytics Report Requests
+   * Lists all analytics report requests for an app
+   *
+   * @param {string} appId - The app ID
+   * @returns {Promise<Array>} List of report requests
+   */
+  async getAnalyticsReportRequests(appId) {
+    if (!this.isConfigured()) {
+      return [];
+    }
+
+    try {
+      logger.info('Fetching analytics report requests', { appId });
+
+      const response = await this.apiRequest(`/apps/${appId}/analyticsReportRequests`, {
+        method: 'GET'
+      });
+
+      const requests = response.data || [];
+      logger.info(`Found ${requests.length} analytics report requests`);
+
+      return requests.map(req => ({
+        id: req.id,
+        accessType: req.attributes?.accessType,
+        stoppedDueToInactivity: req.attributes?.stoppedDueToInactivity || false
+      }));
+
+    } catch (error) {
+      logger.error('Failed to get analytics report requests', {
+        appId,
+        error: error.message
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get Analytics Report Instances
+   * Gets report instances for a specific report type (not report request)
+   *
+   * @param {string} reportTypeId - The report type ID (e.g., 'r8-...')
+   * @param {string} granularity - 'DAILY', 'WEEKLY', or 'MONTHLY'
+   * @param {number} limit - Maximum number of instances to return
+   * @returns {Promise<Array>} List of report instances
+   */
+  async getAnalyticsReportInstances(reportTypeId, granularity = 'DAILY', limit = 30) {
+    if (!this.isConfigured()) {
+      return [];
+    }
+
+    try {
+      logger.info('Fetching analytics report instances', { reportTypeId, granularity, limit });
+
+      const response = await this.apiRequest(
+        `/analyticsReports/${reportTypeId}/instances?filter[granularity]=${granularity}&limit=${limit}`,
+        { method: 'GET' }
+      );
+
+      const instances = response.data || [];
+      logger.info(`Found ${instances.length} report instances for ${reportTypeId}`);
+
+      // Map instances with correct attribute paths
+      return instances.map(inst => ({
+        id: inst.id,
+        granularity: inst.attributes?.granularity,
+        processingDate: inst.attributes?.processingDate
+      }));
+
+    } catch (error) {
+      logger.error('Failed to get analytics report instances', {
+        reportTypeId,
+        error: error.message
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get Analytics Report Requests
+   * Gets all analytics report requests for an app
+   *
+   * @param {string} appId - The app ID
+   * @returns {Promise<Array>} List of report requests
+   */
+  async getAnalyticsReportRequests(appId) {
+    if (!this.isConfigured()) {
+      return [];
+    }
+
+    try {
+      logger.info('Fetching analytics report requests', { appId });
+
+      const response = await this.apiRequest(
+        `/apps/${appId}/analyticsReportRequests`,
+        { method: 'GET' }
+      );
+
+      const requests = response.data || [];
+      logger.info(`Found ${requests.length} analytics report requests`);
+
+      return requests.map(req => ({
+        id: req.id,
+        accessType: req.attributes?.accessType,
+        stoppedDueToInactivity: req.attributes?.stoppedDueToInactivity || false
+      }));
+
+    } catch (error) {
+      logger.error('Failed to get analytics report requests', {
+        appId,
+        error: error.message
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Get Available Report Types
+   * Gets all report types for a report request
+   *
+   * @param {string} reportRequestId - The report request ID
+   * @returns {Promise<Object>} Map of report types by name
+   */
+  async getAnalyticsReportTypes(reportRequestId) {
+    if (!this.isConfigured()) {
+      return {};
+    }
+
+    try {
+      logger.info('Fetching analytics report types', { reportRequestId });
+
+      const response = await this.apiRequest(
+        `/analyticsReportRequests/${reportRequestId}/reports?limit=200`,
+        { method: 'GET' }
+      );
+
+      const reports = response.data || [];
+      logger.info(`Found ${reports.length} report types`);
+
+      // Map report names to their IDs
+      const reportTypes = {};
+      for (const report of reports) {
+        if (report.attributes?.name && report.id) {
+          reportTypes[report.attributes.name] = {
+            id: report.id,
+            category: report.attributes.category,
+            name: report.attributes.name
+          };
+        }
+      }
+
+      return reportTypes;
+
+    } catch (error) {
+      logger.error('Failed to get analytics report types', {
+        reportRequestId,
+        error: error.message
+      });
+      return {};
+    }
+  }
+
+  /**
+   * Download and Decompress Analytics CSV
+   * Downloads a .csv.gz file from a URL and returns the parsed data
+   *
+   * @param {string} url - The download URL
+   * @returns {Promise<Array>} Array of parsed CSV rows
+   */
+  async downloadAnalyticsCsv(url) {
+    const https = await import('https');
+    const { createGunzip } = await import('zlib');
+
+    return new Promise((resolve, reject) => {
+      https.get(url, (response) => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to download CSV: ${response.statusCode}`));
+          return;
+        }
+
+        const gunzip = createGunzip();
+        const chunks = [];
+
+        response.pipe(gunzip);
+
+        gunzip.on('data', (chunk) => chunks.push(chunk));
+        gunzip.on('end', () => {
+          const csvData = Buffer.concat(chunks).toString('utf-8');
+          const rows = this.parseAnalyticsCsv(csvData);
+          resolve(rows);
+        });
+        gunzip.on('error', reject);
+      }).on('error', reject);
+    });
+  }
+
+  /**
+   * Parse Analytics CSV Data
+   * Parses CSV data from App Store Connect Analytics
+   *
+   * @param {string} csvData - Raw CSV data
+   * @returns {Array} Parsed rows as objects
+   */
+  parseAnalyticsCsv(csvData) {
+    const lines = csvData.trim().split('\n');
+    if (lines.length < 2) return [];
+
+    // Parse header
+    const headers = this.parseTSVRow(lines[0]);
+
+    // Parse data rows
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = this.parseTSVRow(lines[i]);
+      if (values.length === headers.length) {
+        const row = {};
+        headers.forEach((header, idx) => {
+          row[header] = values[idx];
+        });
+        rows.push(row);
+      }
+    }
+
+    return rows;
+  }
+
+  /**
+   * Get Analytics Report Segments
+   * Fetches segment data for a specific report instance
+   *
+   * @param {string} reportInstanceId - The report instance ID
+   * @returns {Promise<Object>} Segment data
+   */
+  async getAnalyticsReportSegments(reportInstanceId) {
+    if (!this.isConfigured()) {
+      return {};
+    }
+
+    try {
+      logger.info('Fetching analytics report segments', { reportInstanceId });
+
+      const response = await this.apiRequest(
+        `/analyticsReportInstances/${reportInstanceId}/segments`,
+        { method: 'GET' }
+      );
+
+      return {
+        success: true,
+        data: response.data || [],
+        meta: response.meta
+      };
+
+    } catch (error) {
+      logger.error('Failed to get analytics report segments', {
+        reportInstanceId,
+        error: error.message
+      });
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Fetch App Analytics Metrics
+   * High-level method to get analytics metrics for a date range
+   * Uses App Sessions and App Store Installation reports
+   *
+   * @param {string} appId - The app ID
+   * @param {string} startDate - Start date (YYYY-MM-DD)
+   * @param {string} endDate - End date (YYYY-MM-DD)
+   * @returns {Promise<Object>} Analytics metrics including installs, sessions, etc.
+   */
+  async fetchAppAnalyticsMetrics(appId, startDate, endDate) {
+    try {
+      logger.info('Fetching app analytics metrics', { appId, startDate, endDate });
+
+      // Get report requests
+      const requests = await this.getAnalyticsReportRequests(appId);
+
+      if (requests.length === 0) {
+        logger.info('No existing report requests, creating one...');
+        await this.createAnalyticsReportRequest(appId, 'ONGOING');
+        logger.info('Report request created. It may take up to 24 hours for initial reports to be available.');
+        return this.getMockAppAnalyticsMetrics(appId, startDate, endDate);
+      }
+
+      // Use the first ongoing request
+      const ongoingRequest = requests.find(r => r.accessType === 'ONGOING') || requests[0];
+
+      // Get available report types
+      const reportTypes = await this.getAnalyticsReportTypes(ongoingRequest.id);
+
+      // Key report types we need
+      const sessionsReportId = reportTypes['App Sessions Standard']?.id;
+      const installsReportId = reportTypes['App Store Installation and Deletion Standard']?.id;
+
+      if (!sessionsReportId) {
+        logger.warn('App Sessions Standard report not found');
+        return this.getMockAppAnalyticsMetrics(appId, startDate, endDate);
+      }
+
+      // Get instances for sessions report
+      const sessionsInstances = await this.getAnalyticsReportInstances(sessionsReportId, 'DAILY', 200);
+
+      // Filter instances by date range
+      const filteredInstances = sessionsInstances.filter(inst => {
+        return inst.processingDate >= startDate && inst.processingDate <= endDate;
+      });
+
+      logger.info(`Found ${filteredInstances.length} sessions instances for date range`);
+
+      if (filteredInstances.length === 0) {
+        logger.warn('No report instances found for date range, returning mock data');
+        return this.getMockAppAnalyticsMetrics(appId, startDate, endDate);
+      }
+
+      // Fetch data for each instance
+      const dailyMetrics = [];
+
+      for (const instance of filteredInstances) {
+        try {
+          const metrics = await this.fetchInstanceMetrics(instance.id, instance.processingDate);
+          if (metrics) {
+            dailyMetrics.push(metrics);
+          }
+        } catch (error) {
+          logger.warn(`Failed to fetch metrics for instance ${instance.id}:`, error.message);
+        }
+      }
+
+      logger.info(`Successfully fetched ${dailyMetrics.length} days of metrics`);
+
+      return {
+        success: true,
+        appId,
+        dateRange: { startDate, endDate },
+        dailyMetrics,
+        totalDays: dailyMetrics.length,
+        source: 'app_store_connect'
+      };
+
+    } catch (error) {
+      logger.error('Failed to fetch app analytics metrics', {
+        appId,
+        startDate,
+        endDate,
+        error: error.message
+      });
+
+      return this.getMockAppAnalyticsMetrics(appId, startDate, endDate);
+    }
+  }
+
+  /**
+   * Fetch Metrics for a Single Instance
+   * Downloads and parses the CSV data for a specific instance
+   *
+   * @param {string} instanceId - The instance ID
+   * @param {string} processingDate - The processing date
+   * @returns {Promise<Object>} Metrics for this date
+   */
+  async fetchInstanceMetrics(instanceId, processingDate) {
+    try {
+      // Get segments for this instance
+      const response = await this.apiRequest(
+        `/analyticsReportInstances/${instanceId}/segments`,
+        { method: 'GET' }
+      );
+
+      const segments = response.data || [];
+      if (segments.length === 0) {
+        return null;
+      }
+
+      // Download and parse the CSV from the first segment
+      const segmentUrl = segments[0].attributes?.url;
+      if (!segmentUrl) {
+        return null;
+      }
+
+      const rows = await this.downloadAnalyticsCsv(segmentUrl);
+
+      // Aggregate metrics from all rows
+      // CSV columns: Date, App Name, Sessions, Total Session Duration, Unique Devices, etc.
+      // Data is segmented by device, platform version, source type, etc.
+      let totalSessions = 0;
+      let totalDuration = 0;
+      let totalUniqueDevices = 0;
+
+      for (const row of rows) {
+        // Sum all sessions (data is segmented by device, platform, etc.)
+        if (row.Sessions) {
+          totalSessions += parseInt(row.Sessions) || 0;
+        }
+        if (row['Total Session Duration']) {
+          totalDuration += parseInt(row['Total Session Duration']) || 0;
+        }
+        if (row['Unique Devices']) {
+          totalUniqueDevices += parseInt(row['Unique Devices']) || 0;
+        }
+      }
+
+      // Calculate average session duration in seconds
+      const avgSessionDuration = totalSessions > 0 ? totalDuration / totalSessions : 0;
+
+      return {
+        date: processingDate,
+        installs: 0, // Not available in sessions report - would need App Store Installation report
+        sessions: totalSessions,
+        activeDevices: totalUniqueDevices || totalSessions,
+        crashes: 0,
+        rollingActiveDevices: 0,
+        activeDevicesPast30Days: 0,
+        avgSessionDuration: Math.round(avgSessionDuration)
+      };
+
+    } catch (error) {
+      logger.error(`Failed to fetch instance metrics for ${instanceId}:`, error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Process Analytics Segments
+   * Converts segment data from ASC API into usable metrics
+   *
+   * @param {Array} segments - Raw segment data
+   * @param {string} date - Processing date
+   * @returns {Object} Processed metrics
+   */
+  processAnalyticsSegments(segments, date) {
+    const metrics = {
+      date: date,
+      installs: 0,
+      sessions: 0,
+      activeDevices: 0,
+      crashes: 0,
+      rollingActiveDevices: 0,
+      activeDevicesPast30Days: 0,
+      deletions: 0,
+      reinstalls: 0,
+      conversions: 0,
+      payingUsers: 0
+    };
+
+    // Process each segment
+    for (const segment of segments) {
+      const attrs = segment.attributes || {};
+      const data = attrs.data || [];
+
+      for (const dataPoint of data) {
+        const values = dataPoint.values || {};
+        const total = values.total || 0;
+
+        // Map metrics based on segment type
+        switch (attrs.metricType) {
+          case 'installs':
+          case 'installationCount':
+            metrics.installs += total;
+            break;
+          case 'sessions':
+            metrics.sessions += total;
+            break;
+          case 'activeDevices':
+            if (attrs.frequency === 'daily') {
+              metrics.activeDevices += total;
+            } else if (attrs.frequency === 'rolling') {
+              metrics.rollingActiveDevices += total;
+            } else if (attrs.frequency === 'monthly') {
+              metrics.activeDevicesPast30Days += total;
+            }
+            break;
+          case 'crashes':
+            metrics.crashes += total;
+            break;
+          case 'deletions':
+            metrics.deletions += total;
+            break;
+          case 'reinstalls':
+            metrics.reinstalls += total;
+            break;
+          case 'conversions':
+            metrics.conversions += total;
+            break;
+          case 'payingUsers':
+            metrics.payingUsers += total;
+            break;
+        }
+      }
+    }
+
+    return metrics;
+  }
+
+  /**
+   * Get Mock App Analytics Metrics
+   * Returns realistic mock data when actual data is not available
+   *
+   * @param {string} appId - The app ID
+   * @param {string} startDate - Start date
+   * @param {string} endDate - End date
+   * @returns {Object} Mock analytics metrics
+   */
+  getMockAppAnalyticsMetrics(appId, startDate, endDate) {
+    const dailyMetrics = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const dateStr = d.toISOString().split('T')[0];
+      const dayOfWeek = d.getDay();
+
+      // Seasonal variation (lower on weekends)
+      const baseMultiplier = dayOfWeek === 0 || dayOfWeek === 6 ? 0.8 : 1.0;
+
+      dailyMetrics.push({
+        date: dateStr,
+        installs: Math.floor((50 + Math.random() * 100) * baseMultiplier),
+        sessions: Math.floor((200 + Math.random() * 400) * baseMultiplier),
+        activeDevices: Math.floor((500 + Math.random() * 500) * baseMultiplier),
+        crashes: Math.floor(Math.random() * 20 * baseMultiplier),
+        rollingActiveDevices: Math.floor(1000 + Math.random() * 500),
+        activeDevicesPast30Days: Math.floor(3000 + Math.random() * 2000),
+        deletions: Math.floor(10 + Math.random() * 30),
+        reinstalls: Math.floor(5 + Math.random() * 15),
+        conversions: Math.floor(10 + Math.random() * 30),
+        payingUsers: Math.floor(300 + Math.random() * 200)
+      });
+    }
+
+    return {
+      success: true,
+      appId,
+      dateRange: { startDate, endDate },
+      dailyMetrics,
+      totalDays: dailyMetrics.length,
+      source: 'mock',
+      note: 'Using mock data - actual ASC analytics may take 24+ hours to become available'
+    };
+  }
+
+  /**
+   * Calculate Retention from App Analytics
+   * Estimates Day 1, 7, 30 retention from sessions data
+   *
+   * Note: App Store Connect Analytics does NOT provide true cohort retention.
+   * We use a session stability metric as a proxy: the ratio of recent sessions
+   * to average sessions, which indicates how well user engagement is maintained.
+   *
+   * @param {string} appId - The app ID
+   * @returns {Promise<Object>} Retention metrics
+   */
+  async calculateRetentionFromAnalytics(appId) {
+    try {
+      logger.info('Calculating retention from app analytics', { appId });
+
+      // Get the last 30 days of data
+      const endDate = new Date();
+      endDate.setDate(endDate.getDate() - 1); // Yesterday
+      const startDate = new Date(endDate);
+      startDate.setDate(startDate.getDate() - 30);
+
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+
+      const analyticsData = await this.fetchAppAnalyticsMetrics(appId, startDateStr, endDateStr);
+
+      if (!analyticsData.success || !analyticsData.dailyMetrics || analyticsData.dailyMetrics.length < 7) {
+        logger.warn('Insufficient data for retention calculation, returning mock data');
+        return this.getMockRetentionMetrics();
+      }
+
+      const dailyMetrics = analyticsData.dailyMetrics;
+
+      // Calculate session stability as a proxy for retention
+      // This measures how stable session counts are over time
+      const avgSessions = dailyMetrics.reduce((sum, day) => sum + (day.sessions || 0), 0) / dailyMetrics.length;
+
+      // Recent sessions (last 7 days) compared to average
+      const recentSessions = dailyMetrics.slice(-7).reduce((sum, day) => sum + (day.sessions || 0), 0) / 7;
+
+      // Session stability: ratio of recent to average, normalized to 0-100
+      // Higher values indicate stable or growing engagement
+      const sessionStability = avgSessions > 0 ? (recentSessions / avgSessions) * 100 : 50;
+
+      // Use industry-standard retention as baseline, adjusted by session stability
+      // Typical mobile app: Day 1 ~40%, Day 7 ~15%, Day 30 ~5%
+      // We adjust these based on whether engagement is stable/growing or declining
+      const stabilityFactor = Math.max(0.5, Math.min(1.5, sessionStability / 100));
+
+      const day1Retention = 40 * stabilityFactor;
+      const day7Retention = 15 * stabilityFactor;
+      const day30Retention = 5 * stabilityFactor;
+
+      // Rolling retention uses session data directly
+      const rollingDay7 = Math.min(100, recentSessions / (avgSessions || 1) * 30); // Normalized to reasonable range
+      const rollingDay30 = Math.min(100, recentSessions / (avgSessions || 1) * 25);
+
+      // Estimate cohort size from recent sessions
+      const cohortSize = Math.floor(recentSessions * 2); // Rough estimate: 2 sessions per user per day
+
+      const retentionMetrics = {
+        dateRange: { startDate: startDateStr, endDate: endDateStr },
+        retention: {
+          day1: parseFloat(day1Retention.toFixed(2)),
+          day7: parseFloat(day7Retention.toFixed(2)),
+          day30: parseFloat(day30Retention.toFixed(2)),
+          rollingDay7: parseFloat(rollingDay7.toFixed(2)),
+          rollingDay30: parseFloat(rollingDay30.toFixed(2))
+        },
+        cohortSize,
+        dataSource: analyticsData.source === 'mock' ? 'mock' : 'app_store_connect',
+        dataQuality: {
+          lastSyncAt: new Date(),
+          completeness: analyticsData.source === 'mock' ? 0 : 60, // Lower score since we're estimating
+          isEstimated: true
+        }
+      };
+
+      logger.info('Retention calculated from analytics (session stability proxy)', {
+        day1: retentionMetrics.retention.day1,
+        day7: retentionMetrics.retention.day7,
+        day30: retentionMetrics.retention.day30,
+        note: 'Estimated from session data - true cohort retention not available in ASC'
+      });
+
+      return retentionMetrics;
+
+    } catch (error) {
+      logger.error('Failed to calculate retention from analytics', {
+        appId,
+        error: error.message
+      });
+      return this.getMockRetentionMetrics();
+    }
+  }
+
+  /**
+   * Get Mock Retention Metrics
+   * Returns realistic mock retention data
+   *
+   * @returns {Object} Mock retention metrics
+   */
+  getMockRetentionMetrics() {
+    // Typical mobile app retention rates
+    const baseDay1 = 30 + Math.random() * 15; // 30-45%
+    const baseDay7 = 8 + Math.random() * 7;   // 8-15%
+    const baseDay30 = 3 + Math.random() * 5;  // 3-8%
+
+    return {
+      retention: {
+        day1: parseFloat(baseDay1.toFixed(2)),
+        day7: parseFloat(baseDay7.toFixed(2)),
+        day30: parseFloat(baseDay30.toFixed(2)),
+        rollingDay7: parseFloat((baseDay7 * 1.5).toFixed(2)),
+        rollingDay30: parseFloat((baseDay30 * 2).toFixed(2))
+      },
+      cohortSize: Math.floor(100 + Math.random() * 500),
+      dataSource: 'mock',
+      dataQuality: {
+        lastSyncAt: new Date(),
+        completeness: 0,
+        isEstimated: true
+      }
     };
   }
 }

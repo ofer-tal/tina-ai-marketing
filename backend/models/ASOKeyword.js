@@ -115,4 +115,4 @@ asoKeywordSchema.methods.addRankingToHistory = function(ranking) {
   return this.save();
 };
 
-export default mongoose.model('ASOKeyword', asoKeywordSchema);
+export default mongoose.model('ASOKeyword', asoKeywordSchema, 'marketing_aso_keywords');

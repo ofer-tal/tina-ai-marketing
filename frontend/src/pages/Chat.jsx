@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import { marked } from 'marked';
 
 const ChatContainer = styled.div`
   display: flex;
@@ -106,6 +107,12 @@ const MessageBubble = styled.div`
     background: linear-gradient(135deg, #e94560 0%, #7b2cbf 100%);
     color: white;
     border-bottom-right-radius: 4px;
+  ` : props.$isLoading ? `
+    background: rgba(233, 69, 96, 0.1);
+    border: 2px dashed #e94560;
+    color: #eaeaea;
+    border-bottom-left-radius: 4px;
+    animation: pulse-border 2s ease-in-out infinite;
   ` : `
     background: #1a1a2e;
     border: 1px solid #2d3561;
@@ -114,6 +121,13 @@ const MessageBubble = styled.div`
   `}
   line-height: 1.6;
   word-wrap: break-word;
+
+  ${props => props.$isLoading && `
+    @keyframes pulse-border {
+      0%, 100% { border-color: rgba(233, 69, 96, 0.3); }
+      50% { border-color: #e94560; }
+    }
+  `}
 
   strong {
     font-weight: 600;
@@ -140,6 +154,72 @@ const MessageBubble = styled.div`
     border-radius: 4px;
     font-family: 'Fira Code', monospace;
     font-size: 0.9em;
+  }
+
+  /* Markdown Headers */
+  h1, h2, h3, h4, h5, h6 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: ${props => props.$isUser ? 'white' : '#e94560'};
+  }
+
+  h1 { font-size: 1.5rem; }
+  h2 { font-size: 1.25rem; }
+  h3 { font-size: 1.1rem; }
+
+  /* Markdown Tables */
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+  }
+
+  th, td {
+    border: 1px solid ${props => props.$isUser ? 'rgba(255,255,255,0.2)' : '#2d3561'};
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+
+  th {
+    background: ${props => props.$isUser ? 'rgba(255,255,255,0.1)' : 'rgba(233, 69, 96, 0.2)'};
+    font-weight: 600;
+    color: ${props => props.$isUser ? 'white' : '#e94560'};
+  }
+
+  tr:nth-child(even) {
+    background: ${props => props.$isUser ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.2)'};
+  }
+
+  /* Markdown blockquotes */
+  blockquote {
+    border-left: 3px solid #e94560;
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: #a0a0a0;
+    font-style: italic;
+  }
+
+  /* Markdown horizontal rule */
+  hr {
+    border: none;
+    border-top: 1px solid ${props => props.$isUser ? 'rgba(255,255,255,0.2)' : '#2d3561'};
+    margin: 1rem 0;
+  }
+
+  /* Preformatted code blocks */
+  pre {
+    background: ${props => props.$isUser ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.4)'};
+    padding: 1rem;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
   }
 `;
 
@@ -266,6 +346,39 @@ const LoadingDots = styled.span`
     40% { content: '..'; }
     60%, 100% { content: '...'; }
   }
+`;
+
+const LoadingState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem;
+`;
+
+const ChatLoadingSpinner = styled.div`
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(233, 69, 96, 0.2);
+  border-top-color: #e94560;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+`;
+
+const LoadingText = styled.div`
+  font-weight: 600;
+  color: #e94560;
+  font-size: 0.95rem;
+`;
+
+const LoadingSubText = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  font-style: italic;
 `;
 
 const CreateTodoButton = styled.button`
@@ -610,6 +723,145 @@ const LegacyLoadingSpinner = styled.div`
   color: #e94560;
 `;
 
+// Tool Proposal Card Components
+const ToolProposalCard = styled.div`
+  background: rgba(233, 69, 96, 0.1);
+  border: 2px solid #e94560;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 0.75rem;
+`;
+
+const ToolProposalHeader = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  color: #e94560;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+`;
+
+const ToolProposalTitle = styled.div`
+  font-weight: 600;
+  color: #e94560;
+  margin-bottom: 0.5rem;
+`;
+
+const ToolProposalDetails = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+  margin-bottom: 0.5rem;
+  line-height: 1.5;
+
+  strong {
+    color: #e94560;
+  }
+`;
+
+const ToolProposalReasoning = styled.div`
+  font-size: 0.875rem;
+  color: #b0b0b0;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 6px;
+  font-style: italic;
+`;
+
+const ToolProposalActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  flex-wrap: wrap;
+`;
+
+const ToolProposalButton = styled.button`
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+
+  ${props => {
+    switch (props.$variant) {
+      case 'approve':
+        return `
+          background: linear-gradient(135deg, #00d26a 0%, #00a854 100%);
+          color: white;
+
+          &:hover:not(:disabled) {
+            box-shadow: 0 3px 8px rgba(0, 210, 106, 0.3);
+            transform: translateY(-1px);
+          }
+        `;
+      case 'reject':
+        return `
+          background: rgba(248, 49, 47, 0.1);
+          border: 1px solid #f8312f;
+          color: #f8312f;
+
+          &:hover:not(:disabled) {
+            background: rgba(248, 49, 47, 0.2);
+          }
+        `;
+      case 'discuss':
+        return `
+          background: rgba(123, 44, 191, 0.1);
+          border: 1px solid #7b2cbf;
+          color: #b388ff;
+
+          &:hover:not(:disabled) {
+            background: rgba(123, 44, 191, 0.2);
+          }
+        `;
+      default:
+        return '';
+    }
+  }}
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(0);
+  }
+`;
+
+const ToolProposalStatus = styled.span`
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: ${props => {
+    switch (props.$status) {
+      case 'executed':
+        return 'rgba(0, 210, 106, 0.2)';
+      case 'rejected':
+        return 'rgba(248, 49, 47, 0.2)';
+      default:
+        return 'rgba(255, 176, 32, 0.2)';
+    }
+  }};
+  color: ${props => {
+    switch (props.$status) {
+      case 'executed':
+        return '#00d26a';
+      case 'rejected':
+        return '#f8312f';
+      default:
+        return '#ffb020';
+    }
+  }};
+`;
+
 function Chat() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
@@ -618,6 +870,7 @@ function Chat() {
   const [todosCreated, setTodosCreated] = useState(new Set());
   const [creatingTodo, setCreatingTodo] = useState(null);
   const [proposals, setProposals] = useState({});
+  const [toolProposals, setToolProposals] = useState({});
   const [processingProposal, setProcessingProposal] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -790,7 +1043,8 @@ What would you like to focus on today?`;
           role: 'assistant',
           content: data.response.content,
           timestamp: data.response.timestamp,
-          proposal: data.response.proposal || null
+          proposal: data.response.proposal || null,
+          toolProposal: data.response.toolProposal || null
         };
 
         setMessages(prev => [...prev, aiMessage]);
@@ -800,11 +1054,19 @@ What would you like to focus on today?`;
           setCurrentConversationId(data.conversationId);
         }
 
-        // Store proposal if present
+        // Store proposal if present (legacy budget proposals)
         if (data.response.proposal) {
           setProposals(prev => ({
             ...prev,
             [aiMessage.id]: data.response.proposal
+          }));
+        }
+
+        // Store tool proposal if present (new tool use system)
+        if (data.response.toolProposal) {
+          setToolProposals(prev => ({
+            ...prev,
+            [aiMessage.id]: data.response.toolProposal
           }));
         }
       } else {
@@ -996,25 +1258,136 @@ What would you like to focus on today?`;
     }
   };
 
+  // ============================================================================
+  // TOOL PROPOSAL HANDLERS
+  // ============================================================================
+
+  const handleApproveTool = async (messageId) => {
+    const toolProposal = toolProposals[messageId];
+    if (!toolProposal || processingProposal === messageId) return;
+
+    setProcessingProposal(messageId);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/chat/tools/approve', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          proposalId: toolProposal.id
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Update tool proposal status
+        setToolProposals(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            status: 'executed',
+            executedAt: new Date().toISOString(),
+            result: data.result
+          }
+        }));
+
+        // Add a confirmation message
+        setMessages(prev => [...prev, {
+          id: `tool_result_${toolProposal.id}`,
+          role: 'assistant',
+          content: `✅ Done! ${data.result.message || `Tool "${data.toolName}" executed successfully`}`,
+          timestamp: new Date().toISOString()
+        }]);
+      } else {
+        throw new Error(data.error || 'Failed to execute tool');
+      }
+    } catch (error) {
+      console.error('Error approving tool:', error);
+      alert('Failed to execute tool: ' + error.message);
+
+      // Add error message
+      setMessages(prev => [...prev, {
+        id: `tool_error_${toolProposal.id}`,
+        role: 'assistant',
+        content: `❌ Error executing tool: ${error.message}`,
+        timestamp: new Date().toISOString()
+      }]);
+    } finally {
+      setProcessingProposal(null);
+    }
+  };
+
+  const handleRejectTool = async (messageId) => {
+    const toolProposal = toolProposals[messageId];
+    if (!toolProposal || processingProposal === messageId) return;
+
+    const reason = prompt('Please provide a reason for rejecting this action:');
+
+    if (!reason) return;
+
+    setProcessingProposal(messageId);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/chat/tools/reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          proposalId: toolProposal.id,
+          reason: reason
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setToolProposals(prev => ({
+          ...prev,
+          [messageId]: {
+            ...prev[messageId],
+            status: 'rejected',
+            rejectedAt: new Date().toISOString(),
+            rejectionReason: reason
+          }
+        }));
+
+        // Add notification message
+        setMessages(prev => [...prev, {
+          id: `tool_rejected_${toolProposal.id}`,
+          role: 'assistant',
+          content: `Got it. I won't execute that action. Let me know if you'd like to discuss alternatives.`,
+          timestamp: new Date().toISOString()
+        }]);
+      } else {
+        throw new Error(data.error || 'Failed to reject tool proposal');
+      }
+    } catch (error) {
+      console.error('Error rejecting tool:', error);
+      alert('Failed to reject tool: ' + error.message);
+    } finally {
+      setProcessingProposal(null);
+    }
+  };
+
+  const handleDiscussTool = (messageId, toolProposal) => {
+    // Pre-fill input with a discussion starter
+    const toolName = formatToolName(toolProposal.toolName);
+    setInputValue(`Before we do that, I have some questions about ${toolName}...`);
+  };
+
+  const formatToolName = (toolName) => {
+    return toolName
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  };
+
   const formatMessage = (content) => {
-    // Convert markdown-like syntax to HTML
-    let formatted = content;
-
-    // Bold text
-    formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-
-    // Italic text
-    formatted = formatted.replace(/\*(.*?)\*/g, '<em>$1</em>');
-
-    // Lists
-    formatted = formatted.replace(/^\- (.*$)/gm, '<li>$1</li>');
-    formatted = formatted.replace(/^(\d+)\. (.*$)/gm, '<li>$2</li>');
-
-    // Line breaks
-    formatted = formatted.replace(/\n\n/g, '<br><br>');
-    formatted = formatted.replace(/\n/g, '<br>');
-
-    return formatted;
+    // Use marked for proper markdown rendering
+    return marked.parse(content);
   };
 
   const formatTime = (timestamp) => {
@@ -1095,11 +1468,11 @@ What would you like to focus on today?`;
       <ChatHeader>
         <div>
           <ChatTitle>
-            <span>🤖</span>
-            AI Marketing Executive
+            <span>👩‍💼</span>
+            Tina
           </ChatTitle>
           <ChatStatus>
-            {isConnected ? '🟢 Online' : '🔴 Offline'} • GLM4.7 Powered
+            {isConnected ? '🟢 Online' : '🔴 Offline'} • GLM4.7 Powered • Relentless & Data-Driven
           </ChatStatus>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -1116,23 +1489,26 @@ What would you like to focus on today?`;
       <MessagesContainer>
         {messages.length === 0 ? (
           <WelcomeMessage>
-            <h3>Welcome to Your AI Marketing Executive! 👋</h3>
-            <p>I'm here to help you grow the Blush app from $425 MRR to $10,000/month.</p>
-            <p>I can assist with:</p>
-            <p>📊 Analytics & Performance • 💰 Revenue Strategy • 📱 Content Planning</p>
-            <p>🔍 ASO Optimization • 📈 Paid Ads • 💡 Growth Strategy</p>
+            <h3>Hi, I'm Tina 👩‍💼</h3>
+            <p>I'm your veteran AI Marketing Executive with 15+ years launching apps from unknown to successful using guerrilla marketing.</p>
+            <p>I'm direct, relentless about results, and I'll tell you honestly what's working and what's not.</p>
+            <p><strong>My expertise:</strong></p>
+            <p>📱 Viral Content • 💰 Guerrilla Marketing • 📈 Organic Growth • 🔍 ASO • 💡 Community Building</p>
+            <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#e94560' }}>
+              <em>"Organic content outperforms paid ads 10:1 when done right. Let's build what works."</em>
+            </p>
             <SuggestionChips>
-              <SuggestionChip onClick={() => handleSuggestion('What\'s our current MRR and revenue status?')}>
-                💰 Revenue Status
+              <SuggestionChip onClick={() => handleSuggestion('What\'s your honest assessment of our current marketing?')}>
+                🔍 Assessment
+              </SuggestionChip>
+              <SuggestionChip onClick={() => handleSuggestion('What should we focus on this week to grow MRR?')}>
+                🎯 This Week's Focus
               </SuggestionChip>
               <SuggestionChip onClick={() => handleSuggestion('How can we improve our content strategy?')}>
                 📱 Content Strategy
               </SuggestionChip>
-              <SuggestionChip onClick={() => handleSuggestion('What\'s the budget utilization and ad performance?')}>
-                📊 Budget & Ads
-              </SuggestionChip>
-              <SuggestionChip onClick={() => handleSuggestion('How are our ASO keywords performing?')}>
-                🔍 ASO Status
+              <SuggestionChip onClick={() => handleSuggestion('What\'s working and what\'s wasting money?')}>
+                💰 ROI Analysis
               </SuggestionChip>
             </SuggestionChips>
           </WelcomeMessage>
@@ -1144,7 +1520,71 @@ What would you like to focus on today?`;
                 <MessageTime>{formatTime(msg.timestamp)}</MessageTime>
                 {msg.role === 'assistant' && (
                   <>
-                    {proposals[msg.id] ? (
+                    {/* Tool Proposals (New Tool Use System) */}
+                    {toolProposals[msg.id] && (
+                      <ToolProposalCard>
+                        <ToolProposalHeader>
+                          <span>🔧</span>
+                          Tina wants to: {formatToolName(toolProposals[msg.id].toolName)}
+                          <ToolProposalStatus $status={toolProposals[msg.id].status || 'pending'}>
+                            {toolProposals[msg.id].status === 'executed' ? '✓ Executed' :
+                             toolProposals[msg.id].status === 'rejected' ? '✗ Rejected' :
+                             '⏳ Awaiting Approval'}
+                          </ToolProposalStatus>
+                        </ToolProposalHeader>
+                        {toolProposals[msg.id].actionDisplay && (
+                          <ToolProposalDetails>
+                            <strong>Action:</strong> {toolProposals[msg.id].actionDisplay.description}
+                          </ToolProposalDetails>
+                        )}
+                        {toolProposals[msg.id].reasoning && (
+                          <ToolProposalReasoning>
+                            "{toolProposals[msg.id].reasoning}"
+                          </ToolProposalReasoning>
+                        )}
+                        {toolProposals[msg.id].status !== 'executed' && toolProposals[msg.id].status !== 'rejected' && toolProposals[msg.id].requiresApproval && (
+                          <ToolProposalActions>
+                            <ToolProposalButton
+                              $variant="approve"
+                              onClick={() => handleApproveTool(msg.id)}
+                              disabled={processingProposal === msg.id}
+                            >
+                              <span>✓</span>
+                              {processingProposal === msg.id ? 'Executing...' : 'Approve'}
+                            </ToolProposalButton>
+                            <ToolProposalButton
+                              $variant="reject"
+                              onClick={() => handleRejectTool(msg.id)}
+                              disabled={processingProposal === msg.id}
+                            >
+                              <span>✗</span>
+                              {processingProposal === msg.id ? 'Processing...' : 'Reject'}
+                            </ToolProposalButton>
+                            <ToolProposalButton
+                              $variant="discuss"
+                              onClick={() => handleDiscussTool(msg.id, toolProposals[msg.id])}
+                              disabled={processingProposal === msg.id}
+                            >
+                              <span>💬</span>
+                              Discuss First
+                            </ToolProposalButton>
+                          </ToolProposalActions>
+                        )}
+                        {toolProposals[msg.id].status === 'rejected' && toolProposals[msg.id].rejectionReason && (
+                          <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#a0a0a0' }}>
+                            Reason: {toolProposals[msg.id].rejectionReason}
+                          </div>
+                        )}
+                        {toolProposals[msg.id].status === 'executed' && toolProposals[msg.id].result && (
+                          <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#00d26a' }}>
+                            ✓ {toolProposals[msg.id].result.message || 'Action completed successfully'}
+                          </div>
+                        )}
+                      </ToolProposalCard>
+                    )}
+
+                    {/* Legacy Budget Proposals */}
+                    {proposals[msg.id] && !toolProposals[msg.id] && (
                       <ProposalCard>
                         <ProposalHeader>
                           <span>💼</span>
@@ -1181,7 +1621,10 @@ What would you like to focus on today?`;
                           </div>
                         )}
                       </ProposalCard>
-                    ) : (
+                    )}
+
+                    {/* Todo Button (Only if no proposals) */}
+                    {!proposals[msg.id] && !toolProposals[msg.id] && (
                       <>
                         {todosCreated.has(msg.id) ? (
                           <TodoCreatedBadge>
@@ -1207,8 +1650,12 @@ What would you like to focus on today?`;
         )}
         {isLoading && (
           <MessageWrapper $isUser={false}>
-            <MessageBubble $isUser={false}>
-              <LoadingDots>Thinking</LoadingDots>
+            <MessageBubble $isUser={false} $isLoading={true}>
+              <LoadingState>
+                <ChatLoadingSpinner />
+                <LoadingText>Tina is working</LoadingText>
+                <LoadingSubText>Analyzing data and formulating response...</LoadingSubText>
+              </LoadingState>
             </MessageBubble>
           </MessageWrapper>
         )}

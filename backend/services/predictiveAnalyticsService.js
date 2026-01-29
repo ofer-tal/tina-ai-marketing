@@ -28,7 +28,7 @@ class PredictiveAnalyticsService {
         try {
           Revenue = mongoose.model('MarketingRevenue');
         } catch (e) {
-          Revenue = mongoose.model('MarketingRevenue', new mongoose.Schema({}, { strict: false }), 'marketing_revenue');
+          Revenue = mongoose.model('MarketingRevenue', new mongoose.Schema({}, { strict: false }), 'marketing_revenues');
         }
 
         historicalData = await Revenue.find({

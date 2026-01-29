@@ -29,10 +29,9 @@ if (process.env.NODE_ENV !== 'production') {
 
 /**
  * GLM4.7 API Service
- * GLM4.7 client with Anthropic-compatible API format
+ * GLM4.7 client using Z.AI's native OpenAI-compatible API
  *
- * This service provides an Anthropic-compatible interface to the GLM4.7 API
- * using the endpoint: https://api.z.ai/api/anthropic
+ * Endpoint: https://api.z.ai/api/paas/v4/chat/completions
  *
  * Supported features:
  * - Chat completions with system messages
@@ -40,12 +39,13 @@ if (process.env.NODE_ENV !== 'production') {
  * - Context window management
  * - Error handling and retries
  * - Message history management
+ * - Function calling (tools)
  */
 class GLMService {
   constructor() {
     this.apiKey = process.env.GLM47_API_KEY;
-    this.endpoint = process.env.GLM47_API_ENDPOINT || 'https://api.z.ai/api/anthropic';
-    this.model = 'glm-4-plus'; // GLM4.7 model
+    this.endpoint = process.env.GLM47_API_ENDPOINT || 'https://api.z.ai/api/paas/v4';
+    this.model = 'glm-4.7'; // GLM4.7 model - supports function calling
     this.timeout = 60000; // 60 second timeout
     this.maxRetries = 3;
     this.retryDelay = 1000; // Initial retry delay in ms
@@ -111,15 +111,16 @@ class GLMService {
   }
 
   /**
-   * Create a chat completion (Anthropic-compatible format)
+   * Create a chat completion
    *
    * @param {object} options - Chat completion options
    * @param {Array} options.messages - Array of message objects with role and content
-   * @param {string} options.system - Optional system message
+   * @param {string} options.system - Optional system message (will be prepended to messages)
    * @param {number} options.maxTokens - Maximum tokens to generate (default: 4096)
    * @param {number} options.temperature - Sampling temperature (default: 0.7)
    * @param {number} options.topP - Top-p sampling (default: 0.9)
    * @param {boolean} options.stream - Whether to stream responses (default: false)
+   * @param {Array} options.tools - Optional tools array for function calling
    * @returns {Promise<object>} Chat completion response
    */
   async createMessage(options = {}) {
@@ -129,7 +130,8 @@ class GLMService {
       maxTokens = 4096,
       temperature = 0.7,
       topP = 0.9,
-      stream = false
+      stream = false,
+      tools = null
     } = options;
 
     logger.info('GLM4.7 createMessage requested', {
@@ -137,7 +139,9 @@ class GLMService {
       hasSystem: !!system,
       maxTokens,
       temperature,
-      stream
+      stream,
+      hasTools: !!tools && tools.length > 0,
+      toolCount: tools?.length || 0
     });
 
     // Validate messages
@@ -151,20 +155,86 @@ class GLMService {
       return this._getMockResponse(messages[messages.length - 1]?.content || '');
     }
 
-    // Build request body in Anthropic format
+    // Build messages array
+    // NOTE: For Z.AI GLM-4.7 coding endpoint, system prompt goes in 'system' parameter
+    // NOT in the messages array. Messages array should only contain user/assistant/tool messages.
+    // CRITICAL: Only include OpenAI-compatible fields (role, content, name, tool_calls, tool_call_id)
+    // Strip out any custom fields like timestamp, metadata, etc.
+    const apiMessages = messages.map(m => {
+      // Only keep OpenAI-compatible fields
+      const cleanMessage = {
+        role: m.role,
+        content: m.content
+      };
+
+      // Add tool_calls if present (for assistant messages)
+      if (m.tool_calls) {
+        cleanMessage.tool_calls = m.tool_calls;
+      }
+
+      // Add tool_call_id for tool role messages
+      if (m.tool_call_id) {
+        cleanMessage.tool_call_id = m.tool_call_id;
+      }
+
+      // Add name for tool role messages (optional, but some implementations use it)
+      if (m.name && m.role === 'tool') {
+        cleanMessage.name = m.name;
+      }
+
+      return cleanMessage;
+    });
+
+    // Build request body in Z.AI format (OpenAI-compatible)
     const requestBody = {
       model: this.model,
-      messages: messages,
+      messages: apiMessages,
       max_tokens: maxTokens,
       temperature: temperature,
       top_p: topP,
       stream: stream
     };
 
-    // Add system message if provided
-    if (system) {
-      requestBody.system = system;
+    // Add tools if provided (function calling support)
+    // Note: GLM doesn't support tool_choice parameter like OpenAI
+    // The model automatically decides whether to use tools
+    if (tools && tools.length > 0) {
+      requestBody.tools = tools;
+      // Don't send tool_choice - GLM will auto-determine whether to use tools
     }
+
+    // Log the request for debugging (without sensitive data)
+    logger.info('GLM4.7 API request', {
+      url: `${this.endpoint}/chat/completions`,
+      model: requestBody.model,
+      messageCount: requestBody.messages?.length,
+      hasTools: !!requestBody.tools,
+      toolCount: requestBody.tools?.length || 0,
+      temperature: requestBody.temperature,
+      // Log detailed message structure to debug format issues
+      messagesPreview: requestBody.messages?.map((m, idx) => {
+        const preview = {
+          index: idx,
+          role: m.role,
+          hasContent: !!m.content,
+          contentType: typeof m.content,
+          contentIsArray: Array.isArray(m.content),
+          hasToolCalls: !!m.tool_calls,
+          toolCallsCount: m.tool_calls?.length || 0
+        };
+        // For tool role, log key fields
+        if (m.role === 'tool') {
+          preview.tool_call_id = m.tool_call_id;
+          preview.name = m.name;
+          preview.contentLength = m.content?.length || 0;
+        }
+        // For assistant with tool_calls, log tool names
+        if (m.role === 'assistant' && m.tool_calls) {
+          preview.toolNames = m.tool_calls.map(tc => tc.function?.name);
+        }
+        return preview;
+      })
+    });
 
     // Make API call with retry logic
     let lastError;
@@ -239,20 +309,22 @@ class GLMService {
       return this._getMockStreamResponse(messages[messages.length - 1]?.content || '', onChunk);
     }
 
+    // Build messages array
+    const apiMessages = [];
+    if (system) {
+      apiMessages.push({ role: 'system', content: system });
+    }
+    apiMessages.push(...messages);
+
     // Build request body
     const requestBody = {
       model: this.model,
-      messages: messages,
+      messages: apiMessages,
       max_tokens: maxTokens,
       temperature: temperature,
       top_p: topP,
       stream: true
     };
-
-    // Add system message if provided
-    if (system) {
-      requestBody.system = system;
-    }
 
     try {
       // Make streaming request
@@ -268,28 +340,68 @@ class GLMService {
   }
 
   /**
-   * Make API request to GLM4.7
+   * Make API request to Z.AI GLM4.7
    * @private
    */
   async _makeRequest(requestBody) {
-    const url = `${this.endpoint}/v1/messages`;
+    const url = `${this.endpoint}/chat/completions`;
 
-    logger.debug('Making GLM4.7 API request', {
+    logger.info('GLM4.7 Full request body for debugging', {
       url,
-      model: requestBody.model,
-      messageCount: requestBody.messages?.length
+      requestBody: JSON.stringify({
+        model: requestBody.model,
+        messageCount: requestBody.messages?.length,
+        hasTools: !!requestBody.tools,
+        toolCount: requestBody.tools?.length || 0,
+        toolsSample: requestBody.tools ? requestBody.tools.slice(0, 1) : null
+      }, null, 2)
+    });
+
+    // Log the actual messages array structure for debugging 400 errors
+    logger.info('GLM4.7 Messages structure', {
+      messagesArray: JSON.stringify(requestBody.messages?.map((m, i) => {
+        const msgInfo = {
+          index: i,
+          role: m.role
+        };
+        if (m.role === 'tool') {
+          msgInfo.tool_call_id = m.tool_call_id;
+          msgInfo.name = m.name;
+          msgInfo.contentLength = m.content?.length || 0;
+          msgInfo.contentPreview = m.content?.substring(0, 100);
+        } else if (m.role === 'assistant') {
+          if (m.tool_calls) {
+            msgInfo.tool_calls = m.tool_calls.map(tc => ({
+              id: tc.id,
+              type: tc.type,
+              name: tc.function?.name
+            }));
+          }
+          msgInfo.contentType = typeof m.content;
+          msgInfo.contentIsArray = Array.isArray(m.content);
+          msgInfo.contentValue = m.content;
+        } else {
+          msgInfo.contentLength = m.content?.length || 0;
+          msgInfo.contentPreview = m.content?.substring(0, 100);
+        }
+        return msgInfo;
+      }), null, 2)
     });
 
     try {
+      const requestBodyJson = JSON.stringify(requestBody);
+      logger.info('GLM4.7 Request JSON preview (first 3000 chars)', {
+        preview: requestBodyJson.substring(0, 3000) + (requestBodyJson.length > 3000 ? '...' : '')
+      });
+
       // Use rate limiter for all GLM API requests
       const response = await rateLimiterService.fetch(url, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01'
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify(requestBody),
+        body: requestBodyJson,
         signal: AbortSignal.timeout(this.timeout)
       });
 
@@ -302,26 +414,64 @@ class GLMService {
 
       logger.info('GLM4.7 API request successful', {
         responseId: data.id,
-        finishReason: data.stop_reason
+        finishReason: data.choices?.[0]?.finish_reason
       });
 
-      // Return in Anthropic format
+      // Check if response contains tool calls
+      const choice = data.choices?.[0];
+      const message = choice?.message;
+
+      if (message?.tool_calls && message.tool_calls.length > 0) {
+        // Return tool_use response for function calling
+        // Include ALL tool calls for parallel execution
+        const toolCalls = message.tool_calls.map(tc => ({
+          id: tc.id,
+          name: tc.function.name,
+          parameters: JSON.parse(tc.function.arguments || '{}')
+        }));
+
+        return {
+          id: data.id || `glm-${Date.now()}`,
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: message.content || ''
+            }
+          ],
+          model: data.model || this.model,
+          stopReason: 'tool_calls',
+          usage: {
+            inputTokens: data.usage?.prompt_tokens || 0,
+            outputTokens: data.usage?.completion_tokens || 0,
+            totalTokens: data.usage?.total_tokens || 0
+          },
+          // Convenience property - first tool call (for backward compatibility)
+          toolCall: toolCalls[0],
+          // All tool calls for parallel execution
+          toolCalls: toolCalls,
+          rawToolCalls: message.tool_calls
+        };
+      }
+
+      // Return in Anthropic-compatible format for consistency with rest of codebase
       return {
         id: data.id || `glm-${Date.now()}`,
         type: 'message',
         role: 'assistant',
-        content: data.content || [
+        content: [
           {
             type: 'text',
-            text: data.message?.content || data.text || ''
+            text: message?.content || ''
           }
         ],
         model: data.model || this.model,
-        stopReason: data.stop_reason || data.finish_reason || 'stop',
-        stopSequence: data.stop_sequence || null,
+        stopReason: choice?.finish_reason || 'stop',
+        stopSequence: null,
         usage: {
-          inputTokens: data.usage?.input_tokens || data.usage?.prompt_tokens || 0,
-          outputTokens: data.usage?.output_tokens || data.usage?.completion_tokens || 0,
+          inputTokens: data.usage?.prompt_tokens || 0,
+          outputTokens: data.usage?.completion_tokens || 0,
           totalTokens: data.usage?.total_tokens || 0
         }
       };
@@ -339,7 +489,7 @@ class GLMService {
    * @private
    */
   async _makeStreamRequest(requestBody, onChunk) {
-    const url = `${this.endpoint}/v1/messages`;
+    const url = `${this.endpoint}/chat/completions`;
 
     logger.debug('Making GLM4.7 streaming request', {
       url,
@@ -352,8 +502,7 @@ class GLMService {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'anthropic-version': '2023-06-01'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(this.timeout)
@@ -390,8 +539,8 @@ class GLMService {
               const parsed = JSON.parse(data);
 
               // Extract content from delta
-              if (parsed.type === 'content_block_delta' && parsed.delta?.text) {
-                const text = parsed.delta.text;
+              if (parsed.choices?.[0]?.delta?.content) {
+                const text = parsed.choices[0].delta.content;
                 fullContent += text;
 
                 // Call callback with chunk
@@ -402,8 +551,8 @@ class GLMService {
               }
 
               // Capture message ID
-              if (parsed.message) {
-                messageId = parsed.message.id;
+              if (parsed.id) {
+                messageId = parsed.id;
               }
 
             } catch (parseError) {
@@ -463,10 +612,10 @@ class GLMService {
       content: [
         {
           type: 'text',
-          text: `[MOCK RESPONSE] I received your message: "${userMessage.substring(0, 100)}${userMessage.length > 100 ? '...' : ''}"\n\nThis is a mock response because GLM4.7 API key is not configured. To use the actual GLM4.7 API:\n\n1. Set GLM47_API_KEY in your environment\n2. Set GLM47_API_ENDPOINT to https://api.z.ai/api/anthropic\n3. Restart the server\n\nThe GLM4.7 service is ready to use once configured.`
+          text: `[MOCK RESPONSE] I received your message: "${userMessage.substring(0, 100)}${userMessage.length > 100 ? '...' : ''}"\n\nThis is a mock response because GLM4.7 API key is not configured. To use the actual GLM4.7 API:\n\n1. Set GLM47_API_KEY in your environment\n2. Set GLM47_API_ENDPOINT to https://api.z.ai/api/paas/v4\n3. Restart the server\n\nThe GLM4.7 service is ready to use once configured.`
         }
       ],
-      model: 'glm-4-plus',
+      model: 'glm-4.7',
       stopReason: 'stop',
       usage: {
         inputTokens: userMessage.length / 4,
@@ -506,7 +655,7 @@ class GLMService {
           text: mockText
         }
       ],
-      model: 'glm-4-plus',
+      model: 'glm-4.7',
       stopReason: 'stop',
       usage: {
         inputTokens: userMessage.length / 4,

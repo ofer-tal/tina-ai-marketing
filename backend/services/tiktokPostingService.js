@@ -14,8 +14,34 @@
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
 import rateLimiterService from './rateLimiter.js';
+import crypto from 'crypto';
+import AuthToken from '../models/AuthToken.js';
 
 const logger = getLogger('services', 'tiktok-posting');
+
+// Static cache for PKCE code verifiers (shared across all instances)
+// Maps state parameter -> code_verifier
+const pkceStore = new Map();
+
+/**
+ * Store code verifier for a given state
+ */
+function storeCodeVerifier(state, codeVerifier) {
+  pkceStore.set(state, codeVerifier);
+  // Auto-expire after 10 minutes to prevent memory leaks
+  setTimeout(() => {
+    pkceStore.delete(state);
+  }, 10 * 60 * 1000);
+}
+
+/**
+ * Get and remove code verifier for a given state
+ */
+function getCodeVerifier(state) {
+  const verifier = pkceStore.get(state);
+  pkceStore.delete(state); // One-time use
+  return verifier;
+}
 
 class TikTokPostingService extends BaseApiClient {
   constructor(config = {}) {
@@ -37,6 +63,14 @@ class TikTokPostingService extends BaseApiClient {
     this.refreshToken = null;
     this.tokenExpiresAt = null;
     this.creatorId = null;
+    this.openId = null;  // TikTok user's open_id
+
+    // Store state for CSRF protection during OAuth flow
+    this.csrfState = null;
+
+    // PKCE (Proof Key for Code Exchange) for OAuth security
+    this.codeVerifier = null;
+    this.codeChallenge = null;
 
     // TikTok API endpoints
     this.endpoints = {
@@ -61,6 +95,117 @@ class TikTokPostingService extends BaseApiClient {
       appSecretConfigured: !!this.appSecret,
       redirectUriConfigured: !!this.redirectUri,
     });
+  }
+
+  /**
+   * Initialize service - load tokens from database
+   * This should be called after MongoDB connection is established
+   */
+  async initialize() {
+    try {
+      logger.info('Loading TikTok tokens from database...');
+      const tokenDoc = await AuthToken.getActiveToken('tiktok');
+
+      if (tokenDoc && tokenDoc.accessToken) {
+        // Check if token is expired or will expire soon
+        const now = new Date();
+        const expiresAt = new Date(tokenDoc.expiresAt);
+        const isExpired = tokenDoc.expiresAt && now >= expiresAt;
+        const willExpireSoon = tokenDoc.expiresAt && (expiresAt - now) < (5 * 60 * 1000); // 5 minutes
+
+        if (isExpired) {
+          logger.info('Stored TikTok token is expired, attempting refresh...');
+          const refreshResult = await this._refreshStoredToken(tokenDoc);
+          if (refreshResult) {
+            logger.info('TikTok token refreshed successfully', {
+              hasAccessToken: !!this.accessToken,
+            });
+          } else {
+            logger.warn('Failed to refresh TikTok token, re-authentication required');
+          }
+        } else if (willExpireSoon) {
+          logger.info('TikTok token expiring soon, proactively refreshing...');
+          await this._refreshStoredToken(tokenDoc);
+        } else {
+          // Load token into memory
+          this.accessToken = tokenDoc.accessToken;
+          this.refreshToken = tokenDoc.refreshToken;
+          this.creatorId = tokenDoc.creatorId;
+          this.openId = tokenDoc.metadata?.open_id;  // Load open_id from metadata
+          this.tokenExpiresAt = expiresAt;
+
+          logger.info('TikTok token loaded from database', {
+            hasAccessToken: !!this.accessToken,
+            hasRefreshToken: !!this.refreshToken,
+            creatorId: this.creatorId,
+            openId: this.openId,
+            expiresAt: this.tokenExpiresAt,
+          });
+        }
+      } else {
+        logger.info('No TikTok token found in database');
+      }
+    } catch (error) {
+      logger.error('Failed to load TikTok tokens from database', {
+        error: error.message,
+      });
+    }
+  }
+
+  /**
+   * Refresh a stored token from database
+   */
+  async _refreshStoredToken(tokenDoc) {
+    if (!tokenDoc.refreshToken) {
+      return null;
+    }
+
+    try {
+      const url = this.baseURL + this.endpoints.oauth.refresh;
+
+      // Build form-encoded body (TikTok requires form-urlencoded, not JSON)
+      const params = new URLSearchParams();
+      params.append('client_key', this.appKey);
+      params.append('client_secret', this.appSecret);
+      params.append('grant_type', 'refresh_token');
+      params.append('refresh_token', tokenDoc.refreshToken);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Refresh failed: ${response.status}`);
+      }
+
+      const jsonData = await response.json();
+      const tokenData = jsonData.data || jsonData;
+
+      // Update memory
+      this.accessToken = tokenData.access_token;
+      this.refreshToken = tokenData.refresh_token || tokenDoc.refreshToken;
+      this.creatorId = tokenData.creator_id || tokenDoc.creatorId;
+      this.tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
+
+      // Update database using the generic model
+      await AuthToken.refreshToken('tiktok', {
+        accessToken: this.accessToken,
+        refreshToken: this.refreshToken,
+        creatorId: this.creatorId,
+        expiresAt: this.tokenExpiresAt,
+      });
+
+      return true;
+    } catch (error) {
+      logger.error('Failed to refresh TikTok token', {
+        error: error.message,
+      });
+      return null;
+    }
   }
 
   /**
@@ -333,12 +478,24 @@ class TikTokPostingService extends BaseApiClient {
    * User should visit this URL to authorize the app
    */
   getAuthorizationUrl(scopes = ['video.upload', 'video.publish']) {
+    // Generate and store state for CSRF protection
+    const state = this._generateState();
+
+    // Generate PKCE code verifier and challenge
+    const codeVerifier = this._generateCodeVerifier();
+    const codeChallenge = this._generateCodeChallenge(codeVerifier);
+
+    // Store the code verifier in the static cache for later retrieval during callback
+    storeCodeVerifier(state, codeVerifier);
+
     const params = new URLSearchParams({
       client_key: this.appKey,
       scope: scopes.join(','),
       redirect_uri: this.redirectUri,
       response_type: 'code',
-      state: this._generateState(),
+      state: state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
     });
 
     const url = `${this.endpoints.oauth.authorize}?${params.toString()}`;
@@ -346,6 +503,8 @@ class TikTokPostingService extends BaseApiClient {
     logger.info('Generated authorization URL', {
       url,
       scopes,
+      state: state,
+      hasCodeChallenge: !!codeChallenge,
     });
 
     return url;
@@ -354,38 +513,73 @@ class TikTokPostingService extends BaseApiClient {
   /**
    * Exchange authorization code for access token
    * Called after user authorizes the app
+   * Note: This makes a direct fetch request to avoid auth headers from BaseApiClient
    */
   async exchangeCodeForToken(code, state) {
     try {
       logger.info('Exchanging authorization code for access token...');
 
-      // Verify state matches (prevent CSRF attacks)
-      const expectedState = this._generateState();
-      if (state !== expectedState) {
-        throw new Error('Invalid state parameter - possible CSRF attack');
+      // Retrieve code verifier from static cache using state
+      const codeVerifier = getCodeVerifier(state);
+
+      if (!codeVerifier) {
+        throw new Error('No code verifier found for this state - PKCE flow may have expired or been already used');
       }
 
-      const response = await this.post(this.endpoints.oauth.token, {
-        client_key: this.appKey,
-        client_secret: this.appSecret,
-        code,
-        grant_type: 'authorization_code',
-        redirect_uri: this.redirectUri,
+      logger.info('Code verifier retrieved from cache', { state });
+
+      // Make direct fetch request to avoid BaseApiClient's auth headers
+      // TikTok requires application/x-www-form-urlencoded (not JSON)
+      const url = this.baseURL + this.endpoints.oauth.token;
+
+      // Build form-encoded body
+      const params = new URLSearchParams();
+      params.append('client_key', this.appKey);
+      params.append('client_secret', this.appSecret);
+      params.append('code', code);
+      params.append('grant_type', 'authorization_code');
+      params.append('redirect_uri', this.redirectUri);
+      params.append('code_verifier', codeVerifier);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params,
       });
 
-      // Store tokens
-      this._storeTokens(response.data);
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token exchange failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const jsonData = await response.json();
+
+      // Log the full response for debugging
+      logger.info('TikTok token response received', {
+        hasData: !!jsonData.data,
+        hasAccessToken: !!jsonData.access_token,
+        dataKeys: jsonData.data ? Object.keys(jsonData.data) : Object.keys(jsonData),
+        fullResponse: JSON.stringify(jsonData).substring(0, 500),
+      });
+
+      // TikToken OAuth response structure: { data: { access_token, refresh_token, expires_in, ... } }
+      const tokenData = jsonData.data || jsonData;
+
+      // Store tokens (async - saves to database)
+      await this._storeTokens(tokenData);
 
       logger.info('Successfully exchanged code for access token', {
         hasAccessToken: !!this.accessToken,
         hasRefreshToken: !!this.refreshToken,
-        expiresIn: response.data.expires_in,
+        expiresIn: tokenData.expires_in,
       });
 
       return {
         success: true,
         authenticated: true,
-        data: response.data,
+        data: tokenData,
       };
 
     } catch (error) {
@@ -413,24 +607,43 @@ class TikTokPostingService extends BaseApiClient {
         throw new Error('No refresh token available');
       }
 
-      const response = await this.post(this.endpoints.oauth.refresh, {
-        client_key: this.appKey,
-        client_secret: this.appSecret,
-        grant_type: 'refresh_token',
-        refresh_token: this.refreshToken,
+      // TikTok requires form-urlencoded for OAuth token endpoints
+      // Cannot use BaseApiClient.post() which sends JSON
+      const url = this.baseURL + this.endpoints.oauth.refresh;
+
+      const params = new URLSearchParams();
+      params.append('client_key', this.appKey);
+      params.append('client_secret', this.appSecret);
+      params.append('grant_type', 'refresh_token');
+      params.append('refresh_token', this.refreshToken);
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params,
       });
 
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Token refresh failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const jsonData = await response.json();
+      const tokenData = jsonData.data || jsonData;
+
       // Store updated tokens
-      this._storeTokens(response.data);
+      await this._storeTokens(tokenData);
 
       logger.info('Successfully refreshed access token', {
         hasAccessToken: !!this.accessToken,
-        expiresIn: response.data.expires_in,
+        expiresIn: tokenData.expires_in,
       });
 
       return {
         success: true,
-        data: response.data,
+        data: tokenData,
       };
 
     } catch (error) {
@@ -448,6 +661,8 @@ class TikTokPostingService extends BaseApiClient {
 
   /**
    * Get user information
+   * TikTok API v2 requires a 'fields' query parameter specifying which fields to retrieve.
+   * The open_id is returned in the response, not sent as a parameter.
    */
   async getUserInfo() {
     try {
@@ -455,11 +670,18 @@ class TikTokPostingService extends BaseApiClient {
         throw new Error('Not authenticated');
       }
 
-      const response = await this.get(this.endpoints.user.info, {
-        headers: {
-          'Authorization': `Bearer ${this.accessToken}`,
-        },
+      // TikTok requires 'fields' query parameter with comma-separated list of fields to retrieve
+      // Only request fields that require 'user.info.basic' scope (which we have)
+      const fields = 'open_id,union_id,avatar_url,display_name';
+      const url = `${this.endpoints.user.info}?fields=${encodeURIComponent(fields)}`;
+
+      logger.debug('Fetching TikTok user info', {
+        url: url.replace(this.accessToken, '****'),
+        hasToken: !!this.accessToken,
+        tokenLength: this.accessToken?.length,
       });
+
+      const response = await this.get(url);
 
       return {
         success: true,
@@ -467,13 +689,28 @@ class TikTokPostingService extends BaseApiClient {
       };
 
     } catch (error) {
-      logger.error('Failed to get user info', {
+      // Log detailed error info including TikTok's response
+      const errorDetails = {
         error: error.message,
-      });
+        status: error.status,
+        hasResponse: !!error.response,
+      };
+
+      // Include TikTok's error response if available
+      if (error.data) {
+        if (typeof error.data === 'string') {
+          errorDetails.responseText = error.data;
+        } else if (error.data.error) {
+          errorDetails.tiktokError = error.data.error;
+        }
+      }
+
+      logger.error('Failed to get user info', errorDetails);
 
       return {
         success: false,
         error: error.message,
+        details: errorDetails,
       };
     }
   }
@@ -752,12 +989,13 @@ class TikTokPostingService extends BaseApiClient {
   }
 
   /**
-   * Store tokens from response
+   * Store tokens from response (saves to database for persistence)
    */
-  _storeTokens(tokenData) {
+  async _storeTokens(tokenData) {
     this.accessToken = tokenData.access_token;
     this.refreshToken = tokenData.refresh_token;
     this.creatorId = tokenData.creator_id;
+    this.openId = tokenData.open_id;  // Store TikTok user's open_id
 
     // Calculate expiration time
     if (tokenData.expires_in) {
@@ -770,8 +1008,29 @@ class TikTokPostingService extends BaseApiClient {
       hasAccessToken: !!this.accessToken,
       hasRefreshToken: !!this.refreshToken,
       creatorId: this.creatorId,
+      openId: this.openId,
       expiresAt: this.tokenExpiresAt,
     });
+
+    // Persist to database for use by background jobs
+    try {
+      await AuthToken.saveToken('tiktok', {
+        accessToken: this.accessToken,
+        refreshToken: this.refreshToken,
+        creatorId: this.creatorId,
+        expiresAt: this.tokenExpiresAt,
+        scope: tokenData.scope || [],
+        userInfo: tokenData.userInfo || {},
+        metadata: {
+          open_id: this.openId,  // Store open_id in metadata
+        },
+      });
+      logger.info('TikTok token persisted to database');
+    } catch (error) {
+      logger.error('Failed to persist TikTok token to database', {
+        error: error.message,
+      });
+    }
   }
 
   /**
@@ -779,6 +1038,38 @@ class TikTokPostingService extends BaseApiClient {
    */
   _generateState() {
     return 'tiktok_oauth_state_' + Date.now();
+  }
+
+  /**
+   * Generate PKCE code verifier (43-128 characters)
+   * Uses a cryptographically secure random string
+   */
+  _generateCodeVerifier() {
+    const array = new Uint8Array(32);
+    crypto.randomFillSync(array);
+    return this._base64UrlEncode(array);
+  }
+
+  /**
+   * Generate PKCE code challenge from code verifier
+   * NOTE: TikTok uses NON-STANDARD PKCE - requires HEX encoding, not Base64URL!
+   * Standard PKCE (RFC 7636): BASE64URL(SHA256(code_verifier))
+   * TikTok PKCE: HEX(SHA256(code_verifier))
+   */
+  _generateCodeChallenge(verifier) {
+    const hash = crypto.createHash('sha256').update(verifier).digest();
+    return hash.toString('hex');
+  }
+
+  /**
+   * Base64URL encode a buffer (standard base64 without padding, with URL-safe chars)
+   */
+  _base64UrlEncode(buffer) {
+    return buffer
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=/g, '');
   }
 
   /**
@@ -807,6 +1098,80 @@ class TikTokPostingService extends BaseApiClient {
 
     return {
       'Authorization': `Bearer ${this.accessToken}`,
+    };
+  }
+
+  /**
+   * Fetch all user videos from TikTok with pagination
+   * Returns videos with metrics (views, likes, comments, shares)
+   */
+  async fetchUserVideos() {
+    if (!this.accessToken) {
+      throw new Error('Not authenticated - no access token');
+    }
+
+    const fields = 'id,title,video_description,create_time,share_url,like_count,comment_count,share_count,view_count';
+    const uniqueVideos = new Map();
+    let cursor = 0;
+    let hasMore = true;
+    let pageCount = 0;
+    const maxPages = 10;
+
+    while (hasMore && pageCount < maxPages) {
+      pageCount++;
+      logger.debug(`Fetching TikTok videos page ${pageCount}...`);
+
+      const apiUrl = `${this.baseURL}/video/list/?fields=${encodeURIComponent(fields)}`;
+
+      const body = { max_count: 20 };
+      if (cursor > 0) {
+        body.cursor = cursor;
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch videos: ${response.status} ${errorText}`);
+      }
+
+      const result = await response.json();
+
+      if (result.error?.code !== 'ok') {
+        throw new Error(`TikTok API error: ${result.error.message} (${result.error.code})`);
+      }
+
+      const videos = result.data?.videos || [];
+      hasMore = result.data?.has_more || false;
+      cursor = result.data?.cursor || 0;
+
+      // Deduplicate by video ID
+      for (const video of videos) {
+        if (video.id && !uniqueVideos.has(video.id)) {
+          uniqueVideos.set(video.id, video);
+        }
+      }
+
+      logger.debug(`Page ${pageCount}: ${videos.length} videos (unique: ${uniqueVideos.size})`);
+
+      if (videos.length === 0 || !hasMore) {
+        break;
+      }
+    }
+
+    logger.info(`Fetched ${uniqueVideos.size} unique TikTok videos from ${pageCount} pages`);
+
+    return {
+      success: true,
+      videos: Array.from(uniqueVideos.values()),
+      totalCount: uniqueVideos.size,
     };
   }
 

@@ -10,7 +10,9 @@ export default defineConfig({
     host: true,
     strictPort: false, // Allow trying other ports if 5173 is taken
     watch: {
-      usePolling: true // Better file watching in WSL
+      usePolling: true, // Better file watching in WSL
+      // Don't reload when .env changes (we handle it manually)
+      ignored: ['**/.env', '**/backend/**']
     },
     proxy: {
       '/api': {

@@ -1005,6 +1005,7 @@ function Dashboard() {
   const [postsPerformance, setPostsPerformance] = useState(null);
   const [engagementData, setEngagementData] = useState(null);
   const [budgetData, setBudgetData] = useState(null);
+  const [keywordData, setKeywordData] = useState(null);
   const [alerts, setAlerts] = useState([]);
   const [dismissedAlerts, setDismissedAlerts] = useState(new Set());
   const [loading, setLoading] = useState(true);
@@ -1013,17 +1014,6 @@ function Dashboard() {
   const [exporting, setExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(new Date());
 
-  // Mock keyword rankings data
-  const mockKeywordData = [
-    { keyword: 'romantic stories', ranking: 3, volume: 65000, competition: 'high', change: 2 },
-    { keyword: 'spicy fiction', ranking: 7, volume: 48000, competition: 'medium', change: -1 },
-    { keyword: 'romance novels', ranking: 12, volume: 82000, competition: 'high', change: 5 },
-    { keyword: 'love stories', ranking: 18, volume: 54000, competition: 'medium', change: 0 },
-    { keyword: 'fantasy romance', ranking: 24, volume: 36000, competition: 'low', change: 3 },
-    { keyword: 'erotic fiction', ranking: 31, volume: 29000, competition: 'medium', change: -2 },
-    { keyword: 'romantic audiobooks', ranking: 45, volume: 22000, competition: 'low', change: 1 }
-  ];
-
   useEffect(() => {
     const loadData = async () => {
       await Promise.all([
@@ -1031,6 +1021,7 @@ function Dashboard() {
         fetchPostsPerformance(),
         fetchEngagementMetrics(),
         fetchBudgetUtilization(),
+        fetchKeywordData(),
         fetchAlerts()
       ]);
       setLastUpdated(new Date());
@@ -1064,13 +1055,6 @@ function Dashboard() {
     } catch (err) {
       console.error('Failed to fetch metrics:', err);
       setError('Failed to load dashboard metrics. Please try again later.');
-      // Set mock data for development
-      setMetrics({
-        mrr: { current: 425, previous: 380, change: 11.8 },
-        users: { current: 1247, previous: 1102, change: 13.2 },
-        spend: { current: 87, previous: 92, change: -5.4 },
-        posts: { current: 23, previous: 18, change: 27.8 }
-      });
     } finally {
       setLoading(false);
     }
@@ -1111,8 +1095,23 @@ function Dashboard() {
       setEngagementData(data);
     } catch (err) {
       console.error('Failed to fetch engagement metrics:', err);
-      // Set mock data for development
       setEngagementData(null);
+    }
+  };
+
+  const fetchKeywordData = async () => {
+    try {
+      const response = await fetch('/api/aso-keywords?limit=10');
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setKeywordData(data.keywords || data);
+    } catch (err) {
+      console.error('Failed to fetch keyword data:', err);
+      setKeywordData(null);
     }
   };
 
@@ -1128,88 +1127,8 @@ function Dashboard() {
       setBudgetData(data);
     } catch (err) {
       console.error('Failed to fetch budget utilization:', err);
-      // Set mock data for development
-      setBudgetData(getMockBudgetData());
+      setBudgetData(null);
     }
-  };
-
-  const getMockBudgetData = () => {
-    const monthlyBudget = 3000;
-    const totalSpend = Math.round(1500 + Math.random() * 1000);
-    const remainingBudget = monthlyBudget - totalSpend;
-    const utilizationPercent = (totalSpend / monthlyBudget) * 100;
-    const projectedSpend = Math.round(totalSpend * (30 / new Date().getDate()));
-
-    return {
-      period: {
-        start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
-        end: new Date().toISOString(),
-        currentDay: new Date().getDate(),
-        daysInMonth: 30,
-        remainingDays: 30 - new Date().getDate()
-      },
-      budget: {
-        monthly: monthlyBudget,
-        spent: totalSpend,
-        remaining: remainingBudget,
-        projected: projectedSpend
-      },
-      variance: {
-        amount: monthlyBudget - totalSpend,
-        percent: ((monthlyBudget - totalSpend) / monthlyBudget) * 100,
-        status: (monthlyBudget - totalSpend) >= 0 ? 'under' : 'over',
-        description: `${Math.abs(((monthlyBudget - totalSpend) / monthlyBudget) * 100).toFixed(1)}% ${monthlyBudget >= totalSpend ? 'under' : 'over'} budget`
-      },
-      utilization: {
-        percent: Math.round(utilizationPercent * 10) / 10,
-        amount: totalSpend,
-        ofTotal: monthlyBudget
-      },
-      thresholds: {
-        warning: 70,
-        critical: 90,
-        current: utilizationPercent >= 90 ? 'critical' : utilizationPercent >= 70 ? 'warning' : 'normal'
-      },
-      alert: {
-        level: utilizationPercent >= 90 ? 'critical' : utilizationPercent >= 70 ? 'warning' : 'normal',
-        message: utilizationPercent >= 90 ? 'Critical: Budget nearly exhausted' : utilizationPercent >= 70 ? 'Warning: 70% of budget used' : null,
-        action: utilizationPercent >= 90 ? 'Auto-pause recommended' : utilizationPercent >= 70 ? 'Review campaign spend' : null
-      },
-      pacing: {
-        currentDailySpend: Math.round(totalSpend / new Date().getDate()),
-        requiredDailySpend: Math.round(remainingBudget / (30 - new Date().getDate()) * 100) / 100,
-        budgetHealth: utilizationPercent > (new Date().getDate() / 30) * 100 ? 'overspending' : 'on-track'
-      },
-      breakdown: {
-        apple_search_ads: {
-          spent: Math.round(totalSpend * 0.42),
-          budget: Math.round(monthlyBudget * 0.50),
-          percent: Math.round((totalSpend * 0.42) / (monthlyBudget * 0.50) * 100),
-          variance: {
-            amount: Math.round(monthlyBudget * 0.50) - Math.round(totalSpend * 0.42),
-            percent: ((Math.round(monthlyBudget * 0.50) - Math.round(totalSpend * 0.42)) / Math.round(monthlyBudget * 0.50)) * 100
-          }
-        },
-        tiktok_ads: {
-          spent: Math.round(totalSpend * 0.32),
-          budget: Math.round(monthlyBudget * 0.30),
-          percent: Math.round((totalSpend * 0.32) / (monthlyBudget * 0.30) * 100),
-          variance: {
-            amount: Math.round(monthlyBudget * 0.30) - Math.round(totalSpend * 0.32),
-            percent: ((Math.round(monthlyBudget * 0.30) - Math.round(totalSpend * 0.32)) / Math.round(monthlyBudget * 0.30)) * 100
-          }
-        },
-        instagram_ads: {
-          spent: Math.round(totalSpend * 0.26),
-          budget: Math.round(monthlyBudget * 0.20),
-          percent: Math.round((totalSpend * 0.26) / (monthlyBudget * 0.20) * 100),
-          variance: {
-            amount: Math.round(monthlyBudget * 0.20) - Math.round(totalSpend * 0.26),
-            percent: ((Math.round(monthlyBudget * 0.20) - Math.round(totalSpend * 0.26)) / Math.round(monthlyBudget * 0.20)) * 100
-          }
-        }
-      }
-    };
   };
 
   const fetchAlerts = async () => {
@@ -1237,6 +1156,7 @@ function Dashboard() {
         fetchPostsPerformance(),
         fetchEngagementMetrics(),
         fetchBudgetUtilization(),
+        fetchKeywordData(),
         fetchAlerts()
       ]);
       setLastUpdated(new Date());
@@ -1439,15 +1359,17 @@ function Dashboard() {
       csvRows.push(['KEYWORD RANKINGS']);
       csvRows.push(['Keyword', 'Ranking', 'Volume', 'Competition', 'Change']);
 
-      mockKeywordData.forEach(keyword => {
-        csvRows.push([
-          keyword.keyword,
-          keyword.ranking,
-          keyword.volume,
-          keyword.competition,
-          keyword.change
-        ]);
-      });
+      if (keywordData && keywordData.length > 0) {
+        keywordData.forEach(keyword => {
+          csvRows.push([
+            keyword.keyword || keyword.keyword,
+            keyword.ranking || keyword.currentRank,
+            keyword.volume || keyword.searchVolume,
+            keyword.competition || keyword.competitionLevel,
+            keyword.change || keyword.rankChange || 0
+          ]);
+        });
+      }
 
       // Convert to CSV string
       const csvString = csvRows.map(row => row.map(cell => {
@@ -1836,33 +1758,45 @@ function Dashboard() {
         <Title>App Store Keyword Rankings</Title>
       </DashboardHeader>
 
-      <KeywordsGrid>
-        {mockKeywordData.map((keyword) => (
-          <KeywordCard key={keyword.keyword}>
-            <KeywordHeader>
-              <KeywordName>{keyword.keyword}</KeywordName>
-              <RankBadge $rank={keyword.ranking}>
-                #{keyword.ranking}
-              </RankBadge>
-            </KeywordHeader>
-            <KeywordMeta>
-              <KeywordMetric>
-                <MetricLabel>Volume</MetricLabel>
-                <MetricValue>{formatNumber(keyword.volume)}</MetricValue>
-              </KeywordMetric>
-              <KeywordMetric>
-                <MetricLabel>Competition</MetricLabel>
-                <CompetitionBadge $level={keyword.competition}>
-                  {keyword.competition}
-                </CompetitionBadge>
-              </KeywordMetric>
-              <RankChange $change={keyword.change}>
-                {keyword.change > 0 ? `↑${keyword.change}` : keyword.change < 0 ? `↓${Math.abs(keyword.change)}` : '→'}
-              </RankChange>
-            </KeywordMeta>
-          </KeywordCard>
-        ))}
-      </KeywordsGrid>
+      {keywordData && keywordData.length > 0 ? (
+        <KeywordsGrid>
+          {keywordData.map((keyword) => (
+            <KeywordCard key={keyword.keyword || keyword._id}>
+              <KeywordHeader>
+                <KeywordName>{keyword.keyword}</KeywordName>
+                <RankBadge $rank={keyword.ranking || keyword.currentRank}>
+                  #{keyword.ranking || keyword.currentRank}
+                </RankBadge>
+              </KeywordHeader>
+              <KeywordMeta>
+                <KeywordMetric>
+                  <MetricLabel>Volume</MetricLabel>
+                  <MetricValue>{formatNumber(keyword.volume || keyword.searchVolume)}</MetricValue>
+                </KeywordMetric>
+                <KeywordMetric>
+                  <MetricLabel>Competition</MetricLabel>
+                  <CompetitionBadge $level={keyword.competition || keyword.competitionLevel}>
+                    {keyword.competition || keyword.competitionLevel}
+                  </CompetitionBadge>
+                </KeywordMetric>
+                <RankChange $change={keyword.change || keyword.rankChange}>
+                  {(keyword.change || keyword.rankChange) > 0 ? `↑${keyword.change || keyword.rankChange}` : (keyword.change || keyword.rankChange) < 0 ? `↓${Math.abs(keyword.change || keyword.rankChange)}` : '→'}
+                </RankChange>
+              </KeywordMeta>
+            </KeywordCard>
+          ))}
+        </KeywordsGrid>
+      ) : (
+        <MetricCard>
+          <MetricLabel>
+            <MetricIcon>📱</MetricIcon>
+            App Store Keyword Rankings
+          </MetricLabel>
+          <div style={{ color: '#a0a0a0', marginTop: '1rem' }}>
+            No keyword ranking data available. Keywords will appear here once ASO tracking is configured.
+          </div>
+        </MetricCard>
+      )}
 
       <DashboardHeader>
         <Title>Engagement Metrics</Title>

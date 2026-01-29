@@ -10,7 +10,7 @@ pnpm-lock.yaml
 .env.*.local
 
 # Credentials and secrets
-config/credentials/
+backend/config/credentials/
 
 # Logs
 logs/
@@ -86,6 +86,7 @@ docker-compose.override.yml
 *.tmp
 *.temp
 *.bak
+*.pid
 
 # Feature database (managed by MCP server)
 features.db

@@ -34,7 +34,7 @@ beforeAll(async () => {
   await db.collection('marketing_tasks').deleteMany({
     title: { $regex: /^REGRESSION_TEST_/ }
   });
-  await db.collection('marketing_revenue').deleteMany({
+  await db.collection('marketing_revenues').deleteMany({
     period: 'regression-test'
   });
 });
@@ -48,7 +48,7 @@ afterAll(async () => {
     await db.collection('marketing_tasks').deleteMany({
       title: { $regex: /^REGRESSION_TEST_/ }
     });
-    await db.collection('marketing_revenue').deleteMany({
+    await db.collection('marketing_revenues').deleteMany({
       period: 'regression-test'
     });
   }
@@ -240,10 +240,10 @@ describe('Regression Test Suite', () => {
         createdAt: new Date()
       };
 
-      const result = await db.collection('marketing_revenue').insertOne(revenue);
+      const result = await db.collection('marketing_revenues').insertOne(revenue);
       expect(result.acknowledged).toBe(true);
 
-      const retrieved = await db.collection('marketing_revenue').findOne({
+      const retrieved = await db.collection('marketing_revenues').findOne({
         _id: result.insertedId
       });
 
@@ -471,7 +471,7 @@ describe('Regression Test Suite', () => {
 
       expect(collectionNames).toContain('marketing_posts');
       expect(collectionNames).toContain('marketing_tasks');
-      expect(collectionNames).toContain('marketing_revenue');
+      expect(collectionNames).toContain('marketing_revenues');
     });
   });
 

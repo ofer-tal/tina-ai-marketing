@@ -34,7 +34,7 @@ router.get("/", async (req, res) => {
           dueAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
           completedAt: null,
           resources: [
-            { type: "link", url: "/content", description: "View Content Library" }
+            { type: "link", url: "/content/approval", description: "Review Pending Approvals" }
           ],
           estimatedTime: 15,
           actualTime: null,

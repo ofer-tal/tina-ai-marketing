@@ -12,6 +12,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import styled from 'styled-components';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 
 const COLORS = ['#e94560', '#7b2cbf', '#00d26a', '#ffb020', '#0ea5e9', '#f8312f', '#8b5cf6', '#ec4899'];
@@ -24,13 +25,349 @@ const SOURCE_COLORS = {
   'email': '#ec4899'
 };
 
+// Styled Components replacing Tailwind classes
+const Container = styled.div`
+  padding: 1.5rem;
+`;
+
+const Header = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+`;
+
+const Title = styled.h1`
+  font-size: 1.875rem;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 0.5rem;
+`;
+
+const Subtitle = styled.p`
+  color: #9ca3af;
+`;
+
+const HeaderRight = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const Select = styled.select`
+  background: #374151;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #4b5563;
+`;
+
+const RefreshButton = styled.button`
+  background: ${props => props.$refreshing ? '#4b5563' : '#2563eb'};
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: ${props => props.$refreshing ? 'not-allowed' : 'pointer'};
+  opacity: ${props => props.$refreshing ? 0.6 : 1};
+
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+`;
+
+const SummaryCardsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+`;
+
+const SummaryCard = styled.div`
+  background: #1f2937;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+`;
+
+const SummaryCardHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+`;
+
+const SummaryLabel = styled.p`
+  color: #9ca3af;
+  font-size: 0.875rem;
+`;
+
+const SummaryValue = styled.p`
+  font-size: 1.875rem;
+  font-weight: bold;
+  color: white;
+  margin-top: 0.5rem;
+`;
+
+const SummaryIcon = styled.div`
+  font-size: 1.875rem;
+`;
+
+const SummarySubtext = styled.p`
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
+`;
+
+const ChartCard = styled.div`
+  background: #1f2937;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+`;
+
+const ChartTitle = styled.h2`
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: white;
+  margin-bottom: 1rem;
+`;
+
+const TwoColumnGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem;
+
+  @media (min-width: 1024px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`;
+
+const SourceLegend = styled.div`
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const SourceLegendItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const SourceLegendLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
+const SourceColorDot = styled.div`
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: ${props => props.$color};
+`;
+
+const SourceName = styled.span`
+  color: #d1d5db;
+`;
+
+const SourceValue = styled.span`
+  color: white;
+  font-weight: 600;
+`;
+
+const PageRow = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem;
+  background: #374151;
+  border-radius: 0.5rem;
+  margin-bottom: 0.75rem;
+
+  &:hover {
+    background: #4b5563;
+  }
+`;
+
+const PageLeft = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+`;
+
+const PageNumber = styled.span`
+  color: #9ca3af;
+  font-weight: 600;
+`;
+
+const PagePath = styled.span`
+  color: white;
+  font-family: monospace;
+  font-size: 0.875rem;
+`;
+
+const PageMeta = styled.div`
+  display: flex;
+  gap: 1rem;
+`;
+
+const PageMetaText = styled.span`
+  color: #9ca3af;
+  font-size: 0.75rem;
+`;
+
+const ThreeColumnGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+`;
+
+const MetricColumn = styled.div`
+  margin-bottom: 0.5rem;
+`;
+
+const MetricColumnLabel = styled.p`
+  color: #9ca3af;
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+`;
+
+const MetricColumnValue = styled.p`
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: ${props => props.$color || 'white'};
+`;
+
+const ProgressBar = styled.div`
+  height: 0.5rem;
+  background: #374151;
+  border-radius: 9999px;
+  overflow: hidden;
+  margin-top: 0.5rem;
+`;
+
+const ProgressFill = styled.div`
+  height: 100%;
+  background: ${props => props.$color || '#10b981'};
+  width: ${props => props.$percent}%;
+`;
+
+const MetricSubtext = styled.p`
+  color: #6b7280;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+`;
+
+const TwoColumnGridSmall = styled.div`
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 1.5rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+`;
+
+const LoadingSkeleton = styled.div`
+  padding: 1.5rem;
+
+  .skeleton-title {
+    height: 2rem;
+    background: #374151;
+    border-radius: 0.5rem;
+    width: 33%;
+    margin-bottom: 1rem;
+  }
+
+  .skeleton-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+
+    .skeleton-card {
+      height: 8rem;
+      background: #374151;
+      border-radius: 0.5rem;
+    }
+  }
+
+  .skeleton-chart {
+    height: 16rem;
+    background: #374151;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+  }
+`;
+
+const ErrorCard = styled.div`
+  padding: 1.5rem;
+
+  .error-content {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    border-radius: 0.5rem;
+    padding: 1rem;
+  }
+
+  .error-text {
+    color: #f87171;
+  }
+
+  .retry-button {
+    margin-top: 1rem;
+    background: #dc2626;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    border: none;
+  }
+`;
+
+const NoDataCard = styled.div`
+  padding: 1.5rem;
+
+  .no-data-content {
+    background: #1f2937;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    text-align: center;
+  }
+
+  .no-data-title {
+    color: #9ca3af;
+  }
+
+  .no-data-subtitle {
+    color: #6b7280;
+    font-size: 0.875rem;
+    margin-top: 0.5rem;
+  }
+`;
+
 export default function WebsiteTraffic() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
   const [dateRange, setDateRange] = useState('7d'); // 7d, 30d, 90d
-  const [activeTab, setActiveTab] = useState('overview');
 
   useEffect(() => {
     fetchDashboardData();
@@ -86,45 +423,43 @@ export default function WebsiteTraffic() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse">
-          <div className="h-8 bg-gray-700 rounded w-1/3 mb-4"></div>
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            <div className="h-32 bg-gray-700 rounded"></div>
-            <div className="h-32 bg-gray-700 rounded"></div>
-            <div className="h-32 bg-gray-700 rounded"></div>
-            <div className="h-32 bg-gray-700 rounded"></div>
-          </div>
-          <div className="h-64 bg-gray-700 rounded mb-4"></div>
+      <LoadingSkeleton>
+        <div className="skeleton-title"></div>
+        <div className="skeleton-cards">
+          <div className="skeleton-card"></div>
+          <div className="skeleton-card"></div>
+          <div className="skeleton-card"></div>
+          <div className="skeleton-card"></div>
         </div>
-      </div>
+        <div className="skeleton-chart"></div>
+      </LoadingSkeleton>
     );
   }
 
   if (error) {
     return (
-      <div className="p-6">
-        <div className="bg-red-900/20 border border-red-500/50 rounded-lg p-4">
-          <p className="text-red-400">Error: {error}</p>
+      <ErrorCard>
+        <div className="error-content">
+          <p className="error-text">Error: {error}</p>
           <button
             onClick={fetchDashboardData}
-            className="mt-4 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+            className="retry-button"
           >
             Retry
           </button>
         </div>
-      </div>
+      </ErrorCard>
     );
   }
 
   if (!dashboardData) {
     return (
-      <div className="p-6">
-        <div className="bg-gray-800 rounded-lg p-6 text-center">
-          <p className="text-gray-400">No traffic data available</p>
-          <p className="text-gray-500 text-sm mt-2">Configure Google Analytics in Settings to start tracking</p>
+      <NoDataCard>
+        <div className="no-data-content">
+          <p className="no-data-title">No traffic data available</p>
+          <p className="no-data-subtitle">Configure Google Analytics in Settings to start tracking</p>
         </div>
-      </div>
+      </NoDataCard>
     );
   }
 
@@ -154,91 +489,90 @@ export default function WebsiteTraffic() {
   })) || [];
 
   return (
-    <div className="p-6 space-y-6">
+    <Container>
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <Header>
         <div>
-          <h1 className="text-3xl font-bold text-white mb-2">🌐 Website Traffic</h1>
-          <p className="text-gray-400">Track website traffic from Google Analytics</p>
+          <Title>🌐 Website Traffic</Title>
+          <Subtitle>Track website traffic from Google Analytics</Subtitle>
         </div>
-        <div className="flex gap-2">
-          <select
+        <HeaderRight>
+          <Select
             value={dateRange}
             onChange={(e) => setDateRange(e.target.value)}
-            className="bg-gray-700 text-white px-4 py-2 rounded-lg border border-gray-600"
           >
             <option value="7d">Last 7 Days</option>
             <option value="30d">Last 30 Days</option>
             <option value="90d">Last 90 Days</option>
-          </select>
-          <button
+          </Select>
+          <RefreshButton
             onClick={handleRefresh}
             disabled={refreshing}
-            className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+            $refreshing={refreshing}
           >
             {refreshing ? '⏳' : '🔄'} Refresh
-          </button>
-        </div>
-      </div>
+          </RefreshButton>
+        </HeaderRight>
+      </Header>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex justify-between items-start">
+      <SummaryCardsGrid>
+        <SummaryCard>
+          <SummaryCardHeader>
             <div>
-              <p className="text-gray-400 text-sm">Total Page Views</p>
-              <p className="text-3xl font-bold text-white mt-2">
+              <SummaryLabel>Total Page Views</SummaryLabel>
+              <SummaryValue>
                 {summary.totalPageViews?.toLocaleString() || '0'}
-              </p>
+              </SummaryValue>
             </div>
-            <div className="text-3xl">👁️</div>
-          </div>
-          <p className="text-gray-500 text-sm mt-2">Across {summary.daysWithData || 0} days</p>
-        </div>
+            <SummaryIcon>👁️</SummaryIcon>
+          </SummaryCardHeader>
+          <SummarySubtext>Across {summary.daysWithData || 0} days</SummarySubtext>
+        </SummaryCard>
 
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex justify-between items-start">
+        <SummaryCard>
+          <SummaryCardHeader>
             <div>
-              <p className="text-gray-400 text-sm">Total Sessions</p>
-              <p className="text-3xl font-bold text-white mt-2">
+              <SummaryLabel>Total Sessions</SummaryLabel>
+              <SummaryValue>
                 {summary.totalSessions?.toLocaleString() || '0'}
-              </p>
+              </SummaryValue>
             </div>
-            <div className="text-3xl">🖥️</div>
-          </div>
-          <p className="text-gray-500 text-sm mt-2">User visits</p>
-        </div>
+            <SummaryIcon>🖥️</SummaryIcon>
+          </SummaryCardHeader>
+          <SummarySubtext>User visits</SummarySubtext>
+        </SummaryCard>
 
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex justify-between items-start">
+        <SummaryCard>
+          <SummaryCardHeader>
             <div>
-              <p className="text-gray-400 text-sm">Total Users</p>
-              <p className="text-3xl font-bold text-white mt-2">
+              <SummaryLabel>Total Users</SummaryLabel>
+              <SummaryValue>
                 {summary.totalUsers?.toLocaleString() || '0'}
-              </p>
+              </SummaryValue>
             </div>
-            <div className="text-3xl">👥</div>
-          </div>
-          <p className="text-gray-500 text-sm mt-2">Unique visitors</p>
-        </div>
+            <SummaryIcon>👥</SummaryIcon>
+          </SummaryCardHeader>
+          <SummarySubtext>Unique visitors</SummarySubtext>
+        </SummaryCard>
 
-        <div className="bg-gray-800 rounded-lg p-6">
-          <div className="flex justify-between items-start">
+        <SummaryCard>
+          <SummaryCardHeader>
             <div>
-              <p className="text-gray-400 text-sm">Avg Bounce Rate</p>
-              <p className="text-3xl font-bold text-white mt-2">
+              <SummaryLabel>Avg Bounce Rate</SummaryLabel>
+              <SummaryValue>
                 {summary.avgBounceRate ? `${summary.avgBounceRate}%` : 'N/A'}
-              </p>
+              </SummaryValue>
             </div>
-            <div className="text-3xl">📊</div>
-          </div>
-          <p className="text-gray-500 text-sm mt-2">Lower is better</p>
-        </div>
-      </div>
+            <SummaryIcon>📊</SummaryIcon>
+          </SummaryCardHeader>
+          <SummarySubtext>Lower is better</SummarySubtext>
+        </SummaryCard>
+      </SummaryCardsGrid>
 
       {/* Traffic Trends Chart */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Traffic Trends Over Time</h2>
+      <ChartCard>
+        <ChartTitle>Traffic Trends Over Time</ChartTitle>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={dailyTrendsData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
@@ -289,13 +623,13 @@ export default function WebsiteTraffic() {
             />
           </AreaChart>
         </ResponsiveContainer>
-      </div>
+      </ChartCard>
 
       {/* Traffic Sources and Top Pages */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <TwoColumnGrid>
         {/* Traffic Sources Pie Chart */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Traffic Sources</h2>
+        <ChartCard>
+          <ChartTitle>Traffic Sources</ChartTitle>
           {sourcesData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={250}>
@@ -327,142 +661,132 @@ export default function WebsiteTraffic() {
                   />
                 </PieChart>
               </ResponsiveContainer>
-              <div className="mt-4 space-y-2">
+              <SourceLegend>
                 {sourcesData.map((source, index) => (
-                  <div key={source.name} className="flex justify-between items-center">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-3 h-3 rounded-full"
-                        style={{
-                          backgroundColor: SOURCE_COLORS[source.name.toLowerCase()] || COLORS[index % COLORS.length]
-                        }}
-                      ></div>
-                      <span className="text-gray-300">{source.name}</span>
-                    </div>
-                    <span className="text-white font-semibold">{source.value.toLocaleString()}</span>
-                  </div>
+                  <SourceLegendItem key={source.name}>
+                    <SourceLegendLeft>
+                      <SourceColorDot
+                        $color={SOURCE_COLORS[source.name.toLowerCase()] || COLORS[index % COLORS.length]}
+                      />
+                      <SourceName>{source.name}</SourceName>
+                    </SourceLegendLeft>
+                    <SourceValue>{source.value.toLocaleString()}</SourceValue>
+                  </SourceLegendItem>
                 ))}
-              </div>
+              </SourceLegend>
             </>
           ) : (
-            <p className="text-gray-400 text-center py-8">No traffic source data available</p>
+            <p style={{ color: '#9ca3af', textAlign: 'center', padding: '2rem 0' }}>No traffic source data available</p>
           )}
-        </div>
+        </ChartCard>
 
         {/* Top Pages */}
-        <div className="bg-gray-800 rounded-lg p-6">
-          <h2 className="text-xl font-bold text-white mb-4">Top Pages</h2>
+        <ChartCard>
+          <ChartTitle>Top Pages</ChartTitle>
           {pagesData.length > 0 ? (
-            <div className="space-y-3">
+            <>
               {pagesData.map((page, index) => (
-                <div
-                  key={page.path}
-                  className="flex justify-between items-center p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors"
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-400 font-semibold">#{index + 1}</span>
-                      <span className="text-white font-mono text-sm">{page.path}</span>
+                <PageRow key={page.path}>
+                  <PageLeft>
+                    <div>
+                      <PageNumber>#{index + 1}</PageNumber>
+                      <PagePath>{page.path}</PagePath>
                     </div>
-                    <div className="flex gap-4 mt-1">
-                      <span className="text-gray-400 text-xs">{page.views.toLocaleString()} views</span>
-                      <span className="text-gray-500 text-xs">{page.unique.toLocaleString()} unique</span>
-                    </div>
-                  </div>
-                </div>
+                    <PageMeta>
+                      <PageMetaText>{page.views.toLocaleString()} views</PageMetaText>
+                      <PageMetaText>{page.unique.toLocaleString()} unique</PageMetaText>
+                    </PageMeta>
+                  </PageLeft>
+                </PageRow>
               ))}
-            </div>
+            </>
           ) : (
-            <p className="text-gray-400 text-center py-8">No page data available</p>
+            <p style={{ color: '#9ca3af', textAlign: 'center', padding: '2rem 0' }}>No page data available</p>
           )}
-        </div>
-      </div>
+        </ChartCard>
+      </TwoColumnGrid>
 
       {/* User Acquisition */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h2 className="text-xl font-bold text-white mb-4">User Acquisition</h2>
+      <ChartCard>
+        <ChartTitle>User Acquisition</ChartTitle>
         {acquisition ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div>
-              <p className="text-gray-400 text-sm mb-1">New Users</p>
-              <p className="text-2xl font-bold text-green-400">
+          <ThreeColumnGrid>
+            <MetricColumn>
+              <MetricColumnLabel>New Users</MetricColumnLabel>
+              <MetricColumnValue $color="#4ade80">
                 {acquisition.newUsers?.toLocaleString() || '0'}
-              </p>
-              <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500"
-                  style={{
-                    width: `${acquisition.newUsers && acquisition.totalUsers
-                      ? (acquisition.newUsers / acquisition.totalUsers * 100).toFixed(0)
-                      : 0}%`
-                  }}
-                ></div>
-              </div>
-              <p className="text-gray-500 text-xs mt-1">
+              </MetricColumnValue>
+              <ProgressBar>
+                <ProgressFill
+                  $color="#10b981"
+                  $percent={acquisition.newUsers && acquisition.totalUsers
+                    ? (acquisition.newUsers / acquisition.totalUsers * 100).toFixed(0)
+                    : 0}
+                />
+              </ProgressBar>
+              <MetricSubtext>
                 {acquisition.newUsers && acquisition.totalUsers
                   ? `${(acquisition.newUsers / acquisition.totalUsers * 100).toFixed(1)}%`
                   : '0%'} of total
-              </p>
-            </div>
+              </MetricSubtext>
+            </MetricColumn>
 
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Returning Users</p>
-              <p className="text-2xl font-bold text-blue-400">
+            <MetricColumn>
+              <MetricColumnLabel>Returning Users</MetricColumnLabel>
+              <MetricColumnValue $color="#60a5fa">
                 {acquisition.returningUsers?.toLocaleString() || '0'}
-              </p>
-              <div className="mt-2 h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500"
-                  style={{
-                    width: `${acquisition.returningUsers && acquisition.totalUsers
-                      ? (acquisition.returningUsers / acquisition.totalUsers * 100).toFixed(0)
-                      : 0}%`
-                  }}
-                ></div>
-              </div>
-              <p className="text-gray-500 text-xs mt-1">
+              </MetricColumnValue>
+              <ProgressBar>
+                <ProgressFill
+                  $color="#3b82f6"
+                  $percent={acquisition.returningUsers && acquisition.totalUsers
+                    ? (acquisition.returningUsers / acquisition.totalUsers * 100).toFixed(0)
+                    : 0}
+                />
+              </ProgressBar>
+              <MetricSubtext>
                 {acquisition.returningUsers && acquisition.totalUsers
                   ? `${(acquisition.returningUsers / acquisition.totalUsers * 100).toFixed(1)}%`
                   : '0%'} of total
-              </p>
-            </div>
+              </MetricSubtext>
+            </MetricColumn>
 
-            <div>
-              <p className="text-gray-400 text-sm mb-1">Conversion Rate</p>
-              <p className="text-2xl font-bold text-purple-400">
+            <MetricColumn>
+              <MetricColumnLabel>Conversion Rate</MetricColumnLabel>
+              <MetricColumnValue $color="#a78bfa">
                 {acquisition.conversionRate ? `${(parseFloat(acquisition.conversionRate) * 100).toFixed(2)}%` : 'N/A'}
-              </p>
-              <p className="text-gray-500 text-xs mt-2">Users who converted</p>
-            </div>
-          </div>
+              </MetricColumnValue>
+              <MetricSubtext>Users who converted</MetricSubtext>
+            </MetricColumn>
+          </ThreeColumnGrid>
         ) : (
-          <p className="text-gray-400 text-center py-8">No acquisition data available</p>
+          <p style={{ color: '#9ca3af', textAlign: 'center', padding: '2rem 0' }}>No acquisition data available</p>
         )}
-      </div>
+      </ChartCard>
 
       {/* Additional Metrics */}
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Engagement Metrics</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p className="text-gray-400 text-sm mb-2">Avg Session Duration</p>
-            <p className="text-2xl font-bold text-white">
+      <ChartCard>
+        <ChartTitle>Engagement Metrics</ChartTitle>
+        <TwoColumnGridSmall>
+          <MetricColumn>
+            <MetricColumnLabel>Avg Session Duration</MetricColumnLabel>
+            <MetricColumnValue>
               {summary.avgSessionDuration ? `${Math.floor(summary.avgSessionDuration / 60)}m ${summary.avgSessionDuration % 60}s` : 'N/A'}
-            </p>
-            <p className="text-gray-500 text-xs mt-1">Time spent on site per session</p>
-          </div>
+            </MetricColumnValue>
+            <MetricSubtext>Time spent on site per session</MetricSubtext>
+          </MetricColumn>
 
-          <div>
-            <p className="text-gray-400 text-sm mb-2">Pages per Session</p>
-            <p className="text-2xl font-bold text-white">
+          <MetricColumn>
+            <MetricColumnLabel>Pages per Session</MetricColumnLabel>
+            <MetricColumnValue>
               {summary.totalSessions && summary.totalPageViews
                 ? (summary.totalPageViews / summary.totalSessions).toFixed(2)
                 : 'N/A'}
-            </p>
-            <p className="text-gray-500 text-xs mt-1">Average pages viewed per visit</p>
-          </div>
-        </div>
-      </div>
-    </div>
+            </MetricColumnValue>
+            <MetricSubtext>Average pages viewed per visit</MetricSubtext>
+          </MetricColumn>
+        </TwoColumnGridSmall>
+      </ChartCard>
+    </Container>
   );
 }
