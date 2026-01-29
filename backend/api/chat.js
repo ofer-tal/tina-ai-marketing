@@ -1,121 +1,449 @@
 import express from "express";
 import databaseService from "../services/database.js";
 import mongoose from "mongoose";
+import glmService from "../services/glmService.js";
+import conversationManager from "../services/conversationManager.js";
+import { getContextualPrompt, detectQueryType } from "../services/tinaPersonality.js";
+import { fetchDataContext } from "../services/chatHandlers/analysisHandler.js";
+import ChatConversation from "../models/ChatConversation.js";
+import ToolProposal from "../models/ToolProposal.js";
+import { getAllTools, handleToolCallProposal, executeTool } from "../services/tinaTools/index.js";
+import { getLogger } from "../utils/logger.js";
 
 const router = express.Router();
+const logger = getLogger('chat-api', 'chat-api');
 
-// In-memory conversation storage for mock/development mode
+// In-memory conversation storage for mock/development mode (fallback)
 const mockConversations = new Map();
 let mockConversationIdCounter = 1;
 
-// Mock historical data for development (simulates database queries)
-const mockHistoricalData = {
-  revenue: {
-    current: { mrr: 425, subscribers: 38, arpu: 11.18 },
-    lastMonth: { mrr: 379, subscribers: 34, arpu: 11.15 },
-    threeMonthsAgo: { mrr: 285, subscribers: 26, arpu: 10.96 },
-    trend: [
-      { date: '2024-10-13', mrr: 285, subscribers: 26 },
-      { date: '2024-11-13', mrr: 332, subscribers: 30 },
-      { date: '2024-12-13', mrr: 379, subscribers: 34 },
-      { date: '2025-01-13', mrr: 425, subscribers: 38 }
-    ],
-    growth: { mrr: '+12%', subscribers: '+12%', monthOverMonth: true }
-  },
-  posts: [
-    { id: '1', title: 'Forbidden Professor Chapter 1', platform: 'tiktok', views: 45200, likes: 1898, comments: 142, shares: 89, engagementRate: 4.2, postedAt: '2025-01-12T18:30:00Z', category: 'Professor Romance', spiciness: 2 },
-    { id: '2', title: "Billionaire's Secret Baby", platform: 'tiktok', views: 38100, likes: 1448, comments: 98, shares: 72, engagementRate: 3.8, postedAt: '2025-01-11T20:15:00Z', category: 'Secret Baby', spiciness: 2 },
-    { id: '3', title: 'Office Romance Compilation', platform: 'instagram', views: 29400, likes: 1498, comments: 87, shares: 65, engagementRate: 5.1, postedAt: '2025-01-10T19:00:00Z', category: 'Office Romance', spiciness: 1 },
-    { id: '4', title: 'Bad Boy Roommate Scene', platform: 'tiktok', views: 25600, likes: 896, comments: 64, shares: 42, engagementRate: 3.5, postedAt: '2025-01-09T17:45:00Z', category: 'Bad Boy', spiciness: 2 },
-    { id: '5', title: 'Small Town Sweet Romance', platform: 'youtube_shorts', views: 18900, likes: 756, comments: 48, shares: 31, engagementRate: 4.0, postedAt: '2025-01-08T16:30:00Z', category: 'Small Town', spiciness: 1 },
-    { id: '6', title: 'Forbidden Attraction Chapter 3', platform: 'tiktok', views: 42100, likes: 1179, comments: 126, shares: 84, engagementRate: 2.8, postedAt: '2025-01-07T21:00:00Z', category: 'Forbidden Romance', spiciness: 3 },
-    { id: '7', title: 'College Sweetheart Reunion', platform: 'instagram', views: 22300, likes: 1004, comments: 67, shares: 45, engagementRate: 4.5, postedAt: '2025-01-06T18:00:00Z', category: 'College Romance', spiciness: 1 },
-    { id: '8', title: 'CEO\'s Secret Assistant', platform: 'tiktok', views: 34800, likes: 1183, comments: 94, shares: 66, engagementRate: 3.4, postedAt: '2025-01-05T19:30:00Z', category: 'CEO Romance', spiciness: 2 },
-    { id: '9', title: 'Summer Fling Preview', platform: 'tiktok', views: 27500, likes: 908, comments: 71, shares: 49, engagementRate: 3.3, postedAt: '2025-01-04T17:00:00Z', category: 'Summer Romance', spiciness: 1 },
-    { id: '10', title: 'Dark Romance Scene 2', platform: 'instagram', views: 31200, likes: 1435, comments: 103, shares: 78, engagementRate: 4.6, postedAt: '2025-01-03T20:00:00Z', category: 'Dark Romance', spiciness: 3 }
-  ],
-  keywords: [
-    { keyword: 'spicy fiction', ranking: 7, volume: 45000, competition: 'high', change: -2, trackedSince: '2024-10-01' },
-    { keyword: 'romance stories', ranking: 12, volume: 38000, competition: 'medium', change: 0, trackedSince: '2024-10-01' },
-    { keyword: 'fiction app', ranking: 18, volume: 29000, competition: 'low', change: +3, trackedSince: '2024-11-01' },
-    { keyword: 'romance novels', ranking: 45, volume: 62000, competition: 'low', change: -1, trackedSince: '2024-12-01' },
-    { keyword: 'love stories', ranking: 38, volume: 41000, competition: 'medium', change: +2, trackedSince: '2024-12-01' },
-    { keyword: 'fanfiction', ranking: 52, volume: 78000, competition: 'low', change: 0, trackedSince: '2025-01-01' },
-    { keyword: 'erotic stories', ranking: 28, volume: 35000, competition: 'high', change: +1, trackedSince: '2024-10-01' }
-  ],
-  campaigns: [
-    { name: 'Apple Search Ads - Exact Match', spend: 1200, impressions: 45200, clicks: 1248, conversions: 8, roi: -45, status: 'active' },
-    { name: 'TikTok Ads - Interest Targeting', spend: 720, impressions: 89400, clicks: 2670, conversions: 4, roi: -66, status: 'active' },
-    { name: 'Instagram Ads - Lookalike', spend: 240, impressions: 31200, clicks: 624, conversions: 1, roi: -72, status: 'active' }
-  ]
-};
+// Context window management configuration
+const MAX_CONTEXT_MESSAGES = 20;
+const SUMMARY_TRIGGER_MESSAGES = 30;
+const SUMMARY_CUTOFF_MESSAGES = 10;
 
-// Context window management for long conversations
-const MAX_CONTEXT_MESSAGES = 20; // Maximum messages to include in full context
-const SUMMARY_TRIGGER_MESSAGES = 30; // When to trigger summarization
-const SUMMARY_CUTOFF_MESSAGES = 10; // Keep last 10 messages after summarization
+/**
+ * Format tool data for user display
+ * Converts tool execution results into readable markdown
+ */
+function formatToolDataForUser(toolName, data) {
+  if (!data) {
+    return `I retrieved the data, but it appears to be empty.`;
+  }
 
-// Store conversation summaries in memory (in production, these would be in database)
-const conversationSummaries = new Map();
+  switch (toolName) {
+    case 'get_revenue_summary':
+      const curr = data.current || {};
+      const growth = data.growth || {};
+      const metrics = data.metrics || {};
+      return `**Here's our current revenue data:**
+
+**Current Metrics:**
+• MRR: $${curr.mrr?.toLocaleString() || 'N/A'}
+• Subscribers: ${curr.subscribers?.toLocaleString() || 'N/A'}
+• ARPU: $${curr.arpu?.toFixed(2) || 'N/A'}
+• Net Revenue: $${curr.netRevenue?.toLocaleString() || 'N/A'}
+
+**Growth:**
+• ${growth.percentage?.toFixed(1) || 0}% (${growth.absolute >= 0 ? '+' : ''}$${growth.absolute?.toLocaleString() || 0})
+• New Users: ${metrics.newUsers || 0}
+• Churned: ${metrics.churnedSubscribers || 0}
+• Net New: ${(metrics.newUsers || 0) - (metrics.churnedSubscribers || 0)}
+
+---
+
+What would you like to know more about?`;
+
+    case 'get_content_analytics':
+      return `**Content Analytics:**
+
+${JSON.stringify(data, null, 2)}`;
+
+    case 'get_campaign_performance':
+      return `**Campaign Performance:**
+
+${JSON.stringify(data, null, 2)}`;
+
+    case 'get_budget_status':
+      return `**Budget Status:**
+
+${JSON.stringify(data, null, 2)}`;
+
+    case 'get_aso_keyword_status':
+      return `**ASO Keyword Rankings:**
+
+${JSON.stringify(data, null, 2)}`;
+
+    case 'get_pending_posts':
+      return `**Pending Posts:**
+
+${JSON.stringify(data, null, 2)}`;
+
+    default:
+      return `Here's the data I retrieved:\n\n${JSON.stringify(data, null, 2)}`;
+  }
+}
+
+/**
+ * Real GLM4.7 API Integration
+ * Calls the actual GLM service with Tina's personality and function calling support
+ */
+async function callGLM4API(messages, conversationHistory = [], conversationId = null) {
+  try {
+    const startTime = Date.now();
+
+    // Get data context for the AI
+    let dataContext = {};
+    try {
+      dataContext = await fetchDataContext();
+    } catch (error) {
+      logger.warn('Failed to fetch data context, proceeding without it', {
+        error: error.message
+      });
+    }
+
+    // Detect query type for appropriate prompt
+    const lastUserMessage = messages[messages.length - 1];
+    const queryType = detectQueryType(lastUserMessage?.content || '');
+
+    // Build system prompt with Tina's personality
+    const systemPrompt = getContextualPrompt(dataContext);
+
+    // Z.AI GLM API accepts 'system' role via system parameter
+    // Filter out any system messages from the messages array
+    const filteredMessages = messages.filter(m => m.role !== 'system');
+
+    // Get tools for function calling
+    const tools = getAllTools();
+
+    logger.info('Calling GLM4.7 API', {
+      messageCount: filteredMessages.length,
+      conversationId,
+      queryType: queryType.type,
+      toolsAvailable: tools.length
+    });
+
+    // Call the real GLM service with tools
+    // Note: GLM automatically determines whether to use tools (no tool_choice parameter)
+    const response = await glmService.createMessage({
+      system: systemPrompt,
+      messages: filteredMessages,
+      maxTokens: 4096,
+      temperature: 0.8,  // Slightly higher for creativity
+      tools: tools
+    });
+
+    const thinkingTime = Date.now() - startTime;
+
+    // Check if response contains tool calls (single or parallel)
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      logger.info('GLM4.7 returned tool calls', {
+        count: response.toolCalls.length,
+        toolNames: response.toolCalls.map(tc => tc.name)
+      });
+
+      // Execute ALL tool calls in parallel
+      const toolProposals = await Promise.all(
+        response.toolCalls.map(toolCall =>
+          handleToolCallProposal(toolCall, messages, conversationId, dataContext)
+        )
+      );
+
+      // Separate into read-only tools (executed) and tools requiring approval
+      const executedTools = toolProposals.filter(p => p.type === 'read_only_tool_result' && p.executed);
+      const approvalRequiredTools = toolProposals.filter(p => p.requiresApproval);
+      const erroredTools = toolProposals.filter(p => p.error);
+
+      logger.info('Tool execution results', {
+        total: toolProposals.length,
+        executed: executedTools.length,
+        approvalRequired: approvalRequiredTools.length,
+        errored: erroredTools.length
+      });
+
+      // If any tools require approval, return them without making follow-up call
+      if (approvalRequiredTools.length > 0) {
+        logger.info('Some tools require approval, returning proposals');
+        const firstProposal = approvalRequiredTools[0];
+        return {
+          role: "assistant",
+          content: `I need approval to execute ${approvalRequiredTools.length} tool(s). ${firstProposal.message}`,
+          timestamp: new Date().toISOString(),
+          toolProposal: {
+            id: firstProposal.proposalId,
+            toolName: firstProposal.toolName,
+            parameters: firstProposal.parameters,
+            requiresApproval: firstProposal.requiresApproval,
+            reasoning: firstProposal.reasoning,
+            actionDisplay: firstProposal.actionDisplay,
+            executed: firstProposal.executed,
+            data: firstProposal.data,
+            error: firstProposal.error,
+            pendingCount: approvalRequiredTools.length - 1  // Additional tools pending
+          },
+          metadata: {
+            tokensUsed: response.usage?.totalTokens || 0,
+            thinkingTime,
+            model: response.model,
+            queryType: queryType.type,
+            hasDataContext: Object.keys(dataContext).length > 0,
+            hasToolCall: true
+          }
+        };
+      }
+
+      // If all read-only tools were executed, prepare follow-up with all results
+      if (executedTools.length > 0 && executedTools.length === toolProposals.length) {
+        logger.info('All read-only tools executed, preparing follow-up with all results', {
+          toolCount: executedTools.length,
+          toolNames: executedTools.map(t => t.toolName)
+        });
+
+        // The assistant's message with tool_calls
+        const assistantToolMessage = {
+          role: 'assistant',
+          content: '',
+          tool_calls: response.rawToolCalls
+        };
+
+        // Build tool result messages - one for each tool call
+        const toolResultMessages = executedTools.map((toolProposal, index) => ({
+          role: 'tool',
+          tool_call_id: response.rawToolCalls?.[index]?.id || response.toolCalls[index]?.id || `tool_${Date.now()}_${index}`,
+          content: JSON.stringify(toolProposal.data)
+        }));
+
+        // Build the message array for follow-up call
+        const followUpMessages = [
+          ...messages.filter(m => m.role !== 'system'),
+          assistantToolMessage,
+          ...toolResultMessages
+        ];
+
+        logger.info('Making follow-up call with all tool results', {
+          messageCount: followUpMessages.length,
+          toolResultCount: toolResultMessages.length
+        });
+
+        // Call GLM again with all tool results
+        // Handle recursive tool calls - loop until GLM returns text content
+        let currentMessages = followUpMessages;
+        let currentResponse = await glmService.createMessage({
+          system: systemPrompt,
+          messages: currentMessages,
+          maxTokens: 4096,
+          temperature: 0.8,
+          tools: tools
+        });
+
+        let allExecutedTools = [...executedTools];
+        let recursionCount = 0;
+        const MAX_RECURSION = 5;  // Prevent infinite loops
+
+        // Loop while GLM keeps requesting more tools
+        while (currentResponse.toolCalls && currentResponse.toolCalls.length > 0 && recursionCount < MAX_RECURSION) {
+          recursionCount++;
+          logger.info(`GLM requested additional tools (recursion ${recursionCount})`, {
+            toolCount: currentResponse.toolCalls.length,
+            toolNames: currentResponse.toolCalls.map(tc => tc.name)
+          });
+
+          // Execute the new batch of tools in parallel
+          const newToolProposals = await Promise.all(
+            currentResponse.toolCalls.map(toolCall =>
+              handleToolCallProposal(toolCall, currentMessages, conversationId, dataContext)
+            )
+          );
+
+          const newExecutedTools = newToolProposals.filter(p => p.type === 'read_only_tool_result' && p.executed);
+          const approvalRequired = newToolProposals.filter(p => p.requiresApproval);
+          const errored = newToolProposals.filter(p => p.error);
+
+          // If any tools require approval, break and return partial results
+          if (approvalRequired.length > 0) {
+            logger.info('Additional tools require approval, returning partial results');
+            return {
+              role: "assistant",
+              content: `I gathered some data, but need approval for ${approvalRequired.length} additional action(s). Please check the proposals.`,
+              timestamp: new Date().toISOString(),
+              metadata: {
+                tokensUsed: allExecutedTools.length * 100,  // Approximate
+                thinkingTime: Date.now() - startTime,
+                model: response.model,
+                queryType: queryType.type,
+                partialResults: true,
+                toolsExecuted: allExecutedTools.map(t => t.toolName)
+              }
+            };
+          }
+
+          // Add newly executed tools to our collection
+          allExecutedTools.push(...newExecutedTools);
+
+          // Build the next batch of messages
+          const newAssistantMessage = {
+            role: 'assistant',
+            content: '',
+            tool_calls: currentResponse.rawToolCalls
+          };
+
+          const newToolResultMessages = newExecutedTools.map((toolProposal, index) => ({
+            role: 'tool',
+            tool_call_id: currentResponse.rawToolCalls?.[index]?.id || currentResponse.toolCalls[index]?.id || `tool_${Date.now()}_${index}`,
+            content: JSON.stringify(toolProposal.data)
+          }));
+
+          // Update current messages for next iteration
+          currentMessages = [
+            ...currentMessages,
+            newAssistantMessage,
+            ...newToolResultMessages
+          ];
+
+          // Call GLM again
+          currentResponse = await glmService.createMessage({
+            system: systemPrompt,
+            messages: currentMessages,
+            maxTokens: 4096,
+            temperature: 0.8,
+            tools: tools
+          });
+        }
+
+        if (recursionCount >= MAX_RECURSION) {
+          logger.warn('Max tool recursion depth reached, returning partial results');
+        }
+
+        const totalTime = Date.now() - startTime;
+        const followUpContent = currentResponse.content?.[0]?.text || currentResponse.text || '';
+
+        return {
+          role: "assistant",
+          content: followUpContent || 'I processed your request but encountered an issue generating a response.',
+          timestamp: new Date().toISOString(),
+          metadata: {
+            tokensUsed: (response.usage?.totalTokens || 0) + (currentResponse.usage?.totalTokens || 0),
+            thinkingTime: totalTime,
+            model: response.model,
+            queryType: queryType.type,
+            hasDataContext: Object.keys(dataContext).length > 0,
+            toolsUsed: allExecutedTools.map(t => t.toolName),
+            toolsData: allExecutedTools.map(t => ({ name: t.toolName, data: t.data })),
+            recursionCount: recursionCount
+          }
+        };
+      }
+
+      // Handle mixed results (some executed, some errors)
+      if (executedTools.length > 0) {
+        const errorMessage = erroredTools.map(t => t.error).join('; ');
+        return {
+          role: "assistant",
+          content: `I executed ${executedTools.length} tool(s), but encountered some errors: ${errorMessage}`,
+          timestamp: new Date().toISOString(),
+          metadata: {
+            tokensUsed: response.usage?.totalTokens || 0,
+            thinkingTime,
+            model: response.model,
+            queryType: queryType.type,
+            hasDataContext: Object.keys(dataContext).length > 0,
+            partialSuccess: true,
+            executedCount: executedTools.length,
+            errorCount: erroredTools.length
+          }
+        };
+      }
+
+      // All tools errored - return error message
+      const firstError = erroredTools[0];
+      return {
+        role: "assistant",
+        content: `I encountered an error executing the tools: ${firstError.error}`,
+        timestamp: new Date().toISOString(),
+        error: true,
+        metadata: {
+          tokensUsed: response.usage?.totalTokens || 0,
+          thinkingTime,
+          model: response.model,
+          queryType: queryType.type,
+          hasDataContext: Object.keys(dataContext).length > 0
+        }
+      };
+    }
+
+    // Extract content from response (normal text response)
+    const content = response.content?.[0]?.text || response.text || '';
+
+    logger.info('GLM4.7 API response received', {
+      contentLength: content.length,
+      thinkingTime,
+      tokensUsed: response.usage?.totalTokens || 0
+    });
+
+    return {
+      role: "assistant",
+      content: content,
+      timestamp: new Date().toISOString(),
+      metadata: {
+        tokensUsed: response.usage?.totalTokens || 0,
+        thinkingTime,
+        model: response.model,
+        queryType: queryType.type,
+        hasDataContext: Object.keys(dataContext).length > 0
+      }
+    };
+
+  } catch (error) {
+    logger.error('Error calling GLM4.7 API', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    // Return error message as fallback
+    return {
+      role: "assistant",
+      content: `I apologize, but I'm having trouble connecting right now. The error was: "${error.message}"
+
+Please check that:
+1. The GLM47_API_KEY is configured in your .env file
+2. The API endpoint is accessible
+3. You have a stable internet connection
+
+In the meantime, I can still help with basic questions using local data.`,
+      timestamp: new Date().toISOString(),
+      error: true
+    };
+  }
+}
 
 /**
  * Manage conversation context window for long conversations
- * - Summarizes older messages when conversation gets too long
- * - Maintains key information while reducing token usage
- * - Preserves recent messages in full
+ * Preserves recent messages and creates summaries when needed
  */
 function manageConversationContext(messages, conversationId) {
-  // Count total messages (excluding system prompt)
   const messageCount = messages.filter(m => m.role !== 'system').length;
 
-  // If within limits, return as-is
   if (messageCount <= MAX_CONTEXT_MESSAGES) {
     return messages;
   }
 
-  // Get or create summary for this conversation
-  let summary = conversationSummaries.get(conversationId);
+  // For conversations exceeding limit, keep only recent messages
+  // In production, this would trigger conversationManager.summarizeConversation()
+  const systemMessage = messages.find(m => m.role === 'system');
+  const recentMessages = messages
+    .filter(m => m.role !== 'system')
+    .slice(-SUMMARY_CUTOFF_MESSAGES);
 
-  // If we haven't summarized yet and hit the trigger point, create summary
-  if (!summary && messageCount >= SUMMARY_TRIGGER_MESSAGES) {
-    // Messages to summarize (exclude system prompt and most recent messages)
-    const messagesToSummarize = messages
-      .filter(m => m.role !== 'system')
-      .slice(0, messageCount - SUMMARY_CUTOFF_MESSAGES);
+  const summaryMessage = {
+    role: 'system',
+    content: `**Note:** This is a long conversation. Only the most recent ${SUMMARY_CUTOFF_MESSAGES} messages are shown for context. Previous context has been summarized.`
+  };
 
-    // Extract key information from older messages
-    const summaryPoints = extractSummaryPoints(messagesToSummarize);
-
-    summary = {
-      points: summaryPoints,
-      createdAt: new Date().toISOString(),
-      originalMessageCount: messagesToSummarize.length
-    };
-
-    conversationSummaries.set(conversationId, summary);
-    console.log(`Created summary for conversation ${conversationId} with ${summaryPoints.length} points`);
-  }
-
-  // Build new messages array with summary + recent messages
-  if (summary) {
-    const systemMessage = messages.find(m => m.role === 'system');
-    const recentMessages = messages
-      .filter(m => m.role !== 'system')
-      .slice(-SUMMARY_CUTOFF_MESSAGES);
-
-    const summaryMessage = {
-      role: 'system',
-      content: `**Previous Conversation Summary:**\n\n${summary.points.join('\n')}\n\nContinue the conversation with this context in mind.`
-    };
-
-    return [systemMessage, summaryMessage, ...recentMessages];
-  }
-
-  return messages;
+  return systemMessage ? [systemMessage, summaryMessage, ...recentMessages] : [summaryMessage, ...recentMessages];
 }
 
 /**
- * Extract key summary points from conversation messages
+ * Extract summary points from conversation messages
  */
 function extractSummaryPoints(messages) {
   const points = [];
@@ -132,1079 +460,21 @@ function extractSummaryPoints(messages) {
     if (content.includes('pivot') || content.includes('strategy')) topics.add('Strategic planning discussion');
   });
 
-  // Extract key data points mentioned
-  const keyData = [];
-  userMessages.forEach(msg => {
-    const content = msg.content;
-    // Look for specific numbers and metrics
-    if (content.match(/\$\d+/)) {
-      const matches = content.match(/\$\d+(?:,\d{3})*(?:\.\d+)?/g);
-      if (matches) keyData.push(...matches);
-    }
-  });
-
-  // Build summary points
   if (topics.size > 0) {
     points.push(`**Topics Discussed:** ${Array.from(topics).join(', ')}`);
   }
 
-  if (keyData.length > 0) {
-    const uniqueData = [...new Set(keyData)].slice(0, 5); // Limit to 5 key data points
-    points.push(`**Key Metrics:** ${uniqueData.join(', ')}`);
-  }
-
-  // Extract AI recommendations
-  const aiMessages = messages.filter(m => m.role === 'assistant');
-  if (aiMessages.length > 0) {
-    const lastAI = aiMessages[aiMessages.length - 1];
-    if (lastAI.content.includes('Recommendation')) {
-      const recMatch = lastAI.content.match(/Recommendations?:\s*([\s\S]*?)(?=\n\n|\nShould|\n\*\*Next)/i);
-      if (recMatch) {
-        const recommendations = recMatch[1].split('\n').filter(l => l.trim()).slice(0, 3);
-        if (recommendations.length > 0) {
-          points.push(`**Key Recommendations:**\n${recommendations.join('\n')}`);
-        }
-      }
-    }
-  }
-
-  // Add context about conversation length
   points.push(`**Conversation History:** ${userMessages.length} user messages exchanged`);
 
   return points;
 }
 
-// Mock GLM4.7 API integration for development
-// In production, this will call the actual GLM4.7 API
-async function callGLM4API(messages, conversationHistory = [], conversationId = null) {
-  // Apply context window management
-  let managedMessages = messages;
-  if (conversationId) {
-    managedMessages = manageConversationContext(messages, conversationId);
-  }
-
-  // For development, return mock responses with historical data
-  // In production, this would make an actual API call to GLM4.7
-
-  const lastUserMessage = managedMessages[managedMessages.length - 1]?.content?.toLowerCase() || "";
-
-  // Analyze conversation context for multi-turn conversations
-  const recentContext = messages.slice(-6); // Last 3 exchanges (system + user + assistant pattern)
-  const conversationTopics = recentContext
-    .filter(m => m.role === "user")
-    .map(m => m.content.toLowerCase());
-
-  // Detect if user is following up on a previous topic
-  const hasFollowUpWords = /\b(and|what about|but|also|more|tell me|how about|so)\b/i.test(lastUserMessage);
-  const isAskingAboutRevenue = conversationTopics.some(t => t.includes("revenue") || t.includes("mrr") || t.includes("income") || t.includes("money") || t.includes("earnings"));
-  const isAskingAboutContent = conversationTopics.some(t => t.includes("content") || t.includes("post") || t.includes("tiktok") || t.includes("social"));
-  const isAskingAboutAds = conversationTopics.some(t => t.includes("ad") || t.includes("campaign") || t.includes("spend"));
-  const isAskingAboutASO = conversationTopics.some(t => t.includes("keyword") || t.includes("aso") || t.includes("ranking") || t.includes("app store"));
-
-  // Handle context-aware follow-up questions FIRST (before keyword matching)
-  if (hasFollowUpWords && isAskingAboutRevenue) {
-    const data = mockHistoricalData.revenue;
-
-    // Check if asking about specific time period
-    if (lastUserMessage.includes("last week") || lastUserMessage.includes("week")) {
-      return {
-        role: "assistant",
-        content: `**Last Week's Revenue Performance:**
-
-📊 **Week of Jan 6-12, 2025:**
-- Daily Average: **$13.50/day**
-- Weekly Total: **$94.50**
-- vs Prior Week: **+8% growth**
-
-**Key Drivers:**
-- Strong post performance on "Forbidden Professor" (45.2K views)
-- 3 new subscribers from organic TikTok traffic
-- Low refund rate: 1.2%
-
-**Breakdown by Source:**
-- Organic App Store: $68 (72%)
-- TikTok conversions: $18 (19%)
-- Other sources: $8.50 (9%)
-
-**Observation:** Last week showed good momentum with organic growth outperforming paid ads. Want me to analyze which posts drove the most conversions?`,
-        timestamp: new Date().toISOString()
-      };
-    }
-
-    // Generic revenue follow-up
-    return {
-      role: "assistant",
-      content: `**Regarding your revenue question:**
-
-Building on our revenue discussion:
-
-📈 **Current Trajectory:**
-- We're at **$425 MRR** with **38 subscribers**
-- Growth rate: **+12% month-over-month**
-- ARPU: **$11.18**
-
-**What this tells us:**
-The foundation is solid. Our subscribers are engaged (good ARPU), and we're growing consistently.
-
-**Focus Areas for Next Month:**
-1. **Scale what works:** More content in top-performing categories (Professor Romance, Forbidden Romance)
-2. **Fix leaks:** Address the declining "spicy fiction" keyword ranking
-3. **Optimize spend:** Pause negative ROI ad campaigns, redirect to content production
-
-**Quick Question:** Would you like me to create a specific action plan for any of these areas?`,
-      timestamp: new Date().toISOString()
-    };
-  }
-
-  if (hasFollowUpWords && isAskingAboutContent) {
-    const posts = mockHistoricalData.posts;
-
-    return {
-      role: "assistant",
-      content: `**Following up on content strategy:**
-
-📱 **Content Performance Deep Dive:**
-
-**Top 3 Posts This Week:**
-1. "Forbidden Professor Chapter 1" - **45.2K views, 4.2% engagement** ⭐
-2. "Billionaire's Secret Baby" - **38.1K views, 3.8% engagement**
-3. "Forbidden Attraction Chapter 3" - **42.1K views, 2.8% engagement**
-
-**Pattern I'm Seeing:**
-- **Forbidden Romance** content consistently performs best
-- **Spiciness Level 2** hits the sweet spot (sexy but not too explicit)
-- **Chapter-based series** drive engagement (users want more)
-
-**Recommendation:**
-Create a "Forbidden Professor" series with 5-7 chapters. Post one every 2 days to build anticipation.
-
-**Next Step:** Should I generate a content calendar for this series?`,
-      timestamp: new Date().toISOString()
-    };
-  }
-
-  // Simple mock response logic based on keywords
-  if (lastUserMessage.includes("revenue") || lastUserMessage.includes("mrr") || lastUserMessage.includes("trend") || lastUserMessage.includes("growth")) {
-    const data = mockHistoricalData.revenue;
-    return {
-      role: "assistant",
-      content: `**Revenue Trend Analysis:**
-
-📈 **Current Performance:**
-- MRR: $${data.current.mrr} (${data.growth.mrr} vs last month)
-- Active Subscribers: ${data.current.subscribers} (${data.growth.subscribers} growth)
-- ARPU: $${data.current.arpu.toFixed(2)} (Avg Revenue Per User)
-
-📊 **3-Month Trend:**
-- Oct 2024: $${data.trend[0].mrr} MRR, ${data.trend[0].subscribers} subscribers
-- Nov 2024: $${data.trend[1].mrr} MRR, ${data.trend[1].subscribers} subscribers
-- Dec 2024: $${data.trend[2].mrr} MRR, ${data.trend[2].subscribers} subscribers
-- Jan 2025: $${data.trend[3].mrr} MRR, ${data.trend[3].subscribers} subscribers
-
-💡 **Analysis:**
-We're growing at ~12% month-over-month, which is solid! At this rate, we'll reach $10,000 MRR in approximately 19 months (by August 2026). However, we want to accelerate this.
-
-**Recommendations to Accelerate Growth:**
-1. **Content**: Increase posting frequency from 1-2 to 3-4 posts/day
-2. **ASO**: Fix the declining "spicy fiction" keyword ranking (dropped 2 spots)
-3. **Ads**: Pause negative ROI campaigns and reallocat budget to content creation
-
-Should I create a detailed growth acceleration plan?`,
-      timestamp: new Date().toISOString()
-    };
-  } else if (lastUserMessage.includes("content strategy") || lastUserMessage.includes("content themes") || lastUserMessage.includes("content plan") || (lastUserMessage.includes("content") && (lastUserMessage.includes("suggest") || lastUserMessage.includes("recommend")))) {
-    const posts = mockHistoricalData.posts;
-
-    // Analyze content performance by category
-    const categoryStats = {};
-    posts.forEach(p => {
-      if (!categoryStats[p.category]) {
-        categoryStats[p.category] = { count: 0, views: 0, engagement: 0, spiciness: [] };
-      }
-      categoryStats[p.category].count++;
-      categoryStats[p.category].views += p.views;
-      categoryStats[p.category].engagement += p.engagementRate;
-      categoryStats[p.category].spiciness.push(p.spiciness);
-    });
-
-    const categoryRankings = Object.entries(categoryStats)
-      .map(([cat, stats]) => ({
-        category: cat,
-        ...stats,
-        avgEngagement: stats.engagement / stats.count,
-        avgViews: stats.views / stats.count,
-        avgSpiciness: stats.spiciness.reduce((a, b) => a + b, 0) / stats.spiciness.length
-      }))
-      .sort((a, b) => b.avgEngagement - a.avgEngagement);
-
-    const top3Categories = categoryRankings.slice(0, 3);
-    const bestCategory = categoryRankings[0];
-
-    // Analyze posting patterns
-    const postsByPlatform = {};
-    posts.forEach(p => {
-      if (!postsByPlatform[p.platform]) {
-        postsByPlatform[p.platform] = { count: 0, views: 0, engagement: 0 };
-      }
-      postsByPlatform[p.platform].count++;
-      postsByPlatform[p.platform].views += p.views;
-      postsByPlatform[p.platform].engagement += p.engagementRate;
-    });
-
-    // Optimal posting times analysis
-    const postingHours = posts.map(p => new Date(p.postedAt).getHours());
-    const avgHour = postingHours.reduce((a, b) => a + b, 0) / postingHours.length;
-
-    // Spiciness analysis
-    const spicinessStats = { 1: [], 2: [], 3: [] };
-    posts.forEach(p => {
-      if (spicinessStats[p.spiciness]) {
-        spicinessStats[p.spiciness].push(p.engagementRate);
-      }
-    });
-    const avgEngagementBySpiciness = {};
-    Object.entries(spicinessStats).forEach(([level, rates]) => {
-      avgEngagementBySpiciness[level] = rates.length ? (rates.reduce((a, b) => a + b, 0) / rates.length).toFixed(1) : 0;
-    });
-
-    return {
-      role: "assistant",
-      content: `**📱 Content Strategy Recommendations**
-
-Based on analysis of your last 10 posts, here's a comprehensive content strategy:
-
----
-
-**🎯 Top Content Themes (Ranked by Performance):**
-
-**1. ${bestCategory.category}** ⭐ BEST PERFORMER
-- Avg Engagement: **${bestCategory.avgEngagement.toFixed(1)}%**
-- Avg Views: **${Math.round(bestCategory.avgViews).toLocaleString()}**
-- Avg Spiciness: Level ${bestCategory.avgSpiciness.toFixed(1)}
-- Recommendation: **Double down on this category** - create 40-50% of content here
-
-${top3Categories.slice(1).map((cat, i) => `**${i + 2}. ${cat.category}**
-- Avg Engagement: ${cat.avgEngagement.toFixed(1)}%
-- Avg Views: ${Math.round(cat.avgViews).toLocaleString()}
-- Avg Spiciness: Level ${cat.avgSpiciness.toFixed(1)}
-- Opportunity: Solid performer, maintain current volume`).join('\n\n')}
-
----
-
-**📊 Content Mix Recommendations:**
-
-**Primary Content (60% of posts):**
-- ${bestCategory.category} stories - Your highest engagement category
-- Focus on relatable characters and emotional hooks
-- Target spiciness level 1-2 for broader appeal
-
-**Secondary Content (30% of posts):**
-- ${top3Categories[1]?.category || 'Forbidden Romance'} - Strong performer
-- ${top3Categories[2]?.category || 'Secret Baby'} - Reliable engagement
-- Use for testing new formats and hooks
-
-**Experimental Content (10% of posts):**
-- New categories to expand reach
-- Different spiciness levels to test audience response
-- Trending formats in the romance fiction space
-
----
-
-**⏰ Posting Frequency & Schedule:**
-
-**Current Frequency:** ~1 post/day
-**Recommended Frequency:** **3-4 posts/day**
-
-**Optimal Posting Times:**
-- **Early Morning:** 7-9 AM EST (commute time)
-- **Lunch Break:** 12-2 PM EST
-- **Prime Time:** 6-9 PM EST (highest engagement window)
-- **Late Night:** 10-11 PM EST (bedtime scrolling)
-
-**Weekly Content Calendar (Example):**
-- **Monday**: 3 posts (8 AM, 1 PM, 7 PM)
-- **Tuesday**: 4 posts (8 AM, 12 PM, 6 PM, 9 PM)
-- **Wednesday**: 3 posts (9 AM, 2 PM, 8 PM)
-- **Thursday**: 4 posts (7 AM, 1 PM, 6 PM, 10 PM)
-- **Friday**: 4 posts (8 AM, 12 PM, 7 PM, 9 PM)
-- **Saturday**: 3 posts (10 AM, 3 PM, 8 PM)
-- **Sunday**: 3 posts (9 AM, 2 PM, 7 PM)
-- **Total: 24 posts/week (vs current 7 posts/week)**
-
----
-
-**📏 Video Format Specifications:**
-
-**Length:**
-- **Sweet spot**: 15-30 seconds (highest completion rates)
-- **Short**: 7-15 seconds for hooks/teasers
-- **Long**: 30-60 seconds for story compilations
-
-**Style:**
-- Vertical format (9:16 aspect ratio)
-- Text overlay for first 3 seconds (hook)
-- Captions for accessibility
-- Brand watermark in corner
-- Strong CTA at end ("Link in bio", "Read more in app")
-
----
-
-**🌶️ Spiciness Level Strategy:**
-
-**Level 1 (Sweet Romance):** **BEST PERFORMING** (${avgEngagementBySpiciness[1]}% avg engagement)
-- Use for **60%** of content
-- Broader audience appeal
-- Higher shareability
-
-**Level 2 (Spicy Romance):** Strong performer (${avgEngagementBySpiciness[2]}% avg engagement)
-- Use for **30%** of content
-- Good balance of appeal and engagement
-- Targets core audience
-
-**Level 3 (Very Spicy):** Lower engagement (${avgEngagementBySpiciness[3]}% avg engagement)
-- Use for **10%** of content
-- Niche audience
-- Lower completion rates
-
----
-
-**📈 Platform Strategy:**
-
-${Object.entries(postsByPlatform).map(([platform, stats]) => {
-  const avgEng = (stats.engagement / stats.count).toFixed(1);
-  const avgViews = Math.round(stats.views / stats.count).toLocaleString();
-  const rec = platform === 'tiktok' ? '🎯 Primary platform - 60% of posts' :
-              platform === 'instagram' ? '✅ High engagement - 25% of posts' :
-              '📺 Test platform - 15% of posts';
-  return `**${platform.charAt(0).toUpperCase() + platform.slice(1)}:**
-- Avg Engagement: ${avgEng}%
-- Avg Views: ${avgViews}
-- Strategy: ${rec}`;
-}).join('\n\n')}
-
----
-
-**💡 Content Hooks That Work:**
-
-1. **"Chapter 1" teasers** - "You won't believe what happens next..."
-2. **Character reveals** - "Professor X is about to change everything..."
-3. **Emotional moments** - "The moment she realized she was in love..."
-4. **Cliffhangers** - "He leaned in and whispered..."
-5. **Relatable scenarios** - "When your hot roommate does THIS..."
-
----
-
-**🎯 Expected Results (30 Days):**
-
-By following this strategy:
-- **Posts/week**: 7 → 24 (**+240% more content**)
-- **Projected monthly views**: 315K → 800K-1M (**+150-220%**)
-- **Projected engagement**: 4.0% → 4.5-5.0% (**better targeting**)
-- **Estimated new users**: 80-120/month from organic content
-
----
-
-**✅ Next Steps:**
-
-1. Create content calendar for this week?
-2. Generate story selection for next 7 days?
-3. Set up automated posting schedule?
-
-What would you like to tackle first?`,
-      timestamp: new Date().toISOString()
-    };
-  } else if (lastUserMessage.includes("content") || lastUserMessage.includes("post")) {
-    const posts = mockHistoricalData.posts;
-    const topPosts = posts.slice(0, 5);
-    const avgEngagement = (posts.reduce((sum, p) => sum + p.engagementRate, 0) / posts.length).toFixed(1);
-    const totalViews = posts.reduce((sum, p) => sum + p.views, 0).toLocaleString();
-
-    // Category performance
-    const categoryStats = {};
-    posts.forEach(p => {
-      if (!categoryStats[p.category]) {
-        categoryStats[p.category] = { count: 0, views: 0, engagement: 0 };
-      }
-      categoryStats[p.category].count++;
-      categoryStats[p.category].views += p.views;
-      categoryStats[p.category].engagement += p.engagementRate;
-    });
-
-    const topCategory = Object.entries(categoryStats)
-      .map(([cat, stats]) => ({ category: cat, ...stats, avgEngagement: stats.engagement / stats.count }))
-      .sort((a, b) => b.avgEngagement - a.avgEngagement)[0];
-
-    return {
-      role: "assistant",
-      content: `**Content Performance Analysis (Last 10 Days):**
-
-📱 **Top 5 Performing Posts:**
-1. "${topPosts[0].title}" - ${topPosts[0].views.toLocaleString()} views, ${topPosts[0].engagementRate}% engagement
-2. "${topPosts[1].title}" - ${topPosts[1].views.toLocaleString()} views, ${topPosts[1].engagementRate}% engagement
-3. "${topPosts[2].title}" - ${topPosts[2].views.toLocaleString()} views, ${topPosts[2].engagementRate}% engagement
-4. "${topPosts[3].title}" - ${topPosts[3].views.toLocaleString()} views, ${topPosts[3].engagementRate}% engagement
-5. "${topPosts[4].title}" - ${topPosts[4].views.toLocaleString()} views, ${topPosts[4].engagementRate}% engagement
-
-📊 **Overall Stats:**
-- Total Views: ${totalViews}
-- Average Engagement Rate: ${avgEngagement}%
-- Best Performing Category: **${topCategory.category}** (${topCategory.avgEngagement.toFixed(1)}% avg engagement)
-
-💡 **Key Insights:**
-- **"Professor Romance"** content is performing exceptionally well
-- Videos with spiciness level 1-2 get higher engagement than level 3
-- TikTok drives 60% of views, Instagram has better engagement rates
-- Posting between 6-9 PM EST performs best
-
-**Recommendations:**
-1. Create more "Professor Romance" and "Secret Baby" content
-2. Stick to spiciness levels 1-2 for broader appeal
-3. Test 15-30 second video length (sweet spot for retention)
-4. Increase posting frequency to 3-4 times per day
-
-Would you like me to generate a content calendar for this week?`,
-      timestamp: new Date().toISOString()
-    };
-  } else if (lastUserMessage.includes("campaign review") || lastUserMessage.includes("review campaign") || lastUserMessage.includes("ad review") || (lastUserMessage.includes("review") && lastUserMessage.includes("campaign"))) {
-    // Campaign review scheduling and summaries - check this BEFORE general campaign/budget
-    const campaigns = mockHistoricalData.campaigns;
-    const data = mockHistoricalData;
-
-    // Calculate campaign metrics
-    const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
-    const totalImpressions = campaigns.reduce((sum, c) => sum + c.impressions, 0);
-    const totalClicks = campaigns.reduce((sum, c) => sum + c.clicks, 0);
-    const totalConversions = campaigns.reduce((sum, c) => sum + c.conversions, 0);
-    const avgROI = (campaigns.reduce((sum, c) => sum + c.roi, 0) / campaigns.length).toFixed(0);
-    const totalLoss = Math.abs(campaigns.reduce((sum, c) => sum + (c.spend * (c.roi / 100)), 0));
-
-    // Get best and worst campaigns
-    const bestCampaign = campaigns.sort((a, b) => b.roi - a.roi)[0];
-    const worstCampaign = campaigns.sort((a, b) => a.roi - b.roi)[0];
-
-    // Generate review
-    return {
-      role: "assistant",
-      content: `**📊 Campaign Performance Review**
-
-**Review Period:** Last 30 Days
-**Generated:** ${new Date().toLocaleDateString()}
-**Status:** ⚠️ Action Required
-
----
-
-**💰 Overall Campaign Summary:**
-
-**Budget Utilization:**
-- Total Budget: $3,000
-- Actual Spend: $${totalSpend.toLocaleString()} (${((totalSpend / 3000) * 100).toFixed(1)}%)
-- Remaining: $${(3000 - totalSpend).toLocaleString()}
-
-**Aggregate Performance:**
-- Total Impressions: ${totalImpressions.toLocaleString()}
-- Total Clicks: ${totalClicks.toLocaleString()}
-- Total Conversions: ${totalConversions}
-- Average CTR: ${((totalClicks / totalImpressions) * 100).toFixed(2)}%
-- Average Conversion Rate: ${((totalConversions / totalClicks) * 100).toFixed(2)}%
-- **Average ROI: ${avgROI}%** ⚠️ Negative
-
-**Financial Impact:**
-- Total Loss: $${totalLoss.toFixed(0)} (money wasted)
-- Cost Per Acquisition (CAC): $${(totalSpend / totalConversions).toFixed(0)} per user
-- Lifetime Value (LTV) of acquired users: ~$150
-- **ROI Ratio:** -${Math.round(150 / (totalSpend / totalConversions))}x (losing significant money)
-
----
-
-**📈 Campaign Performance Breakdown:**
-
-**1. ${campaigns[0].name}** ${campaigns[0].roi === Math.max(...campaigns.map(c => c.roi)) ? '✅ BEST PERFORMER' : ''}
-- Status: ${campaigns[0].status.charAt(0).toUpperCase() + campaigns[0].status.slice(1)}
-- Spend: $${campaigns[0].spend}
-- Impressions: ${campaigns[0].impressions.toLocaleString()}
-- Clicks: ${campaigns[0].clicks.toLocaleString()}
-- Conversions: ${campaigns[0].conversions}
-- CTR: ${((campaigns[0].clicks / campaigns[0].impressions) * 100).toFixed(2)}%
-- Conversion Rate: ${((campaigns[0].conversions / campaigns[0].clicks) * 100).toFixed(2)}%
-- ROI: **${campaigns[0].roi}%** (${campaigns[0].roi < 0 ? 'losing money' : 'profitable'})
-- CAC: $${(campaigns[0].spend / campaigns[0].conversions).toFixed(0)} per user
-
-**2. ${campaigns[1].name}** ${campaigns[1].roi === Math.max(...campaigns.map(c => c.roi)) ? '✅ BEST PERFORMER' : ''}
-- Status: ${campaigns[1].status.charAt(0).toUpperCase() + campaigns[1].status.slice(1)}
-- Spend: $${campaigns[1].spend}
-- Impressions: ${campaigns[1].impressions.toLocaleString()}
-- Clicks: ${campaigns[1].clicks.toLocaleString()}
-- Conversions: ${campaigns[1].conversions}
-- CTR: ${((campaigns[1].clicks / campaigns[1].impressions) * 100).toFixed(2)}%
-- Conversion Rate: ${((campaigns[1].conversions / campaigns[1].clicks) * 100).toFixed(2)}%
-- ROI: **${campaigns[1].roi}%** (${campaigns[1].roi < 0 ? 'losing money' : 'profitable'})
-- CAC: $${(campaigns[1].spend / campaigns[1].conversions).toFixed(0)} per user
-
-**3. ${campaigns[2].name}** ${campaigns[2].roi === Math.min(...campaigns.map(c => c.roi)) ? '❌ WORST PERFORMER' : ''}
-- Status: ${campaigns[2].status.charAt(0).toUpperCase() + campaigns[2].status.slice(1)}
-- Spend: $${campaigns[2].spend}
-- Impressions: ${campaigns[2].impressions.toLocaleString()}
-- Clicks: ${campaigns[2].clicks.toLocaleString()}
-- Conversions: ${campaigns[2].conversions}
-- CTR: ${((campaigns[2].clicks / campaigns[2].impressions) * 100).toFixed(2)}%
-- Conversion Rate: ${((campaigns[2].conversions / campaigns[2].clicks) * 100).toFixed(2)}%
-- ROI: **${campaigns[2].roi}%** (${campaigns[2].roi < 0 ? 'losing money' : 'profitable'})
-- CAC: $${(campaigns[2].spend / campaigns[2].conversions).toFixed(0)} per user
-
----
-
-**🎯 Key Findings:**
-
-**Performance Insights:**
-- **Best performing campaign:** ${bestCampaign.name} (${bestCampaign.roi}% ROI, still losing money)
-- **Worst performing campaign:** ${worstCampaign.name} (${worstCampaign.roi}% ROI)
-- **Highest CTR:** ${campaigns.sort((a, b) => (b.clicks / b.impressions) - (a.clicks / a.impressions))[0].name}
-- **Lowest CAC:** ${campaigns.sort((a, b) => (a.spend / a.conversions) - (b.spend / b.conversions))[0].name} ($${Math.round(...campaigns.map(c => c.spend / c.conversions))} per user)
-
-**Critical Issues:**
-- ❌ **ALL campaigns have negative ROI** - bleeding money
-- ❌ **CAC ($${(totalSpend / totalConversions).toFixed(0)}) is 27x higher** than organic CAC (~$15)
-- ❌ **No campaign is profitable** - each conversion loses money
-- ❌ **$${totalLoss.toFixed(0)} wasted** with negative returns
-
-**Comparison to Organic:**
-- **Organic Content ROI:** +280% (from content performance data)
-- **Organic CAC:** ~$15 per user
-- **Organic outperforms paid ads by:** ~27x on cost efficiency
-
----
-
-**💡 Recommendations:**
-
-**Immediate Actions (Priority: URGENT):**
-1. **PAUSE ALL CAMPAIGNS IMMEDIATELY** - Stop the bleeding
-2. **Reallocate remaining budget** ($${(3000 - totalSpend).toLocaleString()}) to content creation
-3. **Document learning**: What audiences/creatives performed worst
-
-**Strategic Shift:**
-- **FROM:** Paid-first acquisition ($400 CAC, -60% ROI)
-- **TO:** Content-first acquisition ($15 CAC, +280% ROI)
-- **Expected result:** $${totalLoss.toFixed(0)} savings/month + better user quality
-
-**Future Testing (Once Profitable):**
-- Test with 10% of current budget
-- Focus on retargeting, not cold acquisition
-- Set strict ROI positive thresholds before scaling
-
----
-
-**📅 Next Scheduled Review:**
-
-**Recommended Schedule:** Weekly campaign reviews
-**Next Review Date:** ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}
-**Focus Metrics:** ROI, CAC, Conversion Rate
-
-**Agenda for Next Review:**
-1. Confirm all campaigns paused
-2. Measure organic content performance
-3. Calculate savings from budget reallocation
-4. Plan small-scale retargeting tests (if profitable)
-
----
-
-**✅ Action Items:**
-- [ ] Pause all 3 campaigns immediately
-- [ ] Reallocate $${(3000 - totalSpend).toLocaleString()} to content tools
-- [ ] Schedule weekly review for ${new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString()}
-- [ ] Create content production plan with reallocated budget
-
-Would you like me to:
-1. **Create action items** for pausing campaigns?
-2. **Schedule next review** automatically?
-3. **Generate content plan** with reallocated budget?`,
-      timestamp: new Date().toISOString(),
-      campaignReview: {
-        type: "campaign_review",
-        period: "last_30_days",
-        generatedAt: new Date().toISOString(),
-        nextReviewDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        summary: {
-          totalSpend,
-          totalImpressions,
-          totalClicks,
-          totalConversions,
-          avgROI: parseFloat(avgROI),
-          totalLoss,
-          cac: Math.round(totalSpend / totalConversions)
-        },
-        bestCampaign: {
-          name: bestCampaign.name,
-          roi: bestCampaign.roi,
-          spend: bestCampaign.spend
-        },
-        worstCampaign: {
-          name: worstCampaign.name,
-          roi: worstCampaign.roi,
-          spend: worstCampaign.spend
-        },
-        recommendations: [
-          "PAUSE ALL CAMPAIGNS IMMEDIATELY",
-          "Reallocate budget to content creation",
-          "Document learnings from failed campaigns"
-        ],
-        status: "awaiting_review"
-      }
-    };
-  } else if (lastUserMessage.includes("budget") || lastUserMessage.includes("spend") || lastUserMessage.includes("ad") || lastUserMessage.includes("campaign")) {
-    const campaigns = mockHistoricalData.campaigns;
-    const totalSpend = campaigns.reduce((sum, c) => sum + c.spend, 0);
-    const totalConversions = campaigns.reduce((sum, c) => sum + c.conversions, 0);
-    const avgRoi = (campaigns.reduce((sum, c) => sum + c.roi, 0) / campaigns.length).toFixed(0);
-
-    // Check if user wants to propose budget changes
-    if (lastUserMessage.includes("proposal") || lastUserMessage.includes("propose") || lastUserMessage.includes("change") || lastUserMessage.includes("reallocat") || lastUserMessage.includes("increase") || lastUserMessage.includes("reduce")) {
-      // Return budget proposal response
-      return {
-        role: "assistant",
-        content: `**💰 Budget Change Proposal**
-
-**Current Budget Allocation:**
-- Total Monthly Budget: $3,000
-- Apple Search Ads: $1,000 (33%)
-- TikTok Ads: $1,000 (33%)
-- Instagram Ads: $1,000 (34%)
-
-**Proposed Changes:**
-- **PAUSE Apple Search Ads** → Save $1,000/month (ROI: -45%)
-- **PAUSE TikTok Ads** → Save $720/month (ROI: -66%)
-- **PAUSE Instagram Ads** → Save $240/month (ROI: -72%)
-- **Total Savings: $1,960/month**
-
-**Recommended Reallocation:**
-- **Video Editing Tools (CapCut Pro, etc.)**: $500/month
-- **Stock Footage Subscription**: $200/month
-- **Influencer Partnerships**: $800/month
-- **Content Production Budget**: $460/month
-
-**Expected Impact:**
-- Monthly savings: $1,960
-- Projected additional organic reach: +50-70%
-- Estimated new users from content: 80-120/month
-- Cost per user (content): ~$16 vs $400 from ads
-
-**Reasoning:**
-All paid campaigns have negative ROI. Organic content outperforms paid ads 3:1 on engagement. Reallocating budget to content creation will yield higher returns at lower CAC.
-
-⚠️ **This proposal requires your approval to implement.**
-
-Would you like me to:
-1. **Approve** this budget change?
-2. **Modify** the allocation?
-3. **Cancel** this proposal?`,
-        timestamp: new Date().toISOString(),
-        proposal: {
-          type: "budget_change",
-          current: {
-            total: 3000,
-            allocations: [
-              { channel: "Apple Search Ads", budget: 1000 },
-              { channel: "TikTok Ads", budget: 1000 },
-              { channel: "Instagram Ads", budget: 1000 }
-            ]
-          },
-          proposed: {
-            total: 3000,
-            allocations: [
-              { channel: "Video Editing Tools", budget: 500 },
-              { channel: "Stock Footage", budget: 200 },
-              { channel: "Influencer Partnerships", budget: 800 },
-              { channel: "Content Production", budget: 460 },
-              { channel: "Apple Search Ads", budget: 0 },
-              { channel: "TikTok Ads", budget: 0 },
-              { channel: "Instagram Ads", budget: 0 }
-            ]
-          },
-          reasoning: "All paid campaigns have negative ROI. Organic content outperforms paid ads 3:1 on engagement. Reallocating budget to content creation will yield higher returns.",
-          expectedImpact: {
-            monthlySavings: 1960,
-            projectedReachIncrease: "50-70%",
-            estimatedNewUsers: "80-120/month",
-            newCAC: 16,
-            oldCAC: 400
-          },
-          status: "awaiting_approval"
-        }
-      };
-    }
-
-    // Regular budget analysis response
-    return {
-      role: "assistant",
-      content: `**Paid Ad Performance Review:**
-
-💰 **Budget Utilization:**
-- Monthly Budget: $3,000
-- Actual Spend: $${totalSpend.toLocaleString()} (${((totalSpend / 3000) * 100).toFixed(1)}% used)
-- Remaining: $${(3000 - totalSpend).toLocaleString()}
-
-📊 **Campaign Performance:**
-1. **Apple Search Ads - Exact Match**
-   - Spend: $${campaigns[0].spend}
-   - ROI: ${campaigns[0].roi}% (losing $${(campaigns[0].spend * 1.45).toFixed(0)})
-   - Conversions: ${campaigns[0].conversions} (@ $${(campaigns[0].spend / campaigns[0].conversions).toFixed(0)} per user)
-
-2. **TikTok Ads - Interest Targeting**
-   - Spend: $${campaigns[1].spend}
-   - ROI: ${campaigns[1].roi}% (losing $${(campaigns[1].spend * 1.66).toFixed(0)})
-   - Conversions: ${campaigns[1].conversions} (@ $${(campaigns[1].spend / campaigns[1].conversions).toFixed(0)} per user)
-
-3. **Instagram Ads - Lookalike**
-   - Spend: $${campaigns[2].spend}
-   - ROI: ${campaigns[2].roi}% (losing $${(campaigns[2].spend * 1.72).toFixed(0)})
-   - Conversions: ${campaigns[2].conversions} (@ $${(campaigns[2].spend / campaigns[2].conversions).toFixed(0)} per user)
-
-⚠️ **Critical Issue:**
-All campaigns have **negative ROI**. We're losing $${(totalSpend * 1.6).toFixed(0)} on paid ads while only acquiring ${totalConversions} users at $${(totalSpend / totalConversions).toFixed(0)} CAC.
-
-**Recommendation:**
-**PAUSE ALL PAID CAMPAIGNS IMMEDIATELY**
-
-Our organic content is performing much better:
-- Organic posts get 2-3x higher engagement
-- CAC from content is ~$15 vs ~$400 from ads
-- Better to invest the $2,160 remaining in content creation tools
-
-Should I pause all campaigns and reallocate budget to content production?`,
-      timestamp: new Date().toISOString()
-    };
-  } else if (lastUserMessage.includes("keyword") || lastUserMessage.includes("aso") || lastUserMessage.includes("ranking") || lastUserMessage.includes("app store")) {
-    const keywords = mockHistoricalData.keywords;
-    const declined = keywords.filter(k => k.change < 0);
-    const improved = keywords.filter(k => k.change > 0);
-
-    return {
-      role: "assistant",
-      content: `**ASO Keyword Rankings Update:**
-
-📉 **Declining Keywords (⚠️ Action Needed):**
-${declined.map(k => `- **"${k.keyword}"**: #${k.ranking} (${k.change > 0 ? '+' : ''}${k.change}), Volume: ${k.volume.toLocaleString()}, Competition: ${k.competition}`).join('\n')}
-
-📈 **Improving Keywords (✅ Keep Optimizing):**
-${improved.map(k => `- **"${k.keyword}"**: #${k.ranking} (${k.change > 0 ? '+' : ''}${k.change}), Volume: ${k.volume.toLocaleString()}, Competition: ${k.competition}`).join('\n')}
-
-🎯 **Top Opportunity Keywords:**
-1. **"romance novels"** - #45, High volume (62K searches), Low competition
-2. **"fanfiction"** - #52, High volume (78K searches), Low competition
-3. **"love stories"** - #38, Medium volume (41K searches), Medium competition
-
-💡 **Strategy:**
-- **Urgent**: Fix "spicy fiction" decline (was #5, now #7)
-- **Short-term**: Target "romance novels" keyword in app description
-- **Long-term**: Build backlinks for "fanfiction" term
-
-**Proposed Actions:**
-1. Update app subtitle: "Romance Novels & Spicy Fiction"
-2. Add "romance novels" to app description (5-7 times)
-3. Create A/B test for "spicy fiction" vs "spicy stories"
-4. Reach out to romance novel bloggers for backlinks
-
-Expected impact: +15-20% organic downloads in 30 days.
-
-Should I implement these ASO changes?`,
-      timestamp: new Date().toISOString()
-    };
-  } else if (lastUserMessage.includes("strategy") || lastUserMessage.includes("recommendation") || lastUserMessage.includes("recommend") || lastUserMessage.includes("plan") || lastUserMessage.includes("advice")) {
-    // Strategy recommendations based on performance data
-    const data = mockHistoricalData;
-    const topPost = data.posts.sort((a, b) => b.engagementRate - a.engagementRate)[0];
-    const worstCampaign = data.campaigns.sort((a, b) => a.roi - b.roi)[0];
-    const decliningKeywords = data.keywords.filter(k => k.change < 0);
-
-    return {
-      role: "assistant",
-      content: `**🎯 Strategic Recommendations for Growth Acceleration**
-
-Based on my analysis of your performance data, here are my top strategic recommendations:
-
-**📈 PRIORITY 1: Content Strategy (High Impact)**
-- **Focus on Professor Romance content** - Your top performer "${topPost.title}" has ${topPost.engagementRate}% engagement
-- **Increase posting frequency** from 1-2 to 3-4 posts/day
-- **Stick to spiciness levels 1-2** for broader appeal (level 3 gets 30% less engagement)
-- **Test video lengths**: 15-30 seconds is the sweet spot
-- **Optimal posting time**: 6-9 PM EST
-
-*Expected Impact: +50-70% more organic reach within 30 days*
-
-**💰 PRIORITY 2: Budget Reallocation (Immediate Action)**
-- **PAUSE ${worstCampaign.name}** - Currently losing ${Math.abs(worstCampaign.roi)}% ROI
-- **Redirection**: Reallocate the $${(3000 - data.campaigns.reduce((sum, c) => sum + c.spend, 0)).toLocaleString()} remaining budget to:
-  - Video editing tools (CapCut Pro, etc.)
-  - Stock footage for content creation
-  - Influencer partnerships for content promotion
-
-*Expected Impact: Save $2,400/month in losses, reinvest in high-ROI content*
-
-**🔍 PRIORITY 3: ASO Optimization (Quick Wins)**
-- **Fix declining keywords**: ${decliningKeywords.map(k => `"${k.keyword}"`).join(', ')}
-- **Update app subtitle** to: "Romance Novels & Spicy Fiction"
-- **Add "romance novels"** to app description (5-7 times naturally)
-- **Target opportunity keyword**: "romance novels" at #45 with 62K volume and low competition
-
-*Expected Impact: +15-20% organic downloads in 30 days*
-
-**📊 PRIORITY 4: Analytics & Optimization**
-- **Track engagement rate by category** to double down on winners
-- **A/B test video hooks** (first 3 seconds are critical)
-- **Monitor competitor strategies** in the romance fiction space
-- **Set up conversion tracking** from content to app installs
-
----
-
-**🚀 30-Day Action Plan:**
-
-**Week 1:**
-- Pause all negative ROI campaigns
-- Update ASO metadata (subtitle, description)
-- Create 10 new Professor Romance story posts
-
-**Week 2:**
-- Test 3-4 posts per day frequency
-- A/B test video hooks (20-30 seconds vs 15-20 seconds)
-- Identify top 3 performing content categories
-
-**Week 3:**
-- Double down on top performing category
-- Reach out to 5-10 romance fiction influencers for collaboration
-- Create content calendar for next month
-
-**Week 4:**
-- Analyze results and optimize
-- Scale what works, kill what doesn't
-- Prepare month 2 strategy
-
-**Projected Results:**
-- MRR: $425 → $650-750 (+53-76%)
-- Organic downloads: +40-60%
-- Engagement rate: +20-30%
-
-Would you like me to:
-1. **Create detailed content calendar** for this week?
-2. **Generate ASO keyword list** for optimization?
-3. **Set up action items** for each priority?
-4. **Dive deeper** into any specific recommendation?`,
-      timestamp: new Date().toISOString()
-    };
-  } else if (lastUserMessage.includes("hello") || lastUserMessage.includes("hi") || lastUserMessage.includes("hey")) {
-    return {
-      role: "assistant",
-      content: `Hello! I'm your AI Marketing Executive for the Blush app. 🚀
-
-I have access to all your historical data and can help with:
-
-**📊 Analytics & Performance**
-- Revenue trends and growth analysis
-- Content performance insights
-- Engagement metrics tracking
-
-**💰 Revenue & Growth**
-- MRR tracking ($425 current, growing 12% MoM)
-- Subscriber analysis (38 active subscribers)
-- Churn rate and LTV optimization
-
-**📱 Content Strategy**
-- Top performing posts analysis
-- Content calendar planning
-- Platform-specific optimization
-
-**🔍 ASO & Keywords**
-- Keyword ranking tracking (7 keywords monitored)
-- App Store optimization recommendations
-- A/B testing strategies
-
-**📈 Paid Advertising**
-- Campaign performance monitoring
-- ROI analysis and budget optimization
-- Audience targeting insights
-
-**💡 Strategic Planning**
-- Growth acceleration planning
-- Milestone tracking toward $10K MRR
-- Competitive analysis
-
-Quick stats: You're at $425 MRR with 38 subscribers, growing 12% month-over-month. Your best content category is "Professor Romance" with 4.5% avg engagement.
-
-What would you like to focus on today?`,
-      timestamp: new Date().toISOString()
-    };
-// This is the pivot code section to insert into chat.js
-
-  } else if (lastUserMessage.includes("pivot") || lastUserMessage.includes("strategic pivot") || lastUserMessage.includes("change direction") || lastUserMessage.includes("new direction")) {
-    // Strategic pivot recommendations
-    const data = mockHistoricalData;
-
-    return {
-      role: "assistant",
-      content: `**🔄 Strategic Pivot Recommendation**
-
-After analyzing your performance data, I recommend a **strategic pivot from paid advertising to organic content-first growth**.
-
----
-
-**📊 Current Situation Analysis:**
-
-**Paid Ads Performance (What's NOT Working):**
-- Total spend: $2,160 across 3 campaigns
-- Conversions: Only 13 users acquired
-- Cost Per Acquisition (CAC): $400 per user
-- ROI: -60% average (losing money on every campaign)
-
-**Organic Content Performance (What IS Working):**
-- 10 posts generated ~315,000 views
-- Average engagement rate: 4.0%
-- Estimated organic CAC: ~$15 per user
-- Organic ROI: +280% (content costs vs user value)
-
-**The Pivot Opportunity:**
-- **Current mix**: 90% paid, 10% organic → **Result: Losing money, slow growth**
-- **Proposed mix**: 10% paid (for testing), 90% organic → **Expected: Profitable, fast growth**
-
----
-
-**🎯 Recommended Strategic Pivot:**
-
-**FROM:** Paid-First Growth Strategy
-- Heavy investment in paid ads
-- Reality: Burning $2,160/month for minimal growth
-
-**TO:** Organic Content-First Growth Strategy
-- Heavy investment in content creation
-- Expected: Scale through viral content and organic reach
-
----
-
-**📋 Pivot Implementation Plan:**
-
-**Phase 1: Immediate (Week 1) - "Stop the Bleeding"**
-- **PAUSE all paid campaigns** immediately
-- Reallocate budget to content tools and production
-
-**Phase 2: Build (Weeks 2-4) - "Content Engine"**
-- Increase posting: 2 posts/day → 4-5 posts/day
-- Content mix: 60% top performers, 30% testing, 10% experimental
-- Build content pipeline: 50+ stories queued
-
-**Phase 3: Scale (Month 2) - "Growth Acceleration"**
-- Double down on winning content categories
-- Test influencer collaborations
-
-**Phase 4: Optimize (Month 3+) - "Profit Machine"**
-- Reintroduce paid ads ONLY for retargeting
-- Focus on high LTV users
-
----
-
-**💰 Expected Outcomes (90 Days):**
-
-**Before Pivot (Paid-First):**
-- Monthly spend: $3,000
-- New users: ~15/month
-- CAC: $400
-- Profitability: ❌ Negative
-
-**After Pivot (Organic-First):**
-- Monthly spend: $1,400
-- New users: ~80-120/month
-- CAC: ~$15
-- Profitability: ✅ Positive
-
-**Key Metrics Improvement:**
-- **CAC**: $400 → $15 (96% reduction)
-- **Monthly users**: 15 → 80-120 (5-8x increase)
-- **Profit margin**: -60% → +85%
-
----
-
-**⚠️ Risks & Mitigation:**
-
-**Risk 1: Organic reach may decline**
-- Mitigation: Diversify platforms (TikTok, Instagram, YouTube Shorts)
-
-**Risk 2: Content production bottleneck**
-- Mitigation: Build pipeline and hire freelancer
-
-**Risk 3: Takes longer to see results**
-- Mitigation: Run small paid tests for data
-
----
-
-**🎯 Success Criteria (90 Days):**
-- [ ] Posting 4-5 times daily
-- [ ] At least 2 posts with >50K views
-- [ ] MRR growth of $300-500/month
-- [ ] Positive profit margin
-
----
-
-**💡 My Recommendation:**
-
-**Execute this pivot immediately.** The data shows paid ads are draining capital while organic content generates real growth.
-
-This pivot transforms marketing from:
-- ❌ Burning cash, slow growth, negative ROI
-- ✅ Positive cash flow, rapid growth, sustainable scalability
-
-**Shall I create action items for this pivot?**`,
-      timestamp: new Date().toISOString(),
-      pivot: {
-        type: "strategic_pivot",
-        from: "paid_first_growth",
-        to: "organic_content_first_growth",
-        reasoning: "Paid campaigns have -60% average ROI with $400 CAC. Organic content generates +280% ROI with ~$15 CAC. Pivot reduces CAC by 96% and increases user acquisition 5-8x.",
-        expectedOutcomes: {
-          beforePivot: { monthlySpend: 3000, newUsers: 15, cac: 400, profitability: "negative" },
-          afterPivot: { monthlySpend: 1400, newUsers: "80-120", cac: 15, profitability: "positive" }
-        },
-        implementationPhases: [
-          { phase: 1, name: "Stop the Bleeding", duration: "Week 1", actions: ["Pause campaigns", "Reallocate budget"] },
-          { phase: 2, name: "Content Engine", duration: "Weeks 2-4", actions: ["Increase posts", "Build pipeline"] },
-          { phase: 3, name: "Growth Acceleration", duration: "Month 2", actions: ["Double down", "Test influencers"] },
-          { phase: 4, name: "Profit Machine", duration: "Month 3+", actions: ["Retargeting ads", "Optimize LTV"] }
-        ],
-        risks: [
-          { risk: "Organic reach decline", mitigation: "Diversify platforms" },
-          { risk: "Content bottleneck", mitigation: "Hire freelancer" },
-          { risk: "Slower results", mitigation: "Small paid tests" }
-        ],
-        successCriteria: ["4-5 posts daily", "2+ posts >50K views", "$300-500 MRR growth", "Positive margin"],
-        status: "awaiting_approval",
-        reviewDate: null
-      }
-    };
-  } else {
-    return {
-      role: "assistant",
-      content: `I can help you with that! Here's what I have access to:
-
-**Revenue & Growth Data:**
-- Current MRR: $425 (12% growth MoM)
-- 38 active subscribers, $11.18 ARPU
-- 3-month trend data available
-
-**Content Performance:**
-- Last 10 posts analyzed
-- Top performer: "Forbidden Professor Chapter 1" (45.2K views, 4.2% engagement)
-- Best category: Professor Romance (4.5% avg engagement)
-
-**ASO Keywords:**
-- 7 keywords being tracked
-- "spicy fiction" declined to #7 (⚠️ needs attention)
-- Opportunity: "romance novels" at #45, low competition
-
-**Paid Ad Campaigns:**
-- 3 active campaigns, all with negative ROI
-- Total spend: $2,160, only 13 conversions
-- Recommendation: Pause and reallocate budget
-
-Could you clarify which area you'd like to explore? I can dive deeper into any of these topics or provide strategic recommendations.`,
-      timestamp: new Date().toISOString()
-    };
-  }
-}
+// Store conversation summaries in memory
+const conversationSummaries = new Map();
+
+// ============================================================================
+// API Routes
+// ============================================================================
 
 // GET /api/chat/history - Get conversation history
 router.get("/history", async (req, res) => {
@@ -1212,74 +482,74 @@ router.get("/history", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (!status.isConnected || status.readyState !== 1) {
-      // Return mock history if no database connection (for development/demo)
+      // Mock mode: return in-memory conversations
+      const mockHistory = Array.from(mockConversations.values()).map(conv => ({
+        id: conv._id,
+        title: conv.title,
+        content: conv.content,
+        messages: conv.messages,
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt
+      }));
+
       return res.json({
         success: true,
-        conversations: [
-          {
-            id: "mock_conv_1",
-            type: "chat",
-            title: "What is my current MRR?",
-            content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
-            reasoning: "Responding to: What is my current MRR?",
-            status: "completed",
-            messages: [
-              {
-                role: "user",
-                content: "What is my current MRR?",
-                timestamp: new Date(Date.now() - 300000).toISOString()
-              },
-              {
-                role: "assistant",
-                content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
-                timestamp: new Date(Date.now() - 290000).toISOString()
-              }
-            ],
-            createdAt: new Date(Date.now() - 300000).toISOString(),
-            updatedAt: new Date(Date.now() - 290000).toISOString()
-          }
-        ],
-        message: "Mock data - no database connection"
+        conversations: mockHistory,
+        mode: 'mock'
       });
     }
 
-    // mongoose already imported at top of file
-    const conversations = await mongoose.connection
-      .collection("marketing_strategy")
-      .find({ type: "chat" })
-      .sort({ createdAt: 1 })
-      .limit(100)
-      .toArray();
+    // Database mode: try to use ChatConversation model first
+    try {
+      const conversations = await ChatConversation.getActiveConversations(50);
 
-    res.json({
-      success: true,
-      conversations: conversations.map(conv => ({
-        id: conv._id,
-        type: conv.type,
-        title: conv.title,
-        content: conv.content,
-        reasoning: conv.reasoning,
-        status: conv.status,
-        messages: conv.messages || [], // Include full messages array
-        createdAt: conv.createdAt,
-        updatedAt: conv.updatedAt
-      }))
-    });
+      return res.json({
+        success: true,
+        conversations: conversations.map(conv => ({
+          id: conv._id,
+          title: conv.title,
+          content: conv.summary || conv.messages[conv.messages.length - 1]?.content || '',
+          messages: conv.messages,
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt
+        })),
+        mode: 'database'
+      });
+    } catch (modelError) {
+      // Fallback to legacy marketing_strategy collection
+      const conversations = await mongoose.connection
+        .collection("marketing_strategy")
+        .find({ type: "chat" })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .toArray();
+
+      return res.json({
+        success: true,
+        conversations: conversations.map(conv => ({
+          id: conv._id,
+          title: conv.title,
+          content: conv.content,
+          messages: conv.messages || [],
+          createdAt: conv.createdAt,
+          updatedAt: conv.updatedAt
+        })),
+        mode: 'legacy'
+      });
+    }
   } catch (error) {
-    console.error("Error fetching chat history:", error);
-    res.json({
-      success: true,
-      conversations: [],
-      message: "Error fetching history - starting fresh"
+    logger.error("Error fetching chat history", { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });
 
-// GET /api/chat/search - Search chat history
+// GET /api/chat/search - Search conversation history
 router.get("/search", async (req, res) => {
   try {
-    const { q, limit = 20 } = req.query;
-
+    const q = req.query.q;
     if (!q) {
       return res.status(400).json({
         success: false,
@@ -1290,134 +560,112 @@ router.get("/search", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (!status.isConnected || status.readyState !== 1) {
-      // Return mock search results if no database connection
-      const mockConversation = {
-        id: "mock_conv_1",
-        title: "What is my current MRR?",
-        content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
-        createdAt: new Date(Date.now() - 300000).toISOString(),
-        messages: [
-          {
-            role: "user",
-            content: "What is my current MRR?",
-            timestamp: new Date(Date.now() - 300000).toISOString()
-          },
-          {
-            role: "assistant",
-            content: "**Revenue Trend Analysis:**\n\n📈 **Current Performance:**\n- MRR: $425 (+12% vs last month)\n- Active Subscribers: 38 (+12% growth)\n- ARPU: $11.18 (Avg Revenue Per User)",
-            timestamp: new Date(Date.now() - 290000).toISOString()
-          }
-        ]
-      };
-
-      // Search in mock data
-      const searchLower = q.toLowerCase();
-      const titleMatch = mockConversation.title.toLowerCase().includes(searchLower);
-      const contentMatch = mockConversation.content.toLowerCase().includes(searchLower);
-      const messagesMatch = mockConversation.messages.some(msg =>
-        msg.content.toLowerCase().includes(searchLower)
-      );
-
-      if (titleMatch || contentMatch || messagesMatch) {
-        // Find highlight
-        let highlight = '';
-        const contentLower = mockConversation.content.toLowerCase();
-        const queryIndex = contentLower.indexOf(searchLower);
-
-        if (queryIndex !== -1) {
-          const start = Math.max(0, queryIndex - 50);
-          const end = Math.min(mockConversation.content.length, queryIndex + q.length + 50);
-          highlight = (start > 0 ? '...' : '') + mockConversation.content.substring(start, end) + (end < mockConversation.content.length ? '...' : '');
-        } else {
-          highlight = mockConversation.content.substring(0, 150) + '...';
-        }
-
-        return res.json({
-          success: true,
-          query: q,
-          results: [{
-            id: mockConversation.id,
-            title: mockConversation.title,
-            highlight: highlight,
-            createdAt: mockConversation.createdAt,
-            messages: mockConversation.messages
-          }],
-          count: 1,
-          message: "Mock data - no database connection"
-        });
-      }
-
       return res.json({
         success: true,
         query: q,
         results: [],
-        count: 0,
-        message: "Mock data - no database connection"
+        message: "Search not available in mock mode"
       });
     }
 
-    // mongoose already imported at top of file
-    const searchQuery = q.toLowerCase();
+    // Try ChatConversation model first
+    try {
+      const results = await ChatConversation.searchConversations(q);
 
-    // Search in title, content, reasoning, and messages array
-    const conversations = await mongoose.connection.db
-      .collection("marketing_strategy")
-      .find({
-        type: "chat",
-        $or: [
-          { title: { $regex: searchQuery, $options: 'i' } },
-          { content: { $regex: searchQuery, $options: 'i' } },
-          { reasoning: { $regex: searchQuery, $options: 'i' } },
-          { 'messages.content': { $regex: searchQuery, $options: 'i' } }
-        ]
-      })
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .toArray();
+      return res.json({
+        success: true,
+        query: q,
+        results: results.map(conv => {
+          // Find matching message for highlight
+          const matchingMessage = conv.messages.find(m =>
+            m.content.toLowerCase().includes(q.toLowerCase())
+          );
 
-    // Highlight matching context in results
-    const results = conversations.map(conv => {
-      let highlight = '';
-      const content = conv.content || '';
-      const title = conv.title || '';
-      const messages = conv.messages || [];
+          let title = conv.title;
+          let highlight = '';
 
-      // Find relevant excerpt
-      const contentLower = content.toLowerCase();
-      const queryIndex = contentLower.indexOf(searchQuery);
+          if (matchingMessage) {
+            const content = matchingMessage.content;
+            const index = content.toLowerCase().indexOf(q.toLowerCase());
+            if (index >= 0) {
+              const start = Math.max(0, index - 50);
+              const end = Math.min(content.length, index + q.length + 50);
+              highlight = (start > 0 ? '...' : '') + content.substring(start, end) + (end < content.length ? '...' : '');
+            }
+          }
 
-      if (queryIndex !== -1) {
-        // Get 100 chars around the match
-        const start = Math.max(0, queryIndex - 50);
-        const end = Math.min(content.length, queryIndex + q.length + 50);
-        highlight = (start > 0 ? '...' : '') + content.substring(start, end) + (end < content.length ? '...' : '');
-      } else if (messages && messages.length > 0) {
-        // Check messages array for matches
-        const matchingMessage = messages.find(msg =>
-          msg.content && msg.content.toLowerCase().includes(searchQuery)
+          return {
+            id: conv._id,
+            title: title,
+            highlight: highlight || conv.summary?.substring(0, 150) || '',
+            createdAt: conv.createdAt,
+            messages: conv.messages
+          };
+        }),
+        count: results.length
+      });
+    } catch (modelError) {
+      // Fallback to text search in legacy collection
+      const conversations = await mongoose.connection
+        .collection("marketing_strategy")
+        .find({
+          type: "chat",
+          $or: [
+            { title: { $regex: q, $options: 'i' } },
+            { content: { $regex: q, $options: 'i' } },
+            { 'messages.content': { $regex: q, $options: 'i' } }
+          ]
+        })
+        .sort({ updatedAt: -1 })
+        .limit(20)
+        .toArray();
+
+      const results = conversations.map(conv => {
+        const messages = conv.messages || [];
+        const matchingMessage = messages.find(m =>
+          m.content && m.content.toLowerCase && m.content.toLowerCase().includes(q.toLowerCase())
         );
-        if (matchingMessage) {
-          highlight = `Message: ${matchingMessage.content.substring(0, 150)}${matchingMessage.content.length > 150 ? '...' : ''}`;
+
+        let title = conv.title;
+        let highlight = '';
+        let content = conv.content || '';
+
+        if (matchingMessage && matchingMessage.content) {
+          const msgContent = matchingMessage.content;
+          const index = msgContent.toLowerCase().indexOf(q.toLowerCase());
+          if (index >= 0) {
+            const start = Math.max(0, index - 50);
+            const end = Math.min(msgContent.length, index + q.length + 50);
+            highlight = msgContent.substring(start, end) + (end < msgContent.length ? '...' : '');
+            title = `Message: ${msgContent.substring(0, 50)}...`;
+          }
+        } else if (content) {
+          const index = content.toLowerCase().indexOf(q.toLowerCase());
+          if (index >= 0) {
+            const start = Math.max(0, index - 50);
+            const end = Math.min(content.length, index + q.length + 50);
+            highlight = content.substring(start, end) + (end < content.length ? '...' : '');
+          }
         }
-      }
 
-      return {
-        id: conv._id,
-        title: title,
-        highlight: highlight || content.substring(0, 150) + (content.length > 150 ? '...' : ''),
-        createdAt: conv.createdAt,
-        messages: messages
-      };
-    });
+        return {
+          id: conv._id,
+          title: title,
+          highlight: highlight || content.substring(0, 150) + (content.length > 150 ? '...' : ''),
+          createdAt: conv.createdAt,
+          messages: messages
+        };
+      });
 
-    res.json({
-      success: true,
-      query: q,
-      results: results,
-      count: results.length
-    });
+      return res.json({
+        success: true,
+        query: q,
+        results: results,
+        count: results.length
+      });
+    }
   } catch (error) {
-    console.error("Error searching chat history:", error);
+    logger.error("Error searching chat history", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1441,23 +689,7 @@ router.post("/message", async (req, res) => {
     let messages = [
       {
         role: "system",
-        content: `You are an AI Marketing Executive for the Blush iPhone app - a romantic/spicy AI story generator. Your goal is to help grow the app from $300-500/month MRR to $10,000/month in 6 months.
-
-Key context:
-- Target audience: 90%+ female, 85% straight, ages 18-45
-- Current MRR: $425 with 38 active subscribers
-- Channels: TikTok, Instagram, YouTube Shorts, Apple Search Ads
-- Brand voice: Sex-positive, romantic, empowering, sexy
-
-Your role:
-- Provide strategic recommendations based on data
-- Be collaborative and explain your reasoning
-- Create action items when appropriate
-- Ask for approval before making significant changes
-- Be concise but thorough
-- Maintain context across multiple conversation turns
-
-Always base recommendations on actual data when available.`
+        content: "You are Tina, a veteran AI marketing executive.", // Will be replaced by Tina's full prompt
       }
     ];
 
@@ -1467,19 +699,25 @@ Always base recommendations on actual data when available.`
 
     if (conversationId) {
       if (status.isConnected && status.readyState === 1) {
-        // Database mode: load from MongoDB
+        // Try ChatConversation model first
         try {
-          // mongoose already imported at top of file
-          const collection = mongoose.connection.db.collection("marketing_strategy");
-          existingConversation = await collection.findOne({ _id: new mongoose.Types.ObjectId(conversationId) });
-
-          // Add previous messages to context for multi-turn conversation
-          if (existingConversation && existingConversation.messages && existingConversation.messages.length > 0) {
+          existingConversation = await ChatConversation.findById(conversationId);
+          if (existingConversation && existingConversation.messages) {
             messages = messages.concat(existingConversation.messages);
           }
-        } catch (dbError) {
-          console.error("Error loading conversation history:", dbError);
-          // Continue without history
+        } catch (modelError) {
+          // Fallback to legacy collection
+          try {
+            const collection = mongoose.connection.db.collection("marketing_strategy");
+            existingConversation = await collection.findOne({ _id: new mongoose.Types.ObjectId(conversationId) });
+            if (existingConversation && existingConversation.messages) {
+              messages = messages.concat(existingConversation.messages);
+            }
+          } catch (fallbackError) {
+            logger.error('Error loading conversation from legacy collection', {
+              error: fallbackError.message
+            });
+          }
         }
       } else {
         // Mock mode: load from in-memory storage
@@ -1496,127 +734,180 @@ Always base recommendations on actual data when available.`
       content: message
     });
 
-    // Get AI response with full conversation context (passes conversationId for context window management)
+    // Get AI response with full conversation context
     const aiResponse = await callGLM4API(messages, existingConversation?.messages || [], conversationId || null);
 
-    // Save conversation to database if available, otherwise use mock storage
+    // Save conversation to database if available
     let savedConversation = null;
+    let savedConversationId = conversationId;
 
     if (status.isConnected && status.readyState === 1) {
       try {
-        // mongoose already imported at top of file
-        const collection = mongoose.connection.db.collection("marketing_strategy");
-
-        // Check if this is a campaign review
-        if (aiResponse.campaignReview) {
-          const campaignReview = {
-            type: "review",
-            title: `Campaign Review - ${new Date().toLocaleDateString()}`,
-            content: aiResponse.content,
-            reasoning: "Regular scheduled campaign performance review",
-            dataReferences: [{
-              type: "campaign_review",
-              ...aiResponse.campaignReview
-            }],
-            status: "completed",
-            expectedOutcome: aiResponse.campaignReview.recommendations.join(", "),
-            actualOutcome: null,
-            reviewDate: new Date(aiResponse.campaignReview.nextReviewDate),
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-
-          const result = await collection.insertOne(campaignReview);
-          savedConversation = {
-            id: result.insertedId,
-            ...campaignReview
-          };
-        } else if (existingConversation) {
-          // Update existing conversation with new messages
+        if (existingConversation) {
+          // Update existing conversation
+          // Simplified: Save only user message and final assistant response
+          // Intermediate tool messages are not persisted to avoid complex serialization issues
           const newMessages = [
             {
               role: "user",
               content: message,
-              timestamp: new Date()
-            },
-            {
-              role: "assistant",
-              content: aiResponse.content,
-              timestamp: aiResponse.timestamp || new Date()
+              timestamp: new Date(),
+              metadata: {}
             }
           ];
 
-          await collection.updateOne(
-            { _id: new mongoose.Types.ObjectId(conversationId) },
-            {
-              $push: { messages: { $each: newMessages } },
-              $set: {
-                content: aiResponse.content,
-                reasoning: `Continuing conversation. Latest: ${message}`,
-                updatedAt: new Date()
-              }
+          // Add final assistant message with tool data in metadata
+          const assistantMessage = {
+            role: "assistant",
+            content: aiResponse.content || "",
+            timestamp: new Date(),
+            metadata: {
+              tokens: aiResponse.metadata?.tokensUsed,
+              model: aiResponse.metadata?.model,
+              thinkingTime: aiResponse.metadata?.thinkingTime
             }
-          );
-
-          savedConversation = {
-            id: conversationId,
-            ...existingConversation,
-            messages: [...(existingConversation.messages || []), ...newMessages],
-            content: aiResponse.content,
-            updatedAt: new Date()
           };
+
+          // Include tool usage info in metadata (not as separate messages)
+          if (aiResponse.metadata?.toolUsed) {
+            assistantMessage.metadata.toolUsed = aiResponse.metadata.toolUsed;
+            assistantMessage.metadata.toolData = aiResponse.metadata.toolData;
+          }
+          // Handle new multi-tool format
+          if (aiResponse.metadata?.toolsUsed) {
+            assistantMessage.metadata.toolsUsed = aiResponse.metadata.toolsUsed;
+            assistantMessage.metadata.toolsData = aiResponse.metadata.toolsData;
+          }
+
+          newMessages.push(assistantMessage);
+          existingConversation.messages.push(...newMessages);
+          existingConversation.metadata.messageCount = existingConversation.messages.length;
+          if (aiResponse.metadata?.tokensUsed) {
+            existingConversation.metadata.totalTokens = (existingConversation.metadata.totalTokens || 0) + aiResponse.metadata.tokensUsed;
+          }
+          await existingConversation.save();
+
+          savedConversation = existingConversation;
         } else {
-          // Create new conversation
-          const conversation = {
-            type: "chat",
-            title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
-            content: aiResponse.content,
-            reasoning: `Responding to: ${message}`,
-            status: "completed",
-            // Store full conversation with both user and AI messages
-            messages: [
-              {
-                role: "user",
-                content: message,
-                timestamp: new Date()
-              },
-              {
-                role: "assistant",
-                content: aiResponse.content,
-                timestamp: aiResponse.timestamp || new Date()
-              }
-            ],
-            createdAt: new Date(),
-            updatedAt: new Date()
+          // Create new conversation using ChatConversation model
+          // Simplified: Save only user message and final assistant response
+          // Intermediate tool messages are not persisted to avoid complex serialization issues
+          const messages = [
+            {
+              role: "user",
+              content: message,
+              timestamp: new Date(),
+              metadata: {}
+            }
+          ];
+
+          // Add final assistant message with tool data in metadata
+          const assistantMessage = {
+            role: "assistant",
+            content: aiResponse.content || "",
+            timestamp: new Date(),
+            metadata: {
+              tokens: aiResponse.metadata?.tokensUsed,
+              model: aiResponse.metadata?.model,
+              thinkingTime: aiResponse.metadata?.thinkingTime
+            }
           };
 
-          const result = await collection.insertOne(conversation);
-          savedConversation = {
-            id: result.insertedId,
-            ...conversation
-          };
+          // Include tool usage info in metadata (not as separate messages)
+          if (aiResponse.metadata?.toolUsed) {
+            assistantMessage.metadata.toolUsed = aiResponse.metadata.toolUsed;
+            assistantMessage.metadata.toolData = aiResponse.metadata.toolData;
+          }
+          // Handle new multi-tool format
+          if (aiResponse.metadata?.toolsUsed) {
+            assistantMessage.metadata.toolsUsed = aiResponse.metadata.toolsUsed;
+            assistantMessage.metadata.toolsData = aiResponse.metadata.toolsData;
+          }
+
+          messages.push(assistantMessage);
+
+          const newConversation = new ChatConversation({
+            title: message.substring(0, 60) + (message.length > 60 ? "..." : ""),
+            isActive: true,
+            messages: messages,
+            metadata: {
+              messageCount: messages.length,
+              totalTokens: aiResponse.metadata?.tokensUsed || 0,
+              lastTopic: aiResponse.metadata?.queryType
+            }
+          });
+
+          await newConversation.save();
+          savedConversation = newConversation;
+          savedConversationId = newConversation._id;
         }
       } catch (dbError) {
-        console.error("Error saving conversation to database:", dbError);
-        // Continue without saving
+        logger.error("Error saving conversation to database", {
+          error: dbError.message
+        });
+
+        // Fallback: try legacy collection
+        try {
+          const collection = mongoose.connection.db.collection("marketing_strategy");
+
+          if (existingConversation) {
+            const newMessages = [
+              { role: "user", content: message, timestamp: new Date() },
+              { role: "assistant", content: aiResponse.content, timestamp: aiResponse.timestamp || new Date() }
+            ];
+
+            await collection.updateOne(
+              { _id: new mongoose.Types.ObjectId(conversationId) },
+              {
+                $push: { messages: { $each: newMessages } },
+                $set: {
+                  content: aiResponse.content,
+                  updatedAt: new Date()
+                }
+              }
+            );
+
+            savedConversation = {
+              id: conversationId,
+              ...existingConversation,
+              messages: [...(existingConversation.messages || []), ...newMessages]
+            };
+          } else {
+            const conversation = {
+              type: "chat",
+              title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
+              content: aiResponse.content,
+              reasoning: `Responding to: ${message}`,
+              status: "completed",
+              messages: [
+                { role: "user", content: message, timestamp: new Date() },
+                { role: "assistant", content: aiResponse.content, timestamp: new Date() }
+              ],
+              createdAt: new Date(),
+              updatedAt: new Date()
+            };
+
+            const result = await collection.insertOne(conversation);
+            savedConversation = {
+              id: result.insertedId,
+              ...conversation
+            };
+            savedConversationId = result.insertedId;
+          }
+        } catch (fallbackError) {
+          logger.error("Error saving to legacy collection", {
+            error: fallbackError.message
+          });
+        }
       }
     } else {
-      // Mock mode: Use in-memory storage for development/testing
+      // Mock mode: Use in-memory storage
       const newMessages = [
-        {
-          role: "user",
-          content: message,
-          timestamp: new Date()
-        },
-        {
-          role: "assistant",
-          content: aiResponse.content,
-          timestamp: aiResponse.timestamp || new Date()
-        }
+        { role: "user", content: message, timestamp: new Date() },
+        { role: "assistant", content: aiResponse.content, timestamp: new Date() }
       ];
 
       if (existingConversation) {
-        // Update existing mock conversation
         existingConversation.messages.push(...newMessages);
         existingConversation.content = aiResponse.content;
         existingConversation.updatedAt = new Date();
@@ -1625,15 +916,12 @@ Always base recommendations on actual data when available.`
           ...existingConversation
         };
       } else {
-        // Create new mock conversation
         const newConversationId = `mock_conv_${mockConversationIdCounter++}`;
         const newConversation = {
           _id: newConversationId,
           type: "chat",
           title: message.substring(0, 50) + (message.length > 50 ? "..." : ""),
           content: aiResponse.content,
-          reasoning: `Responding to: ${message}`,
-          status: "completed",
           messages: newMessages,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -1643,10 +931,11 @@ Always base recommendations on actual data when available.`
           id: newConversationId,
           ...newConversation
         };
+        savedConversationId = newConversationId;
       }
     }
 
-    // Check if a summary was created for this conversation
+    // Check if summary was created
     const summary = conversationId ? conversationSummaries.get(conversationId) : null;
 
     res.json({
@@ -1655,9 +944,10 @@ Always base recommendations on actual data when available.`
         role: aiResponse.role,
         content: aiResponse.content,
         timestamp: aiResponse.timestamp,
-        proposal: aiResponse.proposal || null
+        proposal: aiResponse.proposal || null,
+        metadata: aiResponse.metadata
       },
-      conversationId: savedConversation?.id,
+      conversationId: savedConversationId,
       contextInfo: summary ? {
         summaryCreated: true,
         summarizedMessages: summary.originalMessageCount,
@@ -1670,7 +960,10 @@ Always base recommendations on actual data when available.`
       message: "Response generated successfully"
     });
   } catch (error) {
-    console.error("Error processing chat message:", error);
+    logger.error("Error processing chat message", {
+      error: error.message,
+      stack: error.stack
+    });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1699,14 +992,37 @@ router.post("/feedback", async (req, res) => {
       });
     }
 
-    // Update conversation with feedback
-    // mongoose already imported at top of file
+    // Try ChatConversation model first
+    try {
+      const conversation = await ChatConversation.findById(conversationId);
+      if (conversation) {
+        // Store feedback in metadata
+        if (!conversation.metadata.feedback) {
+          conversation.metadata.feedback = [];
+        }
+        conversation.metadata.feedback.push({
+          content: feedback,
+          type: type,
+          timestamp: new Date()
+        });
+        await conversation.save();
+
+        return res.json({
+          success: true,
+          message: "Feedback recorded successfully"
+        });
+      }
+    } catch (modelError) {
+      // Fall through to legacy collection
+    }
+
+    // Legacy collection fallback
     await mongoose.connection.db.collection("marketing_strategy").updateOne(
       { _id: conversationId },
       {
         $set: {
           feedback: feedback,
-          feedbackType: type, // 'positive' or 'negative'
+          feedbackType: type,
           feedbackGivenAt: new Date(),
           updatedAt: new Date()
         }
@@ -1718,7 +1034,7 @@ router.post("/feedback", async (req, res) => {
       message: "Feedback recorded successfully"
     });
   } catch (error) {
-    console.error("Error recording feedback:", error);
+    logger.error("Error recording feedback", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1732,21 +1048,34 @@ router.delete("/history", async (req, res) => {
     const status = databaseService.getStatus();
 
     if (!status.isConnected || status.readyState !== 1) {
+      mockConversations.clear();
       return res.json({
         success: true,
         message: "History cleared (no database connection)"
       });
     }
 
-    // mongoose already imported at top of file
-    await mongoose.connection.db.collection("marketing_strategy").deleteMany({ type: "chat" });
+    // Try ChatConversation model first
+    try {
+      await ChatConversation.updateMany(
+        { isActive: true },
+        { isActive: false, archivedAt: new Date() }
+      );
+    } catch (modelError) {
+      // Fallback to legacy collection
+      await mongoose.connection.db.collection("marketing_strategy").deleteMany({ type: "chat" });
+    }
+
+    // Clear in-memory storage
+    mockConversations.clear();
+    conversationSummaries.clear();
 
     res.json({
       success: true,
       message: "Conversation history cleared successfully"
     });
   } catch (error) {
-    console.error("Error clearing chat history:", error);
+    logger.error("Error clearing chat history", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1771,7 +1100,6 @@ router.post("/create-todo", async (req, res) => {
 
     if (status.isConnected && status.readyState === 1) {
       try {
-        // mongoose already imported at top of file
         const todo = {
           title,
           description: description || "",
@@ -1796,8 +1124,7 @@ router.post("/create-todo", async (req, res) => {
           ...todo
         };
       } catch (dbError) {
-        console.error("Error saving todo to database:", dbError);
-        // Continue with mock response
+        logger.error("Error saving todo to database", { error: dbError.message });
       }
     }
 
@@ -1829,7 +1156,7 @@ router.post("/create-todo", async (req, res) => {
       message: "Todo created successfully from chat"
     });
   } catch (error) {
-    console.error("Error creating todo from chat:", error);
+    logger.error("Error creating todo from chat", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1851,13 +1178,11 @@ router.post("/approve", async (req, res) => {
 
     const status = databaseService.getStatus();
 
-    // Save approved proposal to database
     if (status.isConnected && status.readyState === 1) {
       try {
-        // mongoose already imported at top of file
         const approvedProposal = {
           type: "decision",
-          title: `Budget Change: ${proposal.current.total} → ${proposal.proposed.total}`,
+          title: `Budget Change: ${proposal.current?.total || proposal.current?.budget} → ${proposal.proposed?.total || proposal.proposed?.budget}`,
           content: `Approved budget reallocation from paid ads to content production`,
           reasoning: proposal.reasoning,
           dataReferences: [{
@@ -1876,7 +1201,7 @@ router.post("/approve", async (req, res) => {
 
         await mongoose.connection.db.collection("marketing_strategy").insertOne(approvedProposal);
       } catch (dbError) {
-        console.error("Error saving approved proposal to database:", dbError);
+        logger.error("Error saving approved proposal", { error: dbError.message });
       }
     }
 
@@ -1890,7 +1215,7 @@ router.post("/approve", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Error approving proposal:", error);
+    logger.error("Error approving proposal", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1912,10 +1237,8 @@ router.post("/reject", async (req, res) => {
 
     const status = databaseService.getStatus();
 
-    // Save rejected proposal to database
     if (status.isConnected && status.readyState === 1) {
       try {
-        // mongoose already imported at top of file
         const rejectedProposal = {
           type: "decision",
           title: `Budget Change Rejected`,
@@ -1938,7 +1261,7 @@ router.post("/reject", async (req, res) => {
 
         await mongoose.connection.db.collection("marketing_strategy").insertOne(rejectedProposal);
       } catch (dbError) {
-        console.error("Error saving rejected proposal to database:", dbError);
+        logger.error("Error saving rejected proposal", { error: dbError.message });
       }
     }
 
@@ -1953,7 +1276,7 @@ router.post("/reject", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Error rejecting proposal:", error);
+    logger.error("Error rejecting proposal", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -1961,129 +1284,231 @@ router.post("/reject", async (req, res) => {
   }
 });
 
-// GET /api/chat/daily-briefing - Generate daily briefing
-router.get("/daily-briefing", async (req, res) => {
-  try {
-    const data = mockHistoricalData;
-    const now = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
+// ============================================================================
+// TOOL APPROVAL ENDPOINTS
+// ============================================================================
 
-    // Calculate yesterday's metrics
-    const yesterdayPosts = data.posts.filter(p => {
-      const postDate = new Date(p.postedAt);
-      return postDate.toDateString() === yesterday.toDateString();
+// POST /api/chat/tools/approve - Approve and execute a tool proposal
+router.post("/tools/approve", async (req, res) => {
+  try {
+    const { proposalId } = req.body;
+
+    if (!proposalId) {
+      return res.status(400).json({
+        success: false,
+        error: "Proposal ID is required"
+      });
+    }
+
+    logger.info('Tool approval requested', { proposalId });
+
+    // Find the proposal
+    const proposal = await ToolProposal.findById(proposalId);
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        error: 'Proposal not found'
+      });
+    }
+
+    if (proposal.status !== 'pending_approval') {
+      return res.status(400).json({
+        success: false,
+        error: `Proposal is not pending approval (current status: ${proposal.status})`
+      });
+    }
+
+    // Mark as approved
+    await proposal.approve('founder');
+
+    logger.info('Tool proposal approved, executing', {
+      proposalId,
+      toolName: proposal.toolName
     });
 
-    const yesterdayViews = yesterdayPosts.reduce((sum, p) => sum + p.views, 0);
-    const yesterdayEngagement = yesterdayPosts.length > 0
-      ? (yesterdayPosts.reduce((sum, p) => sum + p.engagementRate, 0) / yesterdayPosts.length).toFixed(1)
-      : 0;
+    // Execute the tool
+    const result = await executeTool(proposal);
 
-    // Find alerts needing attention
-    const alerts = [];
-
-    // Budget alerts
-    const totalSpend = data.campaigns.reduce((sum, c) => sum + c.spend, 0);
-    const budgetUtilization = (totalSpend / 3000) * 100;
-    if (budgetUtilization > 90) {
-      alerts.push({
-        type: 'critical',
-        title: '⚠️ Budget Critical',
-        message: `Paid ads budget at ${budgetUtilization.toFixed(0)}% utilization. All campaigns have negative ROI.`
-      });
-    } else if (budgetUtilization > 70) {
-      alerts.push({
-        type: 'warning',
-        title: '📊 Budget Alert',
-        message: `Paid ads budget at ${budgetUtilization.toFixed(0)}% utilization. Consider pausing negative ROI campaigns.`
-      });
-    }
-
-    // Declining keywords
-    const decliningKeywords = data.keywords.filter(k => k.change < 0);
-    if (decliningKeywords.length > 0) {
-      alerts.push({
-        type: 'warning',
-        title: '📉 ASO Keywords Declining',
-        message: `${decliningKeywords.length} keyword(s) dropping: ${decliningKeywords.map(k => `"${k.keyword}"`).join(', ')}`
-      });
-    }
-
-    // Today's priorities based on day of week
-    const dayOfWeek = now.getDay(); // 0 = Sunday, 6 = Saturday
-    const dailyPriorities = [];
-
-    if (dayOfWeek === 1) { // Monday
-      dailyPriorities.push({
-        title: 'Content Creation',
-        description: 'Create 3-4 Office Romance posts for this week',
-        priority: 'high'
-      });
-      dailyPriorities.push({
-        title: 'ASO Review',
-        description: 'Check and update keyword rankings',
-        priority: 'medium'
-      });
-    } else if (dayOfWeek === 2 || dayOfWeek === 4) { // Tuesday or Thursday
-      dailyPriorities.push({
-        title: 'Content Creation',
-        description: 'Create 4 posts across different categories',
-        priority: 'high'
-      });
-      dailyPriorities.push({
-        title: 'Performance Review',
-        description: 'Review yesterday\'s post performance',
-        priority: 'low'
-      });
-    } else { // Other days
-      dailyPriorities.push({
-        title: 'Content Creation',
-        description: 'Create 3 posts for today',
-        priority: 'high'
-      });
-    }
-
-    // Weekly summary for Monday
-    let weeklySummary = null;
-    if (dayOfWeek === 1) {
-      const lastWeekTotalViews = data.posts.reduce((sum, p) => sum + p.views, 0);
-      const avgEngagement = (data.posts.reduce((sum, p) => sum + p.engagementRate, 0) / data.posts.length).toFixed(1);
-
-      weeklySummary = {
-        totalViews: lastWeekTotalViews,
-        avgEngagement: avgEngagement,
-        topCategory: Object.entries(
-          data.posts.reduce((acc, p) => {
-            acc[p.category] = (acc[p.category] || 0) + p.views;
-            return acc;
-          }, {})
-        ).sort((a, b) => b[1] - a[1])[0]
-      };
+    // Update proposal with execution result
+    if (result.success) {
+      await proposal.markExecuted(result.data);
+    } else {
+      await proposal.markFailed(result.error);
     }
 
     res.json({
+      success: result.success,
+      proposalId: proposal._id,
+      toolName: proposal.toolName,
+      result: result.data,
+      error: result.error,
+      executedAt: proposal.executedAt,
+      message: result.success
+        ? `Tool "${proposal.toolName}" executed successfully`
+        : `Tool "${proposal.toolName}" execution failed`
+    });
+  } catch (error) {
+    logger.error('Error approving tool proposal', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// POST /api/chat/tools/reject - Reject a tool proposal
+router.post("/tools/reject", async (req, res) => {
+  try {
+    const { proposalId, reason } = req.body;
+
+    if (!proposalId) {
+      return res.status(400).json({
+        success: false,
+        error: "Proposal ID is required"
+      });
+    }
+
+    logger.info('Tool rejection requested', { proposalId, reason });
+
+    const proposal = await ToolProposal.findById(proposalId);
+    if (!proposal) {
+      return res.status(404).json({
+        success: false,
+        error: 'Proposal not found'
+      });
+    }
+
+    if (proposal.status !== 'pending_approval') {
+      return res.status(400).json({
+        success: false,
+        error: `Proposal is not pending approval (current status: ${proposal.status})`
+      });
+    }
+
+    await proposal.reject(reason || 'User rejected the proposal', 'founder');
+
+    logger.info('Tool proposal rejected', {
+      proposalId,
+      toolName: proposal.toolName,
+      reason
+    });
+
+    res.json({
       success: true,
-      briefing: {
-        date: now.toISOString(),
-        dayOfWeek: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][dayOfWeek],
-        yesterday: {
-          posts: yesterdayPosts.length,
-          views: yesterdayViews,
-          avgEngagement: yesterdayEngagement
-        },
-        todayMetrics: {
-          mrr: data.revenue.current.mrr,
-          subscribers: data.revenue.current.subscribers,
-          budgetUtilization: budgetUtilization.toFixed(0)
-        },
-        alerts: alerts,
-        priorities: dailyPriorities,
-        weeklySummary: weeklySummary
+      message: 'Tool proposal rejected',
+      proposalId: proposal._id,
+      toolName: proposal.toolName,
+      rejectionReason: reason
+    });
+  } catch (error) {
+    logger.error('Error rejecting tool proposal', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/chat/tools/pending - Get pending tool proposals
+router.get("/tools/pending", async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+
+    const proposals = await ToolProposal.getPending();
+
+    res.json({
+      success: true,
+      proposals: proposals.slice(0, parseInt(limit)).map(p => ({
+        id: p._id,
+        toolName: p.toolName,
+        parameters: p.toolParameters,
+        reasoning: p.reasoning,
+        requiresApproval: p.requiresApproval,
+        createdAt: p.createdAt
+      }))
+    });
+  } catch (error) {
+    logger.error('Error getting pending proposals', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/chat/tools/history - Get executed tool history
+router.get("/tools/history", async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+
+    const proposals = await ToolProposal.getRecentExecuted(parseInt(limit));
+
+    res.json({
+      success: true,
+      proposals: proposals.map(p => ({
+        id: p._id,
+        toolName: p.toolName,
+        parameters: p.toolParameters,
+        reasoning: p.reasoning,
+        status: p.status,
+        executedAt: p.executedAt,
+        executionDuration: p.executionDuration,
+        executionError: p.executionError
+      }))
+    });
+  } catch (error) {
+    logger.error('Error getting tool history', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/chat/tools/list - Get list of available tools
+router.get("/tools/list", async (req, res) => {
+  try {
+    const { getToolMetadata, getApprovalRequiredTools, getReadOnlyTools } = await import('../services/tinaTools/index.js');
+
+    const approvalRequired = getApprovalRequiredTools();
+    const readOnly = getReadOnlyTools();
+
+    res.json({
+      success: true,
+      tools: {
+        approvalRequired: approvalRequired.map(t => ({
+          name: t.name,
+          description: t.description,
+          exampleUsage: t.exampleUsage,
+          expectedImpact: t.expectedImpact
+        })),
+        readOnly: readOnly.map(t => ({
+          name: t.name,
+          description: t.description,
+          exampleUsage: t.exampleUsage
+        }))
       }
     });
   } catch (error) {
-    console.error("Error generating daily briefing:", error);
+    logger.error('Error getting tools list', { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/chat/daily-briefing - Generate daily briefing (now handled by dailyBriefing job)
+router.get("/daily-briefing", async (req, res) => {
+  try {
+    // This endpoint now delegates to the dailyBriefing job
+    // Return a simple status for now
+    res.json({
+      success: true,
+      message: "Daily briefing is generated by the scheduled job. Check the /api/briefing endpoint for the latest briefing."
+    });
+  } catch (error) {
+    logger.error("Error in daily briefing endpoint", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -2119,7 +1544,6 @@ router.post("/decision/implement", async (req, res) => {
       });
     }
 
-    // mongoose already imported at top of file
     const result = await mongoose.connection.db.collection("marketing_strategy").updateOne(
       { _id: decisionId },
       {
@@ -2152,7 +1576,7 @@ router.post("/decision/implement", async (req, res) => {
       }
     });
   } catch (error) {
-    console.error("Error implementing decision:", error);
+    logger.error("Error implementing decision", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -2168,7 +1592,6 @@ router.get("/decisions", async (req, res) => {
     const statusFilter = status ? { status: status } : {};
     const typeFilter = type ? { type: type } : {};
 
-    // Filter for decision types only (excluding regular chat)
     const filter = {
       $or: [
         { type: "decision" },
@@ -2182,81 +1605,13 @@ router.get("/decisions", async (req, res) => {
     const statusDb = databaseService.getStatus();
 
     if (!statusDb.isConnected || statusDb.readyState !== 1) {
-      // Return mock decisions for development
       return res.json({
         success: true,
-        decisions: [
-          {
-            id: "mock_decision_1",
-            type: "decision",
-            title: "Budget Change: $3000 → $3000 (Reallocated to Content)",
-            content: "Approved budget reallocation from paid ads to content production",
-            reasoning: "All paid campaigns have negative ROI. Organic content outperforms paid ads 3:1 on engagement.",
-            status: "implemented",
-            expectedOutcome: {
-              monthlySavings: 1960,
-              projectedReachIncrease: "50-70%",
-              estimatedNewUsers: "80-120/month",
-              newCAC: 16,
-              oldCAC: 400
-            },
-            actualOutcome: {
-              monthlySavings: 1890,
-              reachIncrease: "65%",
-              newUsers: 95,
-              cac: 18
-            },
-            implementationNotes: "Paused all campaigns on Jan 10. Reallocated budget to content tools.",
-            implementedAt: "2026-01-10T10:00:00.000Z",
-            createdAt: "2026-01-08T14:30:00.000Z",
-            updatedAt: "2026-01-10T10:00:00.000Z"
-          },
-          {
-            id: "mock_decision_2",
-            type: "pivot",
-            title: "Strategic Pivot: Paid-First to Content-First Growth",
-            content: "Recommended strategic pivot from paid advertising to organic content-first growth",
-            reasoning: "Paid campaigns have -60% average ROI with $400 CAC. Organic content generates +280% ROI with ~$15 CAC.",
-            status: "approved",
-            expectedOutcome: {
-              beforePivot: { monthlySpend: 3000, newUsers: 15, cac: 400 },
-              afterPivot: { monthlySpend: 1400, newUsers: "80-120", cac: 15 }
-            },
-            actualOutcome: null,
-            implementedAt: null,
-            createdAt: "2026-01-05T09:00:00.000Z",
-            updatedAt: "2026-01-08T14:30:00.000Z"
-          },
-          {
-            id: "mock_decision_3",
-            type: "review",
-            title: "Campaign Review - January 13, 2026",
-            content: "Regular scheduled campaign performance review",
-            reasoning: "Weekly campaign performance monitoring",
-            status: "completed",
-            dataReferences: {
-              type: "campaign_review",
-              summary: {
-                totalSpend: 2160,
-                avgROI: -61,
-                recommendations: [
-                  "Pause all campaigns",
-                  "Reallocate budget to content"
-                ]
-              }
-            },
-            expectedOutcome: "All negative ROI campaigns paused",
-            actualOutcome: "All campaigns paused successfully",
-            reviewDate: "2026-01-13T00:00:00.000Z",
-            createdAt: "2026-01-13T14:00:00.000Z",
-            updatedAt: "2026-01-13T14:00:00.000Z"
-          }
-        ],
+        decisions: [],
         message: "Mock data - no database connection"
       });
     }
 
-    // mongoose already imported at top of file
     const decisions = await mongoose.connection
       .collection("marketing_strategy")
       .find(filter)
@@ -2284,7 +1639,7 @@ router.get("/decisions", async (req, res) => {
       }))
     });
   } catch (error) {
-    console.error("Error fetching decisions:", error);
+    logger.error("Error fetching decisions", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message
@@ -2293,4 +1648,3 @@ router.get("/decisions", async (req, res) => {
 });
 
 export default router;
-
