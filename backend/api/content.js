@@ -12,6 +12,7 @@ import youtubeOptimizationService from '../services/youtubeOptimizationService.j
 import contentBatchingService from '../services/contentBatchingService.js';
 import contentModerationService from '../services/contentModerationService.js';
 import MarketingPost from '../models/MarketingPost.js';
+import { getStories, createPost } from '../services/tinaTools/postManagementTools.js';
 
 const router = express.Router();
 
@@ -29,6 +30,39 @@ const logger = winston.createLogger({
     new winston.transports.File({ filename: 'logs/content-api.log' }),
   ],
 });
+
+/**
+ * Convert storage file path to URL
+ * Converts Windows and WSL paths to /storage/ URLs for frontend access
+ * @param {string} filePath - Absolute file path
+ * @returns {string} URL path like /storage/videos/tier1/final/video.mp4
+ */
+function storagePathToUrl(filePath) {
+  if (!filePath) return null;
+
+  // Normalize path separators
+  const normalizedPath = filePath.replace(/\\/g, '/');
+
+  // Match the storage directory (after normalization to forward slashes)
+  const storageMatch = normalizedPath.match(/\/?mnt\/[cC]\/Projects\/blush-marketing\/storage\/(.+)/) ||
+                      normalizedPath.match(/[A-Z]:\/Projects\/blush-marketing\/storage\/(.+)/) ||
+                      normalizedPath.match(/\/storage\/(.+)/);
+
+  if (storageMatch) {
+    const url = `/storage/${storageMatch[1]}`;
+    logger.debug('Path converted to URL', { input: filePath, output: url });
+    return url;
+  }
+
+  // If path is already under /storage, use as-is
+  if (normalizedPath.startsWith('/storage/')) {
+    return normalizedPath;
+  }
+
+  // Log warning if path couldn't be converted
+  logger.warn('Could not convert path to URL', { input: filePath, normalized: normalizedPath });
+  return filePath; // Return original if no pattern matched
+}
 
 /**
  * POST /api/content/generate
@@ -89,6 +123,50 @@ router.get('/stories', async (req, res) => {
 
   } catch (error) {
     logger.error('Get story API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/stories/list
+ * Get list of stories available for post creation
+ * Query params: category, spiciness, limit
+ */
+router.get('/stories/list', async (req, res) => {
+  try {
+    const { category, spiciness, limit, search } = req.query;
+
+    logger.info('Fetching stories list for post creation', {
+      category: category || 'all',
+      spiciness: spiciness || 'any',
+      limit: limit || 20,
+      search: search || 'none'
+    });
+
+    const result = await getStories({
+      category,
+      spiciness: spiciness ? parseInt(spiciness) : undefined,
+      limit: limit ? parseInt(limit) : 50, // Get more to allow client-side filtering
+      search
+    });
+
+    res.json({
+      success: true,
+      data: {
+        count: result.count,
+        stories: result.stories
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get stories list API error', {
       error: error.message,
       stack: error.stack
     });
@@ -165,64 +243,69 @@ router.get('/status', async (req, res) => {
 
 /**
  * POST /api/content/posts/create
- * Create a new marketing post (for testing purposes)
+ * Create a new marketing post from the UI or Tina
  */
 router.post('/posts/create', async (req, res) => {
   try {
     logger.info('Creating marketing post via API', { body: req.body });
 
     const {
-      title,
-      description,
-      platform,
-      contentType,
-      status = 'draft',
-      caption,
-      hashtags,
-      scheduledAt,
       storyId,
-      storyName,
-      storyCategory,
-      storySpiciness,
-      generatedAt,
-      generationSource,
-      imagePath
+      platforms,
+      caption,
+      hook,
+      hashtags,
+      contentType = 'video',
+      contentTier = 'tier_1',
+      tierParameters = {},
+      preset = 'triple_visual',  // Extract preset from request
+      voice = 'female_1',
+      generateVideo = false,
+      scheduleFor
     } = req.body;
 
     // Validate required fields
-    if (!platform || !contentType) {
+    if (!storyId) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required fields: platform, contentType'
+        error: 'Missing required field: storyId'
       });
     }
 
-    // Create the post
-    const post = new MarketingPost({
-      title: title || 'Test Post',
-      description,
-      platform,
+    if (!platforms || !Array.isArray(platforms) || platforms.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required field: platforms (array)'
+      });
+    }
+
+    // Log preset for debugging
+    logger.info('Post creation with preset', { preset, contentTier });
+
+    // Use the createPost function from postManagementTools
+    const result = await createPost({
+      storyId,
+      platforms,
+      caption,
+      hook,
+      hashtags,
       contentType,
-      status,
-      caption: caption || '',
-      hashtags: hashtags || [],
-      scheduledAt: scheduledAt ? new Date(scheduledAt) : new Date(Date.now() + 86400000),
-      storyId: storyId || '000000000000000000000001',
-      storyName: storyName || 'Test Story',
-      storyCategory: storyCategory || 'Contemporary',
-      storySpiciness: storySpiciness || 1,
-      imagePath,
-      generatedAt: generatedAt ? new Date(generatedAt) : new Date(),
-      generationSource: generationSource || 'api'
+      contentTier,
+      tierParameters,
+      preset,  // Pass preset through to createPost
+      voice,
+      generateVideo,
+      scheduleFor
     });
 
-    await post.save();
-
-    logger.info('Marketing post created', { id: post._id, status });
+    logger.info('Marketing post(s) created', {
+      created: result.created,
+      videoGenerated: result.videoGenerated
+    });
 
     res.json({
       success: true,
-      data: post
+      data: result
     });
 
   } catch (error) {
@@ -1826,9 +1909,17 @@ router.get('/posts/:id', async (req, res) => {
       });
     }
 
+    // Convert file paths to URLs for frontend access
+    const postWithUrls = {
+      ...post.toObject(),
+      videoPath: storagePathToUrl(post.videoPath),
+      imagePath: storagePathToUrl(post.imagePath),
+      thumbnailPath: storagePathToUrl(post.thumbnailPath)
+    };
+
     res.json({
       success: true,
-      data: post
+      data: postWithUrls
     });
 
   } catch (error) {
@@ -2395,16 +2486,24 @@ router.get('/posts', async (req, res) => {
 
     const posts = await MarketingPost.find(query)
       .populate('storyId', 'title coverPath spiciness category')
-      .sort({ scheduledAt: -1 })
+      .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(parseInt(skip));
 
     const total = await MarketingPost.countDocuments(query);
 
+    // Convert file paths to URLs for frontend access
+    const postsWithUrls = posts.map(post => ({
+      ...post.toObject(),
+      videoPath: storagePathToUrl(post.videoPath),
+      imagePath: storagePathToUrl(post.imagePath),
+      thumbnailPath: storagePathToUrl(post.thumbnailPath)
+    }));
+
     res.json({
       success: true,
       data: {
-        posts,
+        posts: postsWithUrls,
         pagination: {
           total,
           limit: parseInt(limit),

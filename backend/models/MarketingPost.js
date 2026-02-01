@@ -25,7 +25,7 @@ const marketingPostSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'ready', 'approved', 'scheduled', 'posted', 'failed', 'rejected'],
+    enum: ['draft', 'ready', 'approved', 'scheduled', 'posted', 'failed', 'rejected', 'generating'],
     default: 'draft',
     required: true
   },
@@ -35,12 +35,51 @@ const marketingPostSchema = new mongoose.Schema({
     default: 'video'
   },
 
+  // Content tier for tracking generation type
+  contentTier: {
+    type: String,
+    enum: ['tier_1', 'tier_2', 'tier_3', null],
+    default: null,
+    index: true
+  },
+
+  // Generation metadata for cost tracking
+  generationMetadata: {
+    tier: String,
+    imageModel: String, // 'pixelwave', 'flux', etc.
+    videoModel: String, // 'ffmpeg_enhanced_static', 'kling', etc.
+    ttsModel: String, // 'xtts', 'elevenlabs', etc.
+    audioModel: String, // 'fal_ai', null
+    voice: String, // 'female_1', 'male_1', etc.
+    estimatedCost: Number, // in USD
+    actualCost: Number, // tracked after generation
+    generationTime: Number, // milliseconds
+    effects: [String], // ['ken_burns', 'pan', 'text_overlay', 'vignette']
+    imagePrompt: String, // Original image generation prompt
+    narrationLength: Number // Character count of narration
+  },
+
+  // Tier-specific parameters (flexible map for different tiers)
+  tierParameters: {
+    type: Map,
+    of: new mongoose.Schema({
+      parameterKey: String,
+      parameterValue: mongoose.Schema.Types.Mixed
+    }),
+    default: new Map(),
+    required: false
+  },
+
   // Content assets
   videoPath: {
     type: String,
     trim: true
   },
   imagePath: {
+    type: String,
+    trim: true
+  },
+  thumbnailPath: {
     type: String,
     trim: true
   },
@@ -122,6 +161,11 @@ const marketingPostSchema = new mongoose.Schema({
   hook: {
     type: String,
     trim: true
+  },
+  cta: {
+    type: String,
+    trim: true,
+    default: 'Read more on Blush 🔥'
   },
 
   // Approval history tracking
@@ -261,6 +305,50 @@ const marketingPostSchema = new mongoose.Schema({
     errorMessage: {
       type: String,
       trim: true
+    }
+  },
+
+  // Video generation progress tracking
+  videoGenerationProgress: {
+    status: {
+      type: String,
+      enum: ['idle', 'initializing', 'extracting_text', 'generating_images', 'creating_narration', 'mixing_audio', 'processing_video', 'completed', 'failed'],
+      default: 'idle'
+    },
+    progress: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
+    stage: {
+      type: String,
+      trim: true
+    },
+    currentStep: {
+      type: String,
+      trim: true
+    },
+    totalSteps: {
+      type: Number,
+      default: 7
+    },
+    startedAt: {
+      type: Date
+    },
+    completedAt: {
+      type: Date
+    },
+    errorMessage: {
+      type: String,
+      trim: true
+    },
+    result: {
+      videoPath: String,
+      duration: Number,
+      metadata: {
+        type: mongoose.Schema.Types.Mixed
+      }
     }
   },
 
@@ -516,6 +604,96 @@ marketingPostSchema.methods.updateUploadProgress = function(status, progress = 0
     this.uploadProgress.completedAt = new Date();
   }
 
+  return this.save();
+};
+
+// Method to update video generation progress
+marketingPostSchema.methods.updateVideoGenerationProgress = function(status, progress = 0, currentStep = null, result = null, errorMessage = null) {
+  this.videoGenerationProgress = this.videoGenerationProgress || {};
+  this.videoGenerationProgress.status = status;
+  this.videoGenerationProgress.progress = progress;
+
+  if (currentStep) {
+    this.videoGenerationProgress.currentStep = currentStep;
+    this.videoGenerationProgress.stage = currentStep;
+  }
+  if (result) {
+    this.videoGenerationProgress.result = result;
+  }
+  if (errorMessage) {
+    this.videoGenerationProgress.errorMessage = errorMessage;
+  }
+
+  // Set timestamps
+  if (status === 'initializing' && !this.videoGenerationProgress.startedAt) {
+    this.videoGenerationProgress.startedAt = new Date();
+  }
+  if (status === 'completed' || status === 'failed') {
+    this.videoGenerationProgress.completedAt = new Date();
+  }
+
+  // Update post status based on generation status
+  if (status === 'initializing' && this.status !== 'generating') {
+    this.status = 'generating';
+  }
+  if (status === 'completed') {
+    this.status = 'ready';
+  }
+  if (status === 'failed') {
+    this.status = 'draft';
+  }
+
+  return this.save();
+};
+
+// Method to start video generation
+marketingPostSchema.methods.startVideoGeneration = function() {
+  this.status = 'generating';
+  this.videoGenerationProgress = {
+    status: 'initializing',
+    progress: 0,
+    currentStep: 'Initializing...',
+    totalSteps: 7,
+    startedAt: new Date()
+  };
+  return this.save();
+};
+
+// Method to complete video generation
+marketingPostSchema.methods.completeVideoGeneration = function(videoPath, duration, metadata) {
+  this.status = 'ready';
+  this.videoGenerationProgress = {
+    status: 'completed',
+    progress: 100,
+    currentStep: 'Complete',
+    completedAt: new Date(),
+    result: {
+      videoPath,
+      duration,
+      metadata
+    }
+  };
+  this.videoPath = videoPath;
+  this.generationMetadata = metadata;
+  return this.save();
+};
+
+// Method to fail video generation
+marketingPostSchema.methods.failVideoGeneration = function(errorMessage) {
+  this.status = 'draft';
+  // Build new progress object without spreading (to avoid undefined result field)
+  const existingProgress = this.videoGenerationProgress || {};
+  this.videoGenerationProgress = {
+    status: 'failed',
+    progress: existingProgress.progress || 0,
+    currentStep: existingProgress.currentStep || 'Failed',
+    totalSteps: existingProgress.totalSteps || 7,
+    stage: existingProgress.stage || 'failed',
+    startedAt: existingProgress.startedAt,
+    completedAt: new Date(),
+    errorMessage
+  };
+  // Do NOT include result field when failing (it's optional)
   return this.save();
 };
 

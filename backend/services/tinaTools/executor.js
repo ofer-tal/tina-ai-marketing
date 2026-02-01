@@ -12,6 +12,7 @@ import RetentionMetrics from '../../models/RetentionMetrics.js';
 import GoogleAnalyticsDaily from '../../models/GoogleAnalyticsDaily.js';
 import appleSearchAdsService from '../appleSearchAdsService.js';
 import appStoreConnectService from '../appStoreConnectService.js';
+import postManagementTools from './postManagementTools.js';
 
 const logger = getLogger('tool-executor', 'tool-executor');
 
@@ -71,6 +72,31 @@ export async function executeTool(proposal) {
         result = await createContentExperiment(toolParameters);
         break;
 
+      // Post management tools (read-only, no approval)
+      case 'get_stories':
+        result = await postManagementTools.getStories(toolParameters);
+        break;
+
+      case 'create_post':
+        result = await postManagementTools.createPost(toolParameters);
+        break;
+
+      case 'edit_post':
+        result = await postManagementTools.editPost(toolParameters);
+        break;
+
+      case 'generate_post_video':
+        result = await postManagementTools.generatePostVideo(toolParameters);
+        break;
+
+      case 'regenerate_post_video':
+        result = await postManagementTools.regeneratePostVideo(toolParameters);
+        break;
+
+      case 'schedule_post':
+        result = await postManagementTools.schedulePosts(toolParameters);
+        break;
+
       // Read-only tools
       case 'get_campaign_performance':
         result = await getCampaignPerformance(toolParameters);
@@ -94,6 +120,10 @@ export async function executeTool(proposal) {
 
       case 'get_pending_posts':
         result = await getPendingPosts(toolParameters);
+        break;
+
+      case 'get_posting_schedule':
+        result = await getPostingSchedule();
         break;
 
       // New Phase 1: High-Value Tools
@@ -149,6 +179,10 @@ export async function executeTool(proposal) {
 
       case 'get_traffic_sources':
         result = await getTrafficSources(toolParameters);
+        break;
+
+      case 'get_recent_activity':
+        result = await postManagementTools.getRecentActivity(toolParameters);
         break;
 
       default:
@@ -791,6 +825,53 @@ async function getPendingPosts({ platform = 'all', limit = 20 }) {
       hasImage: !!p.imageUrl,
       predictedEngagement: p.metadata?.predictedEngagement || 'medium'
     }))
+  };
+}
+
+/**
+ * Get posting schedule
+ * Returns current posting schedule configuration
+ */
+async function getPostingSchedule() {
+  // Get current posting frequency from environment
+  const frequency = parseInt(process.env.POSTING_FREQUENCY || '2', 10);
+
+  // Get enabled platforms from environment
+  const enabledPlatforms = process.env.ENABLED_PLATFORMS?.split(',') || ['tiktok', 'instagram'];
+
+  // Get optimal posting times from environment if available
+  const optimalTimes = process.env.OPTIMAL_POSTING_HOURS?.split(',').map(h => parseInt(h.trim(), 10)) || [10, 14, 18];
+
+  // Get posting schedule info from Strategy collection (recent schedule changes)
+  const recentChanges = await Strategy.find({
+    type: 'recommendation',
+    'metadata.toolName': 'update_posting_schedule'
+  })
+    .sort({ createdAt: -1 })
+    .limit(1)
+    .lean();
+
+  const lastUpdated = recentChanges.length > 0 ? recentChanges[0].createdAt : null;
+
+  return {
+    currentFrequency: frequency,
+    postsPerDay: frequency,
+    enabledPlatforms,
+    optimalPostingHours: optimalTimes,
+    scheduleDescription: `${frequency}x per day posting on ${enabledPlatforms.join(', ')}`,
+    bestTimes: optimalTimes.map(h => {
+      if (h === 0) return '12:00 AM';
+      if (h === 12) return '12:00 PM';
+      return h < 12 ? `${h}:00 AM` : `${h - 12}:00 PM`;
+    }),
+    lastUpdated,
+    configuration: {
+      // Configuration details for Tina to understand current setup
+      autoPosting: process.env.AUTO_POSTING === 'true',
+      batchGeneration: process.env.BATCH_GENERATION === 'true',
+      hashtagStrategy: process.env.HASHTAG_STRATEGY || 'moderate',
+      captionStyle: process.env.CAPTION_STYLE || 'engaging'
+    }
   };
 }
 

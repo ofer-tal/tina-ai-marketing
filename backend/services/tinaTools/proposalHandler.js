@@ -205,6 +205,42 @@ async function extractReasoningFromContext(messages, toolName, parameters) {
       reasoning += `. This will ensure consistent content flow.`;
       break;
 
+    case 'create_post':
+      reasoning += `Creating ${parameters.platforms?.length || 1} new marketing post(s)`;
+      if (parameters.storyId) {
+        reasoning += ` from story ${parameters.storyId}`;
+      }
+      if (parameters.generateVideo) {
+        reasoning += ` with video generation`;
+      }
+      reasoning += `. This adds to our content pipeline.`;
+      break;
+
+    case 'edit_post':
+      reasoning += `Editing post ${parameters.postId}`;
+      if (parameters.caption) reasoning += ` (updated caption)`;
+      if (parameters.voice) reasoning += ` (changed voice to ${parameters.voice})`;
+      reasoning += `. This improves content quality.`;
+      break;
+
+    case 'generate_post_video':
+      reasoning += `Generating video for post ${parameters.postId}`;
+      if (parameters.voice) reasoning += ` using ${parameters.voice} voice`;
+      reasoning += `. Video content has higher engagement rates.`;
+      break;
+
+    case 'regenerate_post_video':
+      reasoning += `Regenerating video for post ${parameters.postId}`;
+      if (parameters.feedback) reasoning += ` based on feedback: "${parameters.feedback}"`;
+      reasoning += `. This addresses quality concerns.`;
+      break;
+
+    case 'schedule_post':
+      reasoning += `Scheduling ${parameters.postIds?.length || 1} post(s)`;
+      if (parameters.scheduledAt) reasoning += ` for ${new Date(parameters.scheduledAt).toLocaleString()}`;
+      reasoning += `. This ensures consistent posting schedule.`;
+      break;
+
     default:
       reasoning += `Executing ${toolName} with parameters: ${JSON.stringify(parameters)}`;
   }
@@ -323,6 +359,104 @@ Use this data in your response.`;
       return `**Pending Posts Retrieved:**
 
 ${data.posts ? `${data.posts.length} posts pending approval` : 'No pending posts'}
+
+Use this data in your response.`;
+
+    case 'get_posting_schedule':
+      return `**Posting Schedule Retrieved:**
+
+Current Frequency: ${data.currentFrequency}x per day
+Platforms: ${data.enabledPlatforms?.join(', ') || 'tiktok, instagram'}
+Best Times: ${data.bestTimes?.join(', ') || '10:00 AM, 2:00 PM, 6:00 PM'}
+Auto-Posting: ${data.configuration?.autoPosting ? 'Enabled' : 'Disabled'}
+
+Use this data in your response.`;
+
+    case 'get_stories':
+      return `**Stories Retrieved:**
+
+${data.count} stories available for post creation
+${data.stories ? data.stories.slice(0, 5).map(s => `- ${s.title} (${s.category}, spice: ${s.spiciness})`).join('\n') : ''}
+
+Use this data in your response.`;
+
+    case 'create_post':
+      return `**Post(s) Created:**
+
+${data.created} post(s) created successfully
+${data.posts ? data.posts.map(p => `- ${p.platform}: ${p.title} (${p.status})`).join('\n') : ''}
+${data.videoGenerated ? 'Video generation initiated' : 'Saved as draft (no video generated)'}
+
+Use this data in your response.`;
+
+    case 'edit_post':
+      return `**Post Updated:**
+
+${data.post?.id || 'Post'} updated
+${data.post?.resetToPending ? '⚠️ Status reset to pending (requires re-approval)' : 'Status maintained'}
+Changes: ${data.post?.changes?.join(', ') || 'None'}
+
+Use this data in your response.`;
+
+    case 'generate_post_video':
+      if (data.skipped) {
+        return `**Video Generation:**
+
+Post ${data.postId}: Video already exists at ${data.videoPath}
+
+Use this data in your response.`;
+      }
+      return `**Video Generated:**
+
+Post ${data.postId}: Video created at ${data.videoPath}
+Duration: ${data.duration}s
+Generation time: ${data.generationTime}ms
+
+Use this data in your response.`;
+
+    case 'regenerate_post_video':
+      return `**Video Regenerated:**
+
+Post ${data.postId}: New video created
+Regeneration count: ${data.regenerationCount}
+${data.warning ? `⚠️ ${data.warning}` : ''}
+
+Use this data in your response.`;
+
+    case 'schedule_post':
+      return `**Posts Scheduled:**
+
+${data.scheduled} post(s) scheduled successfully
+${data.skipped > 0 ? `${data.skipped} post(s) skipped` : ''}
+
+Use this data in your response.`;
+
+    case 'get_recent_activity':
+      const activities = data.activities || [];
+      const activityList = activities.slice(0, 10).map(a => {
+        const timeStr = a.timeAgo || 'recently';
+        if (a.type === 'tool_call') {
+          if (a.toolName === 'create_post') {
+            return `- ${timeStr}: Created post (preset: ${a.details?.preset || 'triple_visual'}, voice: ${a.details?.voice || 'female_1'})`;
+          } else if (a.toolName === 'generate_post_video' || a.toolName === 'regenerate_post_video') {
+            return `- ${timeStr}: Generated video (preset: ${a.details?.preset || 'triple_visual'})`;
+          } else if (a.toolName === 'get_stories') {
+            return `- ${timeStr}: Searched for stories ${a.details?.search ? `"${a.details.search}"` : ''}`;
+          }
+          return `- ${timeStr}: Called ${a.toolName}`;
+        } else if (a.type === 'post_created') {
+          return `- ${timeStr}: Created "${a.summary}"`;
+        }
+        return `- ${timeStr}: ${a.summary || a.toolName}`;
+      }).join('\n');
+
+      return `**Recent Activity:**
+
+${data.summary || 'No activity found'}
+
+${activityList}
+
+${activities.length > 10 ? `\n... and ${activities.length - 10} more activities` : ''}
 
 Use this data in your response.`;
 

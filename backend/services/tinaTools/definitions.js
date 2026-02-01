@@ -249,6 +249,336 @@ export const APPROVAL_REQUIRED_TOOLS = [
  * In future "man-on-the-loop" mode, these would execute automatically but notify user.
  */
 export const READ_ONLY_TOOLS = [
+  /**
+   * Post Management Tools - No Approval Required
+   */
+  {
+    name: 'get_stories',
+    description: 'Get available common library stories for post creation. Only returns ready stories (userId: null, status: "ready") that can be used for marketing content.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Filter by story category (optional): Paranormal, Historical, Billionaire, Contemporary, Fantasy, Other',
+          enum: ['Paranormal', 'Historical', 'Billionaire', 'LGBTQ+', 'Contemporary', 'Fantasy', 'Other']
+        },
+        spiciness: {
+          type: 'number',
+          description: 'Filter by maximum spiciness level (0-3, optional)',
+          minimum: 0,
+          maximum: 3
+        },
+        search: {
+          type: 'string',
+          description: 'Search keyword to find stories by name or description (optional). Searches both title and description fields.'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of stories to return',
+          minimum: 1,
+          maximum: 50,
+          default: 20
+        }
+      }
+    },
+    exampleUsage: {
+      search: 'billionaire',
+      limit: 10
+    }
+  },
+  {
+    name: 'create_post',
+    description: 'Create a new marketing post from a story with optional video generation. Creates draft posts that can be edited, generated, and approved later.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        storyId: {
+          type: 'string',
+          description: 'Story ID to base the post on (must be a ready common library story)'
+        },
+        platforms: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Target platforms: can specify multiple (tiktok, instagram, youtube_shorts)',
+          uniqueItems: true
+        },
+        caption: {
+          type: 'string',
+          description: 'Post caption text (optional - auto-generated if not provided)'
+        },
+        hook: {
+          type: 'string',
+          description: 'Hook text for opening (optional - auto-generated if not provided)'
+        },
+        hashtags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Hashtags for the post (optional - auto-generated if not provided)'
+        },
+        contentType: {
+          type: 'string',
+          description: 'Content type to create',
+          enum: ['video', 'image', 'carousel'],
+          default: 'video'
+        },
+        contentTier: {
+          type: 'string',
+          description: 'Video generation tier',
+          enum: ['tier_1', 'tier_2', 'tier_3'],
+          default: 'tier_1'
+        },
+        // Tier 1 specific parameters
+        preset: {
+          type: 'string',
+          description: 'Slide composition preset (for tier_1 videos)',
+          enum: ['triple_visual', 'hook_first'],
+          default: 'triple_visual'
+        },
+        cta: {
+          type: 'string',
+          description: 'Call-to-action text for final slide (supports emojis). Default: "Read more on Blush 🔥"',
+          default: 'Read more on Blush 🔥'
+        },
+        includeMusic: {
+          type: 'boolean',
+          description: 'Include background music in video',
+          default: true
+        },
+        effects: {
+          type: 'object',
+          description: 'Video effects configuration',
+          properties: {
+            kenBurns: { type: 'boolean', default: true },
+            pan: { type: 'boolean', default: false },
+            textOverlay: { type: 'boolean', default: true },
+            vignette: { type: 'boolean', default: true },
+            fadeIn: { type: 'boolean', default: true },
+            fadeOut: { type: 'boolean', default: true }
+          }
+        },
+        voice: {
+          type: 'string',
+          description: 'Voice selection for narration',
+          enum: ['female_1', 'female_2', 'female_3', 'male_1', 'male_2', 'male_3'],
+          default: 'female_1'
+        },
+        generateVideo: {
+          type: 'boolean',
+          description: 'Generate video immediately (default: true)',
+          default: true
+        },
+        scheduleFor: {
+          type: 'string',
+          description: 'ISO date string to schedule the post (optional - auto-scheduled if not provided)'
+        }
+      },
+      required: ['storyId', 'platforms']
+    },
+    exampleUsage: {
+      storyId: '507f1f77bcf86cd799439011',
+      platforms: ['tiktok', 'instagram'],
+      preset: 'triple_visual',
+      voice: 'female_1',
+      cta: 'Download now on Blush 🔥',
+      generateVideo: true
+    },
+    expectedImpact: 'Creates a new marketing post with generated video. Post is marked as draft and requires approval before publishing.'
+  },
+  {
+    name: 'edit_post',
+    description: 'Edit an existing post\'s parameters. Note: Editing approved or scheduled posts resets status to pending, requiring re-approval.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        postId: {
+          type: 'string',
+          description: 'Post ID to edit'
+        },
+        caption: {
+          type: 'string',
+          description: 'New caption text'
+        },
+        hook: {
+          type: 'string',
+          description: 'New hook text'
+        },
+        hashtags: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'New hashtags'
+        },
+        voice: {
+          type: 'string',
+          description: 'New voice selection (for regeneration)',
+          enum: ['female_1', 'female_2', 'female_3', 'male_1', 'male_2', 'male_3']
+        },
+        contentTier: {
+          type: 'string',
+          description: 'New content tier (for regeneration)',
+          enum: ['tier_1', 'tier_2', 'tier_3']
+        }
+      },
+      required: ['postId']
+    },
+    exampleUsage: {
+      postId: '507f1f77bcf86cd799439011',
+      caption: 'Updated caption text'
+    },
+    expectedImpact: 'Updates post parameters. Approved/scheduled posts will require re-approval.'
+  },
+  {
+    name: 'generate_post_video',
+    description: 'Generate video for an existing post using the Tier 1 video generation system with multi-slide presets. Skips if video already exists unless forceRegenerate is true.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        postId: {
+          type: 'string',
+          description: 'Post ID to generate video for'
+        },
+        preset: {
+          type: 'string',
+          description: 'Slide composition preset',
+          enum: ['triple_visual', 'hook_first'],
+          default: 'triple_visual'
+        },
+        voice: {
+          type: 'string',
+          description: 'Voice selection (uses post default if not specified)',
+          enum: ['female_1', 'female_2', 'female_3', 'male_1', 'male_2', 'male_3']
+        },
+        cta: {
+          type: 'string',
+          description: 'Call-to-action text for final slide (supports emojis). Default: "Read more on Blush 🔥"',
+          default: 'Read more on Blush 🔥'
+        },
+        includeMusic: {
+          type: 'boolean',
+          description: 'Include background music',
+          default: true
+        },
+        effects: {
+          type: 'object',
+          description: 'Effect configuration',
+          properties: {
+            kenBurns: { type: 'boolean' },
+            pan: { type: 'boolean' },
+            textOverlay: { type: 'boolean' },
+            vignette: { type: 'boolean' },
+            fadeIn: { type: 'boolean' },
+            fadeOut: { type: 'boolean' }
+          }
+        },
+        forceRegenerate: {
+          type: 'boolean',
+          description: 'Force regeneration even if video exists',
+          default: false
+        }
+      },
+      required: ['postId']
+    },
+    exampleUsage: {
+      postId: '507f1f77bcf86cd799439011',
+      preset: 'hook_first',
+      voice: 'female_1',
+      cta: 'Read more on Blush 🔥',
+      includeMusic: true
+    },
+    expectedImpact: 'Generates or regenerates video content for the post'
+  },
+  {
+    name: 'regenerate_post_video',
+    description: 'Regenerate video with new parameters based on feedback. Tracks regeneration count to prevent infinite loops. Supports multi-slide presets.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        postId: {
+          type: 'string',
+          description: 'Post ID to regenerate video for'
+        },
+        preset: {
+          type: 'string',
+          description: 'Slide composition preset',
+          enum: ['triple_visual', 'hook_first']
+        },
+        feedback: {
+          type: 'string',
+          description: 'What to change in the regeneration (e.g., "slower zoom", "different voice")'
+        },
+        voice: {
+          type: 'string',
+          description: 'New voice selection',
+          enum: ['female_1', 'female_2', 'female_3', 'male_1', 'male_2', 'male_3']
+        },
+        hook: {
+          type: 'string',
+          description: 'New hook text'
+        },
+        caption: {
+          type: 'string',
+          description: 'New caption text'
+        },
+        cta: {
+          type: 'string',
+          description: 'New call-to-action text for final slide (supports emojis). Default: "Read more on Blush 🔥"'
+        },
+        effects: {
+          type: 'object',
+          description: 'New effect settings',
+          properties: {
+            kenBurns: { type: 'boolean' },
+            pan: { type: 'boolean' },
+            textOverlay: { type: 'boolean' },
+            vignette: { type: 'boolean' },
+            fadeIn: { type: 'boolean' },
+            fadeOut: { type: 'boolean' }
+          }
+        }
+      },
+      required: ['postId']
+    },
+    exampleUsage: {
+      postId: '507f1f77bcf86cd799439011',
+      preset: 'triple_visual',
+      feedback: 'Make the zoom effect slower and more subtle',
+      cta: 'Read more on Blush 🔥'
+    },
+    expectedImpact: 'Regenerates video with adjusted parameters based on feedback'
+  },
+  {
+    name: 'schedule_post',
+    description: 'Schedule one or more approved posts for specific dates/times. Posts must be in approved status to be scheduled.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        postIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of post IDs to schedule'
+        },
+        scheduledAt: {
+          type: 'string',
+          description: 'ISO date string for when to post (applies to all posts)'
+        }
+      },
+      required: ['postIds', 'scheduledAt']
+    },
+    exampleUsage: {
+      postIds: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
+      scheduledAt: '2025-02-01T14:00:00Z'
+    },
+    expectedImpact: 'Schedules approved posts for automatic publishing at the specified time'
+  },
+  /**
+   * Analytics Tools - Read Only
+   */
   {
     name: 'get_campaign_performance',
     description: 'Get performance metrics for Apple Search Ads campaigns',
@@ -371,6 +701,16 @@ export const READ_ONLY_TOOLS = [
     exampleUsage: {
       limit: 20
     }
+  },
+  {
+    name: 'get_posting_schedule',
+    description: 'Get current content posting schedule configuration including frequency and platforms',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {}
+    },
+    exampleUsage: {}
   },
   {
     name: 'get_conversion_metrics',
@@ -633,6 +973,35 @@ export const READ_ONLY_TOOLS = [
     exampleUsage: {
       days: 30
     }
+  },
+  /**
+   * Memory & Context Tools - Read Only
+   */
+  {
+    name: 'get_recent_activity',
+    description: 'Get your recent activity history - tool calls you made, posts you created, videos you generated, and decisions you made. Use this when you need to recall what you did recently.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maximum number of recent actions to show',
+          minimum: 5,
+          maximum: 50,
+          default: 20
+        },
+        activityType: {
+          type: 'string',
+          description: 'Filter by activity type (optional)',
+          enum: ['all', 'posts_created', 'videos_generated', 'tools_called', 'all']
+        }
+      }
+    },
+    exampleUsage: {
+      limit: 20,
+      activityType: 'all'
+    }
   }
 ];
 
@@ -700,6 +1069,14 @@ export const TOOL_NAMES = {
   UPDATE_HASHTAG_STRATEGY: 'update_hashtag_strategy',
   CREATE_CONTENT_EXPERIMENT: 'create_content_experiment',
 
+  // Post Management - Read Only (no approval)
+  GET_STORIES: 'get_stories',
+  CREATE_POST: 'create_post',
+  EDIT_POST: 'edit_post',
+  GENERATE_POST_VIDEO: 'generate_post_video',
+  REGENERATE_POST_VIDEO: 'regenerate_post_video',
+  SCHEDULE_POST: 'schedule_post',
+
   // Read only - existing
   GET_CAMPAIGN_PERFORMANCE: 'get_campaign_performance',
   GET_CONTENT_ANALYTICS: 'get_content_analytics',
@@ -707,6 +1084,7 @@ export const TOOL_NAMES = {
   GET_ASO_KEYWORD_STATUS: 'get_aso_keyword_status',
   GET_REVENUE_SUMMARY: 'get_revenue_summary',
   GET_PENDING_POSTS: 'get_pending_posts',
+  GET_POSTING_SCHEDULE: 'get_posting_schedule',
 
   // Read only - new Phase 1: High-Value Tools
   GET_CONVERSION_METRICS: 'get_conversion_metrics',
@@ -798,6 +1176,8 @@ export function formatToolCallForDisplay(toolName, parameters) {
     if (parameters.criteria) {
       description += ` using criteria: ${parameters.criteria}`;
     }
+  } else if (toolName === 'get_posting_schedule') {
+    description = `Get current posting schedule configuration`;
   } else if (toolName === 'get_campaign_performance') {
     description = `Fetch campaign performance (${parameters.timeframe || '7d'})`;
   } else if (toolName === 'get_content_analytics') {
@@ -828,6 +1208,23 @@ export function formatToolCallForDisplay(toolName, parameters) {
     description = `Get optimal posting times (${parameters.platform || 'all'})`;
   } else if (toolName === 'get_traffic_sources') {
     description = `Get traffic sources (last ${parameters.days || 30} days)`;
+  } else if (toolName === 'get_stories') {
+    description = `Get available common library stories`;
+    if (parameters.limit) description += ` (limit: ${parameters.limit})`;
+  } else if (toolName === 'create_post') {
+    description = `Create new marketing post from story`;
+    if (parameters.platforms) description += ` for ${parameters.platforms.join(', ')}`;
+    if (parameters.generateVideo) description += ' with video';
+  } else if (toolName === 'edit_post') {
+    description = `Edit post parameters`;
+  } else if (toolName === 'generate_post_video') {
+    description = `Generate video for post`;
+  } else if (toolName === 'regenerate_post_video') {
+    description = `Regenerate video with feedback`;
+    if (parameters.feedback) description += `: "${parameters.feedback.substring(0, 30)}..."`;
+  } else if (toolName === 'schedule_post') {
+    description = `Schedule ${parameters.postIds?.length || 0} post(s)`;
+    if (parameters.scheduledAt) description += ` for ${new Date(parameters.scheduledAt).toLocaleDateString()}`;
   }
 
   return {

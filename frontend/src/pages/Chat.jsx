@@ -6,8 +6,7 @@ import { marked } from 'marked';
 const ChatContainer = styled.div`
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 200px);
-  max-height: 800px;
+  height: 100vh;
   background: #16213e;
   border: 1px solid #2d3561;
   border-radius: 12px;
@@ -85,6 +84,7 @@ const MessagesContainer = styled.div`
 const MessageWrapper = styled.div`
   display: flex;
   ${props => props.$isUser ? 'justify-content: flex-end;' : 'justify-content: flex-start;'}
+  ${props => !props.$isUser ? 'position: relative;' : ''}
   animation: slideIn 0.3s ease-out;
 
   @keyframes slideIn {
@@ -100,7 +100,7 @@ const MessageWrapper = styled.div`
 `;
 
 const MessageBubble = styled.div`
-  max-width: 70%;
+  max-width: 90%;
   padding: 1rem 1.25rem;
   border-radius: 12px;
   ${props => props.$isUser ? `
@@ -228,6 +228,45 @@ const MessageTime = styled.div`
   color: #a0a0a0;
   margin-top: 0.5rem;
   text-align: right;
+`;
+
+const CopyButton = styled.button`
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: 4px;
+  color: #e94560;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: all 0.2s;
+  z-index: 10;
+
+  ${MessageWrapper}:hover & {
+    opacity: 1;
+  }
+
+  &:hover {
+    background: rgba(233, 69, 96, 0.2);
+    border-color: rgba(233, 69, 96, 0.5);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  &.copied {
+    background: rgba(0, 210, 106, 0.2);
+    border-color: #00d26a;
+    color: #00d26a;
+    opacity: 1;
+  }
 `;
 
 const InputContainer = styled.div`
@@ -526,6 +565,26 @@ const SearchButton = styled.button`
 
   &:hover {
     background: rgba(255, 255, 255, 0.2);
+  }
+`;
+
+const ChatCloseButton = styled.button`
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 6px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: background 0.2s;
+  line-height: 1;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 `;
 
@@ -862,7 +921,7 @@ const ToolProposalStatus = styled.span`
   }};
 `;
 
-function Chat() {
+function Chat({ onClose }) {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -877,6 +936,7 @@ function Chat() {
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [copiedMessageId, setCopiedMessageId] = useState(null);
   const searchTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -920,6 +980,9 @@ function Chat() {
             });
           }
         });
+
+        // Sort all messages by timestamp to ensure correct chronological order
+        historyMessages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
         setMessages(historyMessages);
       } else {
@@ -1044,7 +1107,8 @@ What would you like to focus on today?`;
           content: data.response.content,
           timestamp: data.response.timestamp,
           proposal: data.response.proposal || null,
-          toolProposal: data.response.toolProposal || null
+          toolProposal: data.response.toolProposal || null,
+          toolProposals: data.response.toolProposals || null  // NEW: Array of proposals
         };
 
         setMessages(prev => [...prev, aiMessage]);
@@ -1063,7 +1127,20 @@ What would you like to focus on today?`;
         }
 
         // Store tool proposal if present (new tool use system)
-        if (data.response.toolProposal) {
+        // Handle both single object (legacy) and array (new)
+        if (data.response.toolProposals && Array.isArray(data.response.toolProposals)) {
+          // NEW: Multiple proposals - store each with a unique key
+          const proposalsMap = {};
+          data.response.toolProposals.forEach((proposal, index) => {
+            const proposalKey = `${aiMessage.id}_proposal_${index}`;
+            proposalsMap[proposalKey] = { ...proposal, index, messageId: aiMessage.id };
+          });
+          setToolProposals(prev => ({
+            ...prev,
+            ...proposalsMap
+          }));
+        } else if (data.response.toolProposal) {
+          // Legacy: Single proposal
           setToolProposals(prev => ({
             ...prev,
             [aiMessage.id]: data.response.toolProposal
@@ -1282,7 +1359,7 @@ What would you like to focus on today?`;
       const data = await response.json();
 
       if (data.success) {
-        // Update tool proposal status
+        // Update tool proposal status using the proposal key (messageId parameter is actually the proposal key)
         setToolProposals(prev => ({
           ...prev,
           [messageId]: {
@@ -1292,6 +1369,10 @@ What would you like to focus on today?`;
             result: data.result
           }
         }));
+
+        // Note: The proposal is keyed by proposalKey (e.g., "123_proposal_0")
+        // and contains a `messageId` property pointing to the original message
+        // The cleanup isn't needed since proposals are filtered by messageId when rendering
 
         // Add a confirmation message
         setMessages(prev => [...prev, {
@@ -1378,6 +1459,35 @@ What would you like to focus on today?`;
     setInputValue(`Before we do that, I have some questions about ${toolName}...`);
   };
 
+  const handleCopyMessage = async (messageId, content) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedMessageId(messageId);
+
+      // Reset the "copied" state after 2 seconds
+      setTimeout(() => {
+        setCopiedMessageId(null);
+      }, 2000);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = content;
+      textArea.style.position = 'fixed';
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        setCopiedMessageId(messageId);
+        setTimeout(() => setCopiedMessageId(null), 2000);
+      } catch (err) {
+        console.error('Fallback copy also failed:', err);
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
   const formatToolName = (toolName) => {
     return toolName
       .split('_')
@@ -1429,11 +1539,16 @@ What would you like to focus on today?`;
   };
 
   const loadConversation = (conversation) => {
-    // Convert conversation messages to message format
+    // Convert conversation messages to message format, sorted by timestamp
     const historyMessages = [];
 
     if (conversation.messages && conversation.messages.length > 0) {
-      conversation.messages.forEach(msg => {
+      // Sort messages by timestamp to ensure correct order
+      const sortedMessages = [...conversation.messages].sort((a, b) =>
+        new Date(a.timestamp) - new Date(b.timestamp)
+      );
+
+      sortedMessages.forEach(msg => {
         historyMessages.push({
           id: `${conversation.id}_${msg.role}_${msg.timestamp}`,
           role: msg.role,
@@ -1467,15 +1582,12 @@ What would you like to focus on today?`;
     <ChatContainer>
       <ChatHeader>
         <div>
-          <ChatTitle>
-            <span>👩‍💼</span>
-            Tina
-          </ChatTitle>
+          <ChatTitle>Tina</ChatTitle>
           <ChatStatus>
             {isConnected ? '🟢 Online' : '🔴 Offline'} • GLM4.7 Powered • Relentless & Data-Driven
           </ChatStatus>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <SearchButton onClick={() => setShowSearch(true)}>
             <span>🔍</span>
             Search
@@ -1483,6 +1595,11 @@ What would you like to focus on today?`;
           <ClearButton onClick={handleClearHistory} disabled={messages.length === 0}>
             Clear History
           </ClearButton>
+          {onClose && (
+            <ChatCloseButton onClick={onClose} title="Close panel">
+              ×
+            </ChatCloseButton>
+          )}
         </div>
       </ChatHeader>
 
@@ -1513,78 +1630,95 @@ What would you like to focus on today?`;
             </SuggestionChips>
           </WelcomeMessage>
         ) : (
-          messages.map((msg) => (
-            <MessageWrapper key={msg.id} $isUser={msg.role === 'user'}>
-              <MessageBubble $isUser={msg.role === 'user'}>
-                <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
-                <MessageTime>{formatTime(msg.timestamp)}</MessageTime>
-                {msg.role === 'assistant' && (
-                  <>
-                    {/* Tool Proposals (New Tool Use System) */}
-                    {toolProposals[msg.id] && (
-                      <ToolProposalCard>
-                        <ToolProposalHeader>
-                          <span>🔧</span>
-                          Tina wants to: {formatToolName(toolProposals[msg.id].toolName)}
-                          <ToolProposalStatus $status={toolProposals[msg.id].status || 'pending'}>
-                            {toolProposals[msg.id].status === 'executed' ? '✓ Executed' :
-                             toolProposals[msg.id].status === 'rejected' ? '✗ Rejected' :
-                             '⏳ Awaiting Approval'}
-                          </ToolProposalStatus>
-                        </ToolProposalHeader>
-                        {toolProposals[msg.id].actionDisplay && (
-                          <ToolProposalDetails>
-                            <strong>Action:</strong> {toolProposals[msg.id].actionDisplay.description}
-                          </ToolProposalDetails>
-                        )}
-                        {toolProposals[msg.id].reasoning && (
-                          <ToolProposalReasoning>
-                            "{toolProposals[msg.id].reasoning}"
-                          </ToolProposalReasoning>
-                        )}
-                        {toolProposals[msg.id].status !== 'executed' && toolProposals[msg.id].status !== 'rejected' && toolProposals[msg.id].requiresApproval && (
-                          <ToolProposalActions>
-                            <ToolProposalButton
-                              $variant="approve"
-                              onClick={() => handleApproveTool(msg.id)}
-                              disabled={processingProposal === msg.id}
-                            >
-                              <span>✓</span>
-                              {processingProposal === msg.id ? 'Executing...' : 'Approve'}
-                            </ToolProposalButton>
-                            <ToolProposalButton
-                              $variant="reject"
-                              onClick={() => handleRejectTool(msg.id)}
-                              disabled={processingProposal === msg.id}
-                            >
-                              <span>✗</span>
-                              {processingProposal === msg.id ? 'Processing...' : 'Reject'}
-                            </ToolProposalButton>
-                            <ToolProposalButton
-                              $variant="discuss"
-                              onClick={() => handleDiscussTool(msg.id, toolProposals[msg.id])}
-                              disabled={processingProposal === msg.id}
-                            >
-                              <span>💬</span>
-                              Discuss First
-                            </ToolProposalButton>
-                          </ToolProposalActions>
-                        )}
-                        {toolProposals[msg.id].status === 'rejected' && toolProposals[msg.id].rejectionReason && (
-                          <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#a0a0a0' }}>
-                            Reason: {toolProposals[msg.id].rejectionReason}
-                          </div>
-                        )}
-                        {toolProposals[msg.id].status === 'executed' && toolProposals[msg.id].result && (
-                          <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#00d26a' }}>
-                            ✓ {toolProposals[msg.id].result.message || 'Action completed successfully'}
-                          </div>
-                        )}
-                      </ToolProposalCard>
-                    )}
+          messages.map((msg) => {
+            // Get all proposals for this message (both direct match and those with messageId)
+            const msgProposals = Object.entries(toolProposals)
+              .filter(([key, p]) => key === msg.id || p.messageId === msg.id || p.originalMessageId === msg.id)
+              .map(([key, p]) => ({ key, ...p }));
 
-                    {/* Legacy Budget Proposals */}
-                    {proposals[msg.id] && !toolProposals[msg.id] && (
+            const hasProposals = msgProposals.length > 0;
+            const hasLegacyProposal = proposals[msg.id] && !hasProposals;
+
+            return (
+              <MessageWrapper key={msg.id} $isUser={msg.role === 'user'}>
+                {msg.role === 'assistant' ? (
+                  <>
+                    <CopyButton
+                      onClick={() => handleCopyMessage(msg.id, msg.content)}
+                      className={copiedMessageId === msg.id ? 'copied' : ''}
+                      title="Copy to clipboard"
+                    >
+                      <span>{copiedMessageId === msg.id ? '✓' : '📋'}</span>
+                    </CopyButton>
+                    <MessageBubble>
+                      <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
+                      <MessageTime>{formatTime(msg.timestamp)}</MessageTime>
+                      <>
+                      {/* Tool Proposals - Render all proposals for this message */}
+                      {hasProposals && msgProposals.map((proposal) => (
+                        <ToolProposalCard key={proposal.key}>
+                          <ToolProposalHeader>
+                            <span>🔧</span>
+                            Tina wants to: {formatToolName(proposal.toolName)}
+                            <ToolProposalStatus $status={proposal.status || 'pending'}>
+                              {proposal.status === 'executed' ? '✓ Executed' :
+                               proposal.status === 'rejected' ? '✗ Rejected' :
+                               '⏳ Awaiting Approval'}
+                            </ToolProposalStatus>
+                          </ToolProposalHeader>
+                          {proposal.actionDisplay && (
+                            <ToolProposalDetails>
+                              <strong>Action:</strong> {proposal.actionDisplay.description}
+                            </ToolProposalDetails>
+                          )}
+                          {proposal.reasoning && (
+                            <ToolProposalReasoning>
+                              "{proposal.reasoning}"
+                            </ToolProposalReasoning>
+                          )}
+                          {proposal.status !== 'executed' && proposal.status !== 'rejected' && proposal.requiresApproval && (
+                            <ToolProposalActions>
+                              <ToolProposalButton
+                                $variant="approve"
+                                onClick={() => handleApproveTool(proposal.key)}
+                                disabled={processingProposal === proposal.key}
+                              >
+                                <span>✓</span>
+                                {processingProposal === proposal.key ? 'Executing...' : 'Approve'}
+                              </ToolProposalButton>
+                              <ToolProposalButton
+                                $variant="reject"
+                                onClick={() => handleRejectTool(proposal.key)}
+                                disabled={processingProposal === proposal.key}
+                              >
+                                <span>✗</span>
+                                {processingProposal === proposal.key ? 'Processing...' : 'Reject'}
+                              </ToolProposalButton>
+                              <ToolProposalButton
+                                $variant="discuss"
+                                onClick={() => handleDiscussTool(proposal.key, proposal)}
+                                disabled={processingProposal === proposal.key}
+                              >
+                                <span>💬</span>
+                                Discuss First
+                              </ToolProposalButton>
+                            </ToolProposalActions>
+                          )}
+                          {proposal.status === 'rejected' && proposal.rejectionReason && (
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#a0a0a0' }}>
+                              Reason: {proposal.rejectionReason}
+                            </div>
+                          )}
+                          {proposal.status === 'executed' && proposal.result && (
+                            <div style={{ marginTop: '0.5rem', fontSize: '0.875rem', color: '#00d26a' }}>
+                              ✓ {proposal.result.message || 'Action completed successfully'}
+                            </div>
+                          )}
+                        </ToolProposalCard>
+                      ))}
+
+                      {/* Legacy Budget Proposals */}
+                      {hasLegacyProposal && (
                       <ProposalCard>
                         <ProposalHeader>
                           <span>💼</span>
@@ -1624,29 +1758,34 @@ What would you like to focus on today?`;
                     )}
 
                     {/* Todo Button (Only if no proposals) */}
-                    {!proposals[msg.id] && !toolProposals[msg.id] && (
-                      <>
-                        {todosCreated.has(msg.id) ? (
-                          <TodoCreatedBadge>
-                            <span>✓</span>
-                            Todo Created
-                          </TodoCreatedBadge>
-                        ) : (
-                          <CreateTodoButton
-                            onClick={() => handleCreateTodo(msg)}
-                            disabled={creatingTodo === msg.id}
-                          >
-                            <span>+</span>
-                            {creatingTodo === msg.id ? 'Creating...' : 'Create Todo'}
-                          </CreateTodoButton>
-                        )}
-                      </>
+                    {!hasProposals && !hasLegacyProposal && (
+                      todosCreated.has(msg.id) ? (
+                        <TodoCreatedBadge>
+                          <span>✓</span>
+                          Todo Created
+                        </TodoCreatedBadge>
+                      ) : (
+                        <CreateTodoButton
+                          onClick={() => handleCreateTodo(msg)}
+                          disabled={creatingTodo === msg.id}
+                        >
+                          <span>+</span>
+                          {creatingTodo === msg.id ? 'Creating...' : 'Create Todo'}
+                        </CreateTodoButton>
+                      )
                     )}
                   </>
-                )}
+                </MessageBubble>
+                  </>
+                ) : (
+              <MessageBubble $isUser={true}>
+                <div dangerouslySetInnerHTML={{ __html: formatMessage(msg.content) }} />
+                <MessageTime>{formatTime(msg.timestamp)}</MessageTime>
               </MessageBubble>
+            )}
             </MessageWrapper>
-          ))
+            );
+          })
         )}
         {isLoading && (
           <MessageWrapper $isUser={false}>

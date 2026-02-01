@@ -24,9 +24,16 @@ const storySchema = new mongoose.Schema({
   },
 
   // Story metadata
-  title: {
+  name: {
     type: String,
     required: true
+  },
+
+  // Alias for compatibility (maps to name)
+  title: {
+    type: String,
+    get: function() { return this.name; },
+    set: function(val) { this.name = val; }
   },
 
   description: {
@@ -34,18 +41,18 @@ const storySchema = new mongoose.Schema({
     default: ''
   },
 
-  // Story category
+  // Story category (at root level, also duplicated in parameters)
   category: {
     type: String,
-    required: true,
-    enum: ['Paranormal', 'Historical', 'Billionaire', 'LGBTQ+', 'Contemporary', 'Fantasy', 'Other'],
+    // No strict enum - actual data has values like "Science Fiction", "Paranormal", etc.
     index: true
   },
 
   // Spiciness level (0-3, where 3 is most explicit)
+  // NOTE: In actual schema, this is under parameters.spiciness
+  // We keep this for backward compatibility
   spiciness: {
     type: Number,
-    required: true,
     min: 0,
     max: 3,
     index: true
@@ -87,6 +94,31 @@ const storySchema = new mongoose.Schema({
     default: ''
   },
 
+  // Image URLs (from actual schema)
+  imageUrl: {
+    type: String,
+    default: ''
+  },
+
+  thumbnailUrl: {
+    type: String,
+    default: ''
+  },
+
+  // Parameters object (contains spiciness, category, etc.)
+  parameters: {
+    spiciness: {
+      type: Number,
+      default: 0
+    },
+    category: {
+      type: String,
+      default: 'Contemporary'
+    },
+    // Other parameters that may exist
+    any: {}
+  },
+
   // Tags for the story
   tags: [String],
 
@@ -116,6 +148,14 @@ const storySchema = new mongoose.Schema({
   // Published date
   publishedAt: {
     type: Date,
+    default: null
+  },
+
+  // Full story content (from external text storage)
+  // This field is NOT in the strict schema but exists in the database
+  // Using Schema.Types.Mixed to allow any structure
+  fullStory: {
+    type: mongoose.Schema.Types.Mixed,
     default: null
   }
 }, {

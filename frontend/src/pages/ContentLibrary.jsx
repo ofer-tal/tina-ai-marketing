@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
+import CreatePostModal from '../components/CreatePostModal.jsx';
+import GenerateVideoOptions from '../components/GenerateVideoOptions.jsx';
+import RegenerateVideoModal from '../components/RegenerateVideoModal.jsx';
 
 const LibraryContainer = styled.div`
   width: 100%;
@@ -153,6 +156,14 @@ const Button = styled.button`
   }
 `;
 
+const CreatePostButton = styled(Button)`
+  background: linear-gradient(135deg, #7b2cbf 0%, #9d4edd 100%);
+
+  &:hover {
+    background: linear-gradient(135deg, #9d4edd 0%, #b36bf7 100%);
+  }
+`;
+
 // Bulk Action Components
 const BulkActionsBar = styled.div`
   display: ${props => props.$visible ? 'flex' : 'none'};
@@ -281,21 +292,22 @@ const ContentGrid = styled.div`
 
 const ContentCard = styled.div`
   background: #16213e;
-  border: 1px solid #2d3561;
+  border: 1px solid ${props => props.$selected ? '#e94560' : '#2d3561'};
   border-radius: 12px;
   overflow: hidden;
   transition: all 0.2s;
+  box-shadow: ${props => props.$selected ? '0 0 0 3px rgba(233, 69, 96, 0.3)' : 'none'};
 
   &:hover {
     border-color: #e94560;
     transform: translateY(-4px);
-    box-shadow: 0 8px 24px rgba(233, 69, 96, 0.15);
+    box-shadow: ${props => props.$selected ? '0 8px 24px rgba(233, 69, 96, 0.3)' : '0 8px 24px rgba(233, 69, 96, 0.15)'};
   }
 `;
 
 const ThumbnailContainer = styled.div`
   width: 100%;
-  aspect-ratio: 9/16;
+  aspect-ratio: 16/9;
   background: #1a1a2e;
   display: flex;
   align-items: center;
@@ -308,6 +320,10 @@ const Thumbnail = styled.div`
   width: 100%;
   height: 100%;
   background: ${props => {
+    // Use thumbnail image if available, otherwise use gradient
+    if (props.$thumbnail) {
+      return `url(${props.$thumbnail}) center/cover no-repeat`;
+    }
     const gradients = {
       tiktok: 'linear-gradient(135deg, #00f2ea 0%, #ff0050 100%)',
       instagram: 'linear-gradient(135deg, #833ab4 0%, #fd1d1d 50%, #fcb045 100%)',
@@ -338,11 +354,18 @@ const StatusBadge = styled.div`
       scheduled: '#007bff',
       posted: '#00d26a',
       failed: '#dc3545',
-      rejected: '#ff6b6b'
+      rejected: '#ff6b6b',
+      generating: '#e94560'
     };
     return colors[props.status] || '#6c757d';
   }};
   color: white;
+  animation: ${props => props.status === 'generating' ? 'pulse 1.5s ease-in-out infinite' : 'none'};
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
 `;
 
 const PlatformIcon = styled.div`
@@ -970,7 +993,8 @@ const VideoContainer = styled.div`
 
 const VideoPlayer = styled.video`
   max-width: 100%;
-  max-height: 80vh;
+  max-height: 65vh;
+  max-width: 450px; /* Limit width for vertical 9:16 videos */
   object-fit: contain;
 `;
 
@@ -1363,8 +1387,8 @@ const PlayButton = styled.button`
 
 const VideoIndicator = styled.div`
   position: absolute;
-  top: 10px;
-  left: 10px;
+  bottom: 10px;
+  right: 10px;
   padding: 0.25rem 0.5rem;
   background: rgba(0, 0, 0, 0.7);
   border-radius: 4px;
@@ -1374,6 +1398,47 @@ const VideoIndicator = styled.div`
   display: flex;
   align-items: center;
   gap: 0.25rem;
+`;
+
+// Video Generation Progress Components
+const GeneratingProgress = styled.div`
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.5rem;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.9), transparent);
+`;
+
+const GeneratingProgressBar = styled.div`
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+`;
+
+const GeneratingProgressFill = styled.div`
+  height: 100%;
+  width: ${props => props.$percent}%;
+  background: linear-gradient(90deg, #e94560, #7b2cbf);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+  animation: shimmer 1.5s ease-in-out infinite;
+
+  @keyframes shimmer {
+    0% { opacity: 0.7; }
+    50% { opacity: 1; }
+    100% { opacity: 0.7; }
+  }
+`;
+
+const GeneratingStatusText = styled.div`
+  color: white;
+  font-size: 0.75rem;
+  margin-top: 0.25rem;
+  text-align: center;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
 `;
 
 const ModalActions = styled.div`
@@ -1514,6 +1579,36 @@ const DeleteButton = styled.button`
     background: #c82333;
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+  }
+
+  &:disabled {
+    background: #2d3561;
+    cursor: not-allowed;
+    opacity: 0.5;
+    transform: none;
+  }
+`;
+
+const GenerateVideoButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
   }
 
   &:disabled {
@@ -2143,9 +2238,51 @@ function ContentLibrary() {
   const [bulkSelected, setBulkSelected] = useState([]);
   const [selectAll, setSelectAll] = useState(false);
 
+  // New modals for post creation and video generation
+  const [createPostModal, setCreatePostModal] = useState(false);
+  const [generateVideoModal, setGenerateVideoModal] = useState(false);
+  const [regenerateVideoModal, setRegenerateVideoModal] = useState(false);
+  const [selectedPostForVideo, setSelectedPostForVideo] = useState(null);
+  const [stories, setStories] = useState([]);
+
   useEffect(() => {
     fetchPosts();
   }, [filters, pagination.page]);
+
+  // Auto-refresh posts that are in 'generating' status
+  useEffect(() => {
+    const generatingPosts = posts.filter(p => p.status === 'generating');
+    if (generatingPosts.length === 0) return;
+
+    const pollInterval = setInterval(async () => {
+      // Update individual generating posts with their progress
+      for (const post of generatingPosts) {
+        try {
+          const response = await fetch(`http://localhost:3001/api/tiered-video/progress/${post._id}`);
+          if (response.ok) {
+            const data = await response.json();
+            const progressData = data.data;
+
+            // Update the post in the posts array
+            setPosts(prevPosts => prevPosts.map(p =>
+              p._id === post._id
+                ? { ...p, status: progressData.status, videoGenerationProgress: progressData }
+                : p
+            ));
+
+            // If generation is complete or failed, refresh the full list
+            if (progressData.status === 'ready' || progressData.errorMessage) {
+              setTimeout(() => fetchPosts(), 1000);
+            }
+          }
+        } catch (err) {
+          console.error('Error polling post progress:', err);
+        }
+      }
+    }, 2000); // Poll every 2 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [posts]);
 
   // Cleanup: stop polling when component unmounts or modal closes
   useEffect(() => {
@@ -2309,6 +2446,78 @@ function ContentLibrary() {
       edited: 'Edited'
     };
     return labels[action] || 'Updated';
+  };
+
+  // Fetch stories for post creation
+  const fetchStories = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/content/stories');
+      if (response.ok) {
+        const data = await response.json();
+        setStories(data.data?.stories || []);
+      } else {
+        // Fallback to empty array if endpoint doesn't exist yet
+        setStories([]);
+      }
+    } catch (err) {
+      console.error('Error fetching stories:', err);
+      setStories([]);
+    }
+  };
+
+  // Open create post modal
+  const handleOpenCreatePost = async () => {
+    await fetchStories();
+    setCreatePostModal(true);
+  };
+
+  // Handle post created
+  const handlePostCreated = (result) => {
+    if (result.success) {
+      fetchPosts(); // Refresh posts list
+    }
+    setCreatePostModal(false);
+  };
+
+  // Handle generate video button click
+  const handleGenerateVideo = (post) => {
+    setSelectedPostForVideo(post);
+    setGenerateVideoModal(true);
+  };
+
+  // Handle video generated
+  const handleVideoGenerated = (result) => {
+    if (result.success) {
+      fetchPosts(); // Refresh posts list
+    }
+    setGenerateVideoModal(false);
+    setSelectedPostForVideo(null);
+  };
+
+  // Handle regenerate video button click
+  const handleRegenerateVideo = (post) => {
+    setSelectedPostForVideo(post);
+    setRegenerateVideoModal(true);
+  };
+
+  // Handle video regenerated
+  const handleVideoRegenerated = (progressData) => {
+    // Check if video generation completed successfully
+    // progressData has status, progress, videoPath, etc. (not a 'success' property)
+    if (progressData?.status === 'ready' || progressData?.progress >= 100 || progressData?.videoPath) {
+      // Update selectedVideo directly with the new videoPath for immediate UI update
+      if (selectedVideo && progressData.videoPath) {
+        setSelectedVideo(prev => ({
+          ...prev,
+          videoPath: progressData.videoPath,
+          status: 'ready'
+        }));
+      }
+      // Also refresh posts list to ensure everything is synced
+      fetchPosts();
+    }
+    setRegenerateVideoModal(false);
+    setSelectedPostForVideo(null);
   };
 
   const formatScheduledTime = (dateString) => {
@@ -3071,6 +3280,52 @@ function ContentLibrary() {
     }
   };
 
+  // Generate Tier 1 Video handler
+  const handleGenerateTier1Video = async () => {
+    if (!selectedVideo) {
+      alert('No content selected for video generation.');
+      return;
+    }
+
+    const storyId = selectedVideo.storyId;
+    if (!storyId) {
+      alert('This post is not associated with a story. Cannot generate video.');
+      return;
+    }
+
+    if (!confirm('Generate a Tier 1 Enhanced Static video for this story?\n\nThis will:\n- Generate an AI image from the story\n- Create narration with TTS\n- Add video effects (Ken Burns, text overlay)\n- Mix with background music\n\nEstimated time: 1-2 minutes')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:3001/api/tiered-video/generate-tier1', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storyId: storyId,
+          caption: selectedVideo.caption || '',
+          hook: selectedVideo.hook || '',
+          platform: selectedVideo.platform || 'tiktok',
+          createPost: true
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        alert(`✅ Tier 1 video generated successfully!\n\nVideo saved to: ${result.data.videoPath}\nDuration: ${result.data.duration.toFixed(1)}s`);
+        // Refresh the posts list
+        fetchPosts();
+        handleCloseModal();
+      } else {
+        throw new Error(result.error || 'Video generation failed');
+      }
+    } catch (error) {
+      console.error('❌ Error generating video:', error);
+      alert(`❌ Failed to generate video: ${error.message}\n\nPlease check:\n1. RunPod API keys are configured\n2. Story has valid content\n3. FFmpeg is available`);
+    }
+  };
+
   // Edit mode handlers
   const handleStartEdit = () => {
     if (!selectedVideo) return;
@@ -3365,7 +3620,10 @@ function ContentLibrary() {
     <LibraryContainer>
       <Header>
         <Title>Content Library</Title>
-        <Button onClick={fetchPosts}>🔄 Refresh</Button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <CreatePostButton onClick={handleOpenCreatePost}>+ Create Post</CreatePostButton>
+          <Button onClick={fetchPosts}>🔄 Refresh</Button>
+        </div>
       </Header>
 
       <FilterBar>
@@ -3508,7 +3766,7 @@ function ContentLibrary() {
         <>
           <ContentGrid>
             {posts.map(post => (
-              <ContentCard key={post._id}>
+              <ContentCard key={post._id} $selected={bulkSelected.includes(post._id)}>
                 <CheckboxContainer>
                   <BulkCheckbox
                     type="checkbox"
@@ -3518,8 +3776,8 @@ function ContentLibrary() {
                   />
                 </CheckboxContainer>
                 <ThumbnailContainer onClick={() => handleThumbnailClick(post)}>
-                  <Thumbnail platform={post.platform}>
-                    {getPlatformEmoji(post.platform)}
+                  <Thumbnail platform={post.platform} $thumbnail={post.thumbnailPath}>
+                    {!post.thumbnailPath && getPlatformEmoji(post.platform)}
                   </Thumbnail>
                   <StatusBadge status={post.status}>
                     {post.status}
@@ -3535,6 +3793,16 @@ function ContentLibrary() {
                   )}
                   {post.contentType === 'image' && (
                     <VideoIndicator>🖼️ Image</VideoIndicator>
+                  )}
+                  {post.status === 'generating' && (
+                    <GeneratingProgress>
+                      <GeneratingProgressBar>
+                        <GeneratingProgressFill $percent={post.videoGenerationProgress?.progress || 0} />
+                      </GeneratingProgressBar>
+                      <GeneratingStatusText>
+                        {post.videoGenerationProgress?.currentStep || 'Generating...'} ({Math.round(post.videoGenerationProgress?.progress || 0)}%)
+                      </GeneratingStatusText>
+                    </GeneratingProgress>
                   )}
                 </ThumbnailContainer>
 
@@ -3578,6 +3846,7 @@ function ContentLibrary() {
                   selectedVideo.videoPath ? (
                     <VideoContainer>
                       <VideoPlayer
+                        key={selectedVideo.videoPath}  // Force remount when videoPath changes
                         src={selectedVideo.videoPath}
                         controls
                         autoPlay
@@ -3845,8 +4114,11 @@ function ContentLibrary() {
                               ? '📤 Posting...'
                               : '📤 Post to TikTok'}
                           </PostToTikTokButton>
+                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
+                            🎬 Generate Video
+                          </GenerateVideoButton>
                           <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={handleRegenerate}>
+                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
                             🔄 Regenerate
                           </RegenerateButton>
                           <ExportButton onClick={handleExportForManual}>
@@ -3867,8 +4139,11 @@ function ContentLibrary() {
                               ? '📤 Posting...'
                               : '📤 Post to Instagram'}
                           </PostToInstagramButton>
+                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
+                            🎬 Generate Video
+                          </GenerateVideoButton>
                           <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={handleRegenerate}>
+                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
                             🔄 Regenerate
                           </RegenerateButton>
                           <ExportButton onClick={handleExportForManual}>
@@ -3881,8 +4156,11 @@ function ContentLibrary() {
                       ) : scheduleMode ? (
                         <>
                           {/* Show schedule datetime picker */}
+                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
+                            🎬 Generate Video
+                          </GenerateVideoButton>
                           <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={handleRegenerate}>
+                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
                             🔄 Regenerate
                           </RegenerateButton>
                           <DuplicateButton onClick={handleDuplicate}>
@@ -3895,8 +4173,11 @@ function ContentLibrary() {
                       ) : (
                         <>
                           {/* Show approve/reject/schedule for non-approved posts */}
+                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
+                            🎬 Generate Video
+                          </GenerateVideoButton>
                           <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={handleRegenerate}>
+                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
                             🔄 Regenerate
                           </RegenerateButton>
                           <DuplicateButton onClick={handleDuplicate}>
@@ -4153,6 +4434,34 @@ function ContentLibrary() {
           )}
         </>
       )}
+
+      {/* New Modals */}
+      <CreatePostModal
+        isOpen={createPostModal}
+        onClose={() => setCreatePostModal(false)}
+        onSave={handlePostCreated}
+        stories={stories}
+      />
+
+      <GenerateVideoOptions
+        isOpen={generateVideoModal}
+        onClose={() => {
+          setGenerateVideoModal(false);
+          setSelectedPostForVideo(null);
+        }}
+        onGenerate={handleVideoGenerated}
+        post={selectedPostForVideo}
+      />
+
+      <RegenerateVideoModal
+        isOpen={regenerateVideoModal}
+        onClose={() => {
+          setRegenerateVideoModal(false);
+          setSelectedPostForVideo(null);
+        }}
+        onRegenerate={handleVideoRegenerated}
+        post={selectedPostForVideo}
+      />
     </LibraryContainer>
   );
 }

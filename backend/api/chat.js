@@ -85,6 +85,17 @@ ${JSON.stringify(data, null, 2)}`;
 }
 
 /**
+ * Format tool name for display
+ * Converts snake_case to Title Case
+ */
+function formatToolName(toolName) {
+  return toolName
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+/**
  * Real GLM4.7 API Integration
  * Calls the actual GLM service with Tina's personality and function calling support
  */
@@ -164,30 +175,35 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
       // If any tools require approval, return them without making follow-up call
       if (approvalRequiredTools.length > 0) {
         logger.info('Some tools require approval, returning proposals');
-        const firstProposal = approvalRequiredTools[0];
+
+        // Return ALL proposals, not just the first one
+        const toolProposals = approvalRequiredTools.map(p => ({
+          id: p.proposalId,
+          toolName: p.toolName,
+          parameters: p.parameters,
+          requiresApproval: p.requiresApproval,
+          reasoning: p.reasoning,
+          actionDisplay: p.actionDisplay,
+          message: p.message
+        }));
+
+        // Build content message that mentions all the actions
+        const toolNames = approvalRequiredTools.map(p => formatToolName(p.toolName)).join(', ');
+        const content = `I need approval for ${approvalRequiredTools.length} action(s): ${toolNames}. Please review each proposal below.`;
+
         return {
           role: "assistant",
-          content: `I need approval to execute ${approvalRequiredTools.length} tool(s). ${firstProposal.message}`,
+          content: content,
           timestamp: new Date().toISOString(),
-          toolProposal: {
-            id: firstProposal.proposalId,
-            toolName: firstProposal.toolName,
-            parameters: firstProposal.parameters,
-            requiresApproval: firstProposal.requiresApproval,
-            reasoning: firstProposal.reasoning,
-            actionDisplay: firstProposal.actionDisplay,
-            executed: firstProposal.executed,
-            data: firstProposal.data,
-            error: firstProposal.error,
-            pendingCount: approvalRequiredTools.length - 1  // Additional tools pending
-          },
+          toolProposals: toolProposals,  // Array of ALL proposals
           metadata: {
             tokensUsed: response.usage?.totalTokens || 0,
             thinkingTime,
             model: response.model,
             queryType: queryType.type,
             hasDataContext: Object.keys(dataContext).length > 0,
-            hasToolCall: true
+            hasToolCall: true,
+            proposalCount: toolProposals.length
           }
         };
       }
