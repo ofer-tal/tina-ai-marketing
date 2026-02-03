@@ -2,5 +2,9 @@
   "watch": ["backend/**/*"],
   "ext": "js,json",
   "ignore": ["node_modules/", "*.test.js"],
-  "exec": "node backend/server.js"
+  "exec": "node backend/utils/server-wrapper.js",
+  "env": {
+    "LOG_TO_FILE": "true",
+    "LOG_FILE_PATH": "logs/backend.log"
+  }
 }
