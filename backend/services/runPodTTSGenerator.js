@@ -113,11 +113,17 @@ const runpod = RUNPOD_API_KEY ? runpodSdk(RUNPOD_API_KEY) : null;
  * Generate speech from text using XTTS v2
  */
 async function generateSpeech(text, voice = 'female_1', languageCode = 'en') {
+  // Add unique request ID for tracking
+  const requestId = `tts_${Date.now().toString(36)}_${Math.random().toString(36).substring(7)}`;
+
   logger.info('Generating speech', {
+    requestId,
     voice,
     language: languageCode,
     textLength: text.length,
-    textPreview: text.substring(0, 100)
+    textPreview: text.substring(0, 100),
+    // Hash of first 50 chars to detect if same text is reused
+    textHash: Buffer.from(text.substring(0, 50)).toString('base64').substring(0, 12)
   });
 
   if (!runpod || !RUNPOD_ENDPOINT_ID_XTTSV2) {
@@ -153,12 +159,12 @@ async function generateSpeech(text, voice = 'female_1', languageCode = 'en') {
         const res = await endpoint.runSync(runPayload);
 
         if (res?.status !== 'COMPLETED') {
-          logger.warn('TTS request did not complete', { status: res?.status });
+          logger.warn('TTS request did not complete', { requestId, status: res?.status });
           throw new Error(`TTS request did not complete successfully. status: ${res?.status}`);
         }
 
         if (!res?.output?.audio) {
-          logger.warn('TTS request did not return audio', { output: res?.output });
+          logger.warn('TTS request did not return audio', { requestId, output: res?.output });
           throw new Error('TTS request did not return any audio.');
         }
 
@@ -168,25 +174,27 @@ async function generateSpeech(text, voice = 'female_1', languageCode = 'en') {
         retries: 3,
         minTimeout: 2000,
         onRetry: (error) => {
-          logger.warn('TTS retry', { error: error.message });
+          logger.warn('TTS retry', { requestId, error: error.message });
         },
       },
     );
 
     const elapsedSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
-    logger.info('RunPod result received', { elapsedSeconds });
+    logger.info('RunPod result received', { requestId, elapsedSeconds });
 
     const dataBase64 = result.output.audio;
     const buffer = Buffer.from(dataBase64, 'base64');
 
     logger.info('Generated audio', {
+      requestId,
       size: `${(buffer.length / 1024).toFixed(0)}KB`,
+      sizeBytes: buffer.length,
       voice: VOICE_DISPLAY_NAMES[voice] || voice
     });
 
     return buffer;
   } catch (error) {
-    logger.error('Error generating speech', { error: error.message });
+    logger.error('Error generating speech', { requestId, error: error.message });
     throw error;
   }
 }
@@ -210,14 +218,34 @@ async function generateAndSaveSpeech(
 
     // Save to file
     await fs.writeFile(outputPath, buffer);
-    logger.info('Saved speech', { outputPath });
+
+    // Verify file was written correctly
+    const stats = await fs.stat(outputPath);
+    const sizeMatches = stats.size === buffer.length;
+
+    logger.info('Saved speech', {
+      outputPath,
+      bufferSize: buffer.length,
+      fileSize: stats.size,
+      sizeMatches,
+      verified: sizeMatches
+    });
+
+    if (!sizeMatches) {
+      logger.error('File size mismatch after write!', {
+        outputPath,
+        bufferSize: buffer.length,
+        fileSize: stats.size,
+        difference: stats.size - buffer.length
+      });
+    }
 
     return {
       path: outputPath,
       size: buffer.length
     };
   } catch (error) {
-    logger.error('Error generating/saving speech', { error: error.message });
+    logger.error('Error generating/saving speech', { error: error.message, outputPath });
     throw error;
   }
 }
@@ -274,12 +302,34 @@ function estimateDuration(text) {
 }
 
 /**
+ * Get actual audio duration from file path using ffprobe
+ */
+async function getAudioDurationFromPath(audioPath) {
+  const { exec } = await import('child_process');
+  const { promisify } = await import('util');
+  const execAsync = promisify(exec);
+
+  try {
+    const { stdout } = await execAsync(
+      `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${audioPath}"`
+    );
+    const duration = parseFloat(stdout.trim());
+    return isNaN(duration) ? 0 : duration;
+  } catch (error) {
+    logger.warn('Failed to get duration via ffprobe, falling back to estimate', {
+      error: error.message
+    });
+    return 0;
+  }
+}
+
+/**
  * Get actual audio duration from buffer (requires ffprobe)
- * For now, returns estimated duration
+ * For backwards compatibility - prefer getAudioDurationFromPath when possible
  */
 async function getAudioDuration(buffer) {
-  // In production, this would use ffprobe to get actual duration
-  // For now, estimate based on buffer size (rough approximation)
+  // In production, this should use ffprobe on the saved file path
+  // For backwards compatibility, estimate based on buffer size
   // WAV: ~176KB per second at 44.1kHz 16-bit stereo
   const estimatedSeconds = buffer.length / (176 * 1024);
   return Math.max(3, estimatedSeconds);
@@ -314,25 +364,53 @@ async function generateForStory(story, text, options = {}) {
     selectedLanguage
   );
 
-  // Get duration
-  const duration = await getAudioDuration(
-    await fs.readFile(finalOutputPath)
-  );
+  // Get actual duration using ffprobe
+  const duration = await getAudioDurationFromPath(finalOutputPath);
+
+  // Calculate expected duration from text to detect truncation
+  const expectedDuration = estimateDuration(text);
+  const wordCount = text.split(/\s+/).length;
+  const avgWordsPerSecond = 2.5; // Normal speech is ~150 words per minute = 2.5 words/second
+  const expectedFromWordCount = wordCount / avgWordsPerSecond;
+
+  // Detect if TTS likely truncated the text
+  // If actual duration is much shorter than expected based on word count, TTS probably truncated
+  const truncationRatio = duration / expectedFromWordCount;
+  const likelyTruncated = truncationRatio < 0.7; // If actual is < 70% of expected, likely truncated
 
   logger.info('Generated speech for story', {
     storyId: story?._id,
     voice: VOICE_DISPLAY_NAMES[selectedVoice] || selectedVoice,
-    duration: `${duration.toFixed(1)}s`
+    duration: `${duration.toFixed(1)}s`,
+    expectedFromWordCount: `${expectedFromWordCount.toFixed(1)}s`,
+    truncationRatio: truncationRatio.toFixed(2),
+    likelyTruncated,
+    wordCount,
+    textLength: text.length,
+    textPreview: text.substring(0, 100)
   });
+
+  if (likelyTruncated) {
+    logger.warn('TTS may have truncated text - actual duration much shorter than expected', {
+      duration: `${duration.toFixed(1)}s`,
+      expected: `${expectedFromWordCount.toFixed(1)}s`,
+      ratio: truncationRatio.toFixed(2),
+      textLength: text.length,
+      wordCount
+    });
+  }
 
   return {
     ...result,
     duration,
     voice: selectedVoice,
     language: selectedLanguage,
+    likelyTruncated,
     metadata: {
       voiceDisplay: VOICE_DISPLAY_NAMES[selectedVoice] || selectedVoice,
-      estimatedDuration: estimateDuration(text)
+      estimatedDuration: expectedDuration,
+      expectedFromWordCount,
+      truncationRatio
     }
   };
 }
@@ -396,6 +474,7 @@ export {
   buildNarrationText,
   estimateDuration,
   getAudioDuration,
+  getAudioDurationFromPath,
   getAvailableVoices,
   healthCheck,
   VOICE_DISPLAY_NAMES
@@ -411,6 +490,7 @@ export default {
   buildNarrationText,
   estimateDuration,
   getAudioDuration,
+  getAudioDurationFromPath,
   getAvailableVoices,
   healthCheck
 };

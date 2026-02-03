@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authentication</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #eaeaea;
+    }
+
+    .container {
+      text-align: center;
+      padding: 2rem;
+      max-width: 400px;
+    }
+
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid #2d3561;
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1.5rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .icon {
+      font-size: 64px;
+      margin-bottom: 1rem;
+    }
+
+    .title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+      color: #eaeaea;
+    }
+
+    .message {
+      font-size: 1rem;
+      color: #a0a0a0;
+      line-height: 1.6;
+    }
+
+    .success {
+      color: #10b981;
+    }
+
+    .error {
+      color: #ef4444;
+    }
+
+    .details {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      color: #ef4444;
+      text-align: left;
+    }
+
+    .close-hint {
+      margin-top: 2rem;
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="container" id="app">
+    <div class="spinner"></div>
+    <div class="title">Processing...</div>
+    <div class="message">Please wait while we complete your authentication.</div>
+  </div>
+
+  <script>
+    const app = document.getElementById('app');
+
+    // Parse URL parameters to determine the result
+    const params = new URLSearchParams(window.location.search);
+    const hasParams = params.toString().length > 0;
+
+    if (hasParams) {
+      // Extract status from URL parameters
+      const tiktokStatus = params.get('tiktok');
+      const googleStatus = params.get('google');
+      const youtubeStatus = params.get('youtube');
+      const message = params.get('message');
+      const error = params.get('error');
+
+      // Determine if authentication was successful
+      const isSuccess =
+        (tiktokStatus === 'success' || googleStatus === 'success' || youtubeStatus === 'success') &&
+        !error;
+
+      if (isSuccess) {
+        // Determine which service was connected
+        const services = [];
+        if (tiktokStatus === 'success') services.push('TikTok');
+        if (googleStatus === 'success') services.push('Google Sheets');
+        if (youtubeStatus === 'success') services.push('YouTube');
+
+        // Send success message to parent window
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'oauth-success',
+            services: services,
+            message: message || (services.join(' and ') + ' connected successfully!')
+          }, window.location.origin);
+
+          // Give the message time to be received, then close
+          setTimeout(() => {
+            window.close();
+          }, 500);
+        } else {
+          // No parent window - show success message
+          app.innerHTML = `
+            <div class="icon">✅</div>
+            <div class="title">Authentication Successful!</div>
+            <div class="message success">
+              ${services.join(' and ')} connected successfully.<br>
+              You can close this window.
+            </div>
+          `;
+        }
+      } else {
+        // Authentication failed - show error
+        const errorMessage = message || error || 'Authentication failed. Please try again.';
+
+        // Send error to parent window
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'oauth-error',
+            message: errorMessage
+          }, window.location.origin);
+        }
+
+        app.innerHTML = `
+          <div class="icon">❌</div>
+          <div class="title">Authentication Failed</div>
+          <div class="message error">
+            ${errorMessage}
+          </div>
+          <div class="details" style="display: none">
+            ${params.toString().split('&').map(p => `<div>${p}</div>`).join('')}
+          </div>
+          <div class="close-hint">You can close this window and try again.</div>
+        `;
+      }
+    } else {
+      // No parameters - might be a direct visit
+      app.innerHTML = `
+        <div class="icon">ℹ️</div>
+        <div class="title">No Authentication Data</div>
+        <div class="message">
+          This page should be accessed as part of an OAuth flow.<br>
+          Please return to the application and try again.
+        </div>
+      `;
+    }
+  </script>
+</body>
+</html>

@@ -8,13 +8,47 @@
 import Story from '../../models/Story.js';
 import MarketingPost from '../../models/MarketingPost.js';
 import StoryBlacklist from '../../models/StoryBlacklist.js';
+import Music from '../../models/Music.js';
 import { getLogger } from '../../utils/logger.js';
 import tieredVideoGenerator from '../tieredVideoGenerator.js';
 import captionGenerationService from '../captionGenerationService.js';
 import hashtagGenerationService from '../hashtagGenerationService.js';
 import hookGenerationService from '../hookGenerationService.js';
+import path from 'path';
 
 const logger = getLogger('post-management-tools', 'post-management-tools');
+
+/**
+ * Convert storage file path to URL for frontend access
+ * Converts Windows and WSL paths to /storage/ URLs
+ * @param {string} filePath - Absolute file path
+ * @returns {string|null} URL path like /storage/videos/tier1/final/video.mp4
+ */
+function storagePathToUrl(filePath) {
+  if (!filePath) return null;
+
+  // Normalize path separators
+  const normalizedPath = filePath.replace(/\\/g, '/');
+
+  // Match the storage directory (after normalization to forward slashes)
+  // Try multiple patterns: WSL (/mnt/c/...), Windows (C:/...), and already-converted (/storage/...)
+  const storageMatch = normalizedPath.match(/\/?mnt\/[cC]\/Projects\/blush-marketing\/storage\/(.+)/) ||
+                      normalizedPath.match(/[A-Z]:\/Projects\/blush-marketing\/storage\/(.+)/) ||
+                      normalizedPath.match(/\/storage\/(.+)/);
+
+  if (storageMatch) {
+    return `/storage/${storageMatch[1]}`;
+  }
+
+  // If path is already under /storage, use as-is
+  if (normalizedPath.startsWith('/storage/')) {
+    return normalizedPath;
+  }
+
+  // Log warning if path couldn't be converted
+  logger.warn('Could not convert path to URL', { input: filePath, normalized: normalizedPath });
+  return filePath; // Return original if no pattern matched
+}
 
 // Valid platforms
 const VALID_PLATFORMS = ['tiktok', 'instagram', 'youtube_shorts'];
@@ -45,6 +79,12 @@ const DEFAULT_EFFECTS = {
 async function createApprovalTodo(post, story) {
   try {
     const mongoose = await import('mongoose');
+
+    // Check if connection is established
+    if (!mongoose.connection || !mongoose.connection.db) {
+      logger.warn('MongoDB connection not available for approval todo creation');
+      return { success: false, error: 'Database connection not available' };
+    }
 
     const platformDisplay = post.platform.charAt(0).toUpperCase() + post.platform.slice(1).replace('_', ' ');
     const title = `✅ Approve Post: ${platformDisplay} - ${post.title.substring(0, 40)}...`;
@@ -196,6 +236,48 @@ export async function getStories({ category, spiciness, limit = 20, search } = {
 }
 
 /**
+ * Get available background music tracks
+ *
+ * @param {Object} options - Query options
+ * @param {string} options.style - Filter by style
+ * @returns {Promise<Object>} Music tracks response
+ */
+export async function getMusic({ style = 'all' } = {}) {
+  try {
+    const query = { status: 'available' };
+    if (style && style !== 'all') {
+      query.style = style;
+    }
+
+    const tracks = await Music.find(query)
+      .sort({ timesUsed: -1, createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    logger.info('Retrieved music tracks for Tina', {
+      count: tracks.length,
+      style: style || 'all'
+    });
+
+    return {
+      count: tracks.length,
+      tracks: tracks.map(t => ({
+        id: t._id.toString(),
+        name: t.name,
+        style: t.style,
+        prompt: t.prompt,
+        duration: t.duration,
+        timesUsed: t.timesUsed || 0,
+        createdAt: t.createdAt
+      }))
+    };
+  } catch (error) {
+    logger.error('Error fetching music tracks', { error: error.message });
+    throw new Error(`Failed to fetch music tracks: ${error.message}`);
+  }
+}
+
+/**
  * Validate create post parameters
  *
  * @param {Object} params - Create post parameters
@@ -257,6 +339,10 @@ async function validateCreatePost(params) {
 /**
  * Create a new marketing post from a story
  *
+ * IMPORTANT: Video generation is ASYNCHRONOUS. When generateVideo=true, this function
+ * returns immediately after launching the generation process. The video will be generated
+ * in the background. Check the post's videoGenerationProgress.status to track completion.
+ *
  * @param {Object} params - Create post parameters
  * @param {string} params.storyId - Story ID
  * @param {Array<string>} params.platforms - Target platforms
@@ -267,8 +353,8 @@ async function validateCreatePost(params) {
  * @param {string} params.contentTier - Content tier (default: 'tier_1')
  * @param {Object} params.tierParameters - Tier-specific parameters (e.g., animationStyle for tier_1)
  * @param {string} params.voice - Voice selection (default: 'female_1')
- * @param {boolean} params.generateVideo - Generate video immediately (default: false)
- * @param {string} params.scheduleFor - ISO date to schedule (optional)
+ * @param {boolean} params.generateVideo - Generate video immediately (default: true, ASYNC)
+ * @param {string} params.scheduleFor - ISO date to schedule (optional - auto-scheduled if not provided)
  * @returns {Promise<Object>} Created post data
  */
 export async function createPost(params = {}) {
@@ -284,7 +370,7 @@ export async function createPost(params = {}) {
     // Tier 1 specific parameters
     preset = 'triple_visual',
     cta = 'Read more on Blush 🔥',
-    includeMusic = true,
+    musicId = null,
     effects = {},
     voice = 'female_1',
     generateVideo = true,
@@ -341,7 +427,30 @@ export async function createPost(params = {}) {
   }
 
   // Determine scheduled date
-  const scheduledDate = scheduleFor ? new Date(scheduleFor) : getNextAvailableSlot();
+  let scheduledDate;
+  if (scheduleFor) {
+    scheduledDate = new Date(scheduleFor);
+
+    // Validate the date is valid
+    if (isNaN(scheduledDate.getTime())) {
+      throw new Error('Invalid scheduled date format. Use ISO 8601 format (e.g., 2026-02-02T15:00:00Z)');
+    }
+
+    // Validate the date is in the future (at least 30 minutes from now to account for processing time)
+    const now = new Date();
+    const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
+    if (scheduledDate < minScheduleTime) {
+      // If the requested time is in the past, use the next available slot instead
+      logger.warn('Requested scheduled time is in the past, using next available slot', {
+        requestedTime: scheduleFor,
+        currentTime: now.toISOString(),
+        minScheduleTime: minScheduleTime.toISOString()
+      });
+      scheduledDate = getNextAvailableSlot();
+    }
+  } else {
+    scheduledDate = getNextAvailableSlot();
+  }
 
   // Create posts for each platform
   const createdPosts = [];
@@ -379,6 +488,7 @@ export async function createPost(params = {}) {
         tier: contentTier,
         preset,
         voice,
+        musicId,
         effects: effectsArray
       }
     });
@@ -393,54 +503,105 @@ export async function createPost(params = {}) {
       status: post.status
     });
 
-    // Generate video if requested
+    // Generate video if requested - ASYNCHRONOUS (launch and forget)
     if (generateVideo && contentType === 'video') {
-      try {
-        // Merge provided effects with defaults
-        const mergedEffects = { ...DEFAULT_EFFECTS, ...effects };
+      // Merge provided effects with defaults
+      const mergedEffects = { ...DEFAULT_EFFECTS, ...effects };
 
-        const videoResult = await generatePostVideoInternal(post, story, {
-          voice,
-          preset,
-          cta,
-          includeMusic,
-          effects: mergedEffects
-        });
+      logger.info('Launching ASYNCHRONOUS video generation for post', {
+        postId: post._id,
+        platform,
+        musicId,
+        hasMusic: !!musicId
+      });
 
-        generationResults.push({
-          postId: post._id,
-          platform,
-          success: videoResult.success,
-          videoPath: videoResult.videoPath,
-          error: videoResult.error
-        });
+      // Mark post as generating - this happens synchronously
+      post.status = 'generating';
+      post.videoGenerationProgress = {
+        status: 'initializing',
+        progress: 0,
+        currentStep: 'Initializing...',
+        totalSteps: 7,
+        startedAt: new Date()
+      };
+      await post.save();
 
-        // Update post with video path
+      // Launch async generation WITHOUT awaiting
+      // This returns immediately to the LLM
+      generatePostVideoInternal(post, story, {
+        voice,
+        preset,
+        cta,
+        musicId,
+        effects: mergedEffects
+      }).then(async (videoResult) => {
         if (videoResult.success) {
           post.videoPath = videoResult.videoPath;
+          post.thumbnailPath = videoResult.thumbnailPath;
+          post.status = 'ready';
+          post.videoGenerationProgress = {
+            status: 'completed',
+            progress: 100,
+            currentStep: 'Complete',
+            completedAt: new Date(),
+            result: {
+              videoPath: videoResult.videoPath,
+              duration: videoResult.duration,
+              metadata: videoResult.metadata
+            }
+          };
           post.generationMetadata = {
             ...post.generationMetadata,
             ...videoResult.metadata
           };
-          await post.save();
+          logger.info('Async video generation completed', {
+            postId: post._id,
+            videoPath: videoResult.videoPath
+          });
+          // Create approval todo NOW that video is ready
+          await createApprovalTodo(post, story);
+        } else {
+          post.status = 'draft';
+          post.videoGenerationProgress = {
+            status: 'failed',
+            progress: 0,
+            currentStep: 'Failed',
+            completedAt: new Date(),
+            errorMessage: videoResult.error
+          };
+          logger.error('Async video generation failed', {
+            postId: post._id,
+            error: videoResult.error
+          });
         }
-      } catch (error) {
-        logger.error('Video generation failed during post creation', {
+        await post.save();
+      }).catch(async (error) => {
+        logger.error('Async video generation error', {
           postId: post._id,
           error: error.message
         });
-        generationResults.push({
-          postId: post._id,
-          platform,
-          success: false,
-          error: error.message
-        });
-      }
-    }
+        post.status = 'draft';
+        post.videoGenerationProgress = {
+          status: 'failed',
+          progress: 0,
+          currentStep: 'Failed',
+          completedAt: new Date(),
+          errorMessage: error.message
+        };
+        await post.save();
+      });
 
-    // Create approval todo for each post
-    await createApprovalTodo(post, story);
+      generationResults.push({
+        postId: post._id,
+        platform,
+        launched: true,
+        message: 'Video generation launched asynchronously'
+      });
+    }
   }
+
+  // Note: Approval todo is created when async video generation completes
+  // Not immediately, to avoid confusion with posts still generating
 
   return {
     success: true,
@@ -451,37 +612,106 @@ export async function createPost(params = {}) {
       title: p.title,
       status: p.status,
       scheduledAt: p.scheduledAt,
-      hasVideo: !!p.videoPath
+      hasVideo: !!p.videoPath,
+      videoGenerationStatus: p.videoGenerationProgress?.status || 'not_started'
     })),
-    videoGenerated: generateVideo,
-    generationResults: generationResults.length > 0 ? generationResults : undefined
+    videoGenerated: false, // Always false now - video generation is async
+    message: generateVideo
+      ? `Launched async video generation for ${createdPosts.length} post(s). Videos are generating in the background. Approval todos will be created once generation completes (check back in a few minutes).`
+      : `${createdPosts.length} post(s) created without video generation.`,
+    generationResults: generationResults.length > 0 ? generationResults : undefined,
+    asyncVideoGeneration: true // Explicitly flag that this is async
   };
 }
 
 /**
  * Get the next available posting slot
  *
+ * Business hours logic:
+ * - MORNING: 8am-11am (best for "tomorrow morning" requests)
+ * - AFTERNOON: 2pm-5pm
+ * - EVENING: 7pm-10pm
+ * - Avoids: late night (11pm-6am), early morning (6am-7am)
+ *
  * @returns {Date} Next available slot
  */
 function getNextAvailableSlot() {
   const now = new Date();
-  // Schedule for next optimal time (e.g., 2pm, 6pm, or 10pm)
-  const optimalHours = [10, 14, 18, 22];
 
-  for (const hour of optimalHours) {
+  // Define posting windows (start hour, end hour exclusive)
+  // These are SOCIAL MEDIA posting times, not work hours
+  const windows = [
+    { name: 'morning', start: 8, end: 11 },   // 8am-11am
+    { name: 'afternoon', start: 14, end: 17 }, // 2pm-5pm
+    { name: 'evening', start: 19, end: 22 }    // 7pm-10pm
+  ];
+
+  // Try each window for today
+  for (const window of windows) {
     const slot = new Date(now);
-    slot.setHours(hour, 0, 0, 0);
+    slot.setHours(window.start, 0, 0, 0);
 
     if (slot > now) {
+      // Still within this window today
       return slot;
     }
   }
 
-  // If all slots passed today, schedule for tomorrow 10am
+  // All windows passed today - schedule for tomorrow morning at 9am
+  // (Middle of morning window, not too early, not too late)
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(10, 0, 0, 0);
+  tomorrow.setHours(9, 0, 0, 0);
   return tomorrow;
+}
+
+/**
+ * Get the next available posting slot with flexible timing
+ *
+ * @param {string} timePreference - Optional: 'morning', 'afternoon', 'evening', or 'any'
+ * @param {number} daysFromNow - Optional: days offset (0=today, 1=tomorrow, etc.)
+ * @returns {Date} Next available slot
+ */
+function getAvailableSlot(timePreference = 'any', daysFromNow = 0) {
+  const now = new Date();
+  const targetDate = new Date(now);
+  targetDate.setDate(now.getDate() + daysFromNow);
+  targetDate.setHours(0, 0, 0, 0);
+
+  // Define posting windows
+  const windows = {
+    morning: { start: 8, end: 11, defaultHour: 9 },
+    afternoon: { start: 14, end: 17, defaultHour: 15 },
+    evening: { start: 19, end: 22, defaultHour: 20 }
+  };
+
+  // If asking for today and preference is 'any', use next available
+  if (daysFromNow === 0 && timePreference === 'any') {
+    return getNextAvailableSlot();
+  }
+
+  // If specific time preference
+  if (timePreference !== 'any' && windows[timePreference]) {
+    const window = windows[timePreference];
+    const slot = new Date(targetDate);
+    slot.setHours(window.defaultHour, 0, 0, 0);
+
+    // If slot is in the past and we're asking for today, move to tomorrow
+    if (slot <= now && daysFromNow === 0) {
+      slot.setDate(slot.getDate() + 1);
+    }
+
+    return slot;
+  }
+
+  // Default to tomorrow morning if daysFromNow > 0
+  if (daysFromNow > 0) {
+    const slot = new Date(targetDate);
+    slot.setHours(9, 0, 0, 0);
+    return slot;
+  }
+
+  return getNextAvailableSlot();
 }
 
 /**
@@ -623,9 +853,15 @@ async function generatePostVideoInternal(post, story, options = {}) {
     voice = post.generationMetadata?.voice || 'female_1',
     preset = 'triple_visual',
     cta = post.cta || 'Read more on Blush 🔥',
-    includeMusic = true,
+    musicId = null,
     effects = DEFAULT_EFFECTS
   } = options;
+
+  logger.info('generatePostVideoInternal called', {
+    postId: post._id,
+    musicId,
+    hasMusic: !!musicId
+  });
 
   try {
     const result = await tieredVideoGenerator.generateTier1Video({
@@ -635,17 +871,21 @@ async function generatePostVideoInternal(post, story, options = {}) {
       cta,
       voice,
       preset,
-      includeMusic,
+      musicId,
       effects
     });
 
     if (result.success) {
       return {
         success: true,
-        videoPath: result.videoPath,
+        videoPath: storagePathToUrl(result.videoPath),
+        thumbnailPath: storagePathToUrl(result.thumbnailPath),
         duration: result.duration,
         metadata: {
           ...result.metadata,
+          preset,
+          musicId,
+          voice,
           videoGeneratedAt: new Date()
         }
       };
@@ -691,7 +931,7 @@ async function checkVideoServicesHealth() {
  * @param {string} params.preset - Slide composition preset
  * @param {string} params.voice - Voice selection
  * @param {string} params.cta - Call-to-action text (supports emojis)
- * @param {boolean} params.includeMusic - Include background music
+ * @param {string} params.musicId - Background music track ID (optional)
  * @param {Object} params.effects - Effect configuration
  * @param {boolean} params.forceRegenerate - Force regeneration even if video exists
  * @returns {Promise<Object>} Generation result
@@ -702,7 +942,7 @@ export async function generatePostVideo(params = {}) {
     preset,
     voice,
     cta,
-    includeMusic = true,
+    musicId = null,
     effects,
     forceRegenerate = false
   } = params;
@@ -758,7 +998,7 @@ export async function generatePostVideo(params = {}) {
     voice: selectedVoice,
     preset: selectedPreset,
     cta: selectedCta,
-    includeMusic,
+    musicId,
     effects: selectedEffects
   });
   const generationTime = Date.now() - startTime;
@@ -767,8 +1007,9 @@ export async function generatePostVideo(params = {}) {
     throw new Error(result.error || 'Video generation failed');
   }
 
-  // Update post with video path
+  // Update post with video path and thumbnail (already URL-formatted)
   post.videoPath = result.videoPath;
+  post.thumbnailPath = result.thumbnailPath;
   post.generationMetadata = {
     ...post.generationMetadata,
     ...result.metadata,
@@ -822,6 +1063,7 @@ export async function regeneratePostVideo(params = {}) {
     hook,
     caption,
     cta,
+    musicId = null,
     effects
   } = params;
 
@@ -846,7 +1088,8 @@ export async function regeneratePostVideo(params = {}) {
     cta: post.cta,
     hashtags: [...(post.hashtags || [])],
     voice: post.generationMetadata?.voice,
-    effects: post.generationMetadata?.effects
+    effects: post.generationMetadata?.effects,
+    musicId: post.generationMetadata?.musicId
   };
 
   // Update caption/hook/cta/preset if provided
@@ -901,6 +1144,7 @@ export async function regeneratePostVideo(params = {}) {
   const selectedPreset = preset || previousState.preset || 'triple_visual';
   const selectedVoice = voice || previousState.voice || 'female_1';
   const selectedCta = cta || previousState.cta || 'Read more on Blush 🔥';
+  const selectedMusicId = musicId !== null ? musicId : previousState.musicId;
   const selectedEffects = effects || previousState.effects || DEFAULT_EFFECTS;
 
   // Generate new video
@@ -909,7 +1153,7 @@ export async function regeneratePostVideo(params = {}) {
     preset: selectedPreset,
     voice: selectedVoice,
     cta: selectedCta,
-    includeMusic: true,
+    musicId: selectedMusicId,
     effects: selectedEffects
   });
   const generationTime = Date.now() - startTime;
@@ -918,8 +1162,9 @@ export async function regeneratePostVideo(params = {}) {
     throw new Error(result.error || 'Video regeneration failed');
   }
 
-  // Update post with new video
+  // Update post with new video and thumbnail (already URL-formatted)
   post.videoPath = result.videoPath;
+  post.thumbnailPath = result.thumbnailPath;
   post.generationMetadata = {
     ...post.generationMetadata,
     ...result.metadata,
@@ -975,8 +1220,11 @@ export async function schedulePosts(params = {}) {
     throw new Error('Invalid scheduled date');
   }
 
-  if (scheduledDate <= new Date()) {
-    throw new Error('Scheduled date must be in the future');
+  // Validate the date is in the future (at least 30 minutes from now)
+  const now = new Date();
+  const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
+  if (scheduledDate < minScheduleTime) {
+    throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${now.toISOString()}, Minimum: ${minScheduleTime.toISOString()}`);
   }
 
   // Find all posts
@@ -1213,6 +1461,7 @@ function generateActivitySummary(activities) {
 
 export default {
   getStories,
+  getMusic,
   createPost,
   editPost,
   generatePostVideo,

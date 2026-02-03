@@ -794,11 +794,20 @@ const ToolProposalCard = styled.div`
 const ToolProposalHeader = styled.div`
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  font-weight: 600;
-  color: #e94560;
+  flex-wrap: wrap;
   margin-bottom: 0.75rem;
   font-size: 0.875rem;
+
+  > span:first-child {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    color: #e94560;
+    flex: 1;
+  }
 `;
 
 const ToolProposalTitle = styled.div`
@@ -826,6 +835,46 @@ const ToolProposalReasoning = styled.div`
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
   font-style: italic;
+  line-height: 1.4;
+
+  strong {
+    color: #e94560;
+    font-style: normal;
+  }
+`;
+
+const ToolProposalParams = styled.div`
+  font-size: 0.875rem;
+  color: #eaeaea;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+
+  strong {
+    color: #e94560;
+  }
+`;
+
+const ParamsList = styled.ul`
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.25rem;
+  list-style-type: disc;
+`;
+
+const ParamsItem = styled.li`
+  margin: 0.25rem 0;
+  line-height: 1.4;
+`;
+
+const ParamName = styled.code`
+  color: #7dd3fc;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 0.8rem;
+`;
+
+const ParamValue = styled.span`
+  color: #eaeaea;
 `;
 
 const ToolProposalActions = styled.div`
@@ -937,6 +986,47 @@ function Chat({ onClose }) {
   const [isSearching, setIsSearching] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
+
+  // Load pending proposals from backend on mount
+  useEffect(() => {
+    const loadPendingProposals = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/chat/proposals/pending');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.proposals) {
+            console.log('[Chat] Loaded pending proposals:', data.proposals);
+            // Map proposals to state format
+            const proposalsMap = {};
+            data.proposals.forEach((proposal, index) => {
+              const key = `pending_${proposal._id || index}`;
+              proposalsMap[key] = {
+                key,
+                id: proposal._id,
+                toolName: proposal.toolName,
+                parameters: proposal.toolParameters,
+                reasoning: proposal.reasoning,
+                status: proposal.status,
+                requiresApproval: proposal.requiresApproval,
+                // Build actionDisplay from tool data
+                actionDisplay: {
+                  description: getToolDescription(proposal.toolName, proposal.toolParameters),
+                  exampleImpact: proposal.expectedImpact || 'This action should help improve our marketing performance.'
+                },
+                // Link to the latest AI message (we'll use the latest assistant message)
+                messageId: 'pending'
+              };
+            });
+            setToolProposals(proposalsMap);
+          }
+        }
+      } catch (error) {
+        console.log('[Chat] No pending proposals to load or error loading them:', error.message);
+      }
+    };
+
+    loadPendingProposals();
+  }, []);
   const searchTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -1098,6 +1188,11 @@ What would you like to focus on today?`;
         })
       });
 
+      console.log('[Chat] Sent message:', {
+        message: userMessage.content.substring(0, 50),
+        conversationId: currentConversationId
+      });
+
       const data = await response.json();
 
       if (data.success) {
@@ -1133,7 +1228,17 @@ What would you like to focus on today?`;
           const proposalsMap = {};
           data.response.toolProposals.forEach((proposal, index) => {
             const proposalKey = `${aiMessage.id}_proposal_${index}`;
-            proposalsMap[proposalKey] = { ...proposal, index, messageId: aiMessage.id };
+            proposalsMap[proposalKey] = {
+              ...proposal,
+              index,
+              messageId: aiMessage.id,
+              status: proposal.status || 'pending_approval'  // Ensure status field exists
+            };
+          });
+          console.log('[Chat] Storing tool proposals:', {
+            aiMessageId: aiMessage.id,
+            proposalsCount: data.response.toolProposals.length,
+            proposalsMap
           });
           setToolProposals(prev => ({
             ...prev,
@@ -1495,6 +1600,38 @@ What would you like to focus on today?`;
       .join(' ');
   };
 
+  const formatParamValue = (value) => {
+    if (Array.isArray(value)) {
+      return value.join(', ');
+    }
+    if (typeof value === 'object') {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  };
+
+  const getToolDescription = (toolName, parameters = {}) => {
+    const descriptions = {
+      create_strategy: parameters.name
+        ? `Create strategy: ${parameters.name}`
+        : 'Create a new marketing strategy',
+      update_strategy: parameters.strategyId
+        ? `Update strategy ${parameters.strategyId}`
+        : 'Update strategy status',
+      complete_strategy: 'Complete strategy with outcomes',
+      pause_strategy: 'Pause active strategy',
+      resume_strategy: 'Resume paused strategy',
+      create_content_experiment: parameters.name
+        ? `Create experiment: ${parameters.name}`
+        : 'Create A/B test experiment',
+      get_strategies: 'Get marketing strategies',
+      get_strategy_details: 'Get strategy details',
+      get_strategy_history: 'Get strategy history'
+    };
+
+    return descriptions[toolName] || formatToolName(toolName);
+  };
+
   const formatMessage = (content) => {
     // Use marked for proper markdown rendering
     return marked.parse(content);
@@ -1633,8 +1770,18 @@ What would you like to focus on today?`;
           messages.map((msg) => {
             // Get all proposals for this message (both direct match and those with messageId)
             const msgProposals = Object.entries(toolProposals)
-              .filter(([key, p]) => key === msg.id || p.messageId === msg.id || p.originalMessageId === msg.id)
+              .filter(([key, p]) => {
+                const matches = key === msg.id || p.messageId === msg.id || p.originalMessageId === msg.id;
+                if (p.messageId === msg.id || key.includes(msg.id)) {
+                  console.log('[Chat] Proposal filter match:', { key, msgId: msg.id, proposalMessageId: p.messageId, matches });
+                }
+                return matches;
+              })
               .map(([key, p]) => ({ key, ...p }));
+
+            if (msgProposals.length > 0) {
+              console.log('[Chat] Found proposals for message:', { msgId: msg.id, count: msgProposals.length, proposals: msgProposals.map(p => ({ key: p.key, toolName: p.toolName, requiresApproval: p.requiresApproval, status: p.status })) });
+            }
 
             const hasProposals = msgProposals.length > 0;
             const hasLegacyProposal = proposals[msg.id] && !hasProposals;
@@ -1658,24 +1805,56 @@ What would you like to focus on today?`;
                       {hasProposals && msgProposals.map((proposal) => (
                         <ToolProposalCard key={proposal.key}>
                           <ToolProposalHeader>
-                            <span>🔧</span>
-                            Tina wants to: {formatToolName(proposal.toolName)}
+                            <span>
+                              <span>🔧</span>
+                              <span>
+                                <strong>Tina wants to:</strong> {formatToolName(proposal.toolName)}
+                              </span>
+                            </span>
                             <ToolProposalStatus $status={proposal.status || 'pending'}>
                               {proposal.status === 'executed' ? '✓ Executed' :
                                proposal.status === 'rejected' ? '✗ Rejected' :
                                '⏳ Awaiting Approval'}
                             </ToolProposalStatus>
                           </ToolProposalHeader>
-                          {proposal.actionDisplay && (
+
+                          {/* Action Description */}
+                          {proposal.actionDisplay?.description && (
                             <ToolProposalDetails>
-                              <strong>Action:</strong> {proposal.actionDisplay.description}
+                              <strong>What:</strong> {proposal.actionDisplay.description}
                             </ToolProposalDetails>
                           )}
+
+                          {/* Expected Impact */}
+                          {proposal.actionDisplay?.exampleImpact && (
+                            <ToolProposalDetails>
+                              <strong>Expected Impact:</strong> {proposal.actionDisplay.exampleImpact}
+                            </ToolProposalDetails>
+                          )}
+
+                          {/* Reasoning */}
                           {proposal.reasoning && (
                             <ToolProposalReasoning>
-                              "{proposal.reasoning}"
+                              <strong>Why:</strong> {proposal.reasoning}
                             </ToolProposalReasoning>
                           )}
+
+                          {/* Parameters (formatted nicely) */}
+                          {proposal.parameters && Object.keys(proposal.parameters).length > 0 && (
+                            <ToolProposalParams>
+                              <strong>Details:</strong>
+                              <ParamsList>
+                                {Object.entries(proposal.parameters).map(([key, value]) => (
+                                  <ParamsItem key={key}>
+                                    <ParamName>{key}:</ParamName>{' '}
+                                    <ParamValue>{formatParamValue(value)}</ParamValue>
+                                  </ParamsItem>
+                                ))}
+                              </ParamsList>
+                            </ToolProposalParams>
+                          )}
+
+                          {/* Action Buttons */}
                           {proposal.status !== 'executed' && proposal.status !== 'rejected' && proposal.requiresApproval && (
                             <ToolProposalActions>
                               <ToolProposalButton

@@ -16,8 +16,33 @@ import { getLogger } from '../utils/logger.js';
 import rateLimiterService from './rateLimiter.js';
 import crypto from 'crypto';
 import AuthToken from '../models/AuthToken.js';
+import { getValidToken, makeAuthenticatedRequest, storeOAuthTokens, getTokenStatus } from '../utils/oauthHelper.js';
+import path from 'path';
 
 const logger = getLogger('services', 'tiktok-posting');
+
+/**
+ * Convert /storage/ URL path back to real file system path
+ * @param {string} storageUrl - URL path like /storage/videos/tier1/final/video.mp4
+ * @returns {string} Real file path like C:\Projects\blush-marketing\storage\videos\...
+ */
+function urlToFilePath(storageUrl) {
+  if (!storageUrl) return null;
+
+  // If it's already a file path (starts with drive letter or /mnt/), return as-is
+  if (storageUrl.match(/^[A-Z]:\\/) || storageUrl.startsWith('/mnt/')) {
+    return storageUrl;
+  }
+
+  // If it's a /storage/ URL, convert to file path
+  if (storageUrl.startsWith('/storage/')) {
+    const relativePath = storageUrl.substring('/storage/'.length);
+    return path.join(process.cwd(), 'storage', relativePath);
+  }
+
+  logger.warn('Unknown path format, using as-is', { storageUrl });
+  return storageUrl;
+}
 
 // Static cache for PKCE code verifiers (shared across all instances)
 // Maps state parameter -> code_verifier
@@ -277,46 +302,11 @@ class TikTokPostingService extends BaseApiClient {
 
   /**
    * Step 2 & 3: Verify authentication token obtained
-   * Check if we have a valid access token
+   * Check if we have a valid access token (using oauthHelper)
    */
   async checkTokenStatus() {
     try {
-      if (!this.accessToken) {
-        return {
-          authenticated: false,
-          hasToken: false,
-          message: 'No access token available',
-        };
-      }
-
-      if (this.tokenExpiresAt && new Date() > this.tokenExpiresAt) {
-        logger.info('Access token expired, attempting refresh...');
-
-        // Try to refresh the token
-        const refreshResult = await this.refreshAccessToken();
-
-        if (!refreshResult.success) {
-          return {
-            authenticated: false,
-            hasToken: false,
-            expired: true,
-            message: 'Access token expired and refresh failed',
-            error: refreshResult.error,
-          };
-        }
-      }
-
-      // Verify token by making a test API call
-      const userInfo = await this.getUserInfo();
-
-      return {
-        authenticated: true,
-        hasToken: true,
-        valid: true,
-        creatorId: this.creatorId,
-        userInfo: userInfo.success ? userInfo.data : null,
-      };
-
+      return await getTokenStatus('tiktok');
     } catch (error) {
       logger.error('Token status check failed', {
         error: error.message,
@@ -909,16 +899,20 @@ class TikTokPostingService extends BaseApiClient {
    */
   async postVideo(videoPath, caption, hashtags = [], onProgress = null) {
     try {
+      // Convert /storage/ URL path back to real file system path
+      const actualPath = urlToFilePath(videoPath);
+
       logger.info('Starting complete video post workflow...', {
         videoPath,
+        actualPath,
         captionLength: caption.length,
         hashtagsCount: hashtags.length,
       });
 
       // Step 1: Initialize upload
       const fs = await import('fs');
-      const videoStats = await fs.promises.stat(videoPath);
-      const videoBuffer = await fs.promises.readFile(videoPath);
+      const videoStats = await fs.promises.stat(actualPath);
+      const videoBuffer = await fs.promises.readFile(actualPath);
 
       const initResult = await this.initializeVideoUpload({
         title: caption.split('\n')[0].substring(0, 100),
@@ -992,6 +986,7 @@ class TikTokPostingService extends BaseApiClient {
    * Store tokens from response (saves to database for persistence)
    */
   async _storeTokens(tokenData) {
+    // Update in-memory cache
     this.accessToken = tokenData.access_token;
     this.refreshToken = tokenData.refresh_token;
     this.creatorId = tokenData.creator_id;
@@ -1004,7 +999,7 @@ class TikTokPostingService extends BaseApiClient {
       );
     }
 
-    logger.info('Tokens stored', {
+    logger.info('Tokens stored (in-memory)', {
       hasAccessToken: !!this.accessToken,
       hasRefreshToken: !!this.refreshToken,
       creatorId: this.creatorId,
@@ -1012,20 +1007,18 @@ class TikTokPostingService extends BaseApiClient {
       expiresAt: this.tokenExpiresAt,
     });
 
-    // Persist to database for use by background jobs
+    // Persist to database using oauthHelper for proper defaults
     try {
-      await AuthToken.saveToken('tiktok', {
-        accessToken: this.accessToken,
-        refreshToken: this.refreshToken,
-        creatorId: this.creatorId,
-        expiresAt: this.tokenExpiresAt,
+      await storeOAuthTokens('tiktok', {
+        access_token: this.accessToken,
+        refresh_token: this.refreshToken,
+        creator_id: this.creatorId,
+        expires_in: tokenData.expires_in,
         scope: tokenData.scope || [],
         userInfo: tokenData.userInfo || {},
-        metadata: {
-          open_id: this.openId,  // Store open_id in metadata
-        },
+        open_id: this.openId,
       });
-      logger.info('TikTok token persisted to database');
+      logger.info('TikTok token persisted to database via oauthHelper');
     } catch (error) {
       logger.error('Failed to persist TikTok token to database', {
         error: error.message,

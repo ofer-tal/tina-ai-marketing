@@ -349,16 +349,16 @@ class PostRetryJob {
    * Start the post retry job
    * Runs every hour
    */
-  start() {
+  async start() {
     if (schedulerService.getJob(this.jobName)) {
-      logger.warn('Post retry job already exists');
+      // Job already exists (common in development with nodemon)
       return;
     }
 
     logger.info('Starting post retry job with exponential backoff');
 
     // Schedule job to run every hour
-    schedulerService.schedule(
+    await schedulerService.schedule(
       this.jobName,
       '0 * * * *', // Every hour at minute 0
       () => this.execute(),

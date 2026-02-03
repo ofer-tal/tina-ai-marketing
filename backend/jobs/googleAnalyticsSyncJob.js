@@ -34,11 +34,11 @@ class GoogleAnalyticsSyncJob {
   /**
    * Initialize and schedule the job
    */
-  initialize() {
+  async initialize() {
     logger.info(`Initializing Google Analytics sync job with schedule: ${this.syncSchedule}`);
 
-    // Register job with scheduler
-    schedulerService.registerJob(
+    // Register job with scheduler (must be awaited - it's async!)
+    await schedulerService.registerJob(
       this.jobName,
       this.syncSchedule,
       () => this.execute(),
@@ -48,10 +48,7 @@ class GoogleAnalyticsSyncJob {
       }
     );
 
-    // Start the job
-    schedulerService.startJob(this.jobName);
-
-    logger.info('Google Analytics sync job initialized and scheduled');
+    logger.info('Google Analytics initialized and scheduled');
   }
 
   /**

@@ -168,7 +168,8 @@ async function generateSlideImages(preset, story) {
         path: null, // Generated later
         gradientStart: categoryStyle.gradientStart,
         gradientEnd: categoryStyle.gradientEnd,
-        foregroundColor: categoryStyle.foregroundColor
+        foregroundColor: categoryStyle.foregroundColor,
+        durationRatio: slideConfig.durationRatio  // Include duration ratio
       });
     } else {
       // Mark this slide for parallel image generation
@@ -214,7 +215,8 @@ async function generateSlideImages(preset, story) {
       index: i,
       type: 'image',
       path: imageResult.path,
-      prompt: imagePrompt
+      prompt: imagePrompt,
+      durationRatio: preset.slides[i].durationRatio  // Include duration ratio
     };
   });
 
@@ -297,9 +299,10 @@ async function createSlideVideos(slides, options) {
 
   for (let i = 0; i < slides.length; i++) {
     const slide = slides[i];
-    const slideDuration = slides.length === 3
-      ? duration / 3
-      : duration * (0.2 + (i - 1) * 0.4); // First slide 20%, rest split
+    // Use durationRatio from slide if available, otherwise divide equally
+    const slideDuration = slide.durationRatio
+      ? duration * slide.durationRatio
+      : duration / slides.length;
 
     const slideStart = currentTime;
     const slideEnd = currentTime + slideDuration;
@@ -481,10 +484,16 @@ async function applySlideEffects(imagePath, outputPath, effects) {
 async function concatenateSlidesWithAudio(slideVideos, audioPath, outputPath) {
   logger.info('Concatenating slides with audio', {
     slideCount: slideVideos.length,
-    audioPath
+    audioPath,
+    slideDurations: slideVideos.map(s => s.duration.toFixed(2))
   });
 
   const totalDuration = slideVideos.reduce((sum, slide) => sum + slide.duration, 0);
+
+  logger.info('Slide timing', {
+    totalVideoDuration: totalDuration.toFixed(2),
+    slideCount: slideVideos.length
+  });
 
   // Create concat filter
   const inputs = slideVideos.map(s => `-i ${s.path}`).join(' ');
@@ -505,7 +514,7 @@ async function concatenateSlidesWithAudio(slideVideos, audioPath, outputPath) {
     '-c:a', 'libmp3lame',
     '-b:a', '192k',
     '-ar', '48000',
-    '-shortest', // Trim to shortest input (audio)
+    '-t', totalDuration.toFixed(2), // Explicitly set output duration to match video length
     '-movflags', '+faststart',
     outputPath
   ];
@@ -514,14 +523,8 @@ async function concatenateSlidesWithAudio(slideVideos, audioPath, outputPath) {
 
   logger.info('Video concatenation complete', { path: outputPath });
 
-  // Clean up temp slide videos
-  for (const slide of slideVideos) {
-    try {
-      await fs.unlink(slide.path);
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
+  // NOTE: No cleanup of temp slide videos - scheduled job handles cleanup
+  // Keeping files for troubleshooting
 
   return outputPath;
 }
@@ -541,7 +544,7 @@ export async function generateMultiSlideVideo(options) {
     hook = '',
     cta = 'Read more on Blush 🔥',  // Default CTA with emoji
     voice = 'female_1',
-    includeMusic = true,
+    musicId = null,
     preset = 'triple_visual',
     effects = {
       kenBurns: true,
@@ -554,7 +557,7 @@ export async function generateMultiSlideVideo(options) {
     logger.info('Starting multi-slide video generation', {
       storyId: story?._id,
       preset,
-      includeMusic
+      musicId
     });
 
     // Ensure directories exist
@@ -579,56 +582,133 @@ export async function generateMultiSlideVideo(options) {
     // Import fetchStoryScene from parent module
     const { fetchStoryScene } = await import('../tieredVideoGenerator.js');
 
-    const { text: narrationText, duration } = await extractTextForDuration(
+    const { text: narrationText, duration: estimatedDuration, inRange: durationInRange, ttsPath: durationTtsPath } = await extractTextForDuration(
       story,
       fetchStoryScene,
       { voice }
     );
 
     logger.info('Narration text extracted', {
-      duration: duration.toFixed(1),
-      textLength: narrationText.length
+      estimatedDuration: estimatedDuration.toFixed(1),
+      textLength: narrationText.length,
+      inRange: durationInRange,
+      ttsPathProvided: !!durationTtsPath
     });
 
     // ============================================================
-    // Step 2: Generate TTS
+    // Step 2: Use TTS from duration control or generate new one
     // ============================================================
-    logger.info('Step 2: Generating TTS...');
+    let ttsPath;
+    let ttsResult;
 
-    const ttsPath = path.join(
-      STORAGE_TEMP,
-      `narration_${Date.now()}.wav`
-    );
+    if (durationTtsPath) {
+      // Reuse the TTS file from duration control
+      ttsPath = durationTtsPath;
+      ttsResult = { path: ttsPath, duration: estimatedDuration };
+      logger.info('Using TTS from duration control', { path: ttsPath, duration: estimatedDuration.toFixed(1) });
+    } else {
+      // Generate new TTS (fallback)
+      logger.info('Generating new TTS (fallback)...');
+      ttsPath = path.join(STORAGE_TEMP, `narration_${Date.now()}.wav`);
+      ttsResult = await runPodTTSGenerator.generateForStory(story, narrationText, {
+        voice,
+        outputPath: ttsPath
+      });
+    }
 
-    const ttsResult = await runPodTTSGenerator.generateForStory(story, narrationText, {
-      voice,
-      outputPath: ttsPath
-    });
+    // Log final TTS duration
+    const MIN_VIDEO_DURATION = 15;
+    const MAX_VIDEO_DURATION = 30;
+    const inRangeAfterTTS = ttsResult.duration >= MIN_VIDEO_DURATION && ttsResult.duration <= MAX_VIDEO_DURATION;
 
-    logger.info('TTS generated', {
+    // Log narration text details to verify it's complete
+    const narrationStart = narrationText.substring(0, 80);
+    const narrationEnd = narrationText.length > 80 ? narrationText.substring(narrationText.length - 80) : narrationText;
+
+    logger.info('TTS ready for video generation', {
       path: ttsResult.path,
-      duration: ttsResult.duration.toFixed(1)
+      duration: ttsResult.duration.toFixed(2),
+      inRange: inRangeAfterTTS,
+      targetRange: `${MIN_VIDEO_DURATION}-${MAX_VIDEO_DURATION}s`,
+      textLength: narrationText.length,
+      textStart: narrationStart.replace(/\n/g, ' '),
+      textEnd: narrationEnd.replace(/\n/g, ' ')
+    });
+
+    // If duration is out of range, log a warning but continue
+    if (!inRangeAfterTTS) {
+      if (ttsResult.duration < MIN_VIDEO_DURATION) {
+        logger.warn(`Narration shorter than minimum (${ttsResult.duration.toFixed(2)}s < ${MIN_VIDEO_DURATION}s), but continuing after max attempts...`);
+      } else {
+        logger.warn(`Narration longer than preferred (${ttsResult.duration.toFixed(2)}s > ${MAX_VIDEO_DURATION}s), but continuing...`);
+      }
+    }
+
+    // Log the actual TTS file to verify duration
+    logger.info('TTS file details', {
+      path: ttsResult.path,
+      fileSize: (await fs.stat(ttsResult.path).catch(() => ({ size: 0 })))?.size || 'unknown'
     });
 
     // ============================================================
     // Step 3: Get Background Music
     // ============================================================
     let musicPath = null;
-    if (includeMusic) {
-      logger.info('Step 3: Getting background music...');
-      musicPath = await falAiAudioService.getBackgroundMusic(story?.category);
 
-      if (musicPath) {
-        logger.info('Background music found', { path: musicPath });
-      } else {
-        logger.info('No background music available');
+    // If musicId is provided, fetch that specific track
+    if (musicId) {
+      logger.info('Step 3: Getting background music from library...', { musicId });
+      try {
+        const Music = (await import('../../models/Music.js')).default;
+        const musicTrack = await Music.findById(musicId);
+
+        logger.info('Music track fetched from DB', {
+          musicId,
+          found: !!musicTrack,
+          status: musicTrack?.status,
+          audioPath: musicTrack?.audioPath
+        });
+
+        if (musicTrack && musicTrack.status === 'available' && musicTrack.audioPath) {
+          // Convert URL path to file system path
+          musicPath = path.join(process.cwd(), musicTrack.audioPath.startsWith('/storage/')
+            ? musicTrack.audioPath.substring(1)  // Remove leading /
+            : musicTrack.audioPath);
+
+          // Increment usage count
+          await musicTrack.incrementUsage();
+
+          logger.info('Background music loaded from library', {
+            musicId,
+            name: musicTrack.name,
+            audioPath: musicTrack.audioPath,
+            resolvedPath: musicPath,
+            fileExists: await fs.access(musicPath).then(() => true).catch(() => false)
+          });
+        } else {
+          logger.warn('Music track not available', { musicId, track: musicTrack });
+        }
+      } catch (error) {
+        logger.error('Failed to load music from library', {
+          musicId,
+          error: error.message,
+          stack: error.stack
+        });
       }
+    } else {
+      logger.info('Step 3: No musicId provided, generating narration-only video');
     }
+
+    // If no musicId provided, musicPath remains null (narration only video)
 
     // ============================================================
     // Step 4: Mix Audio
     // ============================================================
-    logger.info('Step 4: Mixing audio...');
+    logger.info('Step 4: Mixing audio...', {
+      hasNarration: !!ttsResult?.path,
+      hasMusic: !!musicPath,
+      musicPath
+    });
 
     const mixedAudioPath = path.join(STORAGE_TEMP, `mixed_${Date.now()}.wav`);
 
@@ -646,7 +726,15 @@ export async function generateMultiSlideVideo(options) {
       throw new Error(`Audio mixing failed: ${mixResult.error}`);
     }
 
-    logger.info('Audio mixed', { duration: mixResult.duration.toFixed(1) });
+    logger.info('Audio mixed', { duration: mixResult.duration.toFixed(2) });
+
+    // CRITICAL: Compare TTS duration with mixed audio duration
+    logger.info('Duration comparison', {
+      ttsDuration: ttsResult.duration.toFixed(2),
+      mixedDuration: mixResult.duration.toFixed(2),
+      difference: (mixResult.duration - ttsResult.duration).toFixed(2),
+      match: Math.abs(mixResult.duration - ttsResult.duration) < 0.5
+    });
 
     // ============================================================
     // Step 5: Generate slide images
@@ -673,7 +761,11 @@ export async function generateMultiSlideVideo(options) {
       preset  // Pass preset to determine correct text sources per slide
     });
 
-    logger.info('Slide videos created', { count: slideVideos.length });
+    logger.info('Slide videos created', {
+      count: slideVideos.length,
+      slideDurations: slideVideos.map(s => ({ index: s.index, duration: s.duration.toFixed(2) })),
+      totalDuration: slideVideos.reduce((sum, s) => sum + s.duration, 0).toFixed(2)
+    });
 
     // ============================================================
     // Step 7: Concatenate slides with audio
@@ -712,28 +804,13 @@ export async function generateMultiSlideVideo(options) {
     logger.info('Thumbnail generated', { path: thumbnailPath });
 
     // ============================================================
-    // Step 9: Clean up temp files
+    // Step 9: Calculate cost
     // ============================================================
-    try {
-      await fs.unlink(mixedAudioPath);
-      await fs.unlink(ttsResult.path);
-
-      // Clean up gradient slides
-      for (const slide of slides) {
-        if (slide.type === 'gradient' && slide.path) {
-          await fs.unlink(slide.path);
-        }
-      }
-    } catch {
-      // Ignore cleanup errors
-    }
-
-    // ============================================================
-    // Step 10: Calculate cost
-    // ============================================================
+    // NOTE: No manual cleanup needed - scheduled job handles temp file cleanup
+    // Keeping temp files for troubleshooting audio issues
     const imageCost = presetConfig.imageCount * 0.005; // $0.005 per image
     const ttsCost = 0.002;
-    const musicCost = includeMusic ? 0.01 : 0;
+    const musicCost = musicId ? 0.01 : 0;
     const totalCost = imageCost + ttsCost + musicCost;
 
     const generationTime = Date.now() - startTime;
@@ -784,11 +861,11 @@ export async function generateMultiSlideVideo(options) {
  */
 export function getPresetCostEstimate(preset = 'triple_visual', options = {}) {
   const presetConfig = getPreset(preset);
-  const { includeMusic = true } = options;
+  const { musicId = null } = options;
 
   const imageCost = presetConfig.imageCount * 0.005;
   const ttsCost = 0.002;
-  const musicCost = includeMusic ? 0.01 : 0;
+  const musicCost = musicId ? 0.01 : 0;
   const totalCost = imageCost + ttsCost + musicCost;
 
   return {

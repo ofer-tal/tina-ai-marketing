@@ -632,7 +632,7 @@ ${actionItems.todos.overdue > 0 ? `- ${actionItems.todos.overdue} overdue tasks\
     try {
       // Note: In a full implementation, we'd have a MarketingBriefing model
       // For now, we'll store it as a strategy document in marketing_strategy collection
-      const Strategy = mongoose.model('Strategy', new mongoose.Schema({
+      const strategySchema = new mongoose.Schema({
         type: String,
         title: String,
         content: String,
@@ -641,7 +641,8 @@ ${actionItems.todos.overdue > 0 ? `- ${actionItems.todos.overdue} overdue tasks\
         status: String,
         createdAt: Date,
         updatedAt: Date
-      }, { collection: 'marketing_strategy' }));
+      }, { collection: 'marketing_strategy' });
+      const Strategy = mongoose.models.Strategy || mongoose.model('Strategy', strategySchema);
 
       const strategyDoc = await Strategy.create({
         type: 'daily_briefing',

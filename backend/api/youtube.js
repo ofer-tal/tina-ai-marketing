@@ -6,15 +6,12 @@
  */
 
 import express from 'express';
-import YouTubePostingService from '../services/youtubePostingService.js';
+import youtubeService from '../services/youtubePostingService.js';
 import { getLogger } from '../utils/logger.js';
 import MarketingPost from '../models/MarketingPost.js';
 
 const router = express.Router();
 const logger = getLogger('api', 'youtube');
-
-// Initialize YouTube service
-const youtubeService = new YouTubePostingService();
 
 /**
  * GET /api/youtube/authorization-url

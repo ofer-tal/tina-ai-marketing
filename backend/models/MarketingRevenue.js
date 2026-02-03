@@ -95,12 +95,12 @@ const marketingRevenueSchema = new mongoose.Schema({
     default: 100
   },
 
-  // Metadata
+  // Metadata - use Mixed type to allow arbitrary fields
+  // Mongoose strict mode is enabled, so we need Schema.Types.Mixed
+  // to store dynamic fields like productId, productType, originalCurrency, etc.
   metadata: {
-    source: String,
-    appVersion: String,
-    region: String,
-    deviceType: String
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
   },
 
   // Timestamps

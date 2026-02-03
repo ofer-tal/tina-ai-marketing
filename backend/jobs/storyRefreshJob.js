@@ -209,16 +209,16 @@ class StoryRefreshJob {
    * Start the scheduled story refresh job
    * Runs daily at midnight UTC
    */
-  start() {
+  async start() {
     if (schedulerService.getJob(this.jobName)) {
-      logger.warn('Story refresh job already exists');
+      // Job already exists (common in development with nodemon)
       return;
     }
 
     logger.info('Starting story database refresh job');
 
     // Schedule job to run daily at midnight UTC
-    schedulerService.schedule(
+    await schedulerService.schedule(
       this.jobName,
       '0 0 * * *', // Daily at midnight
       () => this.execute(),

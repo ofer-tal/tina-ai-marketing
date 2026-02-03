@@ -24,7 +24,7 @@ export const MIN_TEXT_LENGTH = 100;
 export const MAX_TEXT_LENGTH = 600;
 
 // Maximum adjustment iterations
-export const MAX_ATTEMPTS = 3;
+export const MAX_ATTEMPTS = 5; // Increased from 3 to 5 for more tries
 
 // Starting text length for first attempt
 export const INITIAL_TEXT_LENGTH = 300;
@@ -36,7 +36,7 @@ export const INITIAL_TEXT_LENGTH = 300;
  * @param {Object} story - Story object from database
  * @param {Function} fetchStoryScene - Function to fetch scene text
  * @param {Object} options - Options
- * @returns {Promise<Object>} Result with text, duration, and metadata
+ * @returns {Promise<Object>} Result with text, duration, ttsPath, and metadata
  */
 export async function extractTextForDuration(
   story,
@@ -59,13 +59,15 @@ export async function extractTextForDuration(
   let currentText = '';
   let actualDuration = 0;
   let ttsResult = null;
+  let ttsPath = null;
 
   logger.info('Starting duration-controlled text extraction', {
     storyId: story?._id,
     targetDuration,
     minDuration,
     maxDuration,
-    initialLength
+    initialLength,
+    maxAttempts
   });
 
   while (attempt < maxAttempts) {
@@ -97,8 +99,22 @@ export async function extractTextForDuration(
         attempt,
         textLength,
         actualDuration: actualDuration.toFixed(1),
-        targetRange: `${minDuration}-${maxDuration}s`
+        targetRange: `${minDuration}-${maxDuration}s`,
+        inRange: actualDuration >= minDuration && actualDuration <= maxDuration,
+        likelyTruncated: ttsResult.likelyTruncated || false,
+        truncationRatio: ttsResult.metadata?.truncationRatio
       });
+
+      // If TTS likely truncated the text, log a warning and consider this attempt invalid
+      if (ttsResult.likelyTruncated) {
+        logger.warn('TTS generation appears to have truncated text - this duration measurement may be inaccurate', {
+          attempt,
+          actualDuration: actualDuration.toFixed(1),
+          expectedDuration: ttsResult.metadata?.expectedFromWordCount?.toFixed(1),
+          textLength: currentText.length
+        });
+        // Continue with this attempt but be aware duration may be wrong
+      }
 
       // Check if in range
       if (actualDuration >= minDuration && actualDuration <= maxDuration) {
@@ -107,43 +123,60 @@ export async function extractTextForDuration(
           attempts: attempt
         });
 
-        // Clean up temp file
-        try {
-          await fs.unlink(tempPath);
-        } catch {
-          // Ignore cleanup errors
-        }
+        // Keep the final TTS file - don't clean it up
+        ttsPath = tempPath;
 
         return {
           text: currentText,
           duration: actualDuration,
+          ttsPath: tempPath, // Return the TTS file path for reuse
           attempts: attempt,
           success: true,
           inRange: true
         };
       }
 
+      // NOTE: Keep the duration check files for troubleshooting
+      // Previously we cleaned up temp TTS files here, but now we preserve them
+      // try {
+      //   await fs.unlink(tempPath);
+      // } catch {
+      //   // Ignore cleanup errors
+      // }
+
       // Adjust text length for next attempt
-      const ratio = targetDuration / actualDuration;
+      // Calculate the ratio needed to reach target duration
+      let ratio;
+      if (actualDuration < minDuration) {
+        // Too short - need more text
+        ratio = (targetDuration + 2) / actualDuration; // Add buffer
+        logger.info('Duration too short, increasing text length', {
+          actualDuration: actualDuration.toFixed(1),
+          minDuration,
+          ratio: ratio.toFixed(2)
+        });
+      } else {
+        // Too long - need less text
+        ratio = (targetDuration - 2) / actualDuration; // Add buffer
+        logger.info('Duration too long, decreasing text length', {
+          actualDuration: actualDuration.toFixed(1),
+          maxDuration,
+          ratio: ratio.toFixed(2)
+        });
+      }
+
       const newLength = Math.round(textLength * ratio);
 
       // Clamp text length to reasonable bounds
       textLength = Math.max(minTextLength, Math.min(maxTextLength, newLength));
 
-      logger.info('Adjusting text length', {
+      logger.info('Adjusting text length for next attempt', {
         attempt,
         oldLength: currentText.length,
         newLength: textLength,
         ratio: ratio.toFixed(2),
         actualDuration: actualDuration.toFixed(1)
       });
-
-      // Clean up temp file for next attempt
-      try {
-        await fs.unlink(tempPath);
-      } catch {
-        // Ignore cleanup errors
-      }
 
     } catch (error) {
       logger.error('Error during duration check attempt', {
@@ -157,27 +190,56 @@ export async function extractTextForDuration(
       }
 
       // Adjust text length for retry
-      textLength = Math.round(textLength * 0.8); // Reduce length on error
-      textLength = Math.max(minTextLength, textLength);
+      textLength = Math.round(textLength * 1.2); // Increase length on error
+      textLength = Math.min(maxTextLength, textLength);
     }
   }
 
-  // Best effort after max attempts
+  // Best effort after max attempts - use the last TTS generated
   const finalDuration = ttsResult?.duration || estimateDurationFromText(currentText);
 
-  logger.warn('Max attempts reached, returning best effort', {
-    finalDuration: finalDuration.toFixed(1),
+  // Generate one final TTS file for use if we don't have one
+  if (!ttsPath && currentText) {
+    const tempDir = path.join(process.cwd(), 'storage', 'temp', 'narration');
+    await fs.mkdir(tempDir, { recursive: true });
+    ttsPath = path.join(tempDir, `duration_final_${Date.now()}.wav`);
+
+    try {
+      ttsResult = await runPodTTSGenerator.generateForStory(story, currentText, {
+        voice,
+        outputPath: ttsPath
+      });
+      actualDuration = ttsResult.duration;
+    } catch (error) {
+      logger.error('Failed to generate final TTS', { error: error.message });
+      ttsPath = null;
+    }
+  }
+
+  const inRange = actualDuration >= minDuration && actualDuration <= maxDuration;
+
+  // Log the extracted text to verify it's complete
+  const textStart = currentText.substring(0, 80);
+  const textEnd = currentText.length > 80 ? currentText.substring(currentText.length - 80) : currentText;
+
+  logger.info('Duration control complete', {
+    finalDuration: finalDuration.toFixed(2),
     targetRange: `${minDuration}-${maxDuration}s`,
+    inRange,
     attempts: attempt,
-    textLength: currentText.length
+    textLength: currentText.length,
+    ttsPath: ttsPath ? 'generated' : 'failed',
+    textStart: textStart.replace(/\n/g, ' '),
+    textEnd: textEnd.replace(/\n/g, ' ')
   });
 
   return {
     text: currentText,
-    duration: finalDuration,
+    duration: actualDuration,
+    ttsPath: ttsPath,
     attempts: maxAttempts,
     success: true,
-    inRange: finalDuration >= minDuration && finalDuration <= maxDuration
+    inRange
   };
 }
 

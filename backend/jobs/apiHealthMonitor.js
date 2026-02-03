@@ -9,31 +9,16 @@ import runPodService from '../services/runPodService.js';
 import mongoose from 'mongoose';
 import { getLogger } from '../utils/logger.js';
 import serviceDegradationHandler from '../services/serviceDegradationHandler.js';
+import Strategy from '../models/Strategy.js';
 
 const logger = getLogger('api-health-monitor', 'api-health-monitor');
 
 /**
- * Get or create Strategy model
- * Uses marketing_strategy collection
+ * Get Strategy model
+ * Uses the actual Strategy model from models/Strategy.js
  */
 const getStrategyModel = () => {
-  if (mongoose.models.Strategy) {
-    return mongoose.models.Strategy;
-  }
-
-  return mongoose.model('Strategy', new mongoose.Schema({
-    type: { type: String, enum: ['decision', 'recommendation', 'analysis', 'pivot', 'review', 'daily_briefing', 'api_health_report'], required: true },
-    title: { type: String, required: true },
-    content: { type: String, required: true },
-    reasoning: String,
-    dataReferences: [mongoose.Schema.Types.Mixed],
-    status: { type: String, enum: ['proposed', 'approved', 'rejected', 'implemented'], default: 'proposed' },
-    expectedOutcome: String,
-    actualOutcome: String,
-    reviewDate: Date,
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-  }, { collection: 'marketing_strategy' }));
+  return Strategy;
 };
 
 /**
@@ -677,11 +662,12 @@ class ApiHealthMonitorJob {
       for (const alert of alerts) {
         try {
           await getStrategyModel().create({
-            type: 'analysis',
+            type: 'alert',  // Valid enum value for Strategy model
             title: `⚠️ API Health Alert: ${alert.api}`,
             content: `${alert.api} API has failed ${alert.consecutiveFailures} consecutive health checks. Current uptime: ${alert.uptime}%. Last failure: ${alert.lastFailure.toISOString()}`,
             reasoning: 'Repeated API failures may indicate service degradation or configuration issues. Immediate attention required to prevent service disruption.',
-            status: 'proposed',
+            status: 'pending',  // Valid enum value for Strategy model
+            priority: 'high',
             expectedOutcome: 'API connectivity restored',
             createdAt: new Date()
           });
@@ -706,11 +692,12 @@ class ApiHealthMonitorJob {
     try {
       // Store health check results in strategy collection for historical tracking
       const summary = {
-        type: 'api_health_report',
+        type: 'analysis',  // Valid enum value for Strategy model
         title: `API Health Check - ${new Date().toISOString()}`,
         content: this.generateHealthReport(healthResults),
         reasoning: 'Automated health monitoring report for all external API connections',
-        status: 'implemented',
+        status: 'completed',  // Valid enum value for Strategy model (reports are completed when created)
+        priority: 'low',
         dataReferences: healthResults.map(r => ({
           api: r.name,
           healthy: r.healthy,

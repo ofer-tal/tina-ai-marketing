@@ -2,8 +2,9 @@
  * YouTube Posting Service
  *
  * Handles posting content to YouTube via the YouTube Data API v3.
+ * Uses unified Google OAuth (shared with Google Sheets, Analytics).
  * Features:
- * - OAuth 2.0 authentication flow
+ * - OAuth 2.0 authentication flow (shared Google credentials)
  * - Shorts video upload to YouTube
  * - Video metadata management (title, description, tags)
  * - Privacy status control
@@ -14,6 +15,8 @@
 
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
+import { getValidToken, makeAuthenticatedRequest, storeOAuthTokens, getTokenStatus } from '../utils/oauthHelper.js';
+import AuthToken from '../models/AuthToken.js';
 
 const logger = getLogger('services', 'youtube-posting');
 
@@ -27,16 +30,15 @@ class YouTubePostingService extends BaseApiClient {
     });
 
     // YouTube Data API v3 credentials
-    this.apiKey = process.env.YOUTUBE_API_KEY;
-    this.clientId = process.env.YOUTUBE_CLIENT_ID;
-    this.clientSecret = process.env.YOUTUBE_CLIENT_SECRET;
-    this.redirectUri = process.env.YOUTUBE_REDIRECT_URI;
+    this.apiKey = process.env.YOUTUBE_API_KEY; // This stays YouTube-specific
+    // Google OAuth (unified for all Google services - Sheets, YouTube, Analytics)
+    this.clientId = process.env.GOOGLE_CLIENT_ID;
+    this.clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    this.redirectUri = process.env.GOOGLE_REDIRECT_URI;
     this.enabled = process.env.ENABLE_YOUTUBE_POSTING === 'true';
 
-    // OAuth tokens (stored in memory - should be in database in production)
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.tokenExpiresAt = null;
+    // YouTube uses unified Google OAuth (platform: 'google')
+    this.platform = 'google';
     this.channelId = null;
 
     // YouTube Data API v3 endpoints
@@ -111,7 +113,7 @@ class YouTubePostingService extends BaseApiClient {
           error: 'YouTube OAuth redirect URI not configured',
           code: 'MISSING_REDIRECT_URI',
           details: {
-            redirectUriRequired: 'Set YOUTUBE_REDIRECT_URI in environment',
+            redirectUriRequired: 'Set GOOGLE_REDIRECT_URI in environment',
           },
         };
       }
@@ -166,6 +168,16 @@ class YouTubePostingService extends BaseApiClient {
   }
 
   /**
+   * Get a valid access token with automatic refresh
+   * Uses unified Google OAuth via oauthHelper
+   */
+  async getAccessToken() {
+    return await getValidToken(this.platform, async () => {
+      return await this.refreshAccessToken();
+    });
+  }
+
+  /**
    * Step 2: Set up OAuth 2.0 authentication
    * Generates authorization URL for OAuth flow
    */
@@ -211,12 +223,13 @@ class YouTubePostingService extends BaseApiClient {
   /**
    * Exchange OAuth authorization code for access token
    * Step 3 of OAuth flow
+   * Uses unified Google OAuth (shared with Google Sheets, Analytics)
    */
   async exchangeCodeForToken(code) {
     try {
-      logger.info('Exchanging YouTube OAuth code for access token...');
+      logger.info('Exchanging Google OAuth code for access token (YouTube)...');
 
-      const response = await this.fetch(this.endpoints.oauth.token, {
+      const response = await fetch(this.endpoints.oauth.token, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -237,14 +250,12 @@ class YouTubePostingService extends BaseApiClient {
 
       const tokenData = await response.json();
 
-      // Store tokens
-      this.accessToken = tokenData.access_token;
-      this.refreshToken = tokenData.refresh_token;
-      this.tokenExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+      // Store tokens using unified OAuth helper
+      await storeOAuthTokens(this.platform, tokenData);
 
-      logger.info('YouTube OAuth token obtained successfully', {
-        hasAccessToken: !!this.accessToken,
-        hasRefreshToken: !!this.refreshToken,
+      logger.info('Google OAuth token obtained successfully (YouTube)', {
+        hasAccessToken: !!tokenData.access_token,
+        hasRefreshToken: !!tokenData.refresh_token,
         expiresIn: tokenData.expires_in,
       });
 
@@ -254,7 +265,7 @@ class YouTubePostingService extends BaseApiClient {
         code: 'SUCCESS',
       };
     } catch (error) {
-      logger.error('Failed to exchange YouTube OAuth code for token', {
+      logger.error('Failed to exchange Google OAuth code for token (YouTube)', {
         error: error.message,
         stack: error.stack,
       });
@@ -269,16 +280,20 @@ class YouTubePostingService extends BaseApiClient {
 
   /**
    * Refresh expired access token using refresh token
+   * Uses unified Google OAuth (shared with Google Sheets, Analytics)
    */
   async refreshAccessToken() {
     try {
-      logger.info('Refreshing YouTube OAuth access token...');
+      logger.info('Refreshing Google OAuth access token (YouTube)...');
 
-      if (!this.refreshToken) {
-        throw new Error('No refresh token available');
+      // Get the refresh token from database
+      const tokenDoc = await AuthToken.getActiveToken(this.platform);
+
+      if (!tokenDoc || !tokenDoc.refreshToken) {
+        throw new Error('No refresh token available. Please re-authenticate.');
       }
 
-      const response = await this.fetch(this.endpoints.oauth.refresh, {
+      const response = await fetch(this.endpoints.oauth.refresh, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -286,7 +301,7 @@ class YouTubePostingService extends BaseApiClient {
         body: new URLSearchParams({
           client_id: this.clientId,
           client_secret: this.clientSecret,
-          refresh_token: this.refreshToken,
+          refresh_token: tokenDoc.refreshToken,
           grant_type: 'refresh_token',
         }),
       });
@@ -298,10 +313,10 @@ class YouTubePostingService extends BaseApiClient {
 
       const tokenData = await response.json();
 
-      this.accessToken = tokenData.access_token;
-      this.tokenExpiresAt = Date.now() + (tokenData.expires_in * 1000);
+      // Store the refreshed token using oauthHelper
+      await storeOAuthTokens(this.platform, tokenData);
 
-      logger.info('YouTube OAuth token refreshed successfully', {
+      logger.info('Google OAuth token refreshed successfully (YouTube)', {
         expiresIn: tokenData.expires_in,
       });
 
@@ -309,9 +324,10 @@ class YouTubePostingService extends BaseApiClient {
         success: true,
         message: 'OAuth token refreshed successfully',
         code: 'SUCCESS',
+        accessToken: tokenData.access_token,
       };
     } catch (error) {
-      logger.error('Failed to refresh YouTube OAuth token', {
+      logger.error('Failed to refresh Google OAuth token (YouTube)', {
         error: error.message,
         stack: error.stack,
       });
@@ -327,20 +343,25 @@ class YouTubePostingService extends BaseApiClient {
   /**
    * Step 3: Obtain channel access
    * Get the authenticated user's YouTube channel
+   * Uses unified Google OAuth via oauthHelper
    */
   async getUserChannel() {
     try {
       logger.info('Getting YouTube user channel...');
 
-      if (!this.accessToken) {
-        throw new Error('Not authenticated. No access token available.');
-      }
+      const accessToken = await this.getAccessToken();
+      const url = `${this.baseURL}${this.endpoints.channels.mine}`;
 
-      const response = await this.fetch(this.endpoints.channels.mine, {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
+      const response = await makeAuthenticatedRequest(
+        url,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
         },
-      });
+        this.platform,
+        async () => await this.refreshAccessToken()
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -387,49 +408,10 @@ class YouTubePostingService extends BaseApiClient {
 
   /**
    * Check if access token is valid and not expired
+   * Uses unified Google OAuth via oauthHelper
    */
   async checkTokenStatus() {
-    try {
-      if (!this.accessToken) {
-        return {
-          valid: false,
-          reason: 'No access token',
-        };
-      }
-
-      if (this.tokenExpiresAt && Date.now() >= this.tokenExpiresAt) {
-        return {
-          valid: false,
-          reason: 'Token expired',
-          canRefresh: !!this.refreshToken,
-        };
-      }
-
-      // Test token by making API call
-      const response = await this.fetch(this.endpoints.channels.mine, {
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-        },
-      });
-
-      if (!response.ok) {
-        return {
-          valid: false,
-          reason: 'Token invalid or revoked',
-          canRefresh: !!this.refreshToken,
-        };
-      }
-
-      return {
-        valid: true,
-      };
-    } catch (error) {
-      return {
-        valid: false,
-        reason: error.message,
-        canRefresh: !!this.refreshToken,
-      };
-    }
+    return await getTokenStatus(this.platform);
   }
 
   /**
@@ -519,15 +501,15 @@ class YouTubePostingService extends BaseApiClient {
       }
 
       // Check if we have upload permission by trying to get channel's upload playlist
-      const response = await this.fetch('/channels', {
-        params: {
-          part: 'contentDetails',
-          mine: true,
-        },
-        headers: {
-          Authorization: `Bearer ${this.accessToken}`,
-        },
-      });
+      const accessToken = await this.getAccessToken();
+      const url = `${this.baseURL}/channels?part=contentDetails&mine=true`;
+
+      const response = await makeAuthenticatedRequest(
+        url,
+        {},
+        this.platform,
+        async () => await this.refreshAccessToken()
+      );
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -680,26 +662,29 @@ class YouTubePostingService extends BaseApiClient {
   /**
    * Upload video using resumable upload protocol
    * Handles large video files with retry capability
+   * Uses unified Google OAuth via oauthHelper
    */
   async uploadVideoResumable(videoStream, metadata, onProgress) {
     try {
       logger.info('Starting resumable video upload...');
 
+      const accessToken = await this.getAccessToken();
+
       // Step 1: Initiate resumable upload session
-      const initResponse = await this.fetch(
-        `https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status`,
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(metadata),
-        }
-      );
+      const uploadBaseUrl = 'https://www.googleapis.com/upload/youtube/v3/videos';
+      const initUrl = `${uploadBaseUrl}?uploadType=resumable&part=snippet,status`;
+
+      const initResponse = await fetch(initUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(metadata),
+      });
 
       if (!initResponse.ok) {
-        const errorData = await response.json();
+        const errorData = await initResponse.json();
         throw new Error(errorData.error?.message || 'Failed to initiate upload');
       }
 
@@ -713,10 +698,10 @@ class YouTubePostingService extends BaseApiClient {
       const fs = await import('fs');
       const videoBuffer = fs.readFileSync(videoStream.path);
 
-      const uploadResponse = await this.fetch(uploadUrl, {
+      const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         headers: {
-          Authorization: `Bearer ${this.accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'video/*',
           'Content-Length': videoBuffer.length,
         },
@@ -767,13 +752,14 @@ class YouTubePostingService extends BaseApiClient {
   async healthCheck() {
     try {
       const connectionResult = await this.testConnection();
+      const tokenStatus = await this.checkTokenStatus();
 
       return {
         status: 'ok',
         enabled: this.enabled,
         configured: connectionResult.success,
         hasCredentials: !!(this.apiKey && this.clientId && this.clientSecret),
-        authenticated: !!this.accessToken,
+        authenticated: tokenStatus.valid,
         hasChannel: !!this.channelId,
       };
     } catch (error) {
@@ -785,4 +771,7 @@ class YouTubePostingService extends BaseApiClient {
   }
 }
 
-export default YouTubePostingService;
+// Create singleton instance for use across the application
+const youtubePostingService = new YouTubePostingService();
+
+export default youtubePostingService;

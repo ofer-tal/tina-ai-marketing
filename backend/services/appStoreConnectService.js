@@ -744,7 +744,8 @@ class AppStoreConnectService {
 
       const salesReportsUrl = `https://api.appstoreconnect.apple.com/v1/salesReports`;
       // SUBSCRIPTION_EVENT report type contains paid renewals and conversions
-      const endpoint = `?filter[frequency]=${frequency}&filter[reportType]=SUBSCRIPTION_EVENT&filter[reportSubType]=SUMMARY&filter[reportDate]=${date}&filter[vendorNumber]=${this.vendorNumber}`;
+      // Version 1_4 is required for SUBSCRIPTION_EVENT reports
+      const endpoint = `?filter[frequency]=${frequency}&filter[reportType]=SUBSCRIPTION_EVENT&filter[reportSubType]=SUMMARY&filter[reportDate]=${date}&filter[vendorNumber]=${this.vendorNumber}&filter[version]=1_4`;
 
       const authHeader = await this.getAuthToken();
 
@@ -796,34 +797,71 @@ class AppStoreConnectService {
   }
 
   /**
-   * Fetch All Revenue Reports (SALES only)
+   * Fetch All Revenue Reports (SALES + SUBSCRIPTION_EVENT)
    *
-   * Uses only SALES reports to avoid double counting.
-   * SALES reports contain all revenue transactions including:
-   * - In-app purchases
-   * - Subscription purchases (initial)
-   * - Subscription renewals
-   * - Refunds (negative amounts)
+   * Fetches both SALES and SUBSCRIPTION_EVENT reports to capture all revenue.
+   * - SALES: In-app purchases, some subscription transactions
+   * - SUBSCRIPTION_EVENT: Trial conversions, renewals, cancellations
    *
-   * Note: SUBSCRIPTION_EVENT reports are NOT fetched to avoid
-   * duplicate transactions that may appear in both reports.
+   * Deduplicates transactions by transactionId before returning.
    *
    * @param {Object} options - Query options
-   * @returns {Promise<Object>} Sales report with transactions
+   * @returns {Promise<Object>} Combined report with transactions
    */
   async fetchAllRevenueReports(options = {}) {
     try {
-      logger.info('Fetching revenue reports (SALES only to avoid double counting)');
+      logger.info('Fetching revenue reports (SALES + SUBSCRIPTION_EVENT)');
 
-      // Only fetch SALES report - it contains all revenue transactions
+      // Fetch SALES report
       const salesReport = await this.fetchSalesReports(options);
+      const salesTxns = salesReport.transactions || [];
 
       logger.info('Sales report fetched', {
-        transactionCount: salesReport.transactions?.length || 0,
+        transactionCount: salesTxns.length,
         totals: salesReport.totals
       });
 
-      return salesReport;
+      // Fetch SUBSCRIPTION_EVENT report
+      const subReport = await this.fetchSubscriptionEvents(options);
+      const subTxns = subReport.transactions || [];
+
+      logger.info('Subscription event report fetched', {
+        transactionCount: subTxns.length,
+        totals: subReport.totals
+      });
+
+      // Combine and deduplicate by transactionId
+      const seenIds = new Set();
+      const combinedTransactions = [];
+      for (const tx of [...salesTxns, ...subTxns]) {
+        if (!seenIds.has(tx.transactionId)) {
+          seenIds.add(tx.transactionId);
+          combinedTransactions.push(tx);
+        }
+      }
+
+      const dedupCount = salesTxns.length + subTxns.length - combinedTransactions.length;
+      if (dedupCount > 0) {
+        logger.info(`Deduplicated ${dedupCount} duplicate transactions`);
+      }
+
+      // Combine totals
+      const combinedTotals = {
+        transactionCount: combinedTransactions.length,
+        grossRevenue: (salesReport.totals?.grossRevenue || 0) + (subReport.totals?.grossRevenue || 0),
+        netRevenue: (salesReport.totals?.netRevenue || 0) + (subReport.totals?.netRevenue || 0),
+        appleFees: (salesReport.totals?.appleFees || 0) + (subReport.totals?.appleFees || 0),
+        refunds: (salesReport.totals?.refunds || 0) + (subReport.totals?.refunds || 0),
+        newCustomerCount: (salesReport.totals?.newCustomerCount || 0) + (subReport.totals?.newCustomerCount || 0),
+        newCustomerRevenue: (salesReport.totals?.newCustomerRevenue || 0) + (subReport.totals?.newCustomerRevenue || 0),
+        subscriptionCount: (salesReport.totals?.subscriptionCount || 0) + (subReport.totals?.subscriptionCount || 0),
+        subscriptionRevenue: (salesReport.totals?.subscriptionRevenue || 0) + (subReport.totals?.subscriptionRevenue || 0)
+      };
+
+      return {
+        transactions: combinedTransactions,
+        totals: combinedTotals
+      };
 
     } catch (error) {
       logger.error('Failed to fetch revenue reports', {

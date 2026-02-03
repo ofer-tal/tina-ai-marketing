@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 import { showSuccessToast, showErrorToast } from '../components/Toast';
+import GenerateVideoOptions from '../components/GenerateVideoOptions.jsx';
 
 const PageContainer = styled.div`
   padding: 0;
@@ -223,6 +224,24 @@ const StatusBadge = styled.span`
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
+`;
+
+const TierBadge = styled.span`
+  padding: 0.25rem 0.5rem;
+  background: ${props => {
+    switch (props.$tier) {
+      case 'tier_1': return 'linear-gradient(135deg, #10b981 0%, #059669 100%)';
+      case 'tier_2': return 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)';
+      case 'tier_3': return 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
+      default: return '#3a3a5a';
+    }
+  }};
+  border-radius: 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 `;
 
 const ContentCaption = styled.p`
@@ -450,6 +469,8 @@ function BatchApprovalQueue() {
     reason: '',
     blacklistStory: false
   });
+  const [generateVideoModal, setGenerateVideoModal] = useState(false);
+  const [bulkGenerateMode, setBulkGenerateMode] = useState(false);
 
   useEffect(() => {
     fetchPosts();
@@ -680,6 +701,15 @@ function BatchApprovalQueue() {
     return type === 'video' ? '🎬 Video' : '🖼️ Image';
   };
 
+  const getTierLabel = (tier) => {
+    switch (tier) {
+      case 'tier_1': return 'T1';
+      case 'tier_2': return 'T2';
+      case 'tier_3': return 'T3';
+      default: return null;
+    }
+  };
+
   const formatTime = (dateString) => {
     if (!dateString) return 'Not scheduled';
 
@@ -741,6 +771,16 @@ function BatchApprovalQueue() {
           <BulkButton $variant="approve" onClick={handleBulkApprove}>
             ✅ Approve All
           </BulkButton>
+          <BulkButton
+            $variant="approve"
+            style={{ background: 'linear-gradient(135deg, #e94560 0%, #7b2cbf 100%)' }}
+            onClick={() => {
+              setBulkGenerateMode(true);
+              setGenerateVideoModal(true);
+            }}
+          >
+            🎬 Generate Videos
+          </BulkButton>
           <BulkButton $variant="reject" onClick={handleBulkReject}>
             ❌ Reject All
           </BulkButton>
@@ -782,17 +822,30 @@ function BatchApprovalQueue() {
                     <MetaItem>{getContentTypeIcon(post.contentType)}</MetaItem>
                     <MetaItem>🕒 {formatTime(post.scheduledFor)}</MetaItem>
                     <StatusBadge $status={post.status}>{post.status}</StatusBadge>
+                    {post.contentTier && getTierLabel(post.contentTier) && (
+                      <TierBadge $tier={post.contentTier}>{getTierLabel(post.contentTier)}</TierBadge>
+                    )}
                   </ContentMeta>
                   <ContentCaption>{post.caption}</ContentCaption>
                 </ContentInfo>
               </ContentPreview>
               <QuickActions>
-                <QuickActionButton onClick={() => handleQuickApprove(post._id)}>
-                  ✅ Approve
-                </QuickActionButton>
-                <QuickActionButton onClick={() => handleQuickReject(post._id)}>
-                  ❌ Reject
-                </QuickActionButton>
+                {/* Only show approve/reject for posts with generated videos that aren't approved/posted/rejected yet */}
+                {post.videoPath && !['approved', 'posted', 'rejected'].includes(post.status) && (
+                  <>
+                    <QuickActionButton onClick={() => handleQuickApprove(post._id)}>
+                      ✅ Approve
+                    </QuickActionButton>
+                    <QuickActionButton onClick={() => handleQuickReject(post._id)}>
+                      ❌ Reject
+                    </QuickActionButton>
+                  </>
+                )}
+                {!post.videoPath && (
+                  <QuickActionButton style={{ opacity: 0.5, cursor: 'default' }} title="Generate video first">
+                    ⏳ Pending Video
+                  </QuickActionButton>
+                )}
               </QuickActions>
             </QueueItem>
           ))}
@@ -847,6 +900,27 @@ function BatchApprovalQueue() {
           </RejectModalContent>
         </RejectModalOverlay>
       )}
+
+      {/* Generate Video Options Modal */}
+      <GenerateVideoOptions
+        isOpen={generateVideoModal}
+        onClose={() => {
+          setGenerateVideoModal(false);
+          setBulkGenerateMode(false);
+        }}
+        onGenerate={(result) => {
+          if (result.success) {
+            fetchPosts();
+          }
+          setGenerateVideoModal(false);
+          setBulkGenerateMode(false);
+        }}
+        post={bulkGenerateMode ? {
+          _id: Array.from(selectedPosts)[0],
+          storyId: posts.find(p => p._id === Array.from(selectedPosts)[0])?.storyId,
+          generationMetadata: { voice: 'female_1' }
+        } : null}
+      />
     </PageContainer>
   );
 }

@@ -372,6 +372,14 @@ Auto-Posting: ${data.configuration?.autoPosting ? 'Enabled' : 'Disabled'}
 
 Use this data in your response.`;
 
+    case 'get_music':
+      return `**Music Tracks Retrieved:**
+
+${data.count} music tracks available for video generation
+${data.tracks ? data.tracks.slice(0, 10).map(t => `- ${t.name} (${t.style}) - ${t.duration ? Math.round(t.duration) + 's' : 'N/A'} - used ${t.timesUsed || 0}x`).join('\n') : ''}
+
+Use these music IDs when creating posts to add background music to videos.`;
+
     case 'get_stories':
       return `**Stories Retrieved:**
 

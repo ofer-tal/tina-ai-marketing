@@ -240,6 +240,212 @@ export const APPROVAL_REQUIRED_TOOLS = [
       duration: 7
     },
     expectedImpact: 'Validates hypothesis with real data, informs future content strategy'
+  },
+  /**
+   * Strategy Tools - Approval Required
+   */
+  {
+    name: 'create_strategy',
+    description: 'Create a new strategic initiative. Use this for significant marketing efforts that deserve tracking and measurement. Strategies can be broad (parent) or specific (child/tactics).',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Strategy name',
+          maxLength: 200
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the strategy',
+          maxLength: 1000
+        },
+        hypothesis: {
+          type: 'string',
+          description: 'What we believe will happen and why',
+          maxLength: 500
+        },
+        successMetric: {
+          type: 'string',
+          description: 'How we measure success (e.g., "followers", "engagement_rate", "revenue")'
+        },
+        targetValue: {
+          description: 'Target value for the success metric'
+        },
+        currentBaseline: {
+          description: 'Current baseline value',
+          default: 0
+        },
+        level: {
+          type: 'string',
+          description: 'Strategy level: broad (parent) or specific (child/tactic)',
+          enum: ['broad', 'specific'],
+          default: 'broad'
+        },
+        parentStrategyId: {
+          type: 'string',
+          description: 'Parent strategy ID if this is a child/tactic'
+        },
+        timeframe: {
+          type: 'object',
+          description: 'Time period for this strategy',
+          properties: {
+            start: { type: 'string', description: 'Start date (ISO format)' },
+            end: { type: 'string', description: 'End date (ISO format)' }
+          }
+        },
+        category: {
+          type: 'string',
+          description: 'Strategy category for grouping',
+          enum: ['growth', 'engagement', 'brand', 'revenue', 'content', 'ads', 'general'],
+          default: 'general'
+        },
+        priority: {
+          type: 'number',
+          description: 'Priority level (1-10)',
+          minimum: 1,
+          maximum: 10,
+          default: 5
+        },
+        relatedGoalIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Related goal IDs'
+        }
+      },
+      required: ['name', 'hypothesis', 'successMetric', 'targetValue']
+    },
+    exampleUsage: {
+      name: 'Instagram Reels Growth Push',
+      hypothesis: 'Posting 3 Reels daily with trending audio will increase follower count by 20% in 30 days',
+      successMetric: 'followers',
+      targetValue: 10000,
+      currentBaseline: 8000,
+      level: 'broad',
+      category: 'growth',
+      priority: 8
+    },
+    expectedImpact: 'Creates a trackable strategic initiative with clear success metrics and progress tracking'
+  },
+  {
+    name: 'update_strategy',
+    description: 'Update an existing strategy\'s status, values, or parameters. Use to mark progress, change status, or adjust targets.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        strategyId: {
+          type: 'string',
+          description: 'Strategy ID to update'
+        },
+        currentValue: {
+          description: 'New current value for progress tracking'
+        },
+        status: {
+          type: 'string',
+          description: 'New status',
+          enum: ['draft', 'active', 'paused', 'completed', 'cancelled']
+        },
+        notes: {
+          type: 'string',
+          description: 'Notes about this update',
+          maxLength: 500
+        }
+      },
+      required: ['strategyId']
+    },
+    exampleUsage: {
+      strategyId: 'strategy_1234567890_abcd',
+      currentValue: 9200,
+      notes: 'Good progress, trending toward target'
+    },
+    expectedImpact: 'Updates strategy progress and tracking'
+  },
+  {
+    name: 'complete_strategy',
+    description: 'Mark a strategy as completed with final outcomes and learnings. Use when a strategic initiative has concluded.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        strategyId: {
+          type: 'string',
+          description: 'Strategy ID to complete'
+        },
+        outcomes: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              metric: { type: 'string' },
+              expectedValue: {},
+              actualValue: {},
+              notes: { type: 'string' }
+            }
+          },
+          description: 'Final outcomes comparing expected vs actual'
+        },
+        notes: {
+          type: 'string',
+          description: 'Summary of what was learned',
+          maxLength: 1000
+        }
+      },
+      required: ['strategyId']
+    },
+    exampleUsage: {
+      strategyId: 'strategy_1234567890_abcd',
+      outcomes: [
+        { metric: 'followers', expectedValue: 10000, actualValue: 10500, notes: 'Exceeded target by 5%' }
+      ],
+      notes: 'Strategy successful. The focus on Reels drove significant growth.'
+    },
+    expectedImpact: 'Marks strategy complete with documented outcomes for future reference'
+  },
+  {
+    name: 'pause_strategy',
+    description: 'Pause an active strategy temporarily. Use when a strategy needs to be put on hold.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        strategyId: {
+          type: 'string',
+          description: 'Strategy ID to pause'
+        },
+        reason: {
+          type: 'string',
+          description: 'Why the strategy is being paused',
+          maxLength: 500
+        }
+      },
+      required: ['strategyId']
+    },
+    exampleUsage: {
+      strategyId: 'strategy_1234567890_abcd',
+      reason: 'Pausing due to budget reallocation'
+    },
+    expectedImpact: 'Pauses the strategy while preserving all data for potential resumption'
+  },
+  {
+    name: 'resume_strategy',
+    description: 'Resume a paused strategy. Use when restarting a previously paused initiative.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        strategyId: {
+          type: 'string',
+          description: 'Strategy ID to resume'
+        }
+      },
+      required: ['strategyId']
+    },
+    exampleUsage: {
+      strategyId: 'strategy_1234567890_abcd'
+    },
+    expectedImpact: 'Resumes a paused strategy'
   }
 ];
 
@@ -252,6 +458,25 @@ export const READ_ONLY_TOOLS = [
   /**
    * Post Management Tools - No Approval Required
    */
+  {
+    name: 'get_music',
+    description: 'Get available background music tracks for video generation. Returns all available music tracks with their details. Use this to see what music can be selected when creating posts.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        style: {
+          type: 'string',
+          description: 'Filter by music style (optional)',
+          enum: ['romantic', 'dramatic', 'energetic', 'calm', 'mysterious', 'happy', 'melancholic', 'ambient', 'all'],
+          default: 'all'
+        }
+      }
+    },
+    exampleUsage: {
+      style: 'romantic'
+    }
+  },
   {
     name: 'get_stories',
     description: 'Get available common library stories for post creation. Only returns ready stories (userId: null, status: "ready") that can be used for marketing content.',
@@ -290,7 +515,20 @@ export const READ_ONLY_TOOLS = [
   },
   {
     name: 'create_post',
-    description: 'Create a new marketing post from a story with optional video generation. Creates draft posts that can be edited, generated, and approved later.',
+    description: `Create a new marketing post from a story with optional video generation.
+
+VIDEO GENERATION IS ASYNCHRONOUS: When generateVideo=true, the function returns immediately after launching generation. The post status will be 'generating' and you can check progress later.
+
+IMPORTANT SCHEDULING INFO:
+- Current date will be provided in the system context
+- When user says "tomorrow morning", schedule for ~9am the next day
+- When user says "tomorrow afternoon", schedule for ~3pm the next day
+- When user says "tomorrow evening", schedule for ~8pm the next day
+- AVOID scheduling at: 2am, 3am, 4am, 5am, 6am, 11pm, 12am (these are not optimal posting times)
+- Good posting hours: 8am-11am (morning), 2pm-5pm (afternoon), 7pm-10pm (evening)
+- Always use ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ (e.g., 2026-02-02T09:00:00.000Z)
+
+Creates draft posts that can be edited, generated, and approved later.`,
     requiresApproval: false,
     parameters: {
       type: 'object',
@@ -342,10 +580,9 @@ export const READ_ONLY_TOOLS = [
           description: 'Call-to-action text for final slide (supports emojis). Default: "Read more on Blush 🔥"',
           default: 'Read more on Blush 🔥'
         },
-        includeMusic: {
-          type: 'boolean',
-          description: 'Include background music in video',
-          default: true
+        musicId: {
+          type: 'string',
+          description: 'Background music track ID (optional - leave empty for narration only). Use get_music to see available tracks.'
         },
         effects: {
           type: 'object',
@@ -367,12 +604,12 @@ export const READ_ONLY_TOOLS = [
         },
         generateVideo: {
           type: 'boolean',
-          description: 'Generate video immediately (default: true)',
+          description: 'Generate video immediately (default: true, runs ASYNCHRONOUSLY - returns immediately)',
           default: true
         },
         scheduleFor: {
           type: 'string',
-          description: 'ISO date string to schedule the post (optional - auto-scheduled if not provided)'
+          description: 'ISO date string to schedule the post (e.g., 2026-02-02T15:30:00.000Z). You can schedule at ANY specific time - down to the minute. Time must be at least 5 minutes in the future. If not provided, uses the next optimal posting slot (within standard posting windows: 8-11am, 2-5pm, or 7-10pm).'
         }
       },
       required: ['storyId', 'platforms']
@@ -457,10 +694,9 @@ export const READ_ONLY_TOOLS = [
           description: 'Call-to-action text for final slide (supports emojis). Default: "Read more on Blush 🔥"',
           default: 'Read more on Blush 🔥'
         },
-        includeMusic: {
-          type: 'boolean',
-          description: 'Include background music',
-          default: true
+        musicId: {
+          type: 'string',
+          description: 'Background music track ID (optional - leave empty for narration only)'
         },
         effects: {
           type: 'object',
@@ -486,8 +722,7 @@ export const READ_ONLY_TOOLS = [
       postId: '507f1f77bcf86cd799439011',
       preset: 'hook_first',
       voice: 'female_1',
-      cta: 'Read more on Blush 🔥',
-      includeMusic: true
+      cta: 'Read more on Blush 🔥'
     },
     expectedImpact: 'Generates or regenerates video content for the post'
   },
@@ -1002,6 +1237,102 @@ export const READ_ONLY_TOOLS = [
       limit: 20,
       activityType: 'all'
     }
+  },
+  /**
+   * Strategy Memory Tools - Read Only (No Approval Required)
+   */
+  {
+    name: 'get_strategies',
+    description: 'Get all marketing strategies with optional filters. Returns strategies including their status, progress, and relationships. Use this to understand current strategic initiatives.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Filter by strategy status',
+          enum: ['draft', 'active', 'paused', 'completed', 'cancelled', 'failed', 'all'],
+          default: 'all'
+        },
+        level: {
+          type: 'string',
+          description: 'Filter by strategy level',
+          enum: ['broad', 'specific', 'all'],
+          default: 'all'
+        },
+        category: {
+          type: 'string',
+          description: 'Filter by category (optional)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of strategies to return',
+          minimum: 1,
+          maximum: 100,
+          default: 50
+        }
+      }
+    },
+    exampleUsage: {
+      status: 'active',
+      limit: 20
+    }
+  },
+  {
+    name: 'get_strategy_details',
+    description: 'Get full details of a specific strategy including progress, status history, related goals, and child strategies.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        strategyId: {
+          type: 'string',
+          description: 'Strategy ID (either MongoDB _id or strategyId)'
+        }
+      },
+      required: ['strategyId']
+    },
+    exampleUsage: {
+      strategyId: 'strategy_1234567890_abcd'
+    }
+  },
+  {
+    name: 'get_strategy_history',
+    description: 'Get past strategies and their outcomes. Use this to learn from previous strategic initiatives before creating new ones.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Filter by completion status',
+          enum: ['completed', 'cancelled', 'failed', 'all'],
+          default: 'completed'
+        },
+        days: {
+          type: 'number',
+          description: 'Number of days to look back',
+          minimum: 1,
+          maximum: 365,
+          default: 90
+        },
+        category: {
+          type: 'string',
+          description: 'Filter by category (optional)'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of strategies to return',
+          minimum: 1,
+          maximum: 100,
+          default: 50
+        }
+      }
+    },
+    exampleUsage: {
+      days: 30,
+      limit: 20
+    }
   }
 ];
 
@@ -1069,7 +1400,15 @@ export const TOOL_NAMES = {
   UPDATE_HASHTAG_STRATEGY: 'update_hashtag_strategy',
   CREATE_CONTENT_EXPERIMENT: 'create_content_experiment',
 
+  // Strategy Tools - Approval required
+  CREATE_STRATEGY: 'create_strategy',
+  UPDATE_STRATEGY: 'update_strategy',
+  COMPLETE_STRATEGY: 'complete_strategy',
+  PAUSE_STRATEGY: 'pause_strategy',
+  RESUME_STRATEGY: 'resume_strategy',
+
   // Post Management - Read Only (no approval)
+  GET_MUSIC: 'get_music',
   GET_STORIES: 'get_stories',
   CREATE_POST: 'create_post',
   EDIT_POST: 'edit_post',
@@ -1103,7 +1442,15 @@ export const TOOL_NAMES = {
   GET_KEYWORD_PERFORMANCE: 'get_keyword_performance',
   GET_APP_STORE_PERFORMANCE: 'get_app_store_performance',
   GET_OPTIMAL_POSTING_TIMES: 'get_optimal_posting_times',
-  GET_TRAFFIC_SOURCES: 'get_traffic_sources'
+  GET_TRAFFIC_SOURCES: 'get_traffic_sources',
+
+  // Memory & Context Tools
+  GET_RECENT_ACTIVITY: 'get_recent_activity',
+
+  // Strategy Memory Tools - Read Only
+  GET_STRATEGIES: 'get_strategies',
+  GET_STRATEGY_DETAILS: 'get_strategy_details',
+  GET_STRATEGY_HISTORY: 'get_strategy_history'
 };
 
 /**
@@ -1208,9 +1555,30 @@ export function formatToolCallForDisplay(toolName, parameters) {
     description = `Get optimal posting times (${parameters.platform || 'all'})`;
   } else if (toolName === 'get_traffic_sources') {
     description = `Get traffic sources (last ${parameters.days || 30} days)`;
+  } else if (toolName === 'get_strategies') {
+    description = `Get marketing strategies`;
+    if (parameters.status && parameters.status !== 'all') description += ` (${parameters.status})`;
+  } else if (toolName === 'get_strategy_details') {
+    description = `Get strategy details`;
+  } else if (toolName === 'get_strategy_history') {
+    description = `Get strategy history (last ${parameters.days || 90} days)`;
+  } else if (toolName === 'create_strategy') {
+    description = `Create strategy: ${parameters.name || 'New Strategy'}`;
+  } else if (toolName === 'update_strategy') {
+    description = `Update strategy`;
+    if (parameters.status) description += ` to ${parameters.status}`;
+  } else if (toolName === 'complete_strategy') {
+    description = `Complete strategy with outcomes`;
+  } else if (toolName === 'pause_strategy') {
+    description = `Pause strategy`;
+  } else if (toolName === 'resume_strategy') {
+    description = `Resume strategy`;
   } else if (toolName === 'get_stories') {
     description = `Get available common library stories`;
     if (parameters.limit) description += ` (limit: ${parameters.limit})`;
+  } else if (toolName === 'get_music') {
+    description = `Get available background music tracks`;
+    if (parameters.style && parameters.style !== 'all') description += ` (style: ${parameters.style})`;
   } else if (toolName === 'create_post') {
     description = `Create new marketing post from story`;
     if (parameters.platforms) description += ` for ${parameters.platforms.join(', ')}`;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
 import Settings from './pages/Settings';
+import ServiceHealth from './pages/ServiceHealth';
 import Dashboard from './pages/Dashboard';
 import StrategicDashboard from './pages/StrategicDashboard';
 import Chat from './pages/Chat';
@@ -34,7 +35,9 @@ import ContentCalendar from './pages/ContentCalendar';
 import WebsiteTraffic from './pages/WebsiteTraffic';
 import ContentPerformance from './pages/ContentPerformance';
 import TrendingTopics from './pages/TrendingTopics';
+import ContentMusic from './pages/ContentMusic';
 import KeywordRecommendations from './pages/KeywordRecommendations';
+import Strategies from './pages/Strategies';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -660,6 +663,7 @@ const NAV_SECTIONS = [
     items: [
       { path: '/content/library', icon: '◫', label: 'All Content' },
       { path: '/content/approval', icon: '✓', label: 'Approvals' },
+      { path: '/content/music', icon: '🎵', label: 'Music' },
       { path: '/content/calendar', icon: '◷', label: 'Calendar' },
     ]
   },
@@ -719,6 +723,15 @@ const NAV_SECTIONS = [
     label: 'ASO',
     items: [
       { path: '/aso', icon: '⌕', label: 'Keyword Tracking' },
+    ]
+  },
+  {
+    id: 'tina',
+    icon: '🧠',
+    label: 'Tina AI',
+    items: [
+      { path: '/chat', icon: '💬', label: 'Chat' },
+      { path: '/tina/strategies', icon: '🎯', label: 'Strategies' },
     ]
   },
   {
@@ -886,6 +899,15 @@ function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle, chatOpen, on
               <span className="icon">⚙️</span>
               <span className="label">Settings</span>
             </SidebarNavLink>
+            <SidebarNavLink
+              to="/service-health"
+              $collapsed={collapsed}
+              className={isActive('/service-health') ? 'active' : ''}
+              onClick={handleNavClick}
+            >
+              <span className="icon">🏥</span>
+              <span className="label">Health</span>
+            </SidebarNavLink>
           </NavSectionContent>
         </NavSection>
       </SidebarNav>
@@ -918,17 +940,8 @@ function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle, chatOpen, on
           onMouseDown={onDrawerResizeStart}
           aria-label="Resize chat panel"
         />
-        <ChatPanelHeader>
-          <ChatPanelTitle>👩‍💼 Tina</ChatPanelTitle>
-          <ChatPanelClose
-            onClick={() => onChatToggle(false)}
-            aria-label="Close chat"
-          >
-            ✕
-          </ChatPanelClose>
-        </ChatPanelHeader>
         <ChatPanelContent>
-          <Chat />
+          <Chat onClose={() => onChatToggle(false)} />
         </ChatPanelContent>
       </ChatPanel>
     </>
@@ -1098,14 +1111,18 @@ function App() {
                 <Route path="/content/keyword-recommendations" element={<PageWithBreadcrumbs><KeywordRecommendations /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
+                <Route path="/content/music" element={<PageWithBreadcrumbs><ContentMusic /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />
                 <Route path="/ads" element={<PageWithBreadcrumbs><Campaigns /></PageWithBreadcrumbs>} />
                 <Route path="/ads/campaigns" element={<PageWithBreadcrumbs><Campaigns /></PageWithBreadcrumbs>} />
                 <Route path="/ads/revenue-test" element={<PageWithBreadcrumbs><RevenueAttributionTest /></PageWithBreadcrumbs>} />
                 <Route path="/revenue/weekly" element={<PageWithBreadcrumbs><WeeklyRevenueAggregates /></PageWithBreadcrumbs>} />
                 <Route path="/revenue/monthly" element={<PageWithBreadcrumbs><MonthlyRevenueAggregates /></PageWithBreadcrumbs>} />
+                <Route path="/tina/strategies" element={<PageWithBreadcrumbs><Strategies /></PageWithBreadcrumbs>} />
+                <Route path="/tina/strategies/:id" element={<PageWithBreadcrumbs><Strategies /></PageWithBreadcrumbs>} />
                 <Route path="/todos" element={<PageWithBreadcrumbs><Todos /></PageWithBreadcrumbs>} />
                 <Route path="/settings" element={<PageWithBreadcrumbs><Settings /></PageWithBreadcrumbs>} />
+                <Route path="/service-health" element={<PageWithBreadcrumbs><ServiceHealth /></PageWithBreadcrumbs>} />
                 <Route path="/test/toasts" element={<PageWithBreadcrumbs><ToastTest /></PageWithBreadcrumbs>} />
                 <Route path="/test/modals" element={<PageWithBreadcrumbs><ModalDemo /></PageWithBreadcrumbs>} />
                 <Route path="/test/tabs" element={<PageWithBreadcrumbs><TabsDemo /></PageWithBreadcrumbs>} />

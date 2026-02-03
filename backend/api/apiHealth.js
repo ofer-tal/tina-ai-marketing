@@ -3,32 +3,17 @@ import apiHealthMonitorJob from '../jobs/apiHealthMonitor.js';
 import mongoose from 'mongoose';
 import { getLogger } from '../utils/logger.js';
 import schedulerService from '../services/scheduler.js';
+import Strategy from '../models/Strategy.js';
 
 const logger = getLogger('api-health-api', 'api-health-api');
 const router = express.Router();
 
 /**
- * Get or create Strategy model
- * Uses marketing_strategy collection
+ * Get Strategy model
+ * Uses the actual Strategy model from models/Strategy.js
  */
 const getStrategyModel = () => {
-  if (mongoose.models.Strategy) {
-    return mongoose.models.Strategy;
-  }
-
-  return mongoose.model('Strategy', new mongoose.Schema({
-    type: { type: String, enum: ['decision', 'recommendation', 'analysis', 'pivot', 'review', 'daily_briefing', 'api_health_report'], required: true },
-    title: { type: String, required: true },
-    content: { type: String, required: true },
-    reasoning: String,
-    dataReferences: [mongoose.Schema.Types.Mixed],
-    status: { type: String, enum: ['proposed', 'approved', 'rejected', 'implemented'], default: 'proposed' },
-    expectedOutcome: String,
-    actualOutcome: String,
-    reviewDate: Date,
-    createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
-  }, { collection: 'marketing_strategy' }));
+  return Strategy;
 };
 
 /**
@@ -158,7 +143,7 @@ router.get('/schedule/status', async (req, res) => {
 
     // Get recent health reports from database
     const recentReports = await getStrategyModel().find({
-      type: 'api_health_report'
+      type: 'analysis'
     })
     .sort({ createdAt: -1 })
     .limit(10)
@@ -261,7 +246,7 @@ router.get('/reports', async (req, res) => {
     const skip = parseInt(req.query.skip) || 0;
 
     const reports = await getStrategyModel().find({
-      type: 'api_health_report'
+      type: 'analysis'
     })
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -269,7 +254,7 @@ router.get('/reports', async (req, res) => {
     .lean();
 
     const total = await getStrategyModel().countDocuments({
-      type: 'api_health_report'
+      type: 'analysis'
     });
 
     res.json({
@@ -311,7 +296,7 @@ router.get('/reports', async (req, res) => {
 router.get('/reports/latest', async (req, res) => {
   try {
     const latestReport = await getStrategyModel().findOne({
-      type: 'api_health_report'
+      type: 'analysis'
     })
     .sort({ createdAt: -1 })
     .lean();
@@ -458,6 +443,34 @@ router.post('/jobs/:name/trigger', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to trigger job',
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/api-health/jobs/tiktok-video-matcher/status
+ * Get the status and stats of the TikTok video matcher job
+ */
+router.get('/jobs/tiktok-video-matcher/status', async (req, res) => {
+  try {
+    const tikTokVideoMatcherJob = (await import('../jobs/tikTokVideoMatcher.js')).default;
+    const status = tikTokVideoMatcherJob.getStatus();
+
+    res.json({
+      success: true,
+      data: {
+        name: status.name,
+        schedule: status.schedule,
+        isRunning: status.isRunning,
+        lastMatch: status.lastMatch?.timestamp || null,
+        lastMatchStats: status.lastMatch,
+      }
+    });
+  } catch (error) {
+    logger.error('Failed to get TikTok matcher job status', { error: error.message });
+    res.status(500).json({
+      success: false,
       error: error.message
     });
   }

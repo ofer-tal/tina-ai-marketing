@@ -33,11 +33,11 @@ class AppStoreAnalyticsJob {
   /**
    * Initialize and schedule the job
    */
-  initialize() {
+  async initialize() {
     logger.info(`Initializing App Store Analytics job with schedule: ${this.syncSchedule}`);
 
-    // Register job with scheduler
-    schedulerService.registerJob(
+    // Register job with scheduler (must be awaited - it's async!)
+    await schedulerService.registerJob(
       this.jobName,
       this.syncSchedule,
       () => this.execute(),
@@ -46,9 +46,6 @@ class AppStoreAnalyticsJob {
         metadata: { description: 'Sync app analytics data from App Store Connect' }
       }
     );
-
-    // Start the job
-    schedulerService.startJob(this.jobName);
 
     logger.info('App Store Analytics job initialized and scheduled');
   }

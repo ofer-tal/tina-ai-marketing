@@ -88,10 +88,10 @@ function downloadText(url) {
  * Looks for segments with romantic tension without objectionable content
  *
  * @param {string} fullText - Full story text
- * @param {number} maxLength - Maximum length for narration (default: 300 chars)
+ * @param {number} targetLength - Target length for narration in characters (default: 300)
  * @returns {string} Extracted scene text
  */
-function extractSteamyScene(fullText, maxLength = 300) {
+function extractSteamyScene(fullText, targetLength = 300) {
   // Split into paragraphs
   const paragraphs = fullText.split(/\n\n+/).filter(p => p.trim().length > 50);
 
@@ -110,48 +110,118 @@ function extractSteamyScene(fullText, maxLength = 300) {
         score -= 10;
       }
     }
-    return { text: para.trim(), score };
+    return { text: para.trim(), score, length: para.trim().length };
   });
 
   // Sort by score (highest first) and filter out negatives
-  const best = scoredParagraphs
+  const bestParagraphs = scoredParagraphs
     .filter(p => p.score > 0)
-    .sort((a, b) => b.score - a.score)[0];
+    .sort((a, b) => b.score - a.score);
 
-  if (best) {
-    // Truncate if too long, try to end at a sentence boundary
-    let text = best.text;
-    if (text.length > maxLength) {
-      text = text.substring(0, maxLength);
-      const lastPeriod = text.lastIndexOf('.');
-      const lastExclamation = text.lastIndexOf('!');
-      const lastSentence = Math.max(lastPeriod, lastExclamation);
-      if (lastSentence > maxLength * 0.7) {
-        text = text.substring(0, lastSentence + 1);
-      }
+  if (bestParagraphs.length === 0) {
+    // Fallback: return first paragraph
+    return truncateAtSentenceBoundary(paragraphs[0] || fullText.substring(0, targetLength), targetLength);
+  }
+
+  // Define acceptable range (±30% of target)
+  const minAcceptable = targetLength * 0.7;
+  const maxAcceptable = targetLength * 1.3;
+
+  // Try to find a single paragraph that fits in the acceptable range
+  for (const para of bestParagraphs) {
+    if (para.length >= minAcceptable && para.length <= maxAcceptable) {
+      // Paragraph fits in range, use it as-is or truncate at sentence boundary
+      return truncateAtSentenceBoundary(para.text, targetLength);
     }
+  }
+
+  // If no single paragraph fits, try combining paragraphs
+  // Start with the highest scoring paragraph and add more until we reach the target
+  let combinedText = bestParagraphs[0].text;
+  let combinedLength = bestParagraphs[0].length;
+
+  for (let i = 1; i < bestParagraphs.length; i++) {
+    // If we're already close enough to target, stop
+    if (combinedLength >= minAcceptable) {
+      break;
+    }
+    // Add next paragraph
+    combinedText += ' ' + bestParagraphs[i].text;
+    combinedLength = combinedText.length;
+  }
+
+  // Truncate at sentence boundary to match target length
+  return truncateAtSentenceBoundary(combinedText, targetLength);
+}
+
+/**
+ * Truncate text at the nearest sentence boundary to match target length
+ *
+ * @param {string} text - Text to truncate
+ * @param {number} targetLength - Target length in characters
+ * @returns {string} Truncated text ending at a sentence boundary
+ */
+function truncateAtSentenceBoundary(text, targetLength) {
+  // If text is already short enough, return as-is
+  if (text.length <= targetLength) {
     return text;
   }
 
-  // Fallback: return first paragraph truncated
-  let fallback = paragraphs[0] || '';
-  if (fallback.length > maxLength) {
-    fallback = fallback.substring(0, maxLength);
-    const lastPeriod = fallback.lastIndexOf('.');
-    if (lastPeriod > maxLength * 0.5) {
-      fallback = fallback.substring(0, lastPeriod + 1);
+  // Find the best sentence boundary before or after target
+  const searchRange = Math.floor(targetLength * 0.3); // Search within 30% of target
+  const startPos = Math.max(0, targetLength - searchRange);
+  const endPos = Math.min(text.length, targetLength + searchRange);
+
+  const searchArea = text.substring(startPos, endPos);
+
+  // Look for sentence endings in order of preference: . ! ? ...
+  const sentenceEndings = ['. ', '! ', '? ', '.\n', '!\n', '?\n', '.\r', '!\r', '?\r'];
+  let bestEnd = -1;
+  let bestDistance = Infinity;
+
+  for (const ending of sentenceEndings) {
+    const pos = searchArea.indexOf(ending);
+    if (pos !== -1) {
+      const actualPos = startPos + pos + ending.length - 1; // Position after the punctuation
+      const distance = Math.abs(actualPos - targetLength);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestEnd = actualPos;
+      }
     }
   }
-  return fallback;
+
+  // If we found a good sentence ending (within 20% of target)
+  if (bestEnd !== -1 && bestDistance <= targetLength * 0.2) {
+    return text.substring(0, bestEnd + 1);
+  }
+
+  // Fallback: Find the last sentence ending before target
+  const beforeTarget = text.substring(0, targetLength + searchRange);
+  for (const ending of sentenceEndings) {
+    const pos = beforeTarget.lastIndexOf(ending);
+    if (pos > targetLength * 0.5) { // At least halfway to target
+      return text.substring(0, pos + 1);
+    }
+  }
+
+  // Last resort: truncate at target length (avoid cutting mid-word if possible)
+  let truncatePos = targetLength;
+  const lastSpace = text.lastIndexOf(' ', targetLength);
+  if (lastSpace > targetLength * 0.8) {
+    truncatePos = lastSpace;
+  }
+
+  return text.substring(0, truncatePos) + '...';
 }
 
 /**
  * Fetch and extract a scene from story for narration
  * @param {Object} story - Story object from database
- * @param {number} maxLength - Maximum narration length
+ * @param {number} targetLength - Target narration length in characters
  * @returns {Promise<string>} Extracted scene text
  */
-async function fetchStoryScene(story, maxLength = 300) {
+async function fetchStoryScene(story, targetLength = 300) {
   try {
     // Check for story text URL
     const textUrl = story?.fullStory?.textUrl;
@@ -171,8 +241,8 @@ async function fetchStoryScene(story, maxLength = 300) {
       throw new Error(error);
     }
 
-    const scene = extractSteamyScene(fullText, maxLength);
-    logger.info('Extracted steamy scene', { length: scene.length });
+    const scene = extractSteamyScene(fullText, targetLength);
+    logger.info('Extracted steamy scene', { targetLength, actualLength: scene.length });
 
     return scene;
   } catch (error) {
@@ -197,7 +267,7 @@ async function ensureDirectories() {
  * @property {string} hook - Hook text for video opening
  * @property {string} cta - Call-to-action text for final slide (default: "Read more on Blush 🔥")
  * @property {string} voice - Voice selection (female_1-3, male_1-3)
- * @property {boolean} includeMusic - Whether to include background music
+ * @property {string} musicId - Background music track ID (optional - omit for narration only)
  * @property {Object} effects - Effect configuration
  * @property {string} preset - Preset: 'triple_visual', 'hook_first', or null for legacy mode
  * @property {string} outputPath - Custom output path (optional)
@@ -222,7 +292,7 @@ async function generateTier1Video(options) {
     hook = '',
     cta = 'Read more on Blush 🔥',
     voice = 'female_1',
-    includeMusic = true,
+    musicId = null,
     effects = {
       kenBurns: true,
       pan: false,
@@ -248,7 +318,7 @@ async function generateTier1Video(options) {
       hook,
       cta,
       voice,
-      includeMusic,
+      musicId,
       effects,
       preset,
       outputPath: customOutputPath
@@ -262,7 +332,7 @@ async function generateTier1Video(options) {
     logger.info('Starting Tier 1 video generation', {
       storyId: story?._id,
       voice,
-      includeMusic,
+      musicId,
       effects
     });
 
@@ -275,7 +345,7 @@ async function generateTier1Video(options) {
       imageModel: 'pixelwave',
       videoModel: 'ffmpeg_enhanced_static',
       ttsModel: 'xtts',
-      audioModel: includeMusic ? 'fal_ai' : null,
+      audioModel: musicId ? 'library' : null,
       effects: []
     };
 
@@ -332,18 +402,34 @@ async function generateTier1Video(options) {
     // Step 3: Get Background Music (optional)
     // ============================================================
     let musicPath = null;
-    if (includeMusic) {
-      logger.info('Step 3: Getting background music...');
-      musicPath = await falAiAudioService.getBackgroundMusic(story?.category);
+    if (musicId) {
+      try {
+        const { default: Music } = await import('../models/Music.js');
+        const musicTrack = await Music.findById(musicId);
 
-      if (musicPath) {
-        generationMetadata.audioModel = 'fal_ai';
-        // Note: Not adding cost since we're using local files, not generating
-        logger.info('Background music found', { path: musicPath });
-      } else {
-        logger.info('No background music available, continuing without');
+        if (musicTrack && musicTrack.status === 'available') {
+          musicPath = path.join(process.cwd(), 'storage', 'audio', 'music', path.basename(musicTrack.audioPath));
+
+          // Increment usage count
+          await musicTrack.incrementUsage();
+
+          generationMetadata.audioModel = 'library';
+          logger.info('Background music loaded from library', {
+            musicId,
+            name: musicTrack.name,
+            path: musicPath
+          });
+        } else {
+          logger.warn('Music track not available', { musicId });
+        }
+      } catch (error) {
+        logger.error('Failed to load music from library', {
+          musicId,
+          error: error.message
+        });
       }
     }
+    // If no musicId provided, musicPath remains null (narration only video)
 
     // ============================================================
     // Step 4: Mix Audio (narration + music)
@@ -632,14 +718,14 @@ async function validateVideoOutput(videoPath, expectations) {
  */
 function getCostEstimate(options = {}) {
   const {
-    includeMusic = true,
+    musicId = null,
     effects = {},
     preset = DEFAULT_PRESET
   } = options;
 
   // If using a preset, get preset-specific cost
   if (preset && AVAILABLE_PRESETS.includes(preset)) {
-    return getPresetCostEstimate(preset, { includeMusic });
+    return getPresetCostEstimate(preset, { musicId });
   }
 
   // Legacy single-slide cost calculation
@@ -654,10 +740,10 @@ function getCostEstimate(options = {}) {
   breakdown.tts = COSTS.xtts_speech;
   total += COSTS.xtts_speech;
 
-  // Music (if generated)
-  if (includeMusic) {
-    breakdown.music = COSTS.fal_ai_music;
-    total += COSTS.fal_ai_music;
+  // Music (if selected from library)
+  if (musicId) {
+    breakdown.music = 0.01; // Small cost for library music
+    total += 0.01;
   }
 
   // FFmpeg processing (free, local)

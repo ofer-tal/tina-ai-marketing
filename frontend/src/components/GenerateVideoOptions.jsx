@@ -168,16 +168,34 @@ const CheckboxWrapper = styled.label`
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
+`;
+
+// Music selector styles
+const MusicSelector = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+`;
+
+const MusicOption = styled.label`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  background: ${props => props.$selected ? '#1e2a4a' : '#0f182e'};
+  border: 2px solid ${props => props.$selected ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
 
   &:hover {
     border-color: #e94560;
   }
 
-  input[type="checkbox"] {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    accent-color: #e94560;
+  input[type="radio"] {
+    display: none;
   }
 `;
 
@@ -435,7 +453,6 @@ function GenerateVideoOptions({
   const [preset, setPreset] = useState('triple_visual');
   const [voice, setVoice] = useState('female_1');
   const [cta, setCta] = useState('Read more on Blush 🔥');
-  const [includeMusic, setIncludeMusic] = useState(true);
   const [effects, setEffects] = useState({
     kenBurns: true,
     pan: false,
@@ -444,6 +461,12 @@ function GenerateVideoOptions({
     fadeIn: true,
     fadeOut: true
   });
+
+  // Music selection state
+  const [allMusic, setAllMusic] = useState([]);
+  const [selectedMusic, setSelectedMusic] = useState(null);
+  const [isFetchingMusic, setIsFetchingMusic] = useState(false);
+
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState('');
 
@@ -462,6 +485,29 @@ function GenerateVideoOptions({
     }
   }, [post]);
 
+  // Fetch music tracks when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchMusic();
+    }
+  }, [isOpen]);
+
+  const fetchMusic = async () => {
+    setIsFetchingMusic(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/music/list');
+      if (response.ok) {
+        const data = await response.json();
+        setAllMusic(data.data.tracks || []);
+      }
+    } catch (err) {
+      console.error('Error fetching music:', err);
+      setAllMusic([]);
+    } finally {
+      setIsFetchingMusic(false);
+    }
+  };
+
   const handleEffectToggle = (effectId) => {
     setEffects(prev => ({
       ...prev,
@@ -473,7 +519,7 @@ function GenerateVideoOptions({
     const presetConfig = PRESETS.find(p => p.id === preset) || PRESETS[0];
     const imageCost = presetConfig.imageCount * 0.005; // $0.005 per image
     const ttsCost = 0.002;
-    const musicCost = includeMusic ? 0.01 : 0;
+    const musicCost = selectedMusic ? 0.01 : 0;
 
     let total = imageCost + ttsCost + musicCost;
 
@@ -520,7 +566,7 @@ function GenerateVideoOptions({
       preset,
       voice,
       cta,
-      includeMusic,
+      musicId: selectedMusic?.id || null,
       effects
     };
 
@@ -579,6 +625,7 @@ function GenerateVideoOptions({
       setVoice('female_1');
       setCta('Read more on Blush 🔥');
       setIncludeMusic(true);
+      setSelectedMusic(null);
       setEffects({
         kenBurns: true,
         pan: false,
@@ -718,22 +765,46 @@ function GenerateVideoOptions({
 
         {/* Background Music */}
         <FormSection>
-          <CheckboxWrapper>
-            <input
-              type="checkbox"
-              checked={includeMusic}
-              onChange={(e) => !loading && setIncludeMusic(e.target.checked)}
-              disabled={loading}
-            />
-            <div>
-              <div style={{ fontWeight: 600, color: '#eaeaea' }}>
-                Include Background Music
+          <FormLabel>Background Music (Optional)</FormLabel>
+          <MusicSelector>
+            <MusicOption
+              $selected={!selectedMusic}
+              onClick={() => !loading && setSelectedMusic(null)}
+            >
+              <input
+                type="radio"
+                name="music"
+                checked={!selectedMusic}
+                onChange={() => setSelectedMusic(null)}
+                disabled={loading}
+              />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px' }}>🔇</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>No Music</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>Narration only</div>
               </div>
-              <div style={{ fontSize: '0.9rem', color: '#a0a0a0' }}>
-                Adds subtle background music to enhance the video
-              </div>
-            </div>
-          </CheckboxWrapper>
+            </MusicOption>
+            {allMusic.map(track => (
+              <MusicOption
+                key={track.id}
+                $selected={selectedMusic?.id === track.id}
+                onClick={() => !loading && setSelectedMusic(track)}
+              >
+                <input
+                  type="radio"
+                  name="music"
+                  checked={selectedMusic?.id === track.id}
+                  onChange={() => setSelectedMusic(track)}
+                  disabled={loading}
+                />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px' }}>🎵</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, textTransform: 'capitalize' }}>{track.style}</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>{track.name}</div>
+                </div>
+              </MusicOption>
+            ))}
+          </MusicSelector>
         </FormSection>
 
         {/* Cost Estimate */}

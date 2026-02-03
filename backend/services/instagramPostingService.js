@@ -15,6 +15,8 @@
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
 import rateLimiterService from './rateLimiter.js';
+import AuthToken from '../models/AuthToken.js';
+import { getValidToken, makeAuthenticatedRequest, storeOAuthTokens, getTokenStatus } from '../utils/oauthHelper.js';
 
 const logger = getLogger('services', 'instagram-posting');
 
@@ -138,47 +140,11 @@ class InstagramPostingService extends BaseApiClient {
 
   /**
    * Step 2 & 3: Set up Instagram Business account and verify access token
-   * Check if we have a valid access token and business account
+   * Check if we have a valid access token and business account (using oauthHelper)
    */
   async checkTokenStatus() {
     try {
-      if (!this.accessToken) {
-        return {
-          authenticated: false,
-          hasToken: false,
-          message: 'No access token available',
-        };
-      }
-
-      if (this.tokenExpiresAt && new Date() > this.tokenExpiresAt) {
-        logger.info('Access token expired, attempting refresh...');
-
-        // Try to refresh the token
-        const refreshResult = await this.refreshAccessToken();
-
-        if (!refreshResult.success) {
-          return {
-            authenticated: false,
-            hasToken: false,
-            expired: true,
-            message: 'Access token expired and refresh failed',
-            error: refreshResult.error,
-          };
-        }
-      }
-
-      // Verify token by making a test API call to get user info
-      const userInfo = await this.getUserInfo();
-
-      return {
-        authenticated: true,
-        hasToken: true,
-        valid: true,
-        instagramUserId: this.instagramUserId,
-        hasBusinessAccount: !!this.instagramBusinessAccountId,
-        userInfo: userInfo.success ? userInfo.data : null,
-      };
-
+      return await getTokenStatus('instagram');
     } catch (error) {
       logger.error('Token status check failed', {
         error: error.message,
@@ -483,10 +449,17 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(data.error.message);
       }
 
+      // Store tokens using oauthHelper for persistence
+      await storeOAuthTokens('instagram', {
+        access_token: data.access_token,
+        expires_in: data.expires_in,
+      });
+
+      // Update in-memory cache
       this.accessToken = data.access_token;
       this.tokenExpiresAt = new Date(Date.now() + (data.expires_in * 1000));
 
-      logger.info('Access token obtained successfully', {
+      logger.info('Access token obtained and persisted', {
         expiresIn: data.expires_in,
       });
 

@@ -378,7 +378,6 @@ function TieredVideoConfig() {
   const [loading, setLoading] = useState(false);
   const [selectedTier, setSelectedTier] = useState('tier_1');
   const [selectedVoice, setSelectedVoice] = useState('female_1');
-  const [includeMusic, setIncludeMusic] = useState(true);
   const [effects, setEffects] = useState({
     kenBurns: true,
     pan: false,
@@ -392,7 +391,7 @@ function TieredVideoConfig() {
   useEffect(() => {
     checkHealth();
     fetchCostEstimate();
-  }, [includeMusic]);
+  }, []);
 
   const checkHealth = async () => {
     try {
@@ -406,7 +405,7 @@ function TieredVideoConfig() {
 
   const fetchCostEstimate = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/tiered-video/cost-estimate?includeMusic=${includeMusic}`);
+      const response = await fetch('http://localhost:3001/api/tiered-video/cost-estimate');
       const data = await response.json();
       if (data.success) {
         setCostEstimate(data.data);
@@ -423,7 +422,6 @@ function TieredVideoConfig() {
       const settings = {
         DEFAULT_CONTENT_TIER: selectedTier,
         DEFAULT_VOICE: selectedVoice,
-        DEFAULT_INCLUDE_MUSIC: includeMusic,
         DEFAULT_VIDEO_EFFECTS: Object.keys(effects).filter(k => effects[k]).join(',')
       };
 
@@ -542,21 +540,6 @@ function TieredVideoConfig() {
             </EffectToggle>
           ))}
         </Grid>
-      </Section>
-
-      {/* Music Toggle */}
-      <Section>
-        <EffectToggle>
-          <input
-            type="checkbox"
-            checked={includeMusic}
-            onChange={(e) => setIncludeMusic(e.target.checked)}
-          />
-          <EffectLabel>
-            <strong>Include Background Music</strong>
-            <span>Add subtle background music to videos</span>
-          </EffectLabel>
-        </EffectToggle>
       </Section>
 
       {/* Cost Estimate */}

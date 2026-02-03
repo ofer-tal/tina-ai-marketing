@@ -10,11 +10,11 @@ import mongoose from 'mongoose';
  * credentials that survive server restarts.
  */
 const authTokenSchema = new mongoose.Schema({
-  // Platform identifier (tiktok, instagram, youtube, twitter, pinterest, reddit, apple_search_ads, etc.)
+  // Platform identifier (tiktok, instagram, google (for all Google services), twitter, pinterest, reddit, apple_search_ads, etc.)
   platform: {
     type: String,
     required: true,
-    enum: ['tiktok', 'instagram', 'youtube', 'twitter', 'pinterest', 'reddit', 'apple_search_ads', 'facebook', 'tiktok_ads', 'google_ads'],
+    enum: ['tiktok', 'instagram', 'google', 'twitter', 'pinterest', 'reddit', 'apple_search_ads', 'facebook', 'tiktok_ads', 'google_ads'],
   },
 
   // OAuth/API Token fields

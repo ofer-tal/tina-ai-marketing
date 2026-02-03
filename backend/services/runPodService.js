@@ -3,9 +3,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimiterService from './rateLimiter.js';
+import { default as runpodSdk } from 'runpod-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// RunPod configuration
+const RUNPOD_API_KEY = process.env.RUNPOD_API_KEY;
+const RUNPOD_ENDPOINT_ID_PIXELWAVE = process.env.RUNPOD_ENDPOINT_ID_PIXELWAVE;
+
+// Initialize RunPod SDK
+const runpod = RUNPOD_API_KEY ? runpodSdk(RUNPOD_API_KEY) : null;
 
 // Create logger for RunPod service
 const logger = winston.createLogger({
@@ -48,8 +56,10 @@ if (process.env.NODE_ENV !== 'production') {
  */
 class RunPodService {
   constructor() {
-    this.apiKey = process.env.RUNPOD_API_KEY;
-    this.endpoint = process.env.RUNPOD_API_ENDPOINT;
+    this.apiKey = RUNPOD_API_KEY;
+    // Use endpoint ID pattern (preferred) or fallback to legacy RUNPOD_API_ENDPOINT
+    const endpoint = runpod && RUNPOD_ENDPOINT_ID_PIXELWAVE ? runpod.endpoint(RUNPOD_ENDPOINT_ID_PIXELWAVE) : null;
+    this.endpoint = endpoint || process.env.RUNPOD_API_ENDPOINT;  // Legacy fallback
     this.timeout = 600000; // 10 minutes for video generation (longer than Fal.ai)
     this.pollInterval = 5000; // Check status every 5 seconds
     this.storagePath = process.env.STORAGE_PATH || './storage';
@@ -59,7 +69,7 @@ class RunPodService {
       logger.warn('RUNPOD_API_KEY not configured - service will run in mock mode');
     }
     if (!this.endpoint) {
-      logger.warn('RUNPOD_API_ENDPOINT not configured - service will run in mock mode');
+      logger.warn('RUNPOD_ENDPOINT_ID_PIXELWAVE not configured - service will run in mock mode');
     }
 
     this._ensureStorageDirectory();

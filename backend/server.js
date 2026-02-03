@@ -18,12 +18,14 @@ import contentRouter from "./api/content.js";
 import videoRouter from "./api/video.js";
 import imageRouter from "./api/image.js";
 import audioRouter from "./api/audio.js";
+import tieredVideoRouter from "./api/tieredVideo.js";
 import hooksRouter from "./api/hooks.js";
 import blacklistRouter from "./api/blacklist.js";
 import tiktokRouter from "./api/tiktok.js";
 import tiktokCallbackRouter from "./api/tiktok-callback.js";
 import instagramRouter from "./api/instagram.js";
 import youtubeRouter from "./api/youtube.js";
+import googleCallbackRouter from "./api/google-callback.js";
 import rateLimitsRouter from "./api/rateLimits.js";
 import platformOptimizationRouter from "./api/platform-optimization.js";
 import tiktokAudioRouter from "./api/tiktok-audio.js";
@@ -77,6 +79,7 @@ import websiteTrafficRouter from "./api/websiteTraffic.js";
 import contentPerformanceRouter from "./api/contentPerformance.js";
 import trendingTopicsRouter from "./api/trendingTopics.js";
 import keywordRecommendationsRouter from "./api/keywordRecommendations.js";
+import tinaStrategiesRouter from "./api/tina/strategies.js";
 import serviceStatusRouter from "./api/service-status.js";
 import testErrorsRouter from "./api/test-errors.js";
 import errorMonitoringRouter from "./api/error-monitoring.js";
@@ -109,6 +112,12 @@ import contentMetricsSyncJob from "./jobs/contentMetricsSyncJob.js";
 import metricsAggregationJob from "./jobs/metricsAggregationJob.js";
 import googleAnalyticsSyncJob from "./jobs/googleAnalyticsSyncJob.js";
 import retentionAnalyticsSyncJob from "./jobs/firebaseAnalyticsSyncJob.js";
+import tempFileCleanupJob from "./jobs/tempFileCleanup.js";
+import musicRouter from "./api/music.js";
+import googleRouter from "./api/google.js";
+import tikTokVideoMatcherJob from "./jobs/tikTokVideoMatcher.js";
+import googleSheetsService from "./services/googleSheetsService.js";
+import s3VideoUploader from "./services/s3VideoUploader.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -179,15 +188,24 @@ app.get("/api/health", async (req, res) => {
       },
       youtube: {
         configured: !!(process.env.YOUTUBE_API_KEY &&
-                       process.env.YOUTUBE_CLIENT_ID &&
-                       process.env.YOUTUBE_CLIENT_SECRET),
+                       (process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID) &&
+                       (process.env.GOOGLE_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET)),
         apiKeyConfigured: !!process.env.YOUTUBE_API_KEY,
-        clientIdConfigured: !!process.env.YOUTUBE_CLIENT_ID,
+        clientIdConfigured: !!(process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID),
       },
       googleAnalytics: {
         configured: !!(process.env.GOOGLE_ANALYTICS_VIEW_ID || process.env.GOOGLE_ANALYTICS_PROPERTY_ID),
         viewIdConfigured: !!process.env.GOOGLE_ANALYTICS_VIEW_ID,
         propertyIdConfigured: !!process.env.GOOGLE_ANALYTICS_PROPERTY_ID,
+      },
+      googleSheets: {
+        configured: !!(googleSheetsService.accessToken),
+        connected: !!googleSheetsService.accessToken,
+        spreadsheetId: googleSheetsService.spreadsheetId,
+      },
+      awsS3: {
+        configured: s3VideoUploader.enabled,
+        bucketName: process.env.AWS_S3_BUCKET_NAME,
       },
       ai: {
         falAi: !!process.env.FAL_AI_API_KEY,
@@ -201,7 +219,7 @@ app.get("/api/health", async (req, res) => {
 
     // Calculate overall external API status
     const externalApiStatus = {
-      total: 8,
+      total: 10,
       configured: Object.values(externalApis).filter(api => api.configured).length,
       apis: externalApis
     };
@@ -270,10 +288,12 @@ app.use("/api/content", contentRouter);
 app.use("/api/video", videoRouter);
 app.use("/api/image", imageRouter);
 app.use("/api/audio", audioRouter);
+app.use("/api/tiered-video", tieredVideoRouter);
 app.use("/api/hooks", hooksRouter);
 app.use("/api/blacklist", blacklistRouter);
 app.use("/api/tiktok", tiktokRouter);
 app.use("/auth/tiktok", tiktokCallbackRouter);
+app.use("/auth/google", googleCallbackRouter);
 app.use("/api/instagram", instagramRouter);
 app.use("/api/youtube", youtubeRouter);
 app.use("/api/rate-limits", rateLimitsRouter);
@@ -328,6 +348,7 @@ app.use("/api/website-traffic", websiteTrafficRouter);
 app.use("/api/content-performance", contentPerformanceRouter);
 app.use("/api/trending-topics", trendingTopicsRouter);
 app.use("/api/keyword-recommendations", keywordRecommendationsRouter);
+app.use("/api/tina/strategies", tinaStrategiesRouter);
 app.use("/api/service-status", serviceStatusRouter);
 app.use("/api/test-errors", testErrorsRouter);
 app.use("/api/error-monitoring", errorMonitoringRouter);
@@ -335,6 +356,8 @@ app.use("/api/circuit-breaker", circuitBreakerRouter);
 app.use("/api/manual-posting-fallback", manualPostingFallbackRouter);
 app.use("/api/database-status", databaseStatusRouter);
 app.use("/api/filesystem-errors", fileSystemErrorsRouter);
+app.use("/api/music", musicRouter);
+app.use("/api/google", googleRouter);
 
 // Error handling middleware (must be after all routes)
 // Integrates with error monitoring service to track all errors
@@ -434,8 +457,13 @@ async function startServer() {
       console.error('Failed to initialize TikTok posting service:', error.message);
     }
 
+    // IMPORTANT: Start the scheduler service FIRST before any jobs
+    // Jobs are only started if scheduler.status === 'running'
+    await schedulerService.start();
+    console.log("Scheduler service started");
+
     // Start the posting scheduler job after MongoDB connects
-    postingSchedulerJob.start();
+    await postingSchedulerJob.start();
     console.log("Posting scheduler job started");
 
     // Start the batch generation scheduler
@@ -482,10 +510,6 @@ async function startServer() {
     storyRefreshJob.start();
     console.log("Story database refresh job started");
 
-    // Start the scheduler service (checks for missed jobs on startup)
-    await schedulerService.start();
-    console.log("Scheduler service started");
-
     // Start the revenue sync job
     await revenueSyncJob.start();
     console.log("Revenue sync job started");
@@ -525,13 +549,35 @@ async function startServer() {
     // Start the Retention Analytics sync job (daily at 6 AM)
     await retentionAnalyticsSyncJob.initialize();
     console.log("Retention Analytics sync job initialized");
+
+    // Start the temp file cleanup job (daily at 2 AM)
+    tempFileCleanupJob.start();
+    console.log("Temp file cleanup job started");
+
+    // Initialize Google Sheets service
+    try {
+      await googleSheetsService.initialize();
+      console.log("Google Sheets service initialized");
+    } catch (error) {
+      console.error("Failed to initialize Google Sheets service:", error.message);
+    }
+
+    // Start the TikTok video matcher job (every 30 minutes)
+    console.log("About to initialize TikTok video matcher job...");
+    try {
+      await tikTokVideoMatcherJob.initialize();
+      console.log("TikTok video matcher job started");
+    } catch (error) {
+      console.error("Failed to initialize TikTok video matcher job:", error.message);
+      console.error(error.stack);
+    }
   } catch (error) {
-    console.error("Failed to connect to MongoDB:", error.message);
+    console.error("Failed during server startup:", error.message);
     if (process.env.NODE_ENV === "production") {
-      console.error("In production mode, MongoDB is required. Exiting...");
+      console.error("In production mode, startup errors are fatal. Exiting...");
       process.exit(1);
     } else {
-      console.warn("Running in development mode without MongoDB connection. Some features may not work.");
+      console.warn("Continuing in development mode. Some features may not work correctly.");
     }
   }
 }
@@ -567,7 +613,7 @@ const gracefulShutdown = async (signal) => {
 
     // Stop scheduler jobs
     console.log('  Stopping scheduler jobs...');
-    postingSchedulerJob.stop();
+    await postingSchedulerJob.stop();
     batchGenerationScheduler.stop();
     metricsAggregatorJob.stop();
     weeklyASOAnalysis.stop();
@@ -588,6 +634,8 @@ const gracefulShutdown = async (signal) => {
     metricsAggregationJob.stop();
     googleAnalyticsSyncJob.stop();
     retentionAnalyticsSyncJob.stop();
+    tempFileCleanupJob.stop();
+    tikTokVideoMatcherJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)
@@ -619,20 +667,29 @@ const gracefulShutdown = async (signal) => {
 };
 
 // Listen for shutdown signals
-process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+// Register signal handlers (avoid duplicates in development with nodemon)
+if (!process.listenerCount("SIGTERM")) {
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+}
+if (!process.listenerCount("SIGINT")) {
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+}
 
-// Handle uncaught exceptions
-process.on("uncaughtException", (error) => {
-  console.error("Uncaught Exception:", error);
-  gracefulShutdown("uncaughtException");
-});
+// Handle uncaught exceptions (avoid duplicates in development)
+if (process.listenerCount("uncaughtException") === 0) {
+  process.on("uncaughtException", (error) => {
+    console.error("Uncaught Exception:", error);
+    gracefulShutdown("uncaughtException");
+  });
+}
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (reason, promise) => {
-  console.error("Unhandled Rejection at:", promise, "reason:", reason);
-  gracefulShutdown("unhandledRejection");
-});
+// Handle unhandled promise rejections (avoid duplicates in development)
+if (process.listenerCount("unhandledRejection") === 0) {
+  process.on("unhandledRejection", (reason, promise) => {
+    console.error("Unhandled Rejection at:", promise, "reason:", reason);
+    gracefulShutdown("unhandledRejection");
+  });
+}
 
 startServer();
 

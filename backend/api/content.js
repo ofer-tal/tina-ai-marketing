@@ -261,6 +261,7 @@ router.post('/posts/create', async (req, res) => {
       preset = 'triple_visual',  // Extract preset from request
       voice = 'female_1',
       generateVideo = false,
+      musicId = null,
       scheduleFor
     } = req.body;
 
@@ -295,6 +296,7 @@ router.post('/posts/create', async (req, res) => {
       preset,  // Pass preset through to createPost
       voice,
       generateVideo,
+      musicId,
       scheduleFor
     });
 

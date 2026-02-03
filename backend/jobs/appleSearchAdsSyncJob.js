@@ -33,12 +33,14 @@ class AppleSearchAdsSyncJob {
 
   /**
    * Initialize and schedule the job
+   * Note: schedulerService.registerJob() auto-starts the job if scheduler is running
    */
-  initialize() {
+  async initialize() {
     logger.info(`Initializing Apple Search Ads sync job with schedule: ${this.syncSchedule}`);
 
-    // Register job with scheduler
-    schedulerService.registerJob(
+    // Register job with scheduler (must be awaited - it's async!)
+    // Note: The scheduler will automatically start the job if it's running
+    await schedulerService.registerJob(
       this.jobName,
       this.syncSchedule,
       () => this.execute(),
@@ -50,9 +52,6 @@ class AppleSearchAdsSyncJob {
         }
       }
     );
-
-    // Start the job
-    schedulerService.startJob(this.jobName);
 
     logger.info('Apple Search Ads sync job initialized and scheduled');
   }

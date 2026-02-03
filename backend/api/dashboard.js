@@ -3,6 +3,7 @@ import { cacheMiddleware } from '../middleware/cache.js';
 import MarketingRevenue from '../models/MarketingRevenue.js';
 import MarketingPost from '../models/MarketingPost.js';
 import DailyRevenueAggregate from '../models/DailyRevenueAggregate.js';
+import DailySpend from '../models/DailySpend.js';
 
 const router = express.Router();
 
@@ -1973,5 +1974,52 @@ async function generateFinancialProjections(period, horizon) {
     }
   };
 }
+
+/**
+ * GET /api/dashboard/temp-files/status
+ * Get temp files status (count, size, old files)
+ */
+router.get('/temp-files/status', async (req, res) => {
+  try {
+    const tempFileCleanupJob = await import('../jobs/tempFileCleanup.js');
+    const status = await tempFileCleanupJob.default.getTempFilesStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    console.error('Error fetching temp files status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch temp files status',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/dashboard/temp-files/cleanup
+ * Manually trigger temp file cleanup
+ */
+router.post('/temp-files/cleanup', async (req, res) => {
+  try {
+    const tempFileCleanupJob = await import('../jobs/tempFileCleanup.js');
+    const result = await tempFileCleanupJob.default.trigger();
+
+    res.json({
+      success: true,
+      message: 'Temp file cleanup completed',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error running temp file cleanup:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to run temp file cleanup',
+      message: error.message
+    });
+  }
+});
 
 export default router;

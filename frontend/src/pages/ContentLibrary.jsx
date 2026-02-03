@@ -440,6 +440,46 @@ const ActionButton = styled.button`
   }
 `;
 
+// Posted content link and stats
+const PostedLink = styled.a`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background: rgba(233, 69, 96, 0.2);
+  color: #e94560;
+  text-decoration: none;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  margin-top: 0.5rem;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba(233, 69, 96, 0.3);
+    text-decoration: underline;
+  }
+`;
+
+const StatsRow = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+`;
+
+const StatItem = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.7rem;
+  color: #a0a0a0;
+
+  .stat-value {
+    color: #eaeaea;
+    font-weight: 500;
+  }
+`;
+
 const LegacyLoadingSpinner = styled.div`
   display: flex;
   justify-content: center;
@@ -2406,6 +2446,34 @@ function ContentLibrary() {
     return emojis[platform] || '📱';
   };
 
+  const getPostedLink = (post) => {
+    let url = null;
+    let label = '';
+
+    if (post.platform === 'tiktok' && post.tiktokShareUrl) {
+      url = post.tiktokShareUrl;
+      label = 'View on TikTok';
+    } else if (post.platform === 'instagram' && post.instagramPermalink) {
+      url = post.instagramPermalink;
+      label = 'View on Instagram';
+    } else if (post.platform === 'youtube_shorts' && post.youtubeUrl) {
+      url = post.youtubeUrl;
+      label = 'View on YouTube';
+    }
+
+    if (url) {
+      return <PostedLink href={url} target="_blank" rel="noopener noreferrer">🔗 {label}</PostedLink>;
+    }
+    return null;
+  };
+
+  const formatNumber = (value) => {
+    if (!value && value !== 0) return '0';
+    if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(1)}K`;
+    return value.toString();
+  };
+
   const formatMetric = (value) => {
     if (!value && value !== 0) return '0';
     if (value >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
@@ -3820,6 +3888,25 @@ function ContentLibrary() {
                       🕒 {formatDate(post.scheduledAt)}
                     </ScheduledTime>
                   </CardMeta>
+
+                  {/* Posted content link and stats */}
+                  {post.status === 'posted' && (
+                    <>
+                      {getPostedLink(post)}
+                      {post.performanceMetrics && (post.performanceMetrics.views > 0 || post.performanceMetrics.likes > 0) && (
+                        <StatsRow>
+                          <StatItem>👁️ <span className="stat-value">{formatNumber(post.performanceMetrics.views)}</span></StatItem>
+                          <StatItem>❤️ <span className="stat-value">{formatNumber(post.performanceMetrics.likes)}</span></StatItem>
+                          {post.performanceMetrics.comments > 0 && (
+                            <StatItem>💬 <span className="stat-value">{formatNumber(post.performanceMetrics.comments)}</span></StatItem>
+                          )}
+                          {post.performanceMetrics.shares > 0 && (
+                            <StatItem>🔗 <span className="stat-value">{formatNumber(post.performanceMetrics.shares)}</span></StatItem>
+                          )}
+                        </StatsRow>
+                      )}
+                    </>
+                  )}
 
                   <CardActions>
                     <ActionButton onClick={() => handleThumbnailClick(post)}>

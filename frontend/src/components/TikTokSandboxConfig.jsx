@@ -186,6 +186,32 @@ function TikTokSandboxConfig() {
     fetchAuthUrl();
   }, []);
 
+  // Listen for OAuth messages from popup window
+  useEffect(() => {
+    const handleMessage = (event) => {
+      // Verify origin for security
+      if (event.origin !== window.location.origin) {
+        return;
+      }
+
+      if (event.data.type === 'oauth-success') {
+        // OAuth succeeded - refresh status
+        checkSandboxStatus();
+        // Don't show alert - popup closes automatically
+      } else if (event.data.type === 'oauth-error') {
+        // OAuth failed
+        setError(event.data.message || 'Authentication failed');
+        setConnectionStatus('error');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
   const fetchAuthUrl = async () => {
     try {
       const response = await fetch('http://localhost:3001/api/tiktok/authorize-url?scopes=video.upload,video.publish');
@@ -285,6 +311,8 @@ function TikTokSandboxConfig() {
   };
 
   useEffect(() => {
+    // Only check URL params if not using postMessage (fallback)
+    // This handles cases where the callback page fails to close
     checkForOAuthResult();
   }, []);
 

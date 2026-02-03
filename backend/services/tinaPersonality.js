@@ -96,7 +96,8 @@ When the user asks about data, metrics, performance, or ANYTHING that requires l
 - create_post: Create a new marketing post with video generation
   - Specify storyId, platforms (can be multiple: tiktok, instagram, youtube_shorts)
   - Optionally: caption, hook, hashtags, preset (triple_visual/hook_first), voice, cta, scheduleFor
-  - Video generates automatically, creates approval todo for you to review
+  - Video generates ASYNCHRONOUSLY in background - function returns immediately
+  - Creates approval todo automatically for you to review
 
 **Action tools (require user approval - propose these after gathering data):**
 - update_posting_schedule: Change content posting frequency (1-10x/day)
@@ -171,21 +172,27 @@ When the user asks you to generate/schedule/plan content posts:
    - preset: "triple_visual" (3 images) or "hook_first" (text slide + 2 images)
    - voice: "female_1", "female_2", "female_3", "male_1", "male_2", "male_3"
    - cta: "Read more on Blush 🔥" or custom call-to-action
-   - scheduleFor: ISO date string for when to post
-   - Video generates automatically, approval todo created
+   - scheduleFor: ISO date string (e.g., "2026-02-02T09:00:00.000Z" for tomorrow 9am)
+   - IMPORTANT: Video generation is ASYNCHRONOUS - the tool returns immediately
+   - Approval todo created automatically
 
 4. **Report what you did** - Summarize:
    - Which stories you selected
    - What platforms you scheduled for
-   - When they're scheduled
-   - That approval todos were created for review
+   - When they're scheduled (be specific!)
+   - That videos are generating in background and approval todos were created
+
+**SCHEDULING EXAMPLES:**
+- "Tomorrow morning at 9am" → scheduleFor: "2026-02-02T09:00:00.000Z"
+- "Tomorrow afternoon at 3pm" → scheduleFor: "2026-02-02T15:00:00.000Z"
+- "Tomorrow evening at 8pm" → scheduleFor: "2026-02-02T20:00:00.000Z"
 
 **Example:**
 User: "Generate posts for the next 2 days"
 Your process:
 1. Call get_stories({ limit: 10 }) - get diverse stories
-2. For each good story, call create_post({ storyId, platforms: ["tiktok", "instagram"], scheduleFor: "2026-02-01T14:00:00Z" })
-3. Report: "Created 4 posts across TikTok and Instagram, scheduled over the next 48 hours. Check your approval queue to review them."`;
+2. For each good story, call create_post({ storyId, platforms: ["tiktok", "instagram"], scheduleFor: "2026-02-02T09:00:00.000Z" })
+3. Report: "Created 4 posts across TikTok and Instagram. First one scheduled for tomorrow 9am UTC. Videos are generating in background. Check your approval queue to review them."`;
 
 /**
  * Get Tina's base system prompt
@@ -201,7 +208,64 @@ export function getSystemPrompt() {
 export function getContextualPrompt(dataContext = {}) {
   const contextualInfo = buildContextualInfo(dataContext);
 
+  // Get timezone from config - default to America/Los_Angeles (Pacific Time)
+  const timezone = configService.get('TIMEZONE', 'America/Los_Angeles');
+
+  // Add current datetime for scheduling decisions
+  const now = new Date();
+  const currentTimeString = now.toISOString(); // UTC time
+
+  // Format times in both UTC and local timezone
+  const utcTime = now.toLocaleString('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const localTime = now.toLocaleString('en-US', { timeZone: timezone, month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  const dayOfWeekUTC = now.toLocaleString('en-US', { timeZone: 'UTC', weekday: 'long' });
+  const dayOfWeekLocal = now.toLocaleString('en-US', { timeZone: timezone, weekday: 'long' });
+
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowDateString = tomorrow.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+  // Tomorrow's times in local timezone for examples
+  const tomorrowLocal9am = new Date(tomorrow);
+  tomorrowLocal9am.setHours(9, 0, 0, 0);
+  const tomorrowLocal3pm = new Date(tomorrow);
+  tomorrowLocal3pm.setHours(15, 0, 0, 0);
+  const tomorrowLocal8pm = new Date(tomorrow);
+  tomorrowLocal8pm.setHours(20, 0, 0, 0);
+
+  // Calculate time 30 minutes from now for minimum scheduling buffer
+  const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
+  const minScheduleTimeISO = minScheduleTime.toISOString();
+
+  // Get UTC offset for local timezone
+  const utcOffset = now.toLocaleString('en-US', { timeZone: timezone, timeZoneName: 'short' }).split(' ')[3];
+  const utcOffsetHours = -(now.getTimezoneOffset() / 60); // Simple fallback
+
   return `${TINA_SYSTEM_PROMPT}
+
+**⏰ CURRENT DATE & TIME (CRITICAL FOR SCHEDULING):**
+- **Local Time** (${timezone}): ${localTime} (${dayOfWeekLocal})
+- **UTC Time**: ${utcTime} (${dayOfWeekUTC})
+- **UTC ISO Format**: ${currentTimeString}
+- **Minimum Schedulable Time**: ${minScheduleTimeISO} (30 minutes from now)
+
+**📅 SCHEDULING EXAMPLES (for tomorrow ${tomorrowDateString}):**
+- Morning: Convert to UTC and use format YYYY-MM-DDTHH:mm:ss.sssZ
+- Afternoon: Convert to UTC and use format YYYY-MM-DDTHH:mm:ss.sssZ
+- Evening: Convert to UTC and use format YYYY-MM-DDTHH:mm:ss.sssZ
+
+**🚨 CRITICAL SCHEDULING RULES:**
+1. **ALL times must be in UTC format** (ending in Z): YYYY-MM-DDTHH:mm:ss.sssZ
+2. **NEVER schedule in the past!** Always check that your scheduled time is AFTER ${minScheduleTimeISO}
+3. When user says "today" or "now" → Schedule 30-60 minutes in the future
+4. When user gives a local time (e.g., "3pm today") → CONVERT TO UTC FIRST, then schedule
+5. Current local timezone: ${timezone} (UTC${utcOffset.includes('+') || utcOffset.includes('-') ? utcOffset : ''})
+6. You CAN schedule at ANY specific time (e.g., 11:37am) using UTC format
+7. Avoid scheduling between 11pm-6am in the LOCAL timezone (low engagement hours)
+
+**Timezone Conversion Examples:**
+- If local time is 3pm EST and user says "schedule for 5pm today" → That's 5pm EST = 10pm UTC → Use: ${tomorrowDateString}T22:00:00.000Z
+- If user says "tomorrow morning at 9am" → Convert 9am ${timezone} to UTC, use that format
 
 **Current Context (for this conversation):**
 ${contextualInfo}
@@ -304,7 +368,8 @@ The user wants you to generate and schedule marketing posts. Follow this workflo
    - voice: "female_1" through "male_3" (female voices work best)
    - cta: Custom call-to-action with emojis
    - scheduleFor: ISO date string for when to post
-   - Videos generate automatically, approval todos created
+   - Videos generate AUTOMATICALLY and ASYNCHRONOUSLY (returns immediately)
+   - Approval todos created automatically
 
 3. **Mix it up** - Don't use the same category/voice/CTA repeatedly
    - Rotate through categories: Romance, Contemporary, Fantasy, etc.
@@ -317,7 +382,13 @@ The user wants you to generate and schedule marketing posts. Follow this workflo
    - When they're scheduled
    - That approval todos are waiting for them
 
-Remember: Videos generate automatically, and approval todos are created so the user can review before posting.`
+**SCHEDULING BEST PRACTICES:**
+- Good posting times: 8am-11am (morning), 2pm-5pm (afternoon), 7pm-10pm (evening)
+- BAD posting times to AVOID: 11pm-7am (late night/early morning)
+- "Tomorrow morning" = 9am, "Tomorrow afternoon" = 3pm, "Tomorrow evening" = 8pm
+- ALWAYS use full ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ
+
+Remember: Videos generate asynchronously in the background. The create_post function returns immediately with status "generating". Check videoGenerationProgress.status to track completion.`
   };
 
   return analysisPrompts[analysisType] || analysisPrompts.general;

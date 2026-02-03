@@ -73,6 +73,10 @@ export async function executeTool(proposal) {
         break;
 
       // Post management tools (read-only, no approval)
+      case 'get_music':
+        result = await postManagementTools.getMusic(toolParameters);
+        break;
+
       case 'get_stories':
         result = await postManagementTools.getStories(toolParameters);
         break;
@@ -183,6 +187,40 @@ export async function executeTool(proposal) {
 
       case 'get_recent_activity':
         result = await postManagementTools.getRecentActivity(toolParameters);
+        break;
+
+      // Strategy memory tools - read only
+      case 'get_strategies':
+        result = await getStrategies(toolParameters);
+        break;
+
+      case 'get_strategy_details':
+        result = await getStrategyDetails(toolParameters);
+        break;
+
+      case 'get_strategy_history':
+        result = await getStrategyHistory(toolParameters);
+        break;
+
+      // Strategy tools - approval required
+      case 'create_strategy':
+        result = await createStrategy(toolParameters);
+        break;
+
+      case 'update_strategy':
+        result = await updateStrategy(toolParameters);
+        break;
+
+      case 'complete_strategy':
+        result = await completeStrategy(toolParameters);
+        break;
+
+      case 'pause_strategy':
+        result = await pauseStrategy(toolParameters);
+        break;
+
+      case 'resume_strategy':
+        result = await resumeStrategy(toolParameters);
         break;
 
       default:
@@ -2256,6 +2294,360 @@ function generateTrafficInsights(webSources, appAcquisition) {
   return insights;
 }
 
+// ============================================================================
+// STRATEGY MEMORY TOOLS - READ ONLY
+// ============================================================================
+
+/**
+ * Import MarketingStrategy model dynamically to avoid issues
+ */
+async function getMarketingStrategyModel() {
+  const { default: MarketingStrategy } = await import('../../models/MarketingStrategy.js');
+  return MarketingStrategy;
+}
+
+/**
+ * Get strategies with optional filters
+ */
+async function getStrategies({ status = 'all', level = 'all', category, limit = 50 }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const query = {};
+  if (status !== 'all') {
+    query.status = status;
+  }
+  if (level !== 'all') {
+    query.level = level;
+  }
+  if (category) {
+    query.category = category;
+  }
+
+  const strategies = await MarketingStrategy.find(query)
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    count: strategies.length,
+    strategies: strategies.map(s => ({
+      id: s._id,
+      strategyId: s.strategyId,
+      name: s.name,
+      description: s.description,
+      hypothesis: s.hypothesis,
+      status: s.status,
+      level: s.level,
+      category: s.category,
+      priority: s.priority,
+      successMetric: s.successMetric,
+      targetValue: s.targetValue,
+      currentBaseline: s.currentBaseline,
+      currentValue: s.currentValue,
+      progressPercent: s.targetValue > 0 && s.currentBaseline !== undefined
+        ? Math.round(((s.currentValue - s.currentBaseline) / (s.targetValue - s.currentBaseline)) * 100)
+        : 0,
+      createdAt: s.createdAt,
+      timeframe: s.timeframe
+    }))
+  };
+}
+
+/**
+ * Get strategy details
+ */
+async function getStrategyDetails({ strategyId }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const strategy = await MarketingStrategy.findOne({
+    $or: [{ _id: strategyId }, { strategyId: strategyId }]
+  });
+
+  if (!strategy) {
+    return {
+      error: 'Strategy not found',
+      strategyId
+    };
+  }
+
+  // Get related data
+  const children = await MarketingStrategy.getByParent(strategy.strategyId);
+  const progress = {
+    baseline: strategy.currentBaseline || 0,
+    current: strategy.currentValue || 0,
+    target: strategy.targetValue,
+    progressPercent: strategy.targetValue > 0 && strategy.currentBaseline !== undefined
+      ? Math.round(((strategy.currentValue - strategy.currentBaseline) / (strategy.targetValue - strategy.currentBaseline)) * 100)
+      : 0
+  };
+
+  return {
+    id: strategy._id,
+    strategyId: strategy.strategyId,
+    name: strategy.name,
+    description: strategy.description,
+    hypothesis: strategy.hypothesis,
+    status: strategy.status,
+    level: strategy.level,
+    parentStrategyId: strategy.parentStrategyId,
+    category: strategy.category,
+    priority: strategy.priority,
+    successMetric: strategy.successMetric,
+    targetValue: strategy.targetValue,
+    currentBaseline: strategy.currentBaseline,
+    currentValue: strategy.currentValue,
+    progress,
+    timeframe: strategy.timeframe,
+    statusHistory: strategy.statusHistory,
+    outcomes: strategy.outcomes,
+    relatedGoalIds: strategy.relatedGoalIds,
+    tags: strategy.tags,
+    notes: strategy.notes,
+    createdAt: strategy.createdAt,
+    updatedAt: strategy.updatedAt,
+    childrenCount: children.length,
+    children: children.map(c => ({
+      id: c._id,
+      strategyId: c.strategyId,
+      name: c.name,
+      status: c.status,
+      progressPercent: c.targetValue > 0 && c.currentBaseline !== undefined
+        ? Math.round(((c.currentValue - c.currentBaseline) / (c.targetValue - c.currentBaseline)) * 100)
+        : 0
+    }))
+  };
+}
+
+/**
+ * Get strategy history (past strategies)
+ */
+async function getStrategyHistory({ status = 'completed', days = 90, category, limit = 50 }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const query = {
+    createdAt: { $gte: startDate }
+  };
+
+  if (status !== 'all') {
+    query.status = status;
+  }
+
+  if (category) {
+    query.category = category;
+  }
+
+  const strategies = await MarketingStrategy.find(query)
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    period: {
+      days: days,
+      start: startDate.toISOString(),
+      end: new Date().toISOString()
+    },
+    count: strategies.length,
+    strategies: strategies.map(s => ({
+      id: s._id,
+      strategyId: s.strategyId,
+      name: s.name,
+      status: s.status,
+      category: s.category,
+      successMetric: s.successMetric,
+      targetValue: s.targetValue,
+      currentValue: s.currentValue,
+      outcomes: s.outcomes,
+      completedAt: s.statusHistory.find(h => h.status === 'completed')?.changedAt
+    }))
+  };
+}
+
+// ============================================================================
+// STRATEGY TOOLS - APPROVAL REQUIRED
+// ============================================================================
+
+/**
+ * Create a new strategy
+ */
+async function createStrategy({ name, description, hypothesis, successMetric, targetValue, currentBaseline = 0, level = 'broad', parentStrategyId, timeframe, category = 'general', priority = 5, relatedGoalIds = [] }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const strategy = new MarketingStrategy({
+    name,
+    description: description || '',
+    hypothesis,
+    successMetric,
+    targetValue,
+    currentBaseline,
+    currentValue: currentBaseline,
+    level,
+    parentStrategyId,
+    timeframe: timeframe || {},
+    category,
+    priority,
+    relatedGoalIds,
+    status: 'draft',
+    createdBy: 'tina',
+    autoCreated: true
+  });
+
+  await strategy.save();
+
+  return {
+    message: 'Strategy created',
+    strategy: {
+      id: strategy._id,
+      strategyId: strategy.strategyId,
+      name: strategy.name,
+      status: strategy.status,
+      level: strategy.level,
+      category: strategy.category
+    }
+  };
+}
+
+/**
+ * Update a strategy
+ */
+async function updateStrategy({ strategyId, currentValue, status, notes }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const strategy = await MarketingStrategy.findOne({
+    $or: [{ _id: strategyId }, { strategyId: strategyId }]
+  });
+
+  if (!strategy) {
+    return {
+      error: 'Strategy not found',
+      strategyId
+    };
+  }
+
+  if (currentValue !== undefined) {
+    await strategy.updateValue(currentValue);
+  }
+
+  if (status && strategy.status !== status) {
+    strategy.status = status;
+    strategy.addStatusHistory(status, notes || 'Status updated via tool');
+    await strategy.save();
+  }
+
+  if (notes && !status) {
+    await strategy.addNote(notes, 'tina');
+  }
+
+  return {
+    message: 'Strategy updated',
+    strategy: {
+      id: strategy._id,
+      strategyId: strategy.strategyId,
+      name: strategy.name,
+      status: strategy.status,
+      currentValue: strategy.currentValue
+    }
+  };
+}
+
+/**
+ * Complete a strategy with outcomes
+ */
+async function completeStrategy({ strategyId, outcomes = [], notes = '' }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const strategy = await MarketingStrategy.findOne({
+    $or: [{ _id: strategyId }, { strategyId: strategyId }]
+  });
+
+  if (!strategy) {
+    return {
+      error: 'Strategy not found',
+      strategyId
+    };
+  }
+
+  await strategy.complete(outcomes);
+
+  if (notes) {
+    await strategy.addNote(`Completion: ${notes}`, 'tina');
+  }
+
+  return {
+    message: 'Strategy completed',
+    strategy: {
+      id: strategy._id,
+      strategyId: strategy.strategyId,
+      name: strategy.name,
+      status: strategy.status,
+      outcomes: strategy.outcomes
+    }
+  };
+}
+
+/**
+ * Pause a strategy
+ */
+async function pauseStrategy({ strategyId, reason = '' }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const strategy = await MarketingStrategy.findOne({
+    $or: [{ _id: strategyId }, { strategyId: strategyId }]
+  });
+
+  if (!strategy) {
+    return {
+      error: 'Strategy not found',
+      strategyId
+    };
+  }
+
+  await strategy.pause(reason);
+
+  return {
+    message: 'Strategy paused',
+    strategy: {
+      id: strategy._id,
+      strategyId: strategy.strategyId,
+      name: strategy.name,
+      status: strategy.status
+    }
+  };
+}
+
+/**
+ * Resume a paused strategy
+ */
+async function resumeStrategy({ strategyId }) {
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const strategy = await MarketingStrategy.findOne({
+    $or: [{ _id: strategyId }, { strategyId: strategyId }]
+  });
+
+  if (!strategy) {
+    return {
+      error: 'Strategy not found',
+      strategyId
+    };
+  }
+
+  await strategy.resume();
+
+  return {
+    message: 'Strategy resumed',
+    strategy: {
+      id: strategy._id,
+      strategyId: strategy.strategyId,
+      name: strategy.name,
+      status: strategy.status
+    }
+  };
+}
+
 export default {
   executeTool,
   // Approval-required tools
@@ -2266,6 +2658,12 @@ export default {
   approvePendingPosts,
   updateHashtagStrategy,
   createContentExperiment,
+  // Strategy tools - approval required
+  createStrategy,
+  updateStrategy,
+  completeStrategy,
+  pauseStrategy,
+  resumeStrategy,
   // Read-only tools - existing
   getCampaignPerformance,
   getContentAnalytics,
@@ -2288,5 +2686,9 @@ export default {
   getKeywordPerformance,
   getAppStorePerformance,
   getOptimalPostingTimes,
-  getTrafficSources
+  getTrafficSources,
+  // Strategy memory tools - read only
+  getStrategies,
+  getStrategyDetails,
+  getStrategyHistory
 };

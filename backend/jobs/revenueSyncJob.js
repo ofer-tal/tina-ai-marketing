@@ -410,8 +410,10 @@ class RevenueSyncJob {
   async calculateMetrics() {
     try {
       const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      // Use UTC for date calculations to ensure consistency with stored transaction dates
+      // Transactions from App Store Connect are stored as UTC midnight dates
+      const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+      const startOfLastMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
 
       // Get this month's revenue
       const thisMonthRevenue = await MarketingRevenue.aggregate([

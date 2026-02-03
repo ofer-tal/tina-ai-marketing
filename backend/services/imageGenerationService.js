@@ -3,9 +3,17 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimiterService from './rateLimiter.js';
+import { default as runpodSdk } from 'runpod-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// RunPod configuration
+const RUNPOD_API_KEY = process.env.RUNPOD_API_KEY;
+const RUNPOD_ENDPOINT_ID_PIXELWAVE = process.env.RUNPOD_ENDPOINT_ID_PIXELWAVE;
+
+// Initialize RunPod SDK
+const runpod = RUNPOD_API_KEY ? runpodSdk(RUNPOD_API_KEY) : null;
 
 // Create logger for image generation service
 const logger = winston.createLogger({
@@ -46,8 +54,10 @@ if (process.env.NODE_ENV !== 'production') {
  */
 class ImageGenerationService {
   constructor() {
-    this.apiKey = process.env.RUNPOD_API_KEY;
-    this.endpoint = process.env.RUNPOD_IMAGE_ENDPOINT || process.env.RUNPOD_API_ENDPOINT;
+    this.apiKey = RUNPOD_API_KEY;
+    // Use endpoint ID pattern (preferred) or fallback to legacy env vars
+    const endpoint = runpod && RUNPOD_ENDPOINT_ID_PIXELWAVE ? runpod.endpoint(RUNPOD_ENDPOINT_ID_PIXELWAVE) : null;
+    this.endpoint = endpoint || process.env.RUNPOD_IMAGE_ENDPOINT || process.env.RUNPOD_API_ENDPOINT;  // Legacy fallbacks
     this.timeout = 300000; // 5 minutes for image generation
     this.pollInterval = 3000; // Check status every 3 seconds
     this.storagePath = process.env.STORAGE_PATH || './storage';
@@ -61,7 +71,7 @@ class ImageGenerationService {
       logger.warn('RUNPOD_API_KEY not configured - service will run in mock mode');
     }
     if (!this.endpoint) {
-      logger.warn('RUNPOD_API_ENDPOINT not configured - service will run in mock mode');
+      logger.warn('RUNPOD_ENDPOINT_ID_PIXELWAVE not configured - service will run in mock mode');
     }
 
     this._ensureStorageDirectory();

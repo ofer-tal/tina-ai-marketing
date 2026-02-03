@@ -1,10 +1,36 @@
 import schedulerService from '../services/scheduler.js';
 import MarketingPost from '../models/MarketingPost.js';
-import tiktokPostingService from '../services/tiktokPostingService.js';
 import instagramPostingService from '../services/instagramPostingService.js';
+import s3VideoUploader from '../services/s3VideoUploader.js';
+import googleSheetsService from '../services/googleSheetsService.js';
 import { getLogger } from '../utils/logger.js';
+import crypto from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const logger = getLogger('posting-scheduler', 'scheduler');
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/**
+ * Convert URL path to file system path
+ * Handles paths stored as /storage/... which need to be resolved relative to project root
+ * @param {string} urlPath - The URL path (e.g., /storage/videos/tier1/final/video.mp4)
+ * @returns {string} The absolute file system path
+ */
+function urlToFilePath(urlPath) {
+  if (!urlPath) return urlPath;
+
+  // If it starts with /storage/, it's a URL path that needs conversion
+  if (urlPath.startsWith('/storage/')) {
+    // Go up from backend/ directory to project root, then append the storage path
+    return path.join(__dirname, '../../storage', urlPath.replace('/storage/', ''));
+  }
+
+  // If it's already an absolute path or doesn't match the pattern, return as-is
+  return urlPath;
+}
 
 /**
  * Posting Scheduler Job
@@ -12,7 +38,8 @@ const logger = getLogger('posting-scheduler', 'scheduler');
  * Runs every 15 minutes to check for scheduled content that needs to be posted
  * - Finds content with status 'scheduled' and scheduledAt <= now
  * - Posts to the appropriate platform (TikTok, Instagram, YouTube)
- * - Updates status to 'posted' or 'failed'
+ * - For TikTok: Uses S3 upload + Google Sheets trigger (Buffer/Zapier flow)
+ * - Updates status to 'scheduled' (Buffer will post) or 'failed'
  */
 
 class PostingSchedulerJob {
@@ -37,13 +64,21 @@ class PostingSchedulerJob {
     try {
       logger.info('Checking for scheduled content to post');
 
-      // Find all content that should be posted now
+      // Find all approved posts that have reached their scheduled time
+      // 'approved' means the post is ready to go, scheduledAt determines when
       const scheduledContent = await MarketingPost.find({
-        status: 'scheduled',
-        scheduledAt: { $lte: new Date() }
+        status: 'approved',
+        scheduledAt: { $lte: new Date() },
+        videoPath: { $exists: true, $ne: null } // Must have video
       }).populate('storyId');
 
-      logger.info(`Found ${scheduledContent.length} posts ready for scheduling`);
+      logger.info(`Found ${scheduledContent.length} posts ready for posting`, {
+        posts: scheduledContent.map(p => ({
+          id: p._id.toString(),
+          title: p.title,
+          scheduledAt: p.scheduledAt
+        }))
+      });
 
       if (scheduledContent.length === 0) {
         return;
@@ -97,22 +132,24 @@ class PostingSchedulerJob {
       switch (post.platform) {
         case 'tiktok':
           result = await this.postToTikTok(post);
+          // TikTok posts via Buffer/Zapier - don't mark as posted yet
+          // tiktokVideoMatcher will set status to 'posted' when video is live
           break;
 
         case 'instagram':
           result = await this.postToInstagram(post);
+          // Direct posting - mark as posted immediately
+          await post.markAsPosted();
           break;
 
         case 'youtube_shorts':
           result = await this.postToYouTube(post);
+          // TODO: Implement YouTube posting
           break;
 
         default:
           throw new Error(`Unknown platform: ${post.platform}`);
       }
-
-      // Mark as posted
-      await post.markAsPosted();
 
       logger.info(`Successfully posted scheduled content: ${post._id}`, {
         platform: post.platform,
@@ -138,41 +175,165 @@ class PostingSchedulerJob {
   }
 
   /**
-   * Post to TikTok
+   * Post to TikTok via Buffer/Zapier flow
+   * 1. Upload video to S3
+   * 2. Get public URL
+   * 3. Append row to Google Sheets (triggers Zapier → Buffer → TikTok)
+   * 4. Update post with tracking info
+   * 5. Keep status = 'approved' (actual posting happens via Buffer, tiktokVideoMatcher will mark as 'posted')
+   *
+   * CRITICAL: This is the ONLY posting method. Direct TikTok API posting is NOT supported
+   * as we don't have approval for direct posting.
+   *
    * @param {MarketingPost} post - The post to publish
    */
   async postToTikTok(post) {
-    logger.info(`Posting scheduled content to TikTok: ${post._id}`);
+    logger.info(`========================================`);
+    logger.info(`TikTok Auto-Posting: Starting for post ${post._id}`);
+    logger.info(`Platform: ${post.platform}, Title: ${post.title}`);
+    logger.info(`========================================`);
 
     // Check if TikTok posting is enabled
     const isEnabled = process.env.ENABLE_TIKTOK_POSTING === 'true';
 
     if (!isEnabled) {
-      logger.warn('TikTok posting is disabled, skipping');
-      return { success: false, skipped: true, reason: 'TikTok posting disabled' };
+      logger.error('TikTok posting is DISABLED - skipping post', {
+        postId: post._id,
+        reason: 'ENABLE_TIKTOK_POSTING environment variable is not set to "true"'
+      });
+      throw new Error('TikTok posting is disabled via ENABLE_TIKTOK_POSTING flag');
     }
 
-    // Post the video
-    const result = await tiktokPostingService.postVideo(
-      post.videoPath,
-      post.caption,
-      post.hashtags
-    );
+    // Ensure Google Sheets tokens are loaded
+    await googleSheetsService.ensureConnected();
 
-    if (!result.success) {
-      throw new Error(result.error || 'TikTok posting failed');
+    // Check if we have required services configured
+    const s3Status = s3VideoUploader.getStatus();
+    const s3Enabled = s3Status.enabled;
+    const googleConnected = !!googleSheetsService.accessToken;
+
+    logger.info('Service configuration check', {
+      s3Enabled,
+      s3Bucket: s3Status.bucketName,
+      googleConnected,
+      spreadsheetId: googleSheetsService.spreadsheetId,
+      devMode: googleSheetsService.devMode ? 'YES (using test sheet)' : 'NO (using production sheets)',
+    });
+
+    if (!s3Enabled) {
+      const error = 'S3 uploading is NOT configured. Cannot post to TikTok without S3. ' +
+        'Please configure AWS_S3_BUCKET_NAME, AWS_ACCESS_KEY_ID, and AWS_SECRET_ACCESS_KEY.';
+      logger.error(`========================================`);
+      logger.error(`TikTok Auto-Posting FAILED: ${error}`);
+      logger.error(`========================================`);
+      throw new Error(error);
     }
 
-    // Update post with TikTok IDs
-    if (result.data.publishId) {
-      post.tiktokVideoId = result.data.publishId;
+    if (!googleConnected) {
+      const error = 'Google Sheets is NOT connected. Cannot post to TikTok without Google Sheets. ' +
+        'Please complete Google OAuth via the Settings page.';
+      logger.error(`========================================`);
+      logger.error(`TikTok Auto-Posting FAILED: ${error}`);
+      logger.error(`========================================`);
+      throw new Error(error);
     }
-    if (result.data.shareUrl) {
-      post.tiktokShareUrl = result.data.shareUrl;
-    }
-    await post.save();
 
-    return result;
+    try {
+      // Update publishing status
+      post.publishingStatus = 'pending_upload';
+      await post.save();
+
+      // Step 1: Upload video to S3
+      logger.info(`[Step 1/3] Uploading video to S3...`);
+      logger.info(`  Source (URL path): ${post.videoPath}`);
+
+      // Convert URL path to file system path
+      const videoFilePath = urlToFilePath(post.videoPath);
+      logger.info(`  Source (file path): ${videoFilePath}`);
+      logger.info(`  Key: ${post._id.toString()}`);
+
+      const uploadResult = await s3VideoUploader.uploadVideo(
+        videoFilePath,
+        `${post._id.toString()}.mp4`
+      );
+
+      if (!uploadResult.success) {
+        throw new Error(`S3 upload failed: ${uploadResult.error}`);
+      }
+
+      // Update post with S3 info
+      post.s3Key = uploadResult.s3Key;
+      post.s3Url = uploadResult.publicUrl;
+      post.publishingStatus = 'uploaded_to_s3';
+      await post.save();
+
+      logger.info(`  ✓ Uploaded to S3 successfully`);
+      logger.info(`  S3 URL: ${uploadResult.publicUrl}`);
+
+      // Step 2: Trigger Zapier flow via Google Sheets
+      logger.info(`[Step 2/3] Triggering Zapier flow via Google Sheets...`);
+
+      // Determine which sheet to use (test sheet in dev mode, random from production list otherwise)
+      const targetSheet = googleSheetsService.devMode
+        ? googleSheetsService.testTabName
+        : googleSheetsService.sheetTabNames[Math.floor(Math.random() * googleSheetsService.sheetTabNames.length)];
+
+      logger.info(`  Target sheet: ${targetSheet} ${googleSheetsService.devMode ? '(TEST MODE)' : '(PRODUCTION)'}`);
+
+      const fullCaption = post.hashtags && post.hashtags.length > 0
+        ? `${post.caption}\n\n${post.hashtags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ')}`
+        : post.caption;
+
+      logger.info(`  Caption length: ${fullCaption.length} chars`);
+      logger.info(`  Video URL: ${uploadResult.publicUrl}`);
+
+      const sheetsResult = await googleSheetsService.appendRow(
+        targetSheet,
+        [uploadResult.publicUrl, fullCaption]
+      );
+
+      if (!sheetsResult.success) {
+        throw new Error(`Google Sheets append failed: ${sheetsResult.error}`);
+      }
+
+      // Update post with sheet tracking info
+      post.sheetTabUsed = targetSheet;
+      post.sheetTriggeredAt = new Date();
+      post.publishingStatus = 'triggered_zapier';
+      post.status = 'posting'; // Prevent scheduler from picking it up again
+      await post.save();
+
+      logger.info(`  ✓ Row appended to Google Sheets`);
+      logger.info(`  Sheet: ${targetSheet}`);
+      logger.info(`[Step 3/3] Waiting for Zapier → Buffer → TikTok flow...`);
+      logger.info(`========================================`);
+      logger.info(`TikTok Auto-Posting SUCCESS: Post ${post._id} triggered`);
+      logger.info(`The post will be published by Buffer/Zapier in ~5-30 minutes.`);
+      logger.info(`The tikTokVideoMatcher job will mark it as 'posted' once live.`);
+      logger.info(`========================================`);
+
+      return {
+        success: true,
+        method: 'buffer_zapier',
+        s3Url: uploadResult.publicUrl,
+        sheetName: targetSheet,
+        postId: post._id,
+      };
+
+    } catch (error) {
+      logger.error(`========================================`);
+      logger.error(`TikTok Auto-Posting FAILED for post ${post._id}`);
+      logger.error(`Error: ${error.message}`);
+      logger.error(`========================================`);
+
+      // Mark as failed - do NOT retry automatically, manual intervention needed
+      post.status = 'failed';
+      post.error = error.message;
+      post.failedAt = new Date();
+      await post.save();
+
+      throw error;
+    }
   }
 
   /**
@@ -234,10 +395,12 @@ class PostingSchedulerJob {
 
   /**
    * Start the scheduled posting job
-   * Runs every minute
+   * Runs every 15 minutes
    */
-  start() {
-    if (schedulerService.getJob(this.jobName)) {
+  async start() {
+    // getJob is async - must await it!
+    const existingJob = await schedulerService.getJob(this.jobName);
+    if (existingJob) {
       logger.warn('Scheduled posting job already exists');
       return;
     }
@@ -245,7 +408,7 @@ class PostingSchedulerJob {
     logger.info('Starting scheduled posting job');
 
     // Schedule job to run every 15 minutes
-    schedulerService.schedule(
+    await schedulerService.schedule(
       this.jobName,
       '*/15 * * * *', // Every 15 minutes
       () => this.execute(),
@@ -260,8 +423,10 @@ class PostingSchedulerJob {
   /**
    * Stop the scheduled posting job
    */
-  stop() {
-    if (!schedulerService.getJob(this.jobName)) {
+  async stop() {
+    // getJob is async - must await it!
+    const existingJob = await schedulerService.getJob(this.jobName);
+    if (!existingJob) {
       logger.warn('Scheduled posting job not found');
       return;
     }
@@ -276,8 +441,9 @@ class PostingSchedulerJob {
   /**
    * Get job status
    */
-  getStatus() {
-    const job = schedulerService.getJob(this.jobName);
+  async getStatus() {
+    // getJob is async - must await it!
+    const job = await schedulerService.getJob(this.jobName);
 
     return {
       jobName: this.jobName,

@@ -65,7 +65,7 @@ const configSchema = {
   APP_STORE_CONNECT_ISSUER_ID: {
     required: false,
     description: 'App Store Connect Issuer ID',
-    validate: (value) => !value || /^[A-Z0-9]{8}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{12}$/.test(value),
+    validate: (value) => !value || /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(value),
     errorMessage: 'Must be a valid UUID format'
   },
 
@@ -197,23 +197,54 @@ const configSchema = {
     errorMessage: 'Must not be empty if provided'
   },
 
+  // Google OAuth (for Sheets, YouTube, and other Google services)
+  GOOGLE_CLIENT_ID: {
+    required: false,
+    description: 'Google OAuth Client ID (used for Sheets, YouTube, etc.)',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  GOOGLE_CLIENT_SECRET: {
+    required: false,
+    description: 'Google OAuth Client Secret',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  GOOGLE_REDIRECT_URI: {
+    required: false,
+    description: 'Google OAuth Redirect URI (e.g., http://localhost:5173/auth/google/callback)',
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        new URL(value);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    errorMessage: 'Must be a valid URL'
+  },
+
+  // Legacy YouTube environment variables (deprecated - use GOOGLE_* instead)
   YOUTUBE_CLIENT_ID: {
     required: false,
-    description: 'YouTube OAuth Client ID',
+    description: 'DEPRECATED: Use GOOGLE_CLIENT_ID instead',
     validate: (value) => !value || value.length > 0,
     errorMessage: 'Must not be empty if provided'
   },
 
   YOUTUBE_CLIENT_SECRET: {
     required: false,
-    description: 'YouTube OAuth Client Secret',
+    description: 'DEPRECATED: Use GOOGLE_CLIENT_SECRET instead',
     validate: (value) => !value || value.length > 0,
     errorMessage: 'Must not be empty if provided'
   },
 
   YOUTUBE_REDIRECT_URI: {
     required: false,
-    description: 'YouTube OAuth Redirect URI',
+    description: 'DEPRECATED: Use GOOGLE_REDIRECT_URI instead',
     validate: (value) => {
       if (!value) return true;
       try {
@@ -259,14 +290,30 @@ const configSchema = {
   // RunPod API (Image Generation)
   RUNPOD_API_KEY: {
     required: false,
-    description: 'RunPod API Key for image generation',
+    description: 'RunPod API Key for serverless endpoints',
     validate: (value) => !value || value.length > 0,
     errorMessage: 'Must not be empty if provided'
   },
 
+  // RunPod Endpoint IDs (new pattern - preferred over RUNPOD_API_ENDPOINT)
+  RUNPOD_ENDPOINT_ID_PIXELWAVE: {
+    required: false,
+    description: 'RunPod PixelWave endpoint ID for video generation',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  RUNPOD_ENDPOINT_ID_XTTSV2: {
+    required: false,
+    description: 'RunPod XTTS-v2 endpoint ID for text-to-speech',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  // Legacy: Deprecated in favor of endpoint IDs
   RUNPOD_API_ENDPOINT: {
     required: false,
-    description: 'RunPod API Endpoint URL',
+    description: '[DEPRECATED] Use RUNPOD_ENDPOINT_ID_PIXELWAVE or RUNPOD_ENDPOINT_ID_XTTSV2 instead',
     validate: (value) => {
       if (!value) return true;
       try {
@@ -697,6 +744,23 @@ const configSchema = {
     errorMessage: 'Must be a valid timezone'
   },
 
+  // Timezone for scheduling and content operations
+  TIMEZONE: {
+    required: false,
+    default: 'America/Los_Angeles',
+    description: 'Primary timezone for the application (e.g., America/Los_Angeles, America/New_York, UTC)',
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        Intl.DateTimeFormat('en-US', { timeZone: value });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    errorMessage: 'Must be a valid IANA timezone (e.g., America/Los_Angeles, America/New_York, UTC)'
+  },
+
   // Platform-Specific Settings
   TIKTOK_MAX_CAPTION_LENGTH: {
     required: false,
@@ -977,6 +1041,80 @@ const configSchema = {
       return !isNaN(gb) && gb >= 1 && gb <= 1000;
     },
     errorMessage: 'Must be a number between 1 and 1000 GB'
+  },
+
+  // ===================================================================
+  // AWS S3 Configuration (for public video hosting)
+  // ===================================================================
+  AWS_ACCESS_KEY_ID: {
+    required: false,
+    description: 'AWS Access Key ID for S3',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  AWS_SECRET_ACCESS_KEY: {
+    required: false,
+    description: 'AWS Secret Access Key for S3',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  AWS_S3_BUCKET_NAME: {
+    required: false,
+    description: 'AWS S3 bucket name for video hosting',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  AWS_S3_REGION: {
+    required: false,
+    default: 'us-east-1',
+    description: 'AWS S3 region',
+    validate: (value) => !value || /^[a-z]{2}-[a-z]+-\d{1}$/.test(value),
+    errorMessage: 'Must be a valid AWS region (e.g., us-east-1)'
+  },
+
+  AWS_CLOUDFRONT_DOMAIN: {
+    required: false,
+    default: 'content.blush.v6v.one',
+    description: 'CloudFront domain for public video URLs',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  // ===================================================================
+  // Google Sheets Configuration (for Zapier/Buffer integration)
+  // ===================================================================
+  GOOGLE_SHEETS_SPREADSHEET_ID: {
+    required: false,
+    description: 'Google Sheets Spreadsheet ID (from URL)',
+    validate: (value) => !value || /^[a-zA-Z0-9-_]+$/.test(value),
+    errorMessage: 'Must be a valid Google Sheets Spreadsheet ID'
+  },
+
+  GOOGLE_SHEETS_TAB_NAMES: {
+    required: false,
+    default: '',
+    description: 'Comma-separated list of sheet names for Zapier triggers',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  GOOGLE_SHEETS_TEST_TAB: {
+    required: false,
+    default: 'tests',
+    description: 'Test sheet name for development (not connected to Zapier)',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  GOOGLE_SHEETS_DEV_MODE: {
+    required: false,
+    default: 'true',
+    description: 'Route all sheet writes to test sheet (safer for development)',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
   },
 };
 

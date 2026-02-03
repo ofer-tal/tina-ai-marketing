@@ -23,12 +23,7 @@ pnpm-debug.log*
 
 # Storage
 storage/temp/
-storage/videos/*.mp4
-storage/videos/*.mov
-storage/images/*.png
-storage/images/*.jpg
-storage/audio/*.mp3
-storage/audio/*.m4a
+storage/
 
 # Playwright screenshots
 .playwright-mcp/

@@ -198,6 +198,35 @@ const VoiceIcon = styled.span`
   font-size: 2rem;
 `;
 
+// Music selector styles
+const MusicSelector = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+`;
+
+const MusicOption = styled.label`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px;
+  background: ${props => props.$selected ? '#1e2a4a' : '#0f182e'};
+  border: 2px solid ${props => props.$selected ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  input[type="radio"] {
+    display: none;
+  }
+`;
+
 const StorySelector = styled.div`
   position: relative;
 `;
@@ -659,6 +688,11 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   const [filteredStories, setFilteredStories] = useState([]);
   const [isFetchingStories, setIsFetchingStories] = useState(false);
 
+  // Music selection state
+  const [allMusic, setAllMusic] = useState([]);
+  const [selectedMusic, setSelectedMusic] = useState(null);
+  const [isFetchingMusic, setIsFetchingMusic] = useState(false);
+
   // Video generation progress state
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoProgressStep, setVideoProgressStep] = useState('');
@@ -673,10 +707,11 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     };
   }, []);
 
-  // Fetch stories when modal opens
+  // Fetch stories and music when modal opens
   useEffect(() => {
     if (isOpen) {
       fetchStories();
+      fetchMusic();
     }
   }, [isOpen]);
 
@@ -706,6 +741,23 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
       setFilteredStories(stories.slice(0, 10));
     } finally {
       setIsFetchingStories(false);
+    }
+  };
+
+  // Fetch available music tracks
+  const fetchMusic = async () => {
+    setIsFetchingMusic(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/music/list');
+      if (response.ok) {
+        const data = await response.json();
+        setAllMusic(data.data.tracks || []);
+      }
+    } catch (err) {
+      console.error('Error fetching music:', err);
+      setAllMusic([]);
+    } finally {
+      setIsFetchingMusic(false);
     }
   };
 
@@ -800,7 +852,8 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
       tierParameters,
       voice,
       preset,
-      generateVideo
+      generateVideo,
+      musicId: selectedMusic?.id || null
     };
 
     setLoading(true);
@@ -929,6 +982,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     setSelectedPlatforms(['tiktok']);
     setAllStories([]);
     setFilteredStories([]);
+    setSelectedMusic(null);
     setShowStoryDropdown(false);
     setError(null);
     setVideoProgress(0);
@@ -1273,6 +1327,50 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
               </VoiceOption>
             ))}
           </VoiceSelector>
+        </FormSection>
+
+        {/* Music Selection */}
+        <FormSection>
+          <FormLabel>Background Music (Optional)</FormLabel>
+          <MusicSelector>
+            <MusicOption
+              $selected={!selectedMusic}
+              onClick={() => !loading && setSelectedMusic(null)}
+            >
+              <input
+                type="radio"
+                name="music"
+                checked={!selectedMusic}
+                onChange={() => setSelectedMusic(null)}
+                disabled={loading}
+              />
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '24px' }}>🔇</div>
+                <div style={{ fontSize: '13px', fontWeight: 600 }}>No Music</div>
+                <div style={{ fontSize: '11px', color: '#666' }}>Narration only</div>
+              </div>
+            </MusicOption>
+            {allMusic.map(track => (
+              <MusicOption
+                key={track.id}
+                $selected={selectedMusic?.id === track.id}
+                onClick={() => !loading && setSelectedMusic(track)}
+              >
+                <input
+                  type="radio"
+                  name="music"
+                  checked={selectedMusic?.id === track.id}
+                  onChange={() => setSelectedMusic(track)}
+                  disabled={loading}
+                />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '24px' }}>🎵</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600, textTransform: 'capitalize' }}>{track.name}</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>{track.style} • {track.duration ? Math.round(track.duration) + 's' : 'N/A'}</div>
+                </div>
+              </MusicOption>
+            ))}
+          </MusicSelector>
         </FormSection>
 
         {/* Generate Video Checkbox */}

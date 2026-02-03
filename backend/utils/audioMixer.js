@@ -50,7 +50,7 @@ class AudioMixer {
     const {
       outputPath = null,
       narrationVolume = 1.0,
-      musicVolume = 0.15,
+      musicVolume = parseFloat(process.env.MUSIC_VOLUME) || 0.15,
       fadeInDuration = 0.3,
       fadeOutDuration = 0.5,
       normalize = true
@@ -156,7 +156,7 @@ class AudioMixer {
     const {
       narrationDuration,
       narrationVolume = 1.0,
-      musicVolume = 0.15,
+      musicVolume = parseFloat(process.env.MUSIC_VOLUME) || 0.15,
       fadeInDuration = 0.3,
       fadeOutDuration = 0.5,
       normalize = true

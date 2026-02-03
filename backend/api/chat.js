@@ -278,17 +278,28 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
           // If any tools require approval, break and return partial results
           if (approvalRequired.length > 0) {
             logger.info('Additional tools require approval, returning partial results');
+            const toolProposals = approvalRequired.map(p => ({
+              id: p.proposalId,
+              toolName: p.toolName,
+              parameters: p.parameters,
+              requiresApproval: p.requiresApproval,
+              reasoning: p.reasoning,
+              actionDisplay: p.actionDisplay,
+              message: p.message
+            }));
             return {
               role: "assistant",
               content: `I gathered some data, but need approval for ${approvalRequired.length} additional action(s). Please check the proposals.`,
               timestamp: new Date().toISOString(),
+              toolProposals: toolProposals,  // Include proposals in response
               metadata: {
                 tokensUsed: allExecutedTools.length * 100,  // Approximate
                 thinkingTime: Date.now() - startTime,
                 model: response.model,
                 queryType: queryType.type,
                 partialResults: true,
-                toolsExecuted: allExecutedTools.map(t => t.toolName)
+                toolsExecuted: allExecutedTools.map(t => t.toolName),
+                proposalCount: toolProposals.length
               }
             };
           }
@@ -694,6 +705,12 @@ router.post("/message", async (req, res) => {
   try {
     const { message, conversationId } = req.body;
 
+    logger.info('Received chat message', {
+      message: message?.substring(0, 50) + '...',
+      conversationId,
+      hasConversationId: !!conversationId
+    });
+
     if (!message || typeof message !== "string") {
       return res.status(400).json({
         success: false,
@@ -719,7 +736,14 @@ router.post("/message", async (req, res) => {
         try {
           existingConversation = await ChatConversation.findById(conversationId);
           if (existingConversation && existingConversation.messages) {
+            logger.info('Loaded conversation history', {
+              conversationId,
+              messageCount: existingConversation.messages.length,
+              messages: existingConversation.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 30) }))
+            });
             messages = messages.concat(existingConversation.messages);
+          } else {
+            logger.warn('Conversation not found or has no messages', { conversationId });
           }
         } catch (modelError) {
           // Fallback to legacy collection
@@ -801,6 +825,11 @@ router.post("/message", async (req, res) => {
           if (aiResponse.metadata?.tokensUsed) {
             existingConversation.metadata.totalTokens = (existingConversation.metadata.totalTokens || 0) + aiResponse.metadata.tokensUsed;
           }
+          logger.info('Saving conversation updates', {
+            conversationId,
+            totalMessages: existingConversation.messages.length,
+            newMessagesCount: newMessages.length
+          });
           await existingConversation.save();
 
           savedConversation = existingConversation;
@@ -954,6 +983,13 @@ router.post("/message", async (req, res) => {
     // Check if summary was created
     const summary = conversationId ? conversationSummaries.get(conversationId) : null;
 
+    logger.info('Returning chat response', {
+      savedConversationId,
+      conversationIdProvided: conversationId,
+      responseContent: aiResponse.content?.substring(0, 50) + '...',
+      hasToolProposals: !!aiResponse.toolProposals
+    });
+
     res.json({
       success: true,
       response: {
@@ -961,6 +997,7 @@ router.post("/message", async (req, res) => {
         content: aiResponse.content,
         timestamp: aiResponse.timestamp,
         proposal: aiResponse.proposal || null,
+        toolProposals: aiResponse.toolProposals || null,  // Include tool proposals array
         metadata: aiResponse.metadata
       },
       conversationId: savedConversationId,
@@ -1092,6 +1129,33 @@ router.delete("/history", async (req, res) => {
     });
   } catch (error) {
     logger.error("Error clearing chat history", { error: error.message });
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// GET /api/chat/proposals/pending - Get pending tool proposals
+router.get("/proposals/pending", async (req, res) => {
+  try {
+    const status = databaseService.getStatus();
+
+    if (!status.isConnected || status.readyState !== 1) {
+      return res.json({
+        success: true,
+        proposals: [],
+        message: "No pending proposals (no database connection)"
+      });
+    }
+
+    // Fetch pending proposals from ToolProposal model
+    const { getPendingProposals } = await import('../services/tinaTools/proposalHandler.js');
+    const result = await getPendingProposals('founder', 20);
+
+    res.json(result);
+  } catch (error) {
+    logger.error("Error fetching pending proposals", { error: error.message });
     res.status(500).json({
       success: false,
       error: error.message

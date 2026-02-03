@@ -38,11 +38,11 @@ class RetentionAnalyticsSyncJob {
   /**
    * Initialize and schedule the job
    */
-  initialize() {
+  async initialize() {
     logger.info(`Initializing Retention Analytics sync job with schedule: ${this.syncSchedule}`);
 
-    // Register job with scheduler
-    schedulerService.registerJob(
+    // Register job with scheduler (must be awaited - it's async!)
+    await schedulerService.registerJob(
       this.jobName,
       this.syncSchedule,
       () => this.execute(),
@@ -52,10 +52,7 @@ class RetentionAnalyticsSyncJob {
       }
     );
 
-    // Start the job
-    schedulerService.startJob(this.jobName);
-
-    logger.info('Retention Analytics sync job initialized and scheduled');
+    logger.info('Retention Analytics initialized and scheduled');
   }
 
   /**

@@ -11,6 +11,7 @@
 
 import schedulerService from '../services/scheduler.js';
 import MarketingPost from '../models/MarketingPost.js';
+import tiktokPostingService from '../services/tiktokPostingService.js';
 import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger('content-metrics-sync', 'scheduler');
@@ -32,11 +33,11 @@ class ContentMetricsSyncJob {
   /**
    * Initialize and schedule the job
    */
-  initialize() {
+  async initialize() {
     logger.info(`Initializing content metrics sync job with schedule: ${this.syncSchedule}`);
 
-    // Register job with scheduler
-    schedulerService.registerJob(
+    // Register job with scheduler (must be awaited - it's async!)
+    await schedulerService.registerJob(
       this.jobName,
       this.syncSchedule,
       () => this.execute(),
@@ -46,10 +47,7 @@ class ContentMetricsSyncJob {
       }
     );
 
-    // Start the job
-    schedulerService.startJob(this.jobName);
-
-    logger.info('Content metrics sync job initialized and scheduled');
+    logger.info('Content metrics initialized and scheduled');
   }
 
   /**
@@ -125,16 +123,30 @@ class ContentMetricsSyncJob {
 
   /**
    * Sync metrics for TikTok posts
+   * Fetches all videos from TikTok API and matches them to database posts
    */
   async syncTikTokMetrics() {
-    const result = { updated: 0, failed: 0 };
+    const result = { updated: 0, failed: 0, matched: 0, unmatched: 0 };
 
     try {
-      // Find all posted TikTok posts
+      // Fetch all videos from TikTok API
+      const fetchResult = await tiktokPostingService.fetchUserVideos();
+
+      if (!fetchResult.success) {
+        logger.error('Failed to fetch TikTok videos for metrics sync', {
+          error: fetchResult.error,
+        });
+        return result;
+      }
+
+      const videos = fetchResult.videos || [];
+      logger.info(`Fetched ${videos.length} TikTok videos for metrics sync`);
+
+      // Get all TikTok posts that need metrics updating
       const tiktokPosts = await MarketingPost.find({
         platform: 'tiktok',
-        status: 'posted',
-        postedAt: { $exists: true }
+        status: { $in: ['posted', 'scheduled', 'approved'] },
+        postedAt: { $exists: true },
       });
 
       if (tiktokPosts.length === 0) {
@@ -144,31 +156,58 @@ class ContentMetricsSyncJob {
 
       logger.info(`Found ${tiktokPosts.length} TikTok posts to sync metrics for`);
 
-      // For each post, we would fetch metrics from TikTok API
-      // For now, we'll update the last sync timestamp
+      // Build a map of video IDs to posts for quick lookup
+      const postByVideoId = new Map();
       for (const post of tiktokPosts) {
-        try {
-          // TODO: Implement actual TikTok API call to get video statistics
-          // This would use the tiktokPostingService or a dedicated tiktokAnalyticsService
-          // const metrics = await tiktokService.getVideoStats(post.externalPostId);
-
-          // Store/Update metrics in the post
-          // await MarketingPost.findByIdAndUpdate(post._id, {
-          //   $set: {
-          //     'metrics.views': metrics.view_count,
-          //     'metrics.likes': metrics.like_count,
-          //     'metrics.comments': metrics.comment_count,
-          //     'metrics.shares': metrics.share_count,
-          //     'metrics.lastSyncAt': new Date()
-          //   }
-          // });
-
-          result.updated++;
-        } catch (error) {
-          logger.warn(`Failed to sync metrics for TikTok post ${post._id}: ${error.message}`);
-          result.failed++;
+        if (post.tiktokVideoId) {
+          postByVideoId.set(post.tiktokVideoId, post);
         }
       }
+
+      // Update metrics for matched posts
+      for (const video of videos) {
+        const post = postByVideoId.get(video.id);
+
+        if (post) {
+          try {
+            await MarketingPost.findByIdAndUpdate(post._id, {
+              'performanceMetrics.views': video.view_count || 0,
+              'performanceMetrics.likes': video.like_count || 0,
+              'performanceMetrics.comments': video.comment_count || 0,
+              'performanceMetrics.shares': video.share_count || 0,
+              metricsLastFetchedAt: new Date(),
+            });
+
+            // Also add to metrics history
+            await MarketingPost.findByIdAndUpdate(post._id, {
+              $push: {
+                metricsHistory: {
+                  fetchedAt: new Date(),
+                  views: video.view_count || 0,
+                  likes: video.like_count || 0,
+                  comments: video.comment_count || 0,
+                  shares: video.share_count || 0,
+                },
+              },
+            });
+
+            result.updated++;
+            result.matched++;
+          } catch (error) {
+            logger.warn(`Failed to sync metrics for TikTok post ${post._id}: ${error.message}`);
+            result.failed++;
+          }
+        } else {
+          result.unmatched++;
+        }
+      }
+
+      logger.info('TikTok metrics sync completed', {
+        updated: result.updated,
+        failed: result.failed,
+        matched: result.matched,
+        unmatched: result.unmatched,
+      });
 
     } catch (error) {
       logger.error('Error syncing TikTok metrics:', error);

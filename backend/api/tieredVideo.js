@@ -80,7 +80,7 @@ function storagePathToUrl(filePath) {
  *   "hook": string,             // Hook text for video opening
  *   "cta": string,              // Call-to-action text (default: "Read more on Blush 🔥")
  *   "voice": "female_1",        // Voice selection
- *   "includeMusic": true,       // Include background music
+ *   "musicId": string,          // Background music track ID (optional - omit for narration only)
  *   "effects": {                // Effect configuration
  *     "kenBurns": true,
  *     "pan": false,
@@ -103,7 +103,7 @@ router.post('/generate-tier1', async (req, res) => {
       hook = '',
       cta = 'Read more on Blush 🔥',
       voice = 'female_1',
-      includeMusic = true,
+      musicId = null,
       effects = {},
       createPost = true,
       platform = 'tiktok',
@@ -192,7 +192,7 @@ router.post('/generate-tier1', async (req, res) => {
       hook,
       cta,
       voice,
-      includeMusic,
+      musicId,
       preset,  // Pass preset through to video generator
       effects: {
         kenBurns: effects.kenBurns !== false,
@@ -301,12 +301,12 @@ router.get('/health', async (req, res) => {
  *
  * Query params:
  * - preset: 'triple_visual', 'hook_first', or undefined
- * - includeMusic: boolean
+ * - musicId: string (optional - music track ID)
  */
 router.get('/cost-estimate', (req, res) => {
   try {
     const preset = req.query.preset || 'triple_visual';
-    const includeMusic = req.query.includeMusic !== 'false';
+    const musicId = req.query.musicId || null;
 
     // Validate preset
     if (preset && !AVAILABLE_PRESETS.includes(preset)) {
@@ -318,7 +318,7 @@ router.get('/cost-estimate', (req, res) => {
 
     const estimate = tieredVideoGenerator.getCostEstimate({
       preset,
-      includeMusic
+      musicId
     });
 
     res.json({
@@ -395,7 +395,7 @@ router.get('/stats', (req, res) => {
  *   "options": {              // Generation options
  *     "preset": "triple_visual", // Preset for regeneration
  *     "voice": "female_1",
- *     "includeMusic": true,
+ *     "musicId": string,      // Background music track ID (optional)
  *     "effects": {...},
  *     "hook": string,         // New hook text (optional, updates post)
  *     "caption": string,      // New caption text (optional, updates post)
@@ -407,7 +407,7 @@ router.post('/regenerate/:postId', async (req, res) => {
   const requestId = req.headers['x-request-id'] || Date.now().toString(36);
   const { postId } = req.params;
   // Support both nested options format and flat format from frontend
-  const { feedback, options = {}, voice, hook, caption, cta, effects, preset } = req.body;
+  const { feedback, options = {}, voice, hook, caption, cta, effects, preset, musicId } = req.body;
 
   // Merge flat properties into options if provided (frontend sends them flat)
   const mergedOptions = {
@@ -417,7 +417,8 @@ router.post('/regenerate/:postId', async (req, res) => {
     ...(hook !== undefined && { hook }),
     ...(caption !== undefined && { caption }),
     ...(cta !== undefined && { cta }),
-    ...(effects !== undefined && { effects })
+    ...(effects !== undefined && { effects }),
+    ...(musicId !== undefined && { musicId })
   };
 
   try {
@@ -546,24 +547,31 @@ router.post('/regenerate/:postId', async (req, res) => {
 
         const finalPreset = mergedOptions.preset || presetFromMetadata || presetFromTierParams || 'triple_visual';
 
+        // Try to get musicId from multiple sources (in order of priority)
+        const musicIdFromMetadata = post.generationMetadata?.musicId;
+        const finalMusicId = mergedOptions.musicId !== undefined ? mergedOptions.musicId : musicIdFromMetadata;
+
         const result = await tieredVideoGenerator.generateTier1Video({
           story: story.toObject({ minimize: false }),  // Preserve fields not in schema (like fullStory)
           caption: captionToUse,
           hook: hookToUse,
           cta: ctaToUse,
-          voice: mergedOptions.voice || 'female_1',
-          includeMusic: mergedOptions.includeMusic !== false,
+          voice: mergedOptions.voice || post.generationMetadata?.voice || 'female_1',
+          musicId: finalMusicId,
           preset: finalPreset,
           effects: mergedOptions.effects || {}
         });
 
-        // Log what preset was actually used
-        logger.info('Video generation using preset', {
+        // Log what preset and musicId were actually used
+        logger.info('Video generation using preset and musicId', {
           postId,
           presetPassedIn: mergedOptions.preset,
           presetFromMetadata,
           presetFromTierParams,
-          presetFinallyUsed: finalPreset
+          presetFinallyUsed: finalPreset,
+          musicIdPassedIn: mergedOptions.musicId,
+          musicIdFromMetadata,
+          musicIdFinallyUsed: finalMusicId
         });
 
         if (!result.success) {
@@ -579,7 +587,13 @@ router.post('/regenerate/:postId', async (req, res) => {
         post.videoPath = storagePathToUrl(result.videoPath);
         post.thumbnailPath = result.thumbnailPath ? storagePathToUrl(result.thumbnailPath) : null;
         post.contentTier = 'tier_1';
-        post.generationMetadata = result.metadata;
+        // Merge result.metadata with preset and musicId to ensure they're stored
+        post.generationMetadata = {
+          ...result.metadata,
+          preset: finalPreset,
+          musicId: finalMusicId,
+          voice: mergedOptions.voice || post.generationMetadata?.voice || 'female_1'
+        };
         post.regenerationCount = (post.regenerationCount || 0) + 1;
         post.lastRegeneratedAt = new Date();
 

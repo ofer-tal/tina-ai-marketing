@@ -25,7 +25,7 @@ const marketingPostSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['draft', 'ready', 'approved', 'scheduled', 'posted', 'failed', 'rejected', 'generating'],
+    enum: ['draft', 'ready', 'approved', 'scheduled', 'posting', 'posted', 'failed', 'rejected', 'generating'],
     default: 'draft',
     required: true
   },
@@ -51,6 +51,8 @@ const marketingPostSchema = new mongoose.Schema({
     ttsModel: String, // 'xtts', 'elevenlabs', etc.
     audioModel: String, // 'fal_ai', null
     voice: String, // 'female_1', 'male_1', etc.
+    musicId: String, // Background music track ID from music library
+    preset: String, // Video preset used ('triple_visual', 'hook_first')
     estimatedCost: Number, // in USD
     actualCost: Number, // tracked after generation
     generationTime: Number, // milliseconds
@@ -255,6 +257,41 @@ const marketingPostSchema = new mongoose.Schema({
     trim: true
   },
   youtubeUrl: {
+    type: String,
+    trim: true
+  },
+
+  // S3/CloudFront hosting (for Buffer/Zapier flow)
+  s3Url: {
+    type: String,
+    trim: true
+  },
+  s3Key: {
+    type: String,
+    trim: true
+  },
+
+  // Sheet trigger tracking (for Buffer/Zapier flow)
+  sheetTabUsed: {
+    type: String,
+    trim: true
+  },
+  sheetTriggeredAt: {
+    type: Date
+  },
+
+  // TikTok publishing via Buffer
+  bufferPostId: {
+    type: String,
+    trim: true
+  },
+
+  // Publishing status tracking (for Buffer/Zapier flow)
+  publishingStatus: {
+    type: String,
+    enum: ['pending_upload', 'uploaded_to_s3', 'triggered_zapier', 'posted_to_buffer', 'posted_to_tiktok', 'failed'],
+  },
+  publishingError: {
     type: String,
     trim: true
   },
@@ -699,6 +736,18 @@ marketingPostSchema.methods.failVideoGeneration = function(errorMessage) {
 
 // Method to schedule for posting
 marketingPostSchema.methods.scheduleFor = function(date) {
+  // Validate the date is valid
+  if (isNaN(date.getTime())) {
+    throw new Error('Invalid scheduled date');
+  }
+
+  // Validate the date is in the future (at least 30 minutes from now)
+  const now = new Date();
+  const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
+  if (date < minScheduleTime) {
+    throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${now.toISOString()}, Minimum: ${minScheduleTime.toISOString()}`);
+  }
+
   this.status = 'scheduled';
   this.scheduledAt = date;
   return this.save();

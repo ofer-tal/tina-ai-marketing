@@ -8,9 +8,8 @@ const asoKeywordSchema = new mongoose.Schema({
   keyword: {
     type: String,
     required: true,
-    unique: true,
-    trim: true,
-    index: true
+    unique: true,  // unique: true creates an index automatically
+    trim: true
   },
   ranking: {
     type: Number,
@@ -66,7 +65,6 @@ const asoKeywordSchema = new mongoose.Schema({
 });
 
 // Index for efficient queries
-asoKeywordSchema.index({ keyword: 1 });
 asoKeywordSchema.index({ target: 1 });
 asoKeywordSchema.index({ lastCheckedAt: -1 });
 asoKeywordSchema.index({ 'rankingHistory.date': -1 });

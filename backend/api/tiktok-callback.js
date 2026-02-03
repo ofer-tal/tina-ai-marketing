@@ -32,7 +32,7 @@ router.get('/callback', async (req, res) => {
       });
 
       return res.redirect(
-        'http://localhost:5173/settings?tiktok=error&message=' +
+        '/test-pages/oauth-callback.html?tiktok=error&error=' +
         encodeURIComponent(error_description || 'Authorization failed')
       );
     }
@@ -41,7 +41,7 @@ router.get('/callback', async (req, res) => {
     if (!code) {
       console.error('No authorization code received from TikTok');
       return res.redirect(
-        'http://localhost:5173/settings?tiktok=error&message=' +
+        '/test-pages/oauth-callback.html?tiktok=error&error=' +
         encodeURIComponent('No authorization code received')
       );
     }
@@ -61,9 +61,9 @@ router.get('/callback', async (req, res) => {
         creatorId: tiktokPostingService.creatorId,
       });
 
-      // Redirect back to settings with success message
+      // Redirect to the callback page (will close popup)
       res.redirect(
-        'http://localhost:5173/settings?tiktok=success&message=' +
+        '/test-pages/oauth-callback.html?tiktok=success&message=' +
         encodeURIComponent('Authentication successful! You can now post to TikTok.')
       );
     } else {
@@ -73,7 +73,7 @@ router.get('/callback', async (req, res) => {
       });
 
       res.redirect(
-        'http://localhost:5173/settings?tiktok=error&message=' +
+        '/test-pages/oauth-callback.html?tiktok=error&error=' +
         encodeURIComponent(result.error || 'Authentication failed')
       );
     }
@@ -85,7 +85,7 @@ router.get('/callback', async (req, res) => {
     });
 
     res.redirect(
-      'http://localhost:5173/settings?tiktok=error&message=' +
+      '/test-pages/oauth-callback.html?tiktok=error&error=' +
       encodeURIComponent(error.message || 'An unexpected error occurred')
     );
   }
