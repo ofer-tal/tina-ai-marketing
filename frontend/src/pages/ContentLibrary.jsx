@@ -2487,8 +2487,26 @@ function ContentLibrary() {
       const data = await response.json();
       const fetchedPosts = data.data.posts || [];
 
+      // Sort posts by: posted date > scheduled date > created date (descending)
+      const sortedPosts = [...fetchedPosts].sort((a, b) => {
+        const getDate = (post) => {
+          // If posted, use posted date
+          if (post.status === 'posted' && post.postedAt) {
+            return new Date(post.postedAt).getTime();
+          }
+          // If scheduled but not posted, use scheduled date
+          if (post.scheduledAt) {
+            return new Date(post.scheduledAt).getTime();
+          }
+          // Otherwise use creation date
+          return new Date(post.createdAt || 0).getTime();
+        };
+
+        return getDate(b) - getDate(a); // Descending (newest first)
+      });
+
       // Set posts from API - no mock data fallback
-      setPosts(fetchedPosts);
+      setPosts(sortedPosts);
       setPagination(prev => ({
         ...prev,
         total: data.data.pagination?.total || 0,
@@ -2507,6 +2525,34 @@ function ContentLibrary() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Helper function to get the sort date for a post
+  const getSortDate = (post) => {
+    // If posted, use posted date
+    if (post.status === 'posted' && post.postedAt) {
+      return new Date(post.postedAt).getTime();
+    }
+    // If scheduled but not posted, use scheduled date
+    if (post.scheduledAt) {
+      return new Date(post.scheduledAt).getTime();
+    }
+    // Otherwise use creation date
+    return new Date(post.createdAt || 0).getTime();
+  };
+
+  // Helper to insert a post in the correct sorted position
+  const insertPostSorted = (newPost, currentPosts) => {
+    const newPostDate = getSortDate(newPost);
+    // Find the index where this post should be inserted
+    let insertIndex = currentPosts.findIndex(post => getSortDate(post) < newPostDate);
+    if (insertIndex === -1) {
+      // No posts found with earlier date, append to end
+      return [...currentPosts, newPost];
+    }
+    const newPosts = [...currentPosts];
+    newPosts.splice(insertIndex, 0, newPost);
+    return newPosts;
   };
 
   const handleFilterChange = (key, value) => {
@@ -3387,8 +3433,8 @@ function ContentLibrary() {
       const result = await response.json();
 
       if (result.success) {
-        // Add the duplicated post to the local state
-        setPosts(prevPosts => [result.data, ...prevPosts]);
+        // Add the duplicated post in the correct sorted position
+        setPosts(prevPosts => insertPostSorted(result.data, prevPosts));
 
         alert('✅ Post duplicated successfully!\n\nThe new post has been added to your library with "draft" status.');
         handleCloseModal();
