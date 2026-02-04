@@ -93,7 +93,28 @@ authTokenSchema.index({ expiresAt: 1 }); // For cleanup of expired tokens
 
 // Static method to get active token for a platform
 authTokenSchema.statics.getActiveToken = async function(platform) {
-  return await this.findOne({ platform, isActive: true }).sort({ createdAt: -1 });
+  logger.info(`[AuthToken] getActiveToken called for platform: ${platform}`);
+
+  const token = await this.findOne({ platform, isActive: true }).sort({ createdAt: -1 });
+
+  logger.info(`[AuthToken] getActiveToken result for ${platform}`, {
+    found: !!token,
+    hasAccessToken: !!token?.accessToken,
+    isActive: token?.isActive,
+    tokenId: token?._id?.toString(),
+    expiresAt: token?.expiresAt?.toISOString(),
+  });
+
+  // Also log ALL tokens for this platform for debugging
+  const allTokens = await this.find({ platform }).sort({ createdAt: -1 });
+  logger.info(`[AuthToken] All tokens for ${platform}`, {
+    totalCount: allTokens.length,
+    activeCount: allTokens.filter(t => t.isActive).length,
+    inactiveCount: allTokens.filter(t => !t.isActive).length,
+    allIds: allTokens.map(t => ({ id: t._id?.toString(), isActive: t.isActive, hasAccessToken: !!t.accessToken })),
+  });
+
+  return token;
 };
 
 // Static method to save or update token for a platform

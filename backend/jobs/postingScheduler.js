@@ -228,16 +228,15 @@ class PostingSchedulerJob {
       throw new Error('TikTok posting is disabled via ENABLE_TIKTOK_POSTING flag');
     }
 
-    // Ensure Google Sheets tokens are loaded
-    await googleSheetsService.ensureConnected();
-
     // Check if we have required services configured
     const s3Status = s3VideoUploader.getStatus();
     const s3Enabled = s3Status.enabled;
-    // Check Google connection via oauthManager (after refactoring, accessToken is no longer a property)
+
+    // Check Google connection via oauthManager (before calling ensureConnected)
     const oauthManager = (await import('../services/oauthManager.js')).default;
     const googleConnected = await oauthManager.isAuthenticated('google');
 
+    // Log service configuration status BEFORE throwing errors
     logger.info('Service configuration check', {
       s3Enabled,
       s3Bucket: s3Status.bucketName,
@@ -245,6 +244,9 @@ class PostingSchedulerJob {
       spreadsheetId: googleSheetsService.spreadsheetId,
       devMode: googleSheetsService.devMode ? 'YES (using test sheet)' : 'NO (using production sheets)',
     });
+
+    // Now call ensureConnected which will throw if not authenticated (giving a clearer error)
+    await googleSheetsService.ensureConnected();
 
     if (!s3Enabled) {
       const error = 'S3 uploading is NOT configured. Cannot post to TikTok without S3. ' +
