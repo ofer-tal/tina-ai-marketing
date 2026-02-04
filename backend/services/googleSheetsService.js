@@ -30,7 +30,10 @@ class GoogleSheetsService {
   constructor(config = {}) {
     // Google Sheets configuration
     this.spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
-    this.sheetTabNames = process.env.GOOGLE_SHEETS_TAB_NAMES?.split(',') || [];
+    this.sheetTabNames = process.env.GOOGLE_SHEETS_TAB_NAMES
+      ?.split(',')
+      .map(name => name.trim())
+      .filter(name => name.length > 0) || [];
     this.testTabName = process.env.GOOGLE_SHEETS_TEST_TAB || 'tests';
     this.devMode = process.env.GOOGLE_SHEETS_DEV_MODE === 'true';
 

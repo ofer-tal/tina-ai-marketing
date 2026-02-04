@@ -350,9 +350,9 @@ const StatusBadge = styled.div`
     const colors = {
       draft: '#6c757d',
       ready: '#17a2b8',
-      approved: '#28a745',
+      approved: '#0e4d30', // very dark green - waiting to post
       scheduled: '#007bff',
-      posted: '#00d26a',
+      posted: '#40c057', // bright green - already posted
       failed: '#dc3545',
       rejected: '#ff6b6b',
       generating: '#e94560'
@@ -408,6 +408,28 @@ const ScheduledTime = styled.div`
   display: flex;
   align-items: center;
   gap: 0.25rem;
+`;
+
+const TimeLabel = styled.span`
+  font-size: 0.85rem;
+
+  ${props => props.$color === 'red' && `
+    color: #ff6b6b;
+    font-weight: 500;
+  `}
+
+  ${props => props.$color === 'grey' && `
+    color: #888;
+  `}
+
+  ${props => props.$color === 'green' && `
+    color: #51cf66;
+    font-weight: 500;
+  `}
+
+  ${props => !props.$color && `
+    color: #a0a0a0;
+  `}
 `;
 
 const StoryName = styled.div`
@@ -2284,10 +2306,72 @@ function ContentLibrary() {
   const [regenerateVideoModal, setRegenerateVideoModal] = useState(false);
   const [selectedPostForVideo, setSelectedPostForVideo] = useState(null);
   const [stories, setStories] = useState([]);
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0); // Increment to trigger refresh
 
+  // Function to trigger a refresh
+  const triggerRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // Handle page visibility changes (for auto-refresh)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setIsPageVisible(!document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
+
+  // Auto-refresh every 5 minutes when page is visible and no modal is open
+  useEffect(() => {
+    if (!isPageVisible) return;
+
+    // Check if any modal is open - if so, don't auto-refresh
+    const isAnyModalOpen =
+      rejectModal.isOpen ||
+      regenerateModal.isOpen ||
+      deleteModal.isOpen ||
+      exportModal.isOpen ||
+      createPostModal ||
+      generateVideoModal ||
+      regenerateVideoModal ||
+      editMode ||
+      rescheduleMode ||
+      scheduleMode;
+
+    if (isAnyModalOpen) {
+      console.log('[ContentLibrary] Modal open, skipping auto-refresh');
+      return;
+    }
+
+    const interval = setInterval(() => {
+      console.log('[ContentLibrary] Auto-refreshing posts...');
+      fetchPosts();
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [
+    isPageVisible,
+    rejectModal.isOpen,
+    regenerateModal.isOpen,
+    deleteModal.isOpen,
+    exportModal.isOpen,
+    createPostModal,
+    generateVideoModal,
+    regenerateVideoModal,
+    editMode,
+    rescheduleMode,
+    scheduleMode
+  ]);
+
+  // Initial fetch and fetch on filter/pagination/refresh changes
   useEffect(() => {
     fetchPosts();
-  }, [filters, pagination.page]);
+  }, [filters, pagination.page, refreshKey]);
 
   // Auto-refresh posts that are in 'generating' status
   useEffect(() => {
@@ -2437,6 +2521,65 @@ function ContentLibrary() {
     return date.toLocaleDateString();
   };
 
+  const formatShortDateTime = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const month = date.getMonth() + 1;
+    const day = date.getDate();
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'pm' : 'am';
+    hours = hours % 12;
+    hours = hours ? hours : 12; // Convert 0 to 12
+    return `${month}/${day} ${hours}:${minutes}${ampm}`;
+  };
+
+  const getTimeDisplay = (post) => {
+    const now = new Date();
+
+    // Posts that have been posted (matched)
+    if (post.status === 'posted' && post.postedAt) {
+      return {
+        text: formatShortDateTime(post.postedAt),
+        color: 'green'
+      };
+    }
+
+    // Posts in "posting" state (waiting to be matched)
+    if (post.status === 'posting') {
+      return {
+        text: 'Posting...',
+        color: 'grey'
+      };
+    }
+
+    // Scheduled posts
+    if (post.scheduledAt) {
+      const scheduledDate = new Date(post.scheduledAt);
+      const isPast = scheduledDate < now;
+
+      if (isPast) {
+        // Missed/delayed post
+        return {
+          text: formatShortDateTime(post.scheduledAt),
+          color: 'red'
+        };
+      } else {
+        // Future scheduled post
+        return {
+          text: formatShortDateTime(post.scheduledAt),
+          color: null
+        };
+      }
+    }
+
+    // Fallback
+    return {
+      text: 'Not scheduled',
+      color: 'grey'
+    };
+  };
+
   const getPlatformEmoji = (platform) => {
     const emojis = {
       tiktok: '🎵',
@@ -2542,7 +2685,7 @@ function ContentLibrary() {
   // Handle post created
   const handlePostCreated = (result) => {
     if (result.success) {
-      fetchPosts(); // Refresh posts list
+      triggerRefresh(); // Refresh posts list
     }
     setCreatePostModal(false);
   };
@@ -2556,7 +2699,7 @@ function ContentLibrary() {
   // Handle video generated
   const handleVideoGenerated = (result) => {
     if (result.success) {
-      fetchPosts(); // Refresh posts list
+      triggerRefresh(); // Refresh posts list
     }
     setGenerateVideoModal(false);
     setSelectedPostForVideo(null);
@@ -2582,7 +2725,7 @@ function ContentLibrary() {
         }));
       }
       // Also refresh posts list to ensure everything is synced
-      fetchPosts();
+      triggerRefresh();
     }
     setRegenerateVideoModal(false);
     setSelectedPostForVideo(null);
@@ -2643,10 +2786,30 @@ function ContentLibrary() {
     return abbreviation || 'Local Time';
   };
 
+  // Convert UTC ISO string to local datetime-local format (YYYY-MM-DDTHH:mm)
+  const utcToLocalDateTimeLocal = (isoString) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  // Convert datetime-local value (local time) to UTC ISO string
+  const localDateTimeLocalToUtc = (dateTimeLocalValue) => {
+    if (!dateTimeLocalValue) return null;
+    const date = new Date(dateTimeLocalValue);
+    return date.toISOString();
+  };
+
   const handleStartReschedule = () => {
     setRescheduleMode(true);
     const defaultTime = selectedVideo.scheduledAt || new Date(Date.now() + 3600000).toISOString();
-    setNewScheduledTime(new Date(defaultTime).toISOString().slice(0, 16));
+    // Convert UTC to local datetime-local format
+    setNewScheduledTime(utcToLocalDateTimeLocal(defaultTime));
   };
 
   const handleCancelReschedule = () => {
@@ -2658,14 +2821,15 @@ function ContentLibrary() {
     if (!newScheduledTime) return;
 
     try {
+      const utcTime = localDateTimeLocalToUtc(newScheduledTime);
       const response = await fetch('http://localhost:3001/api/content/posts/' + selectedVideo._id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledAt: new Date(newScheduledTime).toISOString() })
+        body: JSON.stringify({ scheduledAt: utcTime })
       });
 
       if (response.ok) {
-        setSelectedVideo({ ...selectedVideo, scheduledAt: new Date(newScheduledTime).toISOString() });
+        setSelectedVideo({ ...selectedVideo, scheduledAt: utcTime });
         fetchPosts();
         setRescheduleMode(false);
         setNewScheduledTime('');
@@ -2676,7 +2840,8 @@ function ContentLibrary() {
       }
     } catch (error) {
       console.error('Error:', error);
-      setSelectedVideo({ ...selectedVideo, scheduledAt: new Date(newScheduledTime).toISOString() });
+      const utcTime = localDateTimeLocalToUtc(newScheduledTime);
+      setSelectedVideo({ ...selectedVideo, scheduledAt: utcTime });
       setRescheduleMode(false);
       setNewScheduledTime('');
       alert('Updated locally');
@@ -2686,7 +2851,8 @@ function ContentLibrary() {
   const handleStartSchedule = () => {
     setScheduleMode(true);
     const defaultTime = new Date(Date.now() + 3600000); // Default 1 hour from now
-    setScheduledTimeForApproval(defaultTime.toISOString().slice(0, 16));
+    // Convert local time to datetime-local format
+    setScheduledTimeForApproval(utcToLocalDateTimeLocal(defaultTime.toISOString()));
   };
 
   const handleCancelSchedule = () => {
@@ -2707,11 +2873,14 @@ function ContentLibrary() {
         throw new Error('Failed to approve post');
       }
 
+      // Convert local datetime-local value to UTC
+      const utcTime = localDateTimeLocalToUtc(scheduledTimeForApproval);
+
       // Then schedule it
       const scheduleResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scheduledAt: new Date(scheduledTimeForApproval).toISOString() })
+        body: JSON.stringify({ scheduledAt: utcTime })
       });
 
       if (!scheduleResponse.ok) {
@@ -2722,7 +2891,7 @@ function ContentLibrary() {
       setPosts(prevPosts =>
         prevPosts.map(post =>
           post._id === selectedVideo._id
-            ? { ...post, status: 'scheduled', scheduledAt: new Date(scheduledTimeForApproval).toISOString() }
+            ? { ...post, status: 'scheduled', scheduledAt: utcTime }
             : post
         )
       );
@@ -2731,7 +2900,7 @@ function ContentLibrary() {
       setSelectedVideo(prev => ({
         ...prev,
         status: 'scheduled',
-        scheduledAt: new Date(scheduledTimeForApproval).toISOString()
+        scheduledAt: utcTime
       }));
 
       setScheduleMode(false);
@@ -3885,7 +4054,7 @@ function ContentLibrary() {
 
                   <CardMeta>
                     <ScheduledTime>
-                      🕒 {formatDate(post.scheduledAt)}
+                      🕒 <TimeLabel $color={getTimeDisplay(post).color}>{getTimeDisplay(post).text}</TimeLabel>
                     </ScheduledTime>
                   </CardMeta>
 
@@ -4525,7 +4694,10 @@ function ContentLibrary() {
       {/* New Modals */}
       <CreatePostModal
         isOpen={createPostModal}
-        onClose={() => setCreatePostModal(false)}
+        onClose={() => {
+          setCreatePostModal(false);
+          triggerRefresh();
+        }}
         onSave={handlePostCreated}
         stories={stories}
       />
@@ -4535,6 +4707,7 @@ function ContentLibrary() {
         onClose={() => {
           setGenerateVideoModal(false);
           setSelectedPostForVideo(null);
+          triggerRefresh();
         }}
         onGenerate={handleVideoGenerated}
         post={selectedPostForVideo}
@@ -4545,6 +4718,7 @@ function ContentLibrary() {
         onClose={() => {
           setRegenerateVideoModal(false);
           setSelectedPostForVideo(null);
+          triggerRefresh();
         }}
         onRegenerate={handleVideoRegenerated}
         post={selectedPostForVideo}

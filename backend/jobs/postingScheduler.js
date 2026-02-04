@@ -304,7 +304,11 @@ class PostingSchedulerJob {
         ? googleSheetsService.testTabName
         : googleSheetsService.sheetTabNames[Math.floor(Math.random() * googleSheetsService.sheetTabNames.length)];
 
-      logger.info(`  Target sheet: ${targetSheet} ${googleSheetsService.devMode ? '(TEST MODE)' : '(PRODUCTION)'}`);
+      logger.info(`  Target sheet: ${targetSheet} ${googleSheetsService.devMode ? '(TEST MODE)' : '(PRODUCTION)'}`, {
+        availableSheets: googleSheetsService.sheetTabNames,
+        sheetCount: googleSheetsService.sheetTabNames.length,
+        selectedIndex: googleSheetsService.sheetTabNames.indexOf(targetSheet),
+      });
 
       const fullCaption = post.hashtags && post.hashtags.length > 0
         ? `${post.caption}\n\n${post.hashtags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ')}`
