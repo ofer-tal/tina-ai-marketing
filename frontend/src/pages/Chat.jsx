@@ -971,7 +971,15 @@ const ToolProposalStatus = styled.span`
 `;
 
 function Chat({ onClose }) {
-  const [messages, setMessages] = useState([]);
+  // Load messages from localStorage on mount
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tina_messages');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isConnected, setIsConnected] = useState(true);
@@ -1033,6 +1041,15 @@ function Chat({ onClose }) {
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Save messages to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem('tina_messages', JSON.stringify(messages));
+    } catch (error) {
+      console.warn('Failed to save messages to localStorage:', error);
+    }
   }, [messages]);
 
   // Load conversation history on mount
@@ -1283,6 +1300,7 @@ What would you like to focus on today?`;
       });
       setMessages([]);
       setCurrentConversationId(null); // Reset conversation ID
+      localStorage.removeItem('tina_messages'); // Clear localStorage
     } catch (error) {
       console.error('Error clearing history:', error);
     }
@@ -1769,15 +1787,20 @@ What would you like to focus on today?`;
         ) : (
           messages.map((msg) => {
             // Get all proposals for this message (both direct match and those with messageId)
-            const msgProposals = Object.entries(toolProposals)
-              .filter(([key, p]) => {
-                const matches = key === msg.id || p.messageId === msg.id || p.originalMessageId === msg.id;
-                if (p.messageId === msg.id || key.includes(msg.id)) {
-                  console.log('[Chat] Proposal filter match:', { key, msgId: msg.id, proposalMessageId: p.messageId, matches });
+            // Use a Map to deduplicate by proposal ID in case the filter matches the same proposal multiple ways
+            const proposalsMap = new Map();
+            Object.entries(toolProposals).forEach(([key, p]) => {
+              const matches = key === msg.id || p.messageId === msg.id || p.originalMessageId === msg.id;
+              if (matches) {
+                // Use the proposal's _id (or key if _id doesn't exist) as unique identifier
+                const uniqueKey = p._id || p.key || key;
+                if (!proposalsMap.has(uniqueKey)) {
+                  proposalsMap.set(uniqueKey, { key, ...p });
                 }
-                return matches;
-              })
-              .map(([key, p]) => ({ key, ...p }));
+              }
+            });
+
+            const msgProposals = Array.from(proposalsMap.values());
 
             if (msgProposals.length > 0) {
               console.log('[Chat] Found proposals for message:', { msgId: msg.id, count: msgProposals.length, proposals: msgProposals.map(p => ({ key: p.key, toolName: p.toolName, requiresApproval: p.requiresApproval, status: p.status })) });
@@ -1803,7 +1826,7 @@ What would you like to focus on today?`;
                       <>
                       {/* Tool Proposals - Render all proposals for this message */}
                       {hasProposals && msgProposals.map((proposal) => (
-                        <ToolProposalCard key={proposal.key}>
+                        <ToolProposalCard key={proposal._id || `${proposal.key}-${proposal.toolName}`}>
                           <ToolProposalHeader>
                             <span>
                               <span>🔧</span>
