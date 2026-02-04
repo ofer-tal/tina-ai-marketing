@@ -3,20 +3,23 @@
  *
  * Handles posting content to Instagram via the Instagram Graph API.
  * Features:
- * - OAuth authentication flow
+ * - OAuth authentication via oauthManager
  * - Reels video upload to Instagram
  * - Container creation and publishing
  * - Caption and hashtag posting
  * - Post status tracking
  * - Error handling and retry logic
  * - Rate limit compliance
+ *
+ * Uses unified OAuth manager for automatic token refresh.
+ *
+ * @see backend/services/oauthManager.js
  */
 
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
 import rateLimiterService from './rateLimiter.js';
-import AuthToken from '../models/AuthToken.js';
-import { getValidToken, makeAuthenticatedRequest, storeOAuthTokens, getTokenStatus } from '../utils/oauthHelper.js';
+import oauthManager from './oauthManager.js';
 
 const logger = getLogger('services', 'instagram-posting');
 
@@ -24,8 +27,8 @@ class InstagramPostingService extends BaseApiClient {
   constructor(config = {}) {
     super({
       name: 'InstagramPosting',
-      baseURL: 'https://graph.facebook.com/v18.0', // Instagram Graph API uses Facebook's Graph API
-      timeout: 60000, // 60 seconds for video uploads
+      baseURL: 'https://graph.facebook.com/v18.0',
+      timeout: 60000,
       ...config,
     });
 
@@ -35,10 +38,7 @@ class InstagramPostingService extends BaseApiClient {
     this.redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
     this.enabled = process.env.ENABLE_INSTAGRAM_POSTING === 'true';
 
-    // OAuth tokens (stored in memory - should be in database in production)
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.tokenExpiresAt = null;
+    // Track Instagram account info
     this.instagramBusinessAccountId = null;
     this.instagramUserId = null;
 
@@ -50,9 +50,9 @@ class InstagramPostingService extends BaseApiClient {
         refresh: 'https://graph.facebook.com/v18.0/oauth/access_token',
       },
       media: {
-        create: '/{instagram_user_id}/media', // POST - Create media container
-        status: '/{container_id}?fields=status_code', // GET - Check container status
-        publish: '/{instagram_user_id}/media_publish', // POST - Publish media
+        create: '/{instagram_user_id}/media',
+        status: '/{container_id}?fields=status_code',
+        publish: '/{instagram_user_id}/media_publish',
       },
       user: {
         info: '/{instagram_user_id}?fields=username,account_type,media_count',
@@ -63,6 +63,14 @@ class InstagramPostingService extends BaseApiClient {
       },
     };
 
+    // OAuth scopes for Instagram Reels
+    this.scopes = [
+      'instagram_basic',
+      'instagram_content_publish',
+      'pages_read_engagement',
+      'pages_show_list',
+    ];
+
     logger.info('Instagram Posting Service initialized', {
       enabled: this.enabled,
       appIdConfigured: !!this.appId,
@@ -72,8 +80,7 @@ class InstagramPostingService extends BaseApiClient {
   }
 
   /**
-   * Step 1: Configure Instagram Graph API
-   * Validates that credentials are properly configured
+   * Test connection to Instagram Graph API
    */
   async testConnection() {
     try {
@@ -107,20 +114,17 @@ class InstagramPostingService extends BaseApiClient {
         };
       }
 
-      // Check if we have valid tokens
-      const tokenStatus = await this.checkTokenStatus();
+      const isAuthenticated = await oauthManager.isAuthenticated('instagram');
 
       logger.info('Instagram Graph API connection test successful', {
-        authenticated: tokenStatus.authenticated,
-        hasAccessToken: !!this.accessToken,
+        authenticated: isAuthenticated,
         hasBusinessAccount: !!this.instagramBusinessAccountId,
       });
 
       return {
         success: true,
-        authenticated: tokenStatus.authenticated,
+        authenticated: isAuthenticated,
         hasCredentials: true,
-        tokenStatus,
         message: 'Instagram Graph API credentials configured successfully',
       };
 
@@ -139,12 +143,19 @@ class InstagramPostingService extends BaseApiClient {
   }
 
   /**
-   * Step 2 & 3: Set up Instagram Business account and verify access token
-   * Check if we have a valid access token and business account (using oauthHelper)
+   * Check token status
    */
   async checkTokenStatus() {
     try {
-      return await getTokenStatus('instagram');
+      const isAuthenticated = await oauthManager.isAuthenticated('instagram');
+      const token = await oauthManager.getToken('instagram');
+
+      return {
+        authenticated: isAuthenticated,
+        hasToken: !!token,
+        expiresAt: token?.expiresAt,
+        canRefresh: !!token?.refreshToken,
+      };
     } catch (error) {
       logger.error('Token status check failed', {
         error: error.message,
@@ -152,21 +163,54 @@ class InstagramPostingService extends BaseApiClient {
 
       return {
         authenticated: false,
-        hasToken: !!this.accessToken,
+        hasToken: false,
         error: error.message,
       };
     }
   }
 
   /**
-   * Step 4: Verify permissions for content publishing
-   * Check if the access token has the required permissions
+   * Get authorization URL for OAuth flow
+   * @deprecated Use oauthManager.getAuthorizationUrl('instagram', scopes) directly
+   */
+  getAuthorizationUrl() {
+    return oauthManager.getAuthorizationUrl('instagram', this.scopes)
+      .then(({ authUrl }) => authUrl);
+  }
+
+  /**
+   * Exchange authorization code for access token
+   * @deprecated Use oauthManager.handleCallback('instagram', callbackUrl, state) directly
+   */
+  async exchangeCodeForToken(code) {
+    logger.warn('exchangeCodeForToken is deprecated, use oauthManager.handleCallback instead');
+    return {
+      success: false,
+      error: 'This method is deprecated. Use the unified OAuth callback handler.',
+    };
+  }
+
+  /**
+   * Refresh access token
+   * @deprecated Handled automatically by OAuth2Fetch
+   */
+  async refreshAccessToken() {
+    logger.warn('refreshAccessToken is deprecated, token refresh is automatic');
+    return {
+      success: false,
+      error: 'Token refresh is now handled automatically by OAuth2Fetch',
+    };
+  }
+
+  /**
+   * Verify permissions for content publishing
    */
   async verifyPermissions() {
     try {
       logger.info('Verifying Instagram Graph API permissions...');
 
-      if (!this.accessToken) {
+      const token = await oauthManager.getToken('instagram');
+      if (!token || !token.accessToken) {
         return {
           success: false,
           error: 'Not authenticated - no access token',
@@ -183,7 +227,7 @@ class InstagramPostingService extends BaseApiClient {
       ];
 
       // Debug token info to check permissions
-      const debugUrl = `${this.baseURL}/debug_token?input_token=${this.accessToken}`;
+      const debugUrl = `${this.baseURL}/debug_token?input_token=${token.accessToken}`;
       const response = await rateLimiterService.fetch(debugUrl, {
         method: 'GET',
         headers: {
@@ -287,14 +331,6 @@ class InstagramPostingService extends BaseApiClient {
     try {
       logger.info('Discovering Instagram business account...');
 
-      if (!this.accessToken) {
-        return {
-          success: false,
-          error: 'Not authenticated - no access token',
-          code: 'NOT_AUTHENTICATED',
-        };
-      }
-
       const endpoint = this.endpoints.discovery.businessAccount;
       const response = await this.request(endpoint);
 
@@ -348,145 +384,7 @@ class InstagramPostingService extends BaseApiClient {
   }
 
   /**
-   * Refresh access token
-   */
-  async refreshAccessToken() {
-    try {
-      logger.info('Refreshing Instagram access token...');
-
-      if (!this.refreshToken) {
-        return {
-          success: false,
-          error: 'No refresh token available',
-        };
-      }
-
-      const url = `${this.endpoints.oauth.refresh}?grant_type=fb_exchange_token&client_id=${this.appId}&client_secret=${this.appSecret}&fb_exchange_token=${this.refreshToken}`;
-
-      const response = await rateLimiterService.fetch(url, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Token refresh failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-
-      this.accessToken = data.access_token;
-      this.tokenExpiresAt = new Date(Date.now() + (data.expires_in * 1000));
-
-      logger.info('Instagram access token refreshed successfully', {
-        expiresIn: data.expires_in,
-      });
-
-      return {
-        success: true,
-        expiresIn: data.expires_in,
-      };
-
-    } catch (error) {
-      logger.error('Failed to refresh Instagram access token', {
-        error: error.message,
-      });
-
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  /**
-   * Get authorization URL for OAuth flow
-   */
-  getAuthorizationUrl() {
-    const params = new URLSearchParams({
-      client_id: this.appId,
-      redirect_uri: this.redirectUri,
-      scope: 'instagram_basic,instagram_content_publish,pages_read_engagement,pages_show_list',
-      response_type: 'code',
-    });
-
-    return `${this.endpoints.oauth.authorize}?${params.toString()}`;
-  }
-
-  /**
-   * Exchange authorization code for access token
-   */
-  async exchangeCodeForToken(code) {
-    try {
-      logger.info('Exchanging authorization code for access token...');
-
-      const params = new URLSearchParams({
-        client_id: this.appId,
-        client_secret: this.appSecret,
-        code: code,
-        redirect_uri: this.redirectUri,
-      });
-
-      const response = await rateLimiterService.fetch(`${this.endpoints.oauth.token}?${params}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Token exchange failed: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
-
-      // Store tokens using oauthHelper for persistence
-      await storeOAuthTokens('instagram', {
-        access_token: data.access_token,
-        expires_in: data.expires_in,
-      });
-
-      // Update in-memory cache
-      this.accessToken = data.access_token;
-      this.tokenExpiresAt = new Date(Date.now() + (data.expires_in * 1000));
-
-      logger.info('Access token obtained and persisted', {
-        expiresIn: data.expires_in,
-      });
-
-      // Discover Instagram business account
-      await this.discoverBusinessAccount();
-
-      return {
-        success: true,
-        accessToken: this.accessToken,
-        expiresIn: data.expires_in,
-      };
-
-    } catch (error) {
-      logger.error('Failed to exchange code for token', {
-        error: error.message,
-      });
-
-      return {
-        success: false,
-        error: error.message,
-      };
-    }
-  }
-
-  /**
    * Create media container for Instagram Reels
-   * This is step 1 of posting - create the container first
    */
   async createMediaContainer(videoUrl, caption, hashtags = []) {
     try {
@@ -554,7 +452,6 @@ class InstagramPostingService extends BaseApiClient {
 
   /**
    * Check media container status
-   * Wait for Instagram to finish processing the video
    */
   async checkContainerStatus(containerId) {
     try {
@@ -610,7 +507,6 @@ class InstagramPostingService extends BaseApiClient {
 
   /**
    * Publish media container
-   * This is step 2 of posting - publish the created container
    */
   async publishMediaContainer(containerId) {
     try {
@@ -669,7 +565,6 @@ class InstagramPostingService extends BaseApiClient {
 
   /**
    * Post video to Instagram Reels
-   * Complete workflow: create container → wait for processing → publish
    */
   async postVideo(videoPath, caption, hashtags = [], onProgress) {
     try {
@@ -682,9 +577,6 @@ class InstagramPostingService extends BaseApiClient {
       // Step 1: Create media container
       onProgress?.({ stage: 'creating_container', progress: 10 });
 
-      // For Instagram, we need a publicly accessible video URL
-      // In production, this would be uploaded to a cloud storage service first
-      // For now, we'll use a placeholder URL
       const videoUrl = videoPath; // This should be a public URL in production
 
       const containerResult = await this.createMediaContainer(videoUrl, caption, hashtags);
@@ -696,15 +588,15 @@ class InstagramPostingService extends BaseApiClient {
       const containerId = containerResult.containerId;
       onProgress?.({ stage: 'container_created', progress: 30, containerId });
 
-      // Step 2: Wait for container to be processed (poll status)
+      // Step 2: Wait for container to be processed
       onProgress?.({ stage: 'processing_video', progress: 50 });
 
       let attempts = 0;
-      const maxAttempts = 20; // 20 attempts * 3 seconds = 60 seconds max wait
+      const maxAttempts = 20;
       let isFinished = false;
 
       while (!isFinished && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+        await new Promise(resolve => setTimeout(resolve, 3000));
 
         const statusResult = await this.checkContainerStatus(containerId);
 
@@ -763,18 +655,39 @@ class InstagramPostingService extends BaseApiClient {
   }
 
   /**
-   * Get authentication headers for API requests
+   * Make authenticated request using BaseApiClient
+   * Overrides the base method to inject OAuth token
    */
-  async getAuthHeaders() {
-    return {
-      'Authorization': `Bearer ${this.accessToken}`,
-    };
+  async request(endpoint, options = {}) {
+    const token = await oauthManager.getToken('instagram');
+    if (!token || !token.accessToken) {
+      throw new Error('Not authenticated - no access token');
+    }
+
+    const url = `${this.baseURL}${endpoint}`;
+    const response = await rateLimiterService.fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        'Authorization': `Bearer ${token.accessToken}`,
+      },
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      throw new Error(data.error.message);
+    }
+
+    return data;
   }
 
   /**
    * Health check for the service
    */
-  healthCheck() {
+  async healthCheck() {
+    const isAuthenticated = await oauthManager.isAuthenticated('instagram');
+
     return {
       success: true,
       service: 'instagram-posting',
@@ -783,10 +696,10 @@ class InstagramPostingService extends BaseApiClient {
       timestamp: new Date().toISOString(),
       capabilities: {
         configured: !!this.appId && !!this.appSecret,
-        authenticated: !!this.accessToken,
+        authenticated: isAuthenticated,
         hasBusinessAccount: !!this.instagramBusinessAccountId,
         supportsReels: true,
-        maxDuration: 90, // Instagram Reels allows 90 seconds
+        maxDuration: 90,
         features: [
           'oauth_authentication',
           'reels_upload',

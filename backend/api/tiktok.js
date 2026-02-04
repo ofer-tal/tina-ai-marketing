@@ -92,7 +92,7 @@ router.get('/token-status', async (req, res) => {
 
 /**
  * GET /api/tiktok/sandbox-status
- * Step 4: Check sandbox app configured
+ * Step 4: Check sandbox app configured and authentication status
  */
 router.get('/sandbox-status', async (req, res) => {
   try {
@@ -100,10 +100,17 @@ router.get('/sandbox-status', async (req, res) => {
 
     const result = await tiktokPostingService.checkSandboxStatus();
 
+    // Also check authentication status via oauthManager
+    const oauthManager = (await import('../services/oauthManager.js')).default;
+    const isAuthenticated = await oauthManager.isAuthenticated('tiktok');
+
     if (result.success) {
       res.json({
         success: true,
-        data: result,
+        data: {
+          ...result,
+          authenticated: isAuthenticated,
+        },
       });
     } else {
       res.status(400).json({
@@ -163,6 +170,7 @@ router.get('/permissions', async (req, res) => {
 /**
  * GET /api/tiktok/authorize-url
  * Get authorization URL for OAuth flow
+ * @deprecated Use GET /api/oauth/tiktok/authorize-url instead
  */
 router.get('/authorize-url', async (req, res) => {
   try {
@@ -172,12 +180,17 @@ router.get('/authorize-url', async (req, res) => {
       ? req.query.scopes.split(',')
       : ['video.upload', 'video.publish'];
 
-    const url = tiktokPostingService.getAuthorizationUrl(scopes);
+    logger.info('TikTok scopes', { scopes });
+
+    // getAuthorizationUrl is now async and returns { authUrl, state }
+    const url = await tiktokPostingService.getAuthorizationUrl(scopes);
+
+    logger.info('TikTok auth URL generated successfully', { url: url?.substring(0, 100) + '...' });
 
     res.json({
       success: true,
       data: {
-        url,
+        url: url,  // For backward compatibility, url is the authUrl string
         scopes,
         message: 'Visit this URL to authorize the application',
       },
@@ -186,6 +199,8 @@ router.get('/authorize-url', async (req, res) => {
     logger.error('Failed to generate authorization URL', {
       error: error.message,
       stack: error.stack,
+      name: error.name,
+      constructorName: error.constructor.name,
     });
 
     res.status(500).json({

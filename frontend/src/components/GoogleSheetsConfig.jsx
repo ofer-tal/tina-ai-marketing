@@ -233,6 +233,7 @@ function GoogleSheetsConfig() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [authUrl, setAuthUrl] = useState(null);
+  const [refreshResult, setRefreshResult] = useState(null);
 
   useEffect(() => {
     checkConnectionStatus();
@@ -320,6 +321,7 @@ function GoogleSheetsConfig() {
     try {
       setLoading(true);
       setError(null);
+      setRefreshResult(null);
       setConnectionStatus('testing');
 
       const response = await fetch('/api/google/test-connection');
@@ -336,6 +338,43 @@ function GoogleSheetsConfig() {
     } catch (err) {
       setError(err.message);
       setConnectionStatus('error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testTokenRefresh = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setRefreshResult(null);
+
+      const response = await fetch('/api/google/test-refresh', {
+        method: 'POST'
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        setRefreshResult({
+          success: true,
+          message: data.message,
+          data: data.data
+        });
+        // Refresh connection status to show updated token info
+        await checkConnectionStatus();
+      } else {
+        setError(data.error || 'Token refresh failed');
+        setRefreshResult({
+          success: false,
+          error: data.error
+        });
+      }
+    } catch (err) {
+      setError(err.message);
+      setRefreshResult({
+        success: false,
+        error: err.message
+      });
     } finally {
       setLoading(false);
     }
@@ -469,6 +508,12 @@ function GoogleSheetsConfig() {
           🔄 Test Connection
         </SecondaryButton>
         <SecondaryButton
+          onClick={testTokenRefresh}
+          disabled={loading || !connectionInfo?.connected}
+        >
+          🔑 Test Token Refresh
+        </SecondaryButton>
+        <SecondaryButton
           onClick={fetchSheets}
           disabled={loading || !connectionInfo?.connected}
         >
@@ -479,6 +524,25 @@ function GoogleSheetsConfig() {
           <ErrorMessage>
             <strong>Error:</strong> {error}
           </ErrorMessage>
+        )}
+
+        {refreshResult && (
+          <>
+            {refreshResult.success ? (
+              <SuccessMessage>
+                <strong>✓ Token Refresh Test Successful!</strong><br />
+                {refreshResult.message}<br />
+                <small style={{ marginTop: '0.5rem', display: 'block', opacity: 0.9 }}>
+                  Token changed: {refreshResult.data.tokenChanged ? '✓ Yes' : '✗ No'} |
+                  Expires in: {refreshResult.data.expiresIn ? `${Math.floor(refreshResult.data.expiresIn / 60)} minutes` : 'Unknown'}
+                </small>
+              </SuccessMessage>
+            ) : (
+              <ErrorMessage>
+                <strong>Token Refresh Failed:</strong> {refreshResult.error}
+              </ErrorMessage>
+            )}
+          </>
         )}
 
         {connectionStatus === 'connected' && !error && (

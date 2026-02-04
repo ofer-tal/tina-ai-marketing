@@ -1,10 +1,10 @@
 /**
  * Google Sheets Service
  *
- * Handles Google OAuth authentication and Google Sheets API operations.
+ * Handles Google Sheets API operations using unified OAuth manager.
  * Features:
- * - OAuth 2.0 authentication flow (unified Google credentials for all Google services)
- * - Token management with robust auto-refresh capability
+ * - OAuth authentication via oauthManager
+ * - Automatic token refresh via OAuth2Fetch
  * - Spreadsheet metadata retrieval
  * - Sheet enumeration and data reading
  * - Row appending for Zapier/Buffer integration
@@ -14,68 +14,34 @@
  * - GOOGLE_CLIENT_ID → Google OAuth client ID
  * - GOOGLE_CLIENT_SECRET → Google OAuth client secret
  * - GOOGLE_REDIRECT_URI → OAuth callback URL
+ *
+ * @see backend/services/oauthManager.js
  */
 
-import crypto from 'crypto';
 import AuthToken from '../models/AuthToken.js';
 import { getLogger } from '../utils/logger.js';
-import { getValidToken, makeAuthenticatedRequest, storeOAuthTokens, getTokenStatus } from '../utils/oauthHelper.js';
+import oauthManager from './oauthManager.js';
 
 const logger = getLogger('services', 'google-sheets');
 
-// Google OAuth endpoints
-const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const GOOGLE_SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
-
-// Static cache for OAuth state parameters (shared across all instances)
-// Maps state parameter -> code_verifier (for PKCE if needed)
-const oauthStateStore = new Map();
-
-/**
- * Store state parameter for CSRF protection
- */
-function storeOAuthState(state, additionalData = {}) {
-  oauthStateStore.set(state, {
-    timestamp: Date.now(),
-    ...additionalData
-  });
-  // Auto-expire after 10 minutes
-  setTimeout(() => {
-    oauthStateStore.delete(state);
-  }, 10 * 60 * 1000);
-}
-
-/**
- * Get and remove state parameter
- */
-function getOAuthState(state) {
-  const data = oauthStateStore.get(state);
-  oauthStateStore.delete(state); // One-time use
-  return data;
-}
 
 class GoogleSheetsService {
   constructor(config = {}) {
-    // Google OAuth credentials (unified for all Google services)
-    this.clientId = process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID;
-    this.clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET;
-    this.redirectUri = process.env.GOOGLE_REDIRECT_URI || process.env.YOUTUBE_REDIRECT_URI;
-
     // Google Sheets configuration
     this.spreadsheetId = process.env.GOOGLE_SHEETS_SPREADSHEET_ID;
     this.sheetTabNames = process.env.GOOGLE_SHEETS_TAB_NAMES?.split(',') || [];
     this.testTabName = process.env.GOOGLE_SHEETS_TEST_TAB || 'tests';
     this.devMode = process.env.GOOGLE_SHEETS_DEV_MODE === 'true';
 
-    // OAuth tokens
-    this.accessToken = null;
-    this.refreshToken = null;
-    this.tokenExpiresAt = null;
+    // OAuth configuration (for reference)
+    this.clientId = process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID;
+    this.clientSecret = process.env.GOOGLE_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET;
+    this.redirectUri = process.env.GOOGLE_REDIRECT_URI || process.env.YOUTUBE_REDIRECT_URI;
 
     // Scopes for Google Sheets API
     this.scopes = [
-      'https://www.googleapis.com/auth/spreadsheets', // Read/write access
+      'https://www.googleapis.com/auth/spreadsheets',
     ];
 
     logger.info('Google Sheets Service initialized', {
@@ -90,98 +56,23 @@ class GoogleSheetsService {
   }
 
   /**
-   * Initialize service - load tokens from database
+   * Initialize service - verify tokens exist
    */
   async initialize() {
     try {
-      logger.info('Loading Google tokens from database...');
+      logger.info('Initializing Google Sheets service...');
 
-      // Get 'google' platform tokens (unified Google OAuth for all services)
-      const tokenDoc = await AuthToken.getActiveToken('google');
+      const isAuthenticated = await oauthManager.isAuthenticated('google');
 
-      if (tokenDoc && tokenDoc.accessToken) {
-        const now = new Date();
-        const expiresAt = tokenDoc.expiresAt ? new Date(tokenDoc.expiresAt) : null;
-        const isExpired = expiresAt && now >= expiresAt;
-        const willExpireSoon = expiresAt && (expiresAt - now) < (5 * 60 * 1000);
-
-        if (isExpired) {
-          logger.info('Stored Google token is expired, attempting refresh...');
-          const refreshResult = await this._refreshStoredToken(tokenDoc);
-          if (refreshResult) {
-            logger.info('Google token refreshed successfully');
-          } else {
-            logger.warn('Failed to refresh Google token, re-authentication required');
-          }
-        } else if (willExpireSoon) {
-          logger.info('Google token expiring soon, proactively refreshing...');
-          await this._refreshStoredToken(tokenDoc);
-        } else {
-          this.accessToken = tokenDoc.accessToken;
-          this.refreshToken = tokenDoc.refreshToken;
-          this.tokenExpiresAt = expiresAt;
-
-          logger.info('Google token loaded from database', {
-            hasAccessToken: !!this.accessToken,
-            hasRefreshToken: !!this.refreshToken,
-            expiresAt: this.tokenExpiresAt,
-          });
-        }
+      if (isAuthenticated) {
+        logger.info('Google Sheets service initialized with existing token');
       } else {
-        logger.info('No Google token found in database');
+        logger.info('Google Sheets service initialized - no token found, authentication required');
       }
     } catch (error) {
-      logger.error('Failed to load Google tokens from database', {
+      logger.error('Failed to initialize Google Sheets service', {
         error: error.message,
       });
-    }
-  }
-
-  /**
-   * Refresh a stored token from database
-   */
-  async _refreshStoredToken(tokenDoc) {
-    if (!tokenDoc.refreshToken) {
-      return null;
-    }
-
-    try {
-      const params = new URLSearchParams();
-      params.append('client_id', this.clientId);
-      params.append('client_secret', this.clientSecret);
-      params.append('refresh_token', tokenDoc.refreshToken);
-      params.append('grant_type', 'refresh_token');
-
-      const response = await fetch(GOOGLE_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params,
-      });
-
-      if (!response.ok) {
-        throw new Error(`Refresh failed: ${response.status}`);
-      }
-
-      const tokenData = await response.json();
-
-      this.accessToken = tokenData.access_token;
-      this.refreshToken = tokenData.refresh_token || tokenDoc.refreshToken;
-      this.tokenExpiresAt = new Date(Date.now() + (tokenData.expires_in * 1000));
-
-      await AuthToken.refreshToken('google', {
-        accessToken: this.accessToken,
-        refreshToken: this.refreshToken,
-        expiresAt: this.tokenExpiresAt,
-      });
-
-      return true;
-    } catch (error) {
-      logger.error('Failed to refresh Google token', {
-        error: error.message,
-      });
-      return null;
     }
   }
 
@@ -192,24 +83,9 @@ class GoogleSheetsService {
     try {
       logger.info('Testing Google Sheets connection...');
 
-      // If no in-memory token, try to reload from database
-      if (!this.accessToken) {
-        logger.info('No in-memory token, reloading from database...');
-        const tokenDoc = await AuthToken.getActiveToken('google');
-
-        if (tokenDoc && tokenDoc.accessToken) {
-          this.accessToken = tokenDoc.accessToken;
-          this.refreshToken = tokenDoc.refreshToken;
-          this.tokenExpiresAt = tokenDoc.expiresAt ? new Date(tokenDoc.expiresAt) : null;
-
-          logger.info('Loaded Google token from database for connection test', {
-            hasAccessToken: !!this.accessToken,
-            hasRefreshToken: !!this.refreshToken,
-          });
-        }
-      }
-
-      if (!this.accessToken) {
+      // Check if authenticated
+      const isAuthenticated = await oauthManager.isAuthenticated('google');
+      if (!isAuthenticated) {
         return {
           success: false,
           error: 'Not authenticated - no access token. Please complete OAuth first.',
@@ -243,215 +119,63 @@ class GoogleSheetsService {
 
   /**
    * Get authorization URL for OAuth flow
+   * @deprecated Use oauthManager.getAuthorizationUrl('google') directly
    */
-  getAuthorizationUrl() {
-    const state = this._generateState();
-
-    // Store state for CSRF protection
-    storeOAuthState(state);
-
-    const params = new URLSearchParams({
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      response_type: 'code',
-      scope: this.scopes.join(' '),
-      state: state,
-      access_type: 'offline', // Allow refresh token
-      prompt: 'consent', // Force consent to get refresh token
-    });
-
-    const url = `${GOOGLE_AUTH_URL}?${params.toString()}`;
-
-    logger.info('Generated Google authorization URL', {
-      state,
-      scopes: this.scopes,
-    });
-
-    return url;
+  async getAuthorizationUrl() {
+    // For backward compatibility, delegate to oauthManager
+    const { authUrl } = await oauthManager.getAuthorizationUrl('google');
+    return authUrl;
   }
 
   /**
    * Exchange authorization code for access token
+   * @deprecated Use oauthManager.handleCallback('google', callbackUrl, state) directly
    */
   async exchangeCodeForToken(code, state) {
-    try {
-      logger.info('Exchanging authorization code for access token...');
-
-      // Verify state parameter
-      const storedState = getOAuthState(state);
-      if (!storedState) {
-        throw new Error('Invalid or expired state parameter');
-      }
-
-      const params = new URLSearchParams();
-      params.append('client_id', this.clientId);
-      params.append('client_secret', this.clientSecret);
-      params.append('code', code);
-      params.append('grant_type', 'authorization_code');
-      params.append('redirect_uri', this.redirectUri);
-
-      const response = await fetch(GOOGLE_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
-      }
-
-      const tokenData = await response.json();
-
-      await this._storeTokens(tokenData);
-
-      logger.info('Successfully exchanged code for access token', {
-        hasAccessToken: !!this.accessToken,
-        hasRefreshToken: !!this.refreshToken,
-        expiresIn: tokenData.expires_in,
-      });
-
-      return {
-        success: true,
-        authenticated: true,
-        data: tokenData,
-      };
-
-    } catch (error) {
-      logger.error('Failed to exchange code for token', {
-        error: error.message,
-      });
-
-      return {
-        success: false,
-        error: error.message,
-        code: 'TOKEN_EXCHANGE_ERROR',
-      };
-    }
+    // This is now handled by the unified callback handler
+    // Kept for backward compatibility but should not be used
+    logger.warn('exchangeCodeForToken is deprecated, use oauthManager.handleCallback instead');
+    return {
+      success: false,
+      error: 'This method is deprecated. Use the unified OAuth callback handler.',
+    };
   }
 
   /**
    * Refresh access token using refresh token
+   * @deprecated Handled automatically by OAuth2Fetch
    */
   async refreshAccessToken() {
-    try {
-      logger.info('Refreshing access token...');
-
-      if (!this.refreshToken) {
-        throw new Error('No refresh token available');
-      }
-
-      const params = new URLSearchParams();
-      params.append('client_id', this.clientId);
-      params.append('client_secret', this.clientSecret);
-      params.append('refresh_token', this.refreshToken);
-      params.append('grant_type', 'refresh_token');
-
-      const response = await fetch(GOOGLE_TOKEN_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: params,
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Token refresh failed: ${response.status} ${errorText}`);
-      }
-
-      const tokenData = await response.json();
-
-      await this._storeTokens(tokenData);
-
-      logger.info('Successfully refreshed access token', {
-        hasAccessToken: !!this.accessToken,
-        expiresIn: tokenData.expires_in,
-      });
-
-      return {
-        success: true,
-        data: tokenData,
-      };
-
-    } catch (error) {
-      logger.error('Failed to refresh access token', {
-        error: error.message,
-      });
-
-      return {
-        success: false,
-        error: error.message,
-        code: 'TOKEN_REFRESH_ERROR',
-      };
-    }
+    // This is now handled automatically by OAuth2Fetch
+    logger.warn('refreshAccessToken is deprecated, token refresh is automatic');
+    return {
+      success: false,
+      error: 'Token refresh is now handled automatically by OAuth2Fetch',
+    };
   }
 
   /**
-   * Get valid access token (with auto-refresh using oauthHelper)
+   * Get valid access token (with auto-refresh via oauthManager)
    */
   async getAccessToken() {
-    return await getValidToken('google', async () => {
-      return await this.refreshAccessToken();
-    });
+    const token = await oauthManager.getToken('google');
+    if (!token || !token.accessToken) {
+      throw new Error('No access token available. Please authenticate first.');
+    }
+    return token.accessToken;
   }
 
   /**
-   * Store tokens from response (saves to database for persistence)
-   */
-  async _storeTokens(tokenData) {
-    // Update in-memory cache for quick access
-    this.accessToken = tokenData.access_token;
-    this.refreshToken = tokenData.refresh_token || this.refreshToken;
-
-    // Calculate expiration time
-    if (tokenData.expires_in) {
-      this.tokenExpiresAt = new Date(
-        Date.now() + (tokenData.expires_in * 1000) - 60000 // Refresh 1 minute early
-      );
-    }
-
-    logger.info('Tokens stored (in-memory)', {
-      hasAccessToken: !!this.accessToken,
-      hasRefreshToken: !!this.refreshToken,
-      expiresAt: this.tokenExpiresAt,
-    });
-
-    // Persist to database using oauthHelper for proper defaults
-    try {
-      await storeOAuthTokens('google', tokenData);
-      logger.info('Google token persisted to database via oauthHelper');
-    } catch (error) {
-      logger.error('Failed to persist Google token to database', {
-        error: error.message,
-      });
-    }
-  }
-
-  /**
-   * Get spreadsheet metadata (with 401 retry)
+   * Get spreadsheet metadata
+   * Uses oauthManager.fetch for automatic token handling
    */
   async getSpreadsheet() {
     try {
       const url = `${GOOGLE_SHEETS_API_BASE}/${this.spreadsheetId}`;
 
-      const response = await makeAuthenticatedRequest(
-        url,
-        {
-          method: 'GET',
-        },
-        'google',
-        async () => {
-          const result = await this.refreshAccessToken();
-          return {
-            success: true,
-            accessToken: result.accessToken || this.accessToken,
-            expiresAt: result.expiresIn ? new Date(Date.now() + (result.expiresIn * 1000)) : this.tokenExpiresAt,
-          };
-        }
-      );
+      const response = await oauthManager.fetch('google', url, {
+        method: 'GET',
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -524,11 +248,8 @@ class GoogleSheetsService {
       const encodedRange = encodeURIComponent(`${sheetName}!${range}`);
       const url = `${GOOGLE_SHEETS_API_BASE}/${this.spreadsheetId}/values/${encodedRange}`;
 
-      const response = await fetch(url, {
+      const response = await oauthManager.fetch('google', url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
       });
 
       if (!response.ok) {
@@ -579,27 +300,15 @@ class GoogleSheetsService {
       const encodedRange = encodeURIComponent(`${targetSheetName}!A1:Z1`);
       const url = `${GOOGLE_SHEETS_API_BASE}/${this.spreadsheetId}/values/${encodedRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
 
-      const response = await makeAuthenticatedRequest(
-        url,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            values: [values], // API expects array of rows
-          }),
+      const response = await oauthManager.fetch('google', url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        'google',
-        async () => {
-          const result = await this.refreshAccessToken();
-          return {
-            success: true,
-            accessToken: result.accessToken || this.accessToken,
-            expiresAt: result.expiresIn ? new Date(Date.now() + (result.expiresIn * 1000)) : this.tokenExpiresAt,
-          };
-        }
-      );
+        body: JSON.stringify({
+          values: [values], // API expects array of rows
+        }),
+      });
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -706,38 +415,13 @@ class GoogleSheetsService {
 
   /**
    * Ensure service has valid access token loaded
-   * Loads from database if not already in memory
+   * Now handled automatically by oauthManager
    */
   async ensureConnected() {
-    if (this.accessToken) {
-      return; // Already connected
-    }
-
-    logger.info('ensureConnected: No in-memory token, loading from database...');
-
-    const tokenDoc = await AuthToken.getActiveToken('google');
-
-    if (tokenDoc && tokenDoc.accessToken) {
-      // Load into memory
-      this.accessToken = tokenDoc.accessToken;
-      this.refreshToken = tokenDoc.refreshToken;
-      this.tokenExpiresAt = tokenDoc.expiresAt ? new Date(tokenDoc.expiresAt) : null;
-
-      logger.info('ensureConnected: Token loaded from database', {
-        hasAccessToken: !!this.accessToken,
-        hasRefreshToken: !!this.refreshToken,
-        expiresAt: this.tokenExpiresAt,
-      });
-    } else {
+    const isAuthenticated = await oauthManager.isAuthenticated('google');
+    if (!isAuthenticated) {
       throw new Error('No Google token found in database. Please complete Google OAuth first.');
     }
-  }
-
-  /**
-   * Generate state parameter for OAuth
-   */
-  _generateState() {
-    return 'google_oauth_state_' + Date.now() + '_' + crypto.randomBytes(8).toString('hex');
   }
 
   /**
@@ -748,8 +432,6 @@ class GoogleSheetsService {
       success: true,
       service: 'google-sheets',
       status: 'ok',
-      authenticated: !!this.accessToken,
-      hasCredentials: !!(this.clientId && this.clientSecret),
       spreadsheetId: this.spreadsheetId,
       devMode: this.devMode,
       timestamp: new Date().toISOString(),
@@ -758,37 +440,17 @@ class GoogleSheetsService {
 
   /**
    * Get connection status
-   * Loads from database if no in-memory token exists
    */
   async getConnectionStatus() {
-    // If no in-memory token, try to reload from database
-    if (!this.accessToken) {
-      try {
-        const tokenDoc = await AuthToken.getActiveToken('google');
-
-        if (tokenDoc && tokenDoc.accessToken) {
-          this.accessToken = tokenDoc.accessToken;
-          this.refreshToken = tokenDoc.refreshToken;
-          this.tokenExpiresAt = tokenDoc.expiresAt ? new Date(tokenDoc.expiresAt) : null;
-
-          logger.info('Loaded Google token from database for status check');
-        }
-      } catch (error) {
-        logger.error('Failed to load Google token from database for status', {
-          error: error.message,
-        });
-      }
-    }
+    const isAuthenticated = await oauthManager.isAuthenticated('google');
 
     return {
-      connected: !!this.accessToken,
+      connected: isAuthenticated,
       hasSpreadsheetId: !!this.spreadsheetId,
       spreadsheetId: this.spreadsheetId,
       availableSheets: this.sheetTabNames,
       testSheet: this.testTabName,
       devMode: this.devMode,
-      tokenExpiresAt: this.tokenExpiresAt,
-      isExpired: this.tokenExpiresAt ? new Date() >= this.tokenExpiresAt : null,
     };
   }
 }

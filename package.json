@@ -27,6 +27,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",
     "@aws-sdk/client-s3": "^3.980.0",
+    "@badgateway/oauth2-client": "^3.3.1",
     "@fal-ai/client": "^1.0.0",
     "@fal-ai/serverless-client": "^0.15.0",
     "@ffprobe-installer/ffprobe": "^2.1.2",

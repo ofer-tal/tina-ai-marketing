@@ -341,7 +341,7 @@ function TikTokSandboxConfig() {
             <StatusItem>
               <StatusLabel>Authenticated</StatusLabel>
               <StatusValue>
-                {sandboxStatus.userInfo ? '✓ Yes' : '✗ No'}
+                {sandboxStatus.authenticated ? '✓ Yes' : '✗ No'}
               </StatusValue>
             </StatusItem>
             {sandboxStatus.userInfo && (

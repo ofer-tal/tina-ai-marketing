@@ -1,4 +1,7 @@
 import mongoose from 'mongoose';
+import { getLogger } from '../utils/logger.js';
+
+const logger = getLogger('models', 'auth-token');
 
 /**
  * Marketing Auth Token Model
@@ -94,33 +97,237 @@ authTokenSchema.statics.getActiveToken = async function(platform) {
 };
 
 // Static method to save or update token for a platform
-// Uses upsert to ensure only one active token per platform
+// Uses atomic operation to ensure only one active token per platform
+// CRITICAL FIX: Prevents tokens being left inactive if create() fails
 authTokenSchema.statics.saveToken = async function(platform, tokenData) {
-  // First, deactivate all existing tokens for this platform
-  await this.updateMany({ platform }, { isActive: false });
+  // Get stack trace for debugging - log who called this function
+  const stack = new Error().stack;
+  const caller = stack.split('\n')[2]?.trim() || 'unknown';
 
-  // Create new active token record
-  return await this.create({
+  logger.info('AuthToken.saveToken CALLED - will set NEW active token', {
     platform,
-    isActive: true,
-    ...tokenData,
+    hasAccessToken: !!tokenData.accessToken,
+    hasRefreshToken: !!tokenData.refreshToken,
+    expiresAt: tokenData.expiresAt?.toISOString(),
+    caller,
+    reason: 'New OAuth token obtained via callback or refresh'
   });
+
+  try {
+    // Step 1: Deactivate the existing active token (only one, not all!)
+    // This is safer than updateMany which affects all tokens
+    const deactivatedResult = await this.findOneAndUpdate(
+      { platform, isActive: true },
+      {
+        $set: {
+          isActive: false,
+          deactivatedAt: new Date()
+        }
+      },
+      { new: false }
+    );
+
+    if (deactivatedResult) {
+      logger.info('AuthToken.saveToken - deactivated previous active token', {
+        platform,
+        deactivatedTokenId: deactivatedResult._id.toString(),
+        wasActive: deactivatedResult.isActive
+      });
+    } else {
+      logger.info('AuthToken.saveToken - no previous active token found to deactivate', { platform });
+    }
+
+    // Step 2: Create the new active token
+    const newToken = await this.create({
+      platform,
+      isActive: true,
+      ...tokenData,
+    });
+
+    logger.info('AuthToken.saveToken - SUCCESS: new active token created and ACTIVE', {
+      platform,
+      newTokenId: newToken._id.toString(),
+      isActive: newToken.isActive,
+      expiresAt: newToken.expiresAt?.toISOString(),
+      createdAt: newToken.createdAt.toISOString()
+    });
+
+    // Verify the token was actually created and is active
+    const verifyToken = await this.findOne({ _id: newToken._id });
+    if (!verifyToken || !verifyToken.isActive) {
+      logger.error('AuthToken.saveToken - VERIFICATION FAILED: token created but not active!', {
+        platform,
+        tokenId: newToken._id.toString(),
+        verifyToken: verifyToken ? { isActive: verifyToken.isActive } : null
+      });
+    }
+
+    return newToken;
+
+  } catch (error) {
+    logger.error('AuthToken.saveToken - FAILURE: failed to create new token', {
+      platform,
+      error: error.message,
+      errorName: error.name,
+      stack: error.stack,
+      caller
+    });
+
+    // CRITICAL RECOVERY: Attempt to reactivate the previously deactivated token
+    // This ensures we never leave ALL tokens inactive
+    try {
+      const reactivated = await this.findOneAndUpdate(
+        { platform, isActive: false, deactivatedAt: { $exists: true } },
+        { $set: { isActive: true, reactivatedAt: new Date() } },
+        { sort: { deactivatedAt: -1 } }
+      );
+
+      if (reactivated) {
+        logger.warn('AuthToken.saveToken - RECOVERY: reactivated previous token after creation failure', {
+          platform,
+          reactivatedTokenId: reactivated._id.toString(),
+          originalError: error.message
+        });
+      } else {
+        logger.error('AuthToken.saveToken - CRITICAL: no previous token found to reactivate', {
+          platform,
+          originalError: error.message
+        });
+      }
+    } catch (reactivateError) {
+      logger.error('AuthToken.saveToken - CRITICAL: failed to reactivate previous token', {
+        platform,
+        reactivateError: reactivateError.message,
+        originalError: error.message
+      });
+    }
+
+    throw error;
+  }
 };
 
 // Static method to refresh token for a platform
 authTokenSchema.statics.refreshToken = async function(platform, newTokenData) {
+  // Get stack trace for debugging
+  const stack = new Error().stack;
+  const caller = stack.split('\n')[2]?.trim() || 'unknown';
+
+  logger.info('AuthToken.refreshToken CALLED - will UPDATE existing active token', {
+    platform,
+    hasNewAccessToken: !!newTokenData.accessToken,
+    hasNewRefreshToken: !!newTokenData.refreshToken,
+    newExpiresAt: newTokenData.expiresAt?.toISOString(),
+    isActiveBeingSet: newTokenData.isActive,
+    caller,
+    reason: 'Token refreshed via refresh_token grant'
+  });
+
   const activeToken = await this.getActiveToken(platform);
-  if (activeToken) {
-    Object.assign(activeToken, newTokenData);
-    activeToken.lastRefreshedAt = new Date();
-    return await activeToken.save();
+
+  if (!activeToken) {
+    logger.error('AuthToken.refreshToken - NO ACTIVE TOKEN FOUND to refresh', {
+      platform,
+      caller
+    });
+    return null;
   }
-  return null;
+
+  logger.info('AuthToken.refreshToken - found active token to update', {
+    platform,
+      tokenId: activeToken._id.toString(),
+    wasActive: activeToken.isActive,
+    currentExpiresAt: activeToken.expiresAt?.toISOString()
+  });
+
+  try {
+    // Manually set each field to avoid Object.assign issues with Mongoose
+    if (newTokenData.accessToken !== undefined) {
+      activeToken.accessToken = newTokenData.accessToken;
+      logger.debug('AuthToken.refreshToken - updated accessToken');
+    }
+    if (newTokenData.refreshToken !== undefined) {
+      activeToken.refreshToken = newTokenData.refreshToken;
+      logger.debug('AuthToken.refreshToken - updated refreshToken');
+    }
+    if (newTokenData.expiresAt !== undefined) {
+      activeToken.expiresAt = newTokenData.expiresAt;
+      logger.debug('AuthToken.refreshToken - updated expiresAt');
+    }
+    if (newTokenData.tokenType !== undefined) {
+      activeToken.tokenType = newTokenData.tokenType;
+    }
+    if (newTokenData.lastRefreshedAt !== undefined) {
+      activeToken.lastRefreshedAt = newTokenData.lastRefreshedAt;
+    }
+    if (newTokenData.isActive !== undefined) {
+      logger.warn('AuthToken.refreshToken - isActive being explicitly set!', {
+        platform,
+        newIsActive: newTokenData.isActive,
+        caller
+      });
+      activeToken.isActive = newTokenData.isActive;
+    }
+    if (newTokenData.creatorId !== undefined) {
+      activeToken.creatorId = newTokenData.creatorId;
+    }
+    if (newTokenData.metadata !== undefined) {
+      activeToken.metadata = newTokenData.metadata;
+    }
+
+    // Always update lastRefreshedAt
+    activeToken.lastRefreshedAt = new Date();
+
+    // Mark as modified
+    activeToken.markModified('accessToken');
+    activeToken.markModified('refreshToken');
+    activeToken.markModified('expiresAt');
+    activeToken.markModified('lastRefreshedAt');
+
+    const savedToken = await activeToken.save();
+
+    logger.info('AuthToken.refreshToken - SUCCESS: token updated and remains ACTIVE', {
+      platform,
+      tokenId: savedToken._id.toString(),
+      isActive: savedToken.isActive,
+      expiresAt: savedToken.expiresAt?.toISOString(),
+      lastRefreshedAt: savedToken.lastRefreshedAt?.toISOString()
+    });
+
+    return savedToken;
+  } catch (error) {
+    logger.error('AuthToken.refreshToken - FAILURE: failed to update token', {
+      platform,
+      tokenId: activeToken._id.toString(),
+      error: error.message,
+      stack: error.stack,
+      caller
+    });
+    throw error;
+  }
 };
 
 // Static method to deactivate all tokens for a platform
+// WARNING: This should rarely be used - prefer saveToken which creates a new active token
 authTokenSchema.statics.deactivatePlatform = async function(platform) {
-  return await this.updateMany({ platform }, { isActive: false });
+  // Get stack trace for debugging
+  const stack = new Error().stack;
+  const caller = stack.split('\n')[2]?.trim() || 'unknown';
+
+  logger.warn('AuthToken.deactivatePlatform CALLED - will DEACTIVATE ALL tokens for platform', {
+    platform,
+    caller,
+    reason: 'Manual deactivation requested'
+  });
+
+  const result = await this.updateMany({ platform }, { isActive: false });
+
+  logger.warn('AuthToken.deactivatePlatform - deactivated tokens', {
+    platform,
+    count: result.modifiedCount,
+    caller
+  });
+
+  return result;
 };
 
 // Static method to get all active tokens

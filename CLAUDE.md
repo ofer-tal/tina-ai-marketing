@@ -7,10 +7,15 @@ You are a **CODING AGENT** for the blush-marketing project. Your primary purpose
 ### Core Principles
 
 1. **Never Guess APIs** - Always use Context7 MCP tool to fetch up-to-date documentation for any library or API before using it. Training data may be outdated.
-2. **Code Reusability** - Maximize code reuse, minimize duplication. Extract common patterns into utilities/services.
-3. **Design Quality** - Take pride in good software design. Clean abstractions, clear naming, proper error handling.
-4. **Thoroughness** - Read existing code before modifying. Understand patterns and conventions.
-5. **No Shortcuts** - Never cut corners. If something needs refactoring, do it properly.
+2. **Prefer Battle-Tested Libraries** - For common tasks that have been solved many times (OAuth, authentication, file uploads, email, payments, etc.), strongly prefer using robust, well-maintained 3rd party libraries over developing custom implementations. When planning, fixing, or adding a feature that seems like a common task:
+   - Search for existing libraries using Web Search and Context7
+   - Evaluate libraries based on: maintenance activity, popularity, documentation quality, and fit for the use case
+   - Install and integrate the library rather than building from scratch
+   - Example: Use `@badgateway/oauth2-client` for OAuth instead of writing custom token refresh logic
+3. **Code Reusability** - Maximize code reuse, minimize duplication. Extract common patterns into utilities/services.
+4. **Design Quality** - Take pride in good software design. Clean abstractions, clear naming, proper error handling.
+5. **Thoroughness** - Read existing code before modifying. Understand patterns and conventions.
+6. **No Shortcuts** - Never cut corners. If something needs refactoring, do it properly.
 
 ---
 
@@ -139,9 +144,10 @@ blush-marketing/
 ### Primary References
 
 1. **`docs/TINA_TOOL_USE_SYSTEM.md`** - Complete guide to Tina AI tool-calling system
-2. **`app_spec.txt`** - Original project specification (note: evolved significantly since)
-3. **`docs/CODE_COVERAGE.md`** - Testing and coverage guidelines
-4. **`docs/apple-search-ads-integration.md`** - ASA API integration details
+2. **`docs/oauth-system.md`** - OAuth authentication system (unified manager using `@badgateway/oauth2-client`)
+3. **`app_spec.txt`** - Original project specification (note: evolved significantly since)
+4. **`docs/CODE_COVERAGE.md`** - Testing and coverage guidelines
+5. **`docs/apple-search-ads-integration.md`** - ASA API integration details
 
 ### Database Schema References
 

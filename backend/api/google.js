@@ -17,15 +17,17 @@ const router = express.Router();
 /**
  * GET /api/google/authorize-url
  * Get the Google OAuth authorization URL
+ * @deprecated Use GET /api/oauth/google/authorize-url instead
  */
-router.get('/authorize-url', (req, res) => {
+router.get('/authorize-url', async (req, res) => {
   try {
-    const url = googleSheetsService.getAuthorizationUrl();
+    const oauthManager = await import('../services/oauthManager.js');
+    const { authUrl } = await oauthManager.default.getAuthorizationUrl('google');
 
     res.json({
       success: true,
       data: {
-        authorizationUrl: url,
+        authorizationUrl: authUrl,
       },
     });
   } catch (error) {
@@ -223,6 +225,143 @@ router.get('/test-s3', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+    });
+  }
+});
+
+/**
+ * DELETE /api/google/revoke
+ * Revoke/deactivate the current Google token
+ * Use this before re-authorizing to ensure a fresh token with refresh token
+ */
+router.delete('/revoke', async (req, res) => {
+  try {
+    const { getLogger } = await import('../utils/logger.js');
+    const logger = getLogger('api', 'google-revoke');
+    const AuthToken = await import('../models/AuthToken.js');
+
+    logger.info('Token revocation requested');
+
+    const existingToken = await AuthToken.default.getActiveToken('google');
+
+    if (!existingToken) {
+      return res.status(404).json({
+        success: false,
+        error: 'No Google token found.'
+      });
+    }
+
+    // Deactivate the token
+    await AuthToken.default.updateOne(
+      { _id: existingToken._id },
+      { isActive: false, revokedAt: new Date() }
+    );
+
+    logger.info('Token revoked successfully', { tokenId: existingToken._id.toString() });
+
+    return res.json({
+      success: true,
+      message: 'Token revoked successfully. You can now re-authorize to get a fresh token with refresh capabilities.',
+    });
+
+  } catch (error) {
+    const { getLogger } = await import('../utils/logger.js');
+    const logger = getLogger('api', 'google-revoke');
+
+    logger.error('Token revocation failed', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/google/test-refresh
+ * Test endpoint to manually trigger OAuth token refresh
+ * Uses the unified oauthManager to refresh tokens
+ */
+router.post('/test-refresh', async (req, res) => {
+  try {
+    const { getLogger } = await import('../utils/logger.js');
+    const logger = getLogger('api', 'google-test-refresh');
+
+    logger.info('Manual token refresh requested');
+
+    const oauthManager = await import('../services/oauthManager.js');
+    const AuthToken = await import('../models/AuthToken.js');
+
+    // Check if we have a token to refresh
+    const existingToken = await AuthToken.default.getActiveToken('google');
+
+    if (!existingToken) {
+      return res.status(404).json({
+        success: false,
+        error: 'No Google token found. Please authenticate first.'
+      });
+    }
+
+    const oldExpiresAt = existingToken.expiresAt;
+    const oldAccessToken = existingToken.accessToken;
+    const hadRefreshToken = !!existingToken.refreshToken;
+
+    if (!hadRefreshToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'No refresh token available. This usually means the token was obtained without offline access permission.',
+        data: {
+          hasAccessToken: !!existingToken.accessToken,
+          expiresAt: oldExpiresAt,
+          actionRequired: 'Please re-authorize Google to get a refresh token. Click the "Authorize with Google" button again and grant permission.'
+        }
+      });
+    }
+
+    // Get the fetch wrapper and trigger a manual refresh
+    const fetchWrapper = oauthManager.default.getFetchWrapper('google');
+    const refreshedToken = await fetchWrapper.refreshToken();
+
+    // Get the updated token from database
+    const updatedToken = await AuthToken.default.getActiveToken('google');
+
+    logger.info('Token refresh test completed', {
+      hadOldToken: !!oldAccessToken,
+      hasNewToken: !!refreshedToken.accessToken,
+      oldExpiresAt,
+      newExpiresAt: updatedToken?.expiresAt
+    });
+
+    return res.json({
+      success: true,
+      message: 'Token refreshed successfully! New access token received.',
+      data: {
+        hadOldToken: !!oldAccessToken,
+        hasNewToken: !!refreshedToken.accessToken,
+        oldExpiresAt: oldExpiresAt?.toISOString() || null,
+        newExpiresAt: updatedToken?.expiresAt?.toISOString() || null,
+        expiresIn: updatedToken?.expiresAt
+          ? Math.floor((new Date(updatedToken.expiresAt).getTime() - Date.now()) / 1000)
+          : null,
+        tokenChanged: oldAccessToken !== refreshedToken.accessToken
+      }
+    });
+
+  } catch (error) {
+    const { getLogger } = await import('../utils/logger.js');
+    const logger = getLogger('api', 'google-test-refresh');
+
+    logger.error('Token refresh test failed', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Token refresh failed'
     });
   }
 });

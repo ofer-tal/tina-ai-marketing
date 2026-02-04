@@ -1,11 +1,21 @@
 // Server restart trigger - 2026-01-18 10:07
+// IMPORTANT: Load environment variables BEFORE any imports
+// because some services (like glmService) read process.env at module load time
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from parent directory (project root) since server runs from backend/ directory
+const projectRoot = path.resolve(__dirname, '..');
+dotenv.config({ path: path.join(projectRoot, '.env') });
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 import databaseService from "./services/database.js";
 import configService, { configSchema } from "./services/config.js";
 import schedulerService from "./services/scheduler.js";
@@ -22,10 +32,10 @@ import tieredVideoRouter from "./api/tieredVideo.js";
 import hooksRouter from "./api/hooks.js";
 import blacklistRouter from "./api/blacklist.js";
 import tiktokRouter from "./api/tiktok.js";
-import tiktokCallbackRouter from "./api/tiktok-callback.js";
 import instagramRouter from "./api/instagram.js";
 import youtubeRouter from "./api/youtube.js";
-import googleCallbackRouter from "./api/google-callback.js";
+import oauthRouter from "./api/oauth.js";
+import oauthCallbackRouter from "./api/oauth-callback.js";
 import rateLimitsRouter from "./api/rateLimits.js";
 import platformOptimizationRouter from "./api/platform-optimization.js";
 import tiktokAudioRouter from "./api/tiktok-audio.js";
@@ -80,6 +90,13 @@ import contentPerformanceRouter from "./api/contentPerformance.js";
 import trendingTopicsRouter from "./api/trendingTopics.js";
 import keywordRecommendationsRouter from "./api/keywordRecommendations.js";
 import tinaStrategiesRouter from "./api/tina/strategies.js";
+import tinaGoalsRouter from "./api/tina/goals.js";
+import tinaObservationsRouter from "./api/tina/observations.js";
+import tinaExperimentsRouter from "./api/tina/experiments.js";
+import tinaLearningsRouter from "./api/tina/learnings.js";
+import tinaThoughtsRouter from "./api/tina/thoughts.js";
+import tinaPlansRouter from "./api/tina/plans.js";
+import tinaReflectionsRouter from "./api/tina/reflections.js";
 import serviceStatusRouter from "./api/service-status.js";
 import testErrorsRouter from "./api/test-errors.js";
 import errorMonitoringRouter from "./api/error-monitoring.js";
@@ -118,13 +135,11 @@ import googleRouter from "./api/google.js";
 import tikTokVideoMatcherJob from "./jobs/tikTokVideoMatcher.js";
 import googleSheetsService from "./services/googleSheetsService.js";
 import s3VideoUploader from "./services/s3VideoUploader.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// Load .env from parent directory (project root) since server runs from backend/ directory
-const projectRoot = path.resolve(__dirname, '..');
-dotenv.config({ path: path.join(projectRoot, '.env') });
+import tinaGoalProgressJob from "./jobs/tinaGoalProgressJob.js";
+import tinaMonitoringJob from "./jobs/tinaMonitoringJob.js";
+import { analyzeCompletedExperiments } from "./jobs/tinaExperimentAnalysisJob.js";
+import { validateLearnings } from "./jobs/tinaLearningValidationJob.js";
+import { generateWeeklyReflection } from "./jobs/tinaReflectionJob.js";
 
 // Validate environment variables on startup
 console.log("Validating environment configuration...");
@@ -292,8 +307,9 @@ app.use("/api/tiered-video", tieredVideoRouter);
 app.use("/api/hooks", hooksRouter);
 app.use("/api/blacklist", blacklistRouter);
 app.use("/api/tiktok", tiktokRouter);
-app.use("/auth/tiktok", tiktokCallbackRouter);
-app.use("/auth/google", googleCallbackRouter);
+// Unified OAuth routes (replaces individual callback handlers)
+app.use("/api/oauth", oauthRouter);
+app.use("/auth", oauthCallbackRouter);
 app.use("/api/instagram", instagramRouter);
 app.use("/api/youtube", youtubeRouter);
 app.use("/api/rate-limits", rateLimitsRouter);
@@ -349,6 +365,13 @@ app.use("/api/content-performance", contentPerformanceRouter);
 app.use("/api/trending-topics", trendingTopicsRouter);
 app.use("/api/keyword-recommendations", keywordRecommendationsRouter);
 app.use("/api/tina/strategies", tinaStrategiesRouter);
+app.use("/api/tina/goals", tinaGoalsRouter);
+app.use("/api/tina/experiments", tinaExperimentsRouter);
+app.use("/api/tina/learnings", tinaLearningsRouter);
+app.use("/api/tina/thoughts", tinaThoughtsRouter);
+app.use("/api/tina/observations", tinaObservationsRouter);
+app.use("/api/tina/plans", tinaPlansRouter);
+app.use("/api/tina/reflections", tinaReflectionsRouter);
 app.use("/api/service-status", serviceStatusRouter);
 app.use("/api/test-errors", testErrorsRouter);
 app.use("/api/error-monitoring", errorMonitoringRouter);
@@ -560,6 +583,79 @@ async function startServer() {
       console.log("Google Sheets service initialized");
     } catch (error) {
       console.error("Failed to initialize Google Sheets service:", error.message);
+    }
+
+    // Start the Tina goal progress job (daily at 7 AM UTC)
+    try {
+      await schedulerService.schedule(
+        'tina-goal-progress',
+        '0 7 * * *',
+        tinaGoalProgressJob,
+        {
+          timezone: 'UTC',
+          persist: true,
+          metadata: { description: 'Daily Tina goal progress updates' }
+        }
+      );
+      console.log("Tina goal progress job scheduled");
+    } catch (error) {
+      console.error("Failed to schedule Tina goal progress job:", error.message);
+    }
+
+    // Start the Tina monitoring job (every 6 hours)
+    try {
+      await schedulerService.schedule(
+        'tina-monitoring',
+        '0 */6 * * *',
+        tinaMonitoringJob,
+        {
+          timezone: 'UTC',
+          persist: true,
+          metadata: { description: 'Tina proactive monitoring checks' }
+        }
+      );
+      console.log("Tina monitoring job scheduled");
+
+      // Schedule experiment analysis job
+      await schedulerService.schedule(
+        'tina-experiment-analysis',
+        '0 * * * *',
+        analyzeCompletedExperiments,
+        {
+          timezone: 'UTC',
+          persist: true,
+          metadata: { description: 'Hourly experiment analysis and auto-completion' }
+        }
+      );
+      console.log("Tina experiment analysis job scheduled");
+
+      // Schedule learning validation job (weekly Sunday 8am UTC)
+      await schedulerService.schedule(
+        'tina-learning-validation',
+        '0 8 * * 0',
+        validateLearnings,
+        {
+          timezone: 'UTC',
+          persist: true,
+          metadata: { description: 'Weekly learning validation (Sundays 8am)' }
+        }
+      );
+      console.log("Tina learning validation job scheduled");
+
+      // Schedule reflection generation job (weekly Sunday 8pm UTC)
+      await schedulerService.schedule(
+        'tina-reflection-generation',
+        '0 20 * * 0',
+        generateWeeklyReflection,
+        {
+          timezone: 'UTC',
+          persist: true,
+          metadata: { description: 'Weekly reflection generation (Sundays 8pm)' }
+        }
+      );
+      console.log("Tina reflection generation job scheduled");
+    } catch (error) {
+      console.error("Failed to schedule Tina monitoring job:", error.message);
     }
 
     // Start the TikTok video matcher job (every 30 minutes)
