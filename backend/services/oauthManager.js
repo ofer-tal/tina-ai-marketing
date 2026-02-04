@@ -564,6 +564,7 @@ class OAuthManager {
 
   /**
    * Check if platform has an active token
+   * Returns true if there's a token with refresh capability (OAuth2Fetch will handle auto-refresh)
    */
   async isAuthenticated(platform) {
     const token = await AuthToken.getActiveToken(platform);
@@ -571,18 +572,26 @@ class OAuthManager {
     logger.info(`[OAUTH] isAuthenticated check for ${platform}`, {
       hasToken: !!token,
       hasAccessToken: !!token?.accessToken,
+      hasRefreshToken: !!token?.refreshToken,
       expiresAt: token?.expiresAt?.toISOString(),
       isActive: token?.isActive,
     });
 
     if (!token || !token.accessToken) return false;
 
-    // Check if token is expired
+    // If we have a refresh token, consider authenticated even if access token is expired
+    // OAuth2Fetch will automatically refresh it when making an API call
+    if (token.refreshToken) {
+      logger.info(`[OAUTH] ${platform} is authenticated (has refresh token for auto-refresh)`);
+      return true;
+    }
+
+    // Check if token is expired (only matters if no refresh token)
     if (token.expiresAt) {
       const now = new Date();
       const expiresAt = new Date(token.expiresAt);
       if (now >= expiresAt) {
-        logger.warn(`[OAUTH] Token expired for ${platform}`, {
+        logger.warn(`[OAUTH] Token expired for ${platform} and NO refresh token available`, {
           now: now.toISOString(),
           expiresAt: expiresAt.toISOString(),
         });

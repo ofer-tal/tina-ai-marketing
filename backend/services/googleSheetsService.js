@@ -422,9 +422,22 @@ class GoogleSheetsService {
    */
   async ensureConnected() {
     const isAuthenticated = await oauthManager.isAuthenticated('google');
+
     if (!isAuthenticated) {
+      // Try to get more details about why authentication failed
+      const token = await oauthManager.getToken('google');
+      logger.error('Google authentication failed', {
+        hasToken: !!token,
+        hasAccessToken: !!token?.accessToken,
+        hasRefreshToken: !!token?.refreshToken,
+        expiresAt: token?.expiresAt?.toISOString(),
+        isActive: token?.isActive,
+      });
       throw new Error('No Google token found in database. Please complete Google OAuth first.');
     }
+
+    // Token exists and is valid - return
+    return true;
   }
 
   /**
