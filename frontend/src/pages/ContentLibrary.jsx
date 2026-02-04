@@ -593,6 +593,24 @@ const ModalTitle = styled.h3`
   font-size: 1.2rem;
 `;
 
+const PostIdBadge = styled.div`
+  display: inline-block;
+  background: rgba(115, 203, 229, 0.15);
+  border: 1px solid #73cbe5;
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+  color: #73cbe5;
+  font-family: 'Fira Code', monospace;
+  margin-bottom: 1rem;
+  user-select: all;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(115, 203, 229, 0.25);
+  }
+`;
+
 const ModalCaption = styled.p`
   margin: 0 0 1rem 0;
   color: #c0c0c0;
@@ -4141,6 +4159,7 @@ function ContentLibrary() {
                 )}
                 <ModalInfo>
                   <ModalTitle>{selectedVideo.title}</ModalTitle>
+                  <PostIdBadge>ID: {selectedVideo._id}</PostIdBadge>
 
                   {/* Scheduled Time Section */}
                   {selectedVideo.scheduledAt && (
