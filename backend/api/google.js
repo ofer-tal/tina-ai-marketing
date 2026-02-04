@@ -366,4 +366,67 @@ router.post('/test-refresh', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/google/debug-token
+ * Debug endpoint to check current token status
+ */
+router.get('/debug-token', async (req, res) => {
+  try {
+    const { getLogger } = await import('../utils/logger.js');
+    const logger = getLogger('api', 'google-debug-token');
+
+    const AuthToken = await import('../models/AuthToken.js');
+
+    // Get all tokens for Google
+    const allGoogleTokens = await AuthToken.default.find({ platform: 'google' })
+      .sort({ createdAt: -1 });
+
+    // Get active token
+    const activeToken = await AuthToken.default.getActiveToken('google');
+
+    logger.info('Google token debug info', {
+      totalTokens: allGoogleTokens.length,
+      activeTokens: allGoogleTokens.filter(t => t.isActive).length,
+      hasActiveToken: !!activeToken,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        totalTokens: allGoogleTokens.length,
+        activeTokens: allGoogleTokens.filter(t => t.isActive).length,
+        activeToken: activeToken ? {
+          id: activeToken._id.toString(),
+          hasAccessToken: !!activeToken.accessToken,
+          hasRefreshToken: !!activeToken.refreshToken,
+          expiresAt: activeToken.expiresAt?.toISOString(),
+          isActive: activeToken.isActive,
+          createdAt: activeToken.createdAt?.toISOString(),
+        } : null,
+        allTokens: allGoogleTokens.map(t => ({
+          id: t._id.toString(),
+          hasAccessToken: !!t.accessToken,
+          hasRefreshToken: !!t.refreshToken,
+          expiresAt: t.expiresAt?.toISOString(),
+          isActive: t.isActive,
+          createdAt: t.createdAt?.toISOString(),
+        })),
+      },
+    });
+  } catch (error) {
+    const { getLogger } = await import('../utils/logger.js');
+    const logger = getLogger('api', 'google-debug-token');
+
+    logger.error('Token debug failed', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 export default router;
