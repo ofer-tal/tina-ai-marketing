@@ -164,12 +164,36 @@ class PostingSchedulerJob {
         platform: post.platform
       });
 
-      // Mark as failed
-      post.status = 'failed';
-      post.error = error.message;
-      post.failedAt = new Date();
-      await post.save();
+      // Calculate time since scheduled
+      const timeSinceScheduled = Date.now() - new Date(post.scheduledAt).getTime();
+      const RETRY_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
 
+      if (timeSinceScheduled < RETRY_WINDOW) {
+        // Keep as 'approved' so it will be retried in the next scheduler run
+        post.status = 'approved';
+        post.error = error.message;
+        post.retryCount = (post.retryCount || 0) + 1;
+        post.lastRetriedAt = new Date();
+
+        logger.info(`Keeping post as 'approved' for retry (${post.retryCount} attempts, ${Math.round(timeSinceScheduled / 60000)} min since scheduled)`, {
+          postId: post._id,
+          retryCount: post.retryCount
+        });
+      } else {
+        // Mark as failed after 1 hour of attempts
+        post.status = 'failed';
+        post.error = error.message;
+        post.failedAt = new Date();
+        post.retryCount = (post.retryCount || 0) + 1;
+
+        logger.warn(`Post marked as failed after ${post.retryCount} attempts over 1 hour`, {
+          postId: post._id,
+          totalAttempts: post.retryCount,
+          timeSinceScheduled: Math.round(timeSinceScheduled / 60000) + ' minutes'
+        });
+      }
+
+      await post.save();
       throw error;
     }
   }
@@ -210,7 +234,9 @@ class PostingSchedulerJob {
     // Check if we have required services configured
     const s3Status = s3VideoUploader.getStatus();
     const s3Enabled = s3Status.enabled;
-    const googleConnected = !!googleSheetsService.accessToken;
+    // Check Google connection via oauthManager (after refactoring, accessToken is no longer a property)
+    const oauthManager = (await import('../services/oauthManager.js')).default;
+    const googleConnected = await oauthManager.isAuthenticated('google');
 
     logger.info('Service configuration check', {
       s3Enabled,
@@ -326,10 +352,28 @@ class PostingSchedulerJob {
       logger.error(`Error: ${error.message}`);
       logger.error(`========================================`);
 
-      // Mark as failed - do NOT retry automatically, manual intervention needed
-      post.status = 'failed';
-      post.error = error.message;
-      post.failedAt = new Date();
+      // Calculate time since scheduled
+      const timeSinceScheduled = Date.now() - new Date(post.scheduledAt).getTime();
+      const RETRY_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+
+      if (timeSinceScheduled < RETRY_WINDOW) {
+        // Keep as 'approved' so it will be retried in the next scheduler run
+        post.status = 'approved';
+        post.error = error.message;
+        post.retryCount = (post.retryCount || 0) + 1;
+        post.lastRetriedAt = new Date();
+
+        logger.info(`Keeping post as 'approved' for retry (${post.retryCount} attempts, ${Math.round(timeSinceScheduled / 60000)} min since scheduled)`);
+      } else {
+        // Mark as failed after 1 hour of attempts
+        post.status = 'failed';
+        post.error = error.message;
+        post.failedAt = new Date();
+        post.retryCount = (post.retryCount || 0) + 1;
+
+        logger.warn(`Post marked as failed after ${post.retryCount} attempts over 1 hour`);
+      }
+
       await post.save();
 
       throw error;

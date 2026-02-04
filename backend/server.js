@@ -214,8 +214,10 @@ app.get("/api/health", async (req, res) => {
         propertyIdConfigured: !!process.env.GOOGLE_ANALYTICS_PROPERTY_ID,
       },
       googleSheets: {
-        configured: !!(googleSheetsService.accessToken),
-        connected: !!googleSheetsService.accessToken,
+        configured: !!(process.env.GOOGLE_SPREADSHEET_ID &&
+                       (process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID) &&
+                       (process.env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET)),
+        connected: await oauthManager.isAuthenticated('google'),
         spreadsheetId: googleSheetsService.spreadsheetId,
       },
       awsS3: {

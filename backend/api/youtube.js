@@ -9,6 +9,7 @@ import express from 'express';
 import youtubeService from '../services/youtubePostingService.js';
 import { getLogger } from '../utils/logger.js';
 import MarketingPost from '../models/MarketingPost.js';
+import oauthManager from '../services/oauthManager.js';
 
 const router = express.Router();
 const logger = getLogger('api', 'youtube');
@@ -133,7 +134,7 @@ router.post('/test-connection', async (req, res) => {
       message: result.message,
       data: {
         connectionStatus: 'ok',
-        authenticated: !!youtubeService.accessToken,
+        authenticated: await oauthManager.isAuthenticated('google'), // YouTube uses Google OAuth
         hasChannel: !!youtubeService.channelId,
       },
     });

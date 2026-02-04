@@ -18,6 +18,7 @@
 import BaseApiClient from './baseApiClient.js';
 import MarketingPost from '../models/MarketingPost.js';
 import { getLogger } from '../utils/logger.js';
+import oauthManager from './oauthManager.js';
 
 const logger = getLogger('services', 'performance-metrics');
 
@@ -54,12 +55,21 @@ class PerformanceMetricsService extends BaseApiClient {
 
   /**
    * Set access token for a platform (called by posting services)
+   * @deprecated Tokens are now managed by oauthManager
    */
   setPlatformToken(platform, token) {
-    if (this.platforms[platform]) {
-      this.platforms[platform].accessToken = token;
-      logger.info(`Access token set for ${platform}`);
+    logger.warn(`setPlatformToken is deprecated for ${platform}, tokens are now managed by oauthManager`);
+  }
+
+  /**
+   * Helper to get OAuth token from oauthManager
+   */
+  async getPlatformToken(platform) {
+    const token = await oauthManager.getToken(platform);
+    if (!token || !token.accessToken) {
+      return null;
     }
+    return token.accessToken;
   }
 
   /**
@@ -187,25 +197,20 @@ class PerformanceMetricsService extends BaseApiClient {
         };
       }
 
-      if (!this.platforms.tiktok.accessToken) {
+      const accessToken = await this.getPlatformToken('tiktok');
+      if (!accessToken) {
         return {
           success: false,
-          error: 'TikTok access token not set',
+          error: 'TikTok access token not set. Please authenticate.',
           code: 'MISSING_TOKEN',
         };
       }
 
       logger.info(`Fetching TikTok metrics for video ${videoId}...`);
 
-      // TikTok Video Insights API
-      // Note: This endpoint requires specific permissions
-      const response = await this.get(`${this.platforms.tiktok.baseURL}/video/insights/`, {
-        params: {
-          video_id: videoId,
-        },
-        headers: {
-          'Authorization': `Bearer ${this.platforms.tiktok.accessToken}`,
-        },
+      // Use oauthManager for authenticated request
+      const response = await oauthManager.fetch('tiktok', `${this.platforms.tiktok.baseURL}/video/insights/?video_id=${videoId}`, {
+        method: 'GET',
       });
 
       if (response.error && response.error.code) {
@@ -268,24 +273,20 @@ class PerformanceMetricsService extends BaseApiClient {
         };
       }
 
-      if (!this.platforms.instagram.accessToken) {
+      const accessToken = await this.getPlatformToken('instagram');
+      if (!accessToken) {
         return {
           success: false,
-          error: 'Instagram access token not set',
+          error: 'Instagram access token not set. Please authenticate.',
           code: 'MISSING_TOKEN',
         };
       }
 
       logger.info(`Fetching Instagram metrics for media ${mediaId}...`);
 
-      // Instagram Media Insights API
-      const response = await this.get(`${this.platforms.instagram.baseURL}/${mediaId}/insights`, {
-        params: {
-          metric: 'engagement,impressions,reach,shares',
-        },
-        headers: {
-          'Authorization': `Bearer ${this.platforms.instagram.accessToken}`,
-        },
+      // Use oauthManager for authenticated request
+      const response = await oauthManager.fetch('instagram', `${this.platforms.instagram.baseURL}/${mediaId}/insights?metric=engagement,impressions,reach,shares`, {
+        method: 'GET',
       });
 
       if (response.error) {
