@@ -279,8 +279,8 @@ class ApiHealthMonitorJob {
       }
 
       // Attempt a simple API call to test connectivity
-      // Get app details (lightweight call)
-      await appStoreConnectService.getAppDetails();
+      // Use testConnection which is designed for health checks
+      await appStoreConnectService.testConnection();
 
       return {
         healthy: true,
@@ -414,8 +414,8 @@ class ApiHealthMonitorJob {
       }
 
       // Attempt a simple API call to test connectivity
-      // Get real-time report (lightweight call)
-      await googleAnalyticsService.getRealtimeReport();
+      // Fetch realtime users (lightweight call)
+      await googleAnalyticsService.fetchRealtimeUsers();
 
       return {
         healthy: true,
@@ -456,12 +456,11 @@ class ApiHealthMonitorJob {
 
       // Attempt a simple API call to test connectivity
       // Simple test message
-      const testMessage = {
-        role: 'user',
-        content: 'Hello'
-      };
-
-      await glmService.chat([testMessage], {
+      await glmService.createMessage({
+        messages: [{
+          role: 'user',
+          content: 'Hello'
+        }],
         maxTokens: 10,
         temperature: 0.1
       });

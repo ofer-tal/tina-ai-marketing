@@ -38,6 +38,14 @@ import TrendingTopics from './pages/TrendingTopics';
 import ContentMusic from './pages/ContentMusic';
 import KeywordRecommendations from './pages/KeywordRecommendations';
 import Strategies from './pages/Strategies';
+import Goals from './pages/Goals';
+import Inbox from './pages/Inbox';
+import TinaDashboard from './pages/TinaDashboard';
+import Experiments from './pages/Experiments';
+import Learnings from './pages/Learnings';
+import Thoughts from './pages/Thoughts';
+import Plans from './pages/Plans';
+import Reflections from './pages/Reflections';
 import Todos from './pages/Todos';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
@@ -730,8 +738,15 @@ const NAV_SECTIONS = [
     icon: '🧠',
     label: 'Tina AI',
     items: [
-      { path: '/chat', icon: '💬', label: 'Chat' },
+      { path: '/tina', icon: '🏠', label: 'Dashboard' },
       { path: '/tina/strategies', icon: '🎯', label: 'Strategies' },
+      { path: '/tina/goals', icon: '🎯', label: 'Goals' },
+      { path: '/tina/experiments', icon: '🧪', label: 'Experiments' },
+      { path: '/tina/learnings', icon: '💡', label: 'Learnings' },
+      { path: '/tina/plans', icon: '📋', label: 'Plans' },
+      { path: '/tina/reflections', icon: '📝', label: 'Reflections' },
+      { path: '/tina/thoughts', icon: '🧠', label: 'Thoughts' },
+      { path: '/tina/inbox', icon: '📬', label: 'Inbox' },
     ]
   },
   {
@@ -1120,6 +1135,18 @@ function App() {
                 <Route path="/revenue/monthly" element={<PageWithBreadcrumbs><MonthlyRevenueAggregates /></PageWithBreadcrumbs>} />
                 <Route path="/tina/strategies" element={<PageWithBreadcrumbs><Strategies /></PageWithBreadcrumbs>} />
                 <Route path="/tina/strategies/:id" element={<PageWithBreadcrumbs><Strategies /></PageWithBreadcrumbs>} />
+                <Route path="/tina/goals" element={<PageWithBreadcrumbs><Goals /></PageWithBreadcrumbs>} />
+                <Route path="/tina/goals/:id" element={<PageWithBreadcrumbs><Goals /></PageWithBreadcrumbs>} />
+                <Route path="/tina" element={<PageWithBreadcrumbs><TinaDashboard /></PageWithBreadcrumbs>} />
+                <Route path="/tina/learnings" element={<PageWithBreadcrumbs><Learnings /></PageWithBreadcrumbs>} />
+                <Route path="/tina/thoughts" element={<PageWithBreadcrumbs><Thoughts /></PageWithBreadcrumbs>} />
+                <Route path="/tina/inbox" element={<PageWithBreadcrumbs><Inbox /></PageWithBreadcrumbs>} />
+                <Route path="/tina/experiments" element={<PageWithBreadcrumbs><Experiments /></PageWithBreadcrumbs>} />
+                <Route path="/tina/experiments/:id" element={<PageWithBreadcrumbs><Experiments /></PageWithBreadcrumbs>} />
+                <Route path="/tina/plans" element={<PageWithBreadcrumbs><Plans /></PageWithBreadcrumbs>} />
+                <Route path="/tina/plans/:id" element={<PageWithBreadcrumbs><Plans /></PageWithBreadcrumbs>} />
+                <Route path="/tina/reflections" element={<PageWithBreadcrumbs><Reflections /></PageWithBreadcrumbs>} />
+                <Route path="/tina/reflections/:id" element={<PageWithBreadcrumbs><Reflections /></PageWithBreadcrumbs>} />
                 <Route path="/todos" element={<PageWithBreadcrumbs><Todos /></PageWithBreadcrumbs>} />
                 <Route path="/settings" element={<PageWithBreadcrumbs><Settings /></PageWithBreadcrumbs>} />
                 <Route path="/service-health" element={<PageWithBreadcrumbs><ServiceHealth /></PageWithBreadcrumbs>} />

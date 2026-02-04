@@ -194,7 +194,22 @@ const tinaReflectionSchema = new mongoose.Schema({
   summary: String,
 
   // Next week's priorities
-  nextWeekPriorities: [String]
+  nextWeekPriorities: [String],
+
+  // Questions for the founder
+  questionsForFounder: [{
+    question: {
+      type: String,
+      required: true
+    },
+    context: String,
+    relatedTo: {
+      type: String,
+      enum: ['goal', 'strategy', 'experiment', 'general', 'learning'],
+      default: 'general'
+    },
+      id: String
+  }]
 }, {
   collection: 'marketing_reflections',
   timestamps: true

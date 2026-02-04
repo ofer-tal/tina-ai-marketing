@@ -1391,11 +1391,19 @@ router.post("/tools/approve", async (req, res) => {
       });
     }
 
-    if (proposal.status !== 'pending_approval') {
+    // Allow retrying failed proposals (e.g., after fixing a technical bug)
+    const isRetry = proposal.status === 'failed';
+    if (proposal.status !== 'pending_approval' && !isRetry) {
       return res.status(400).json({
         success: false,
         error: `Proposal is not pending approval (current status: ${proposal.status})`
       });
+    }
+
+    // If retrying a failed proposal, reset it first
+    if (isRetry) {
+      await proposal.resetForRetry();
+      logger.info('Reset failed proposal for retry', { proposalId });
     }
 
     // Mark as approved
@@ -1403,7 +1411,8 @@ router.post("/tools/approve", async (req, res) => {
 
     logger.info('Tool proposal approved, executing', {
       proposalId,
-      toolName: proposal.toolName
+      toolName: proposal.toolName,
+      isRetry
     });
 
     // Execute the tool
@@ -1413,7 +1422,28 @@ router.post("/tools/approve", async (req, res) => {
     if (result.success) {
       await proposal.markExecuted(result.data);
     } else {
-      await proposal.markFailed(result.error);
+      // Determine if this is a technical error (implementation bug) or business logic failure
+      // Technical errors should allow retry, business failures should not
+      const isTechnicalError = isTechnicalErrorMessage(result.error);
+
+      if (isTechnicalError) {
+        // Reset to pending_approval so it can be retried after fixing the bug
+        // Store the error but don't mark as failed
+        proposal.executionError = result.error;
+        proposal.status = 'pending_approval';
+        proposal.approvedAt = undefined;
+        proposal.approvedBy = undefined;
+        await proposal.save();
+
+        logger.warn('Tool execution failed with technical error, proposal reset for retry', {
+          proposalId,
+          toolName,
+          error: result.error
+        });
+      } else {
+        // Business logic failure - mark as failed
+        await proposal.markFailed(result.error);
+      }
     }
 
     res.json({
@@ -1423,18 +1453,55 @@ router.post("/tools/approve", async (req, res) => {
       result: result.data,
       error: result.error,
       executedAt: proposal.executedAt,
+      isRetryable: !result.success && isTechnicalErrorMessage(result.error),
       message: result.success
         ? `Tool "${proposal.toolName}" executed successfully`
         : `Tool "${proposal.toolName}" execution failed`
     });
   } catch (error) {
     logger.error('Error approving tool proposal', { error: error.message });
+
+    // If an exception occurs during execution (not in the tool itself), reset for retry
+    const proposal = await ToolProposal.findById(req.body.proposalId);
+    if (proposal && proposal.status === 'approved') {
+      proposal.executionError = error.message;
+      proposal.status = 'pending_approval';
+      proposal.approvedAt = undefined;
+      proposal.approvedBy = undefined;
+      await proposal.save();
+    }
+
     res.status(500).json({
       success: false,
-      error: error.message
+      error: error.message,
+      isRetryable: true
     });
   }
 });
+
+/**
+ * Check if an error message indicates a technical/implementation error (vs business logic failure)
+ * Technical errors should allow retry, business failures should not
+ * @param {string} errorMessage - The error message to check
+ * @returns {boolean} True if this is a technical error
+ */
+function isTechnicalErrorMessage(errorMessage) {
+  if (!errorMessage || typeof errorMessage !== 'string') return false;
+
+  const technicalErrorPatterns = [
+    /Cast to ObjectId failed/i,
+    /Cannot read .* of undefined/i,
+    /Cannot read property .* of undefined/i,
+    /is not a function/i,
+    /Unexpected token/i,
+    /ValidationError/i,
+    /TypeError/i,
+    /ReferenceError/i,
+    /SyntaxError/i
+  ];
+
+  return technicalErrorPatterns.some(pattern => pattern.test(errorMessage));
+}
 
 // POST /api/chat/tools/reject - Reject a tool proposal
 router.post("/tools/reject", async (req, res) => {

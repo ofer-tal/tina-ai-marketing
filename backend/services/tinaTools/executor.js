@@ -10,11 +10,41 @@ import Strategy from '../../models/Strategy.js';
 import DailyRevenueAggregate from '../../models/DailyRevenueAggregate.js';
 import RetentionMetrics from '../../models/RetentionMetrics.js';
 import GoogleAnalyticsDaily from '../../models/GoogleAnalyticsDaily.js';
+import MarketingStrategy from '../../models/MarketingStrategy.js';
+import MarketingGoal from '../../models/MarketingGoal.js';
+import MarketingExperiment from '../../models/MarketingExperiment.js';
+import TinaLearning from '../../models/TinaLearning.js';
+import TinaThoughtLog from '../../models/TinaThoughtLog.js';
 import appleSearchAdsService from '../appleSearchAdsService.js';
 import appStoreConnectService from '../appStoreConnectService.js';
 import postManagementTools from './postManagementTools.js';
 
 const logger = getLogger('tool-executor', 'tool-executor');
+
+/**
+ * Check if a string is a valid MongoDB ObjectId
+ * @param {string} str - String to check
+ * @returns {boolean} True if valid ObjectId format
+ */
+function isValidObjectId(str) {
+  return /^[0-9a-fA-F]{24}$/.test(str);
+}
+
+/**
+ * Build a query for finding a document by either _id (ObjectId) or custom ID field
+ * This handles cases where tools may pass either format
+ * @param {string} id - The ID to search for (could be ObjectId or custom ID like "strategy_123_abc")
+ * @param {string} customIdField - The field name for custom ID (e.g., "strategyId", "goalId")
+ * @returns {object} Mongoose query object
+ */
+function buildIdQuery(id, customIdField) {
+  if (isValidObjectId(id)) {
+    // Valid ObjectId format - check both _id and custom field
+    return { $or: [{ _id: id }, { [customIdField]: id }] };
+  }
+  // Not an ObjectId - only query by custom field
+  return { [customIdField]: id };
+}
 
 /**
  * Tool Executor
@@ -221,6 +251,99 @@ export async function executeTool(proposal) {
 
       case 'resume_strategy':
         result = await resumeStrategy(toolParameters);
+        break;
+
+      // Goal tools - approval required
+      case 'create_goal':
+        result = await createGoal(toolParameters);
+        break;
+
+      case 'update_goal':
+        result = await updateGoal(toolParameters);
+        break;
+
+      case 'link_strategy_to_goal':
+        result = await linkStrategyToGoal(toolParameters);
+        break;
+
+      // Experiment tools - approval required
+      case 'create_experiment':
+        result = await createExperiment(toolParameters);
+        break;
+
+      case 'start_experiment':
+        result = await startExperiment(toolParameters);
+        break;
+
+      case 'complete_experiment':
+        result = await completeExperiment(toolParameters);
+        break;
+
+      case 'pause_experiment':
+        result = await pauseExperiment(toolParameters);
+        break;
+
+      case 'resume_experiment':
+        result = await resumeExperiment(toolParameters);
+        break;
+
+      // Experiment tools - read only
+      case 'get_experiments':
+        result = await getExperiments(toolParameters);
+        break;
+
+      case 'get_experiment_results':
+        result = await getExperimentResults(toolParameters);
+        break;
+
+      // Goal tools - read only
+      case 'get_goals':
+        result = await getGoals(toolParameters);
+        break;
+
+      case 'get_goal_progress':
+        result = await getGoalProgress(toolParameters);
+        break;
+
+      // Learning tools - approval required
+      case 'create_learning':
+        result = await createLearning(toolParameters);
+        break;
+
+      case 'invalidate_learning':
+        result = await invalidateLearning(toolParameters);
+        break;
+
+      // Learning tools - read only
+      case 'get_learnings':
+        result = await getLearnings(toolParameters);
+        break;
+
+      case 'detect_patterns':
+        result = await detectPatterns(toolParameters);
+        break;
+
+      // Plan tools - approval required
+      case 'create_plan':
+        result = await createPlan(toolParameters);
+        break;
+
+      // Plan tools - read only
+      case 'get_current_plan':
+        result = await getCurrentPlan(toolParameters);
+        break;
+
+      case 'get_plans':
+        result = await getPlans(toolParameters);
+        break;
+
+      // Reflection tools - read only
+      case 'get_reflections':
+        result = await getReflections(toolParameters);
+        break;
+
+      case 'get_current_reflection':
+        result = await getCurrentReflection(toolParameters);
         break;
 
       default:
@@ -2306,6 +2429,11 @@ async function getMarketingStrategyModel() {
   return MarketingStrategy;
 }
 
+async function getMarketingGoalModel() {
+  const { default: MarketingGoal } = await import('../../models/MarketingGoal.js');
+  return MarketingGoal;
+}
+
 /**
  * Get strategies with optional filters
  */
@@ -2359,9 +2487,9 @@ async function getStrategies({ status = 'all', level = 'all', category, limit = 
 async function getStrategyDetails({ strategyId }) {
   const MarketingStrategy = await getMarketingStrategyModel();
 
-  const strategy = await MarketingStrategy.findOne({
-    $or: [{ _id: strategyId }, { strategyId: strategyId }]
-  });
+  // Query by strategyId field only - strategyId is human-readable (e.g., "strategy_123_abc")
+  // not a MongoDB ObjectId, so we can't use $or with _id as it will fail to cast
+  const strategy = await MarketingStrategy.findOne({ strategyId });
 
   if (!strategy) {
     return {
@@ -2516,9 +2644,7 @@ async function createStrategy({ name, description, hypothesis, successMetric, ta
 async function updateStrategy({ strategyId, currentValue, status, notes }) {
   const MarketingStrategy = await getMarketingStrategyModel();
 
-  const strategy = await MarketingStrategy.findOne({
-    $or: [{ _id: strategyId }, { strategyId: strategyId }]
-  });
+  const strategy = await MarketingStrategy.findOne(buildIdQuery(strategyId, 'strategyId'));
 
   if (!strategy) {
     return {
@@ -2559,9 +2685,7 @@ async function updateStrategy({ strategyId, currentValue, status, notes }) {
 async function completeStrategy({ strategyId, outcomes = [], notes = '' }) {
   const MarketingStrategy = await getMarketingStrategyModel();
 
-  const strategy = await MarketingStrategy.findOne({
-    $or: [{ _id: strategyId }, { strategyId: strategyId }]
-  });
+  const strategy = await MarketingStrategy.findOne(buildIdQuery(strategyId, 'strategyId'));
 
   if (!strategy) {
     return {
@@ -2594,9 +2718,7 @@ async function completeStrategy({ strategyId, outcomes = [], notes = '' }) {
 async function pauseStrategy({ strategyId, reason = '' }) {
   const MarketingStrategy = await getMarketingStrategyModel();
 
-  const strategy = await MarketingStrategy.findOne({
-    $or: [{ _id: strategyId }, { strategyId: strategyId }]
-  });
+  const strategy = await MarketingStrategy.findOne(buildIdQuery(strategyId, 'strategyId'));
 
   if (!strategy) {
     return {
@@ -2624,9 +2746,7 @@ async function pauseStrategy({ strategyId, reason = '' }) {
 async function resumeStrategy({ strategyId }) {
   const MarketingStrategy = await getMarketingStrategyModel();
 
-  const strategy = await MarketingStrategy.findOne({
-    $or: [{ _id: strategyId }, { strategyId: strategyId }]
-  });
+  const strategy = await MarketingStrategy.findOne(buildIdQuery(strategyId, 'strategyId'));
 
   if (!strategy) {
     return {
@@ -2648,6 +2768,269 @@ async function resumeStrategy({ strategyId }) {
   };
 }
 
+/**
+ * Create a new goal
+ */
+async function createGoal({ name, description, type, targetValue, targetDate, startValue, checkInFrequency, priority }) {
+  const MarketingGoal = await getMarketingGoalModel();
+
+  const goal = new MarketingGoal({
+    name,
+    description: description || '',
+    type,
+    targetValue,
+    currentValue: startValue || 0,
+    startValue: startValue || 0,
+    targetDate: new Date(targetDate),
+    startDate: new Date(),
+    checkInFrequency: checkInFrequency || 'weekly',
+    priority: priority || 5,
+    status: 'draft'
+  });
+
+  await goal.save();
+
+  return {
+    message: 'Goal created successfully',
+    goal: {
+      id: goal._id,
+      goalId: goal.goalId,
+      name: goal.name,
+      type: goal.type,
+      targetValue: goal.targetValue,
+      targetDate: goal.targetDate,
+      status: goal.status
+    }
+  };
+}
+
+/**
+ * Update an existing goal
+ */
+async function updateGoal({ goalId, currentValue, targetValue, targetDate, status, notes }) {
+  const MarketingGoal = await getMarketingGoalModel();
+
+  const goal = await MarketingGoal.findOne(buildIdQuery(goalId, 'goalId'));
+
+  if (!goal) {
+    return {
+      error: 'Goal not found',
+      goalId
+    };
+  }
+
+  // Update progress if currentValue provided
+  if (currentValue !== undefined) {
+    await goal.updateProgress(currentValue);
+  }
+
+  // Update other fields
+  if (targetValue !== undefined) goal.targetValue = targetValue;
+  if (targetDate !== undefined) goal.targetDate = new Date(targetDate);
+  if (status !== undefined) goal.status = status;
+
+  await goal.save();
+
+  // Add notes if provided
+  if (notes) {
+    await goal.addNote(`Update: ${notes}`);
+  }
+
+  // Recalculate trajectory
+  await goal.calculateTrajectory();
+
+  return {
+    message: 'Goal updated successfully',
+    goal: {
+      id: goal._id,
+      goalId: goal.goalId,
+      name: goal.name,
+      currentValue: goal.currentValue,
+      progressPercent: goal.progressPercent,
+      status: goal.status,
+      trajectory: goal.trajectory
+    }
+  };
+}
+
+/**
+ * Link a strategy to a goal
+ */
+async function linkStrategyToGoal({ goalId, strategyId }) {
+  const MarketingGoal = await getMarketingGoalModel();
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const goal = await MarketingGoal.findOne(buildIdQuery(goalId, 'goalId'));
+
+  if (!goal) {
+    return {
+      error: 'Goal not found',
+      goalId
+    };
+  }
+
+  const strategy = await MarketingStrategy.findOne(buildIdQuery(strategyId, 'strategyId'));
+
+  if (!strategy) {
+    return {
+      error: 'Strategy not found',
+      strategyId
+    };
+  }
+
+  // Link strategy to goal
+  if (!goal.linkedStrategyIds) {
+    goal.linkedStrategyIds = [];
+  }
+  if (!goal.linkedStrategyIds.includes(strategy.strategyId)) {
+    goal.linkedStrategyIds.push(strategy.strategyId);
+    await goal.save();
+  }
+
+  // Link goal to strategy
+  if (!strategy.relatedGoalIds) {
+    strategy.relatedGoalIds = [];
+  }
+  if (!strategy.relatedGoalIds.includes(goal.goalId)) {
+    strategy.relatedGoalIds.push(goal.goalId);
+    await strategy.save();
+  }
+
+  return {
+    message: 'Strategy linked to goal successfully',
+    goal: {
+      id: goal._id,
+      goalId: goal.goalId,
+      name: goal.name
+    },
+    strategy: {
+      id: strategy._id,
+      strategyId: strategy.strategyId,
+      name: strategy.name
+    }
+  };
+}
+
+/**
+ * Get all goals with optional filters
+ */
+async function getGoals({ status = 'all', type = 'all', limit = 50 }) {
+  const MarketingGoal = await getMarketingGoalModel();
+
+  const query = {};
+
+  if (status !== 'all') {
+    const validStatuses = ['draft', 'active', 'at_risk', 'achieved', 'missed', 'cancelled'];
+    if (validStatuses.includes(status)) {
+      query.status = status;
+    }
+  }
+
+  if (type !== 'all') {
+    const validTypes = ['revenue', 'growth', 'engagement', 'brand', 'experiment', 'custom'];
+    if (validTypes.includes(type)) {
+      query.type = type;
+    }
+  }
+
+  const goals = await MarketingGoal.find(query)
+    .sort({ targetDate: 1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    message: `Found ${goals.length} goals`,
+    goals: goals.map(g => ({
+      id: g._id,
+      goalId: g.goalId,
+      name: g.name,
+      type: g.type,
+      status: g.status,
+      currentValue: g.currentValue,
+      targetValue: g.targetValue,
+      progressPercent: g.progressPercent,
+      targetDate: g.targetDate,
+      trajectory: g.trajectory
+    }))
+  };
+}
+
+/**
+ * Get detailed progress for a goal
+ */
+async function getGoalProgress({ goalId }) {
+  const MarketingGoal = await getMarketingGoalModel();
+  const MarketingStrategy = await getMarketingStrategyModel();
+
+  const goal = await MarketingGoal.findOne(buildIdQuery(goalId, 'goalId'));
+
+  if (!goal) {
+    return {
+      error: 'Goal not found',
+      goalId
+    };
+  }
+
+  // Get linked strategies
+  let linkedStrategies = [];
+  if (goal.linkedStrategyIds && goal.linkedStrategyIds.length > 0) {
+    linkedStrategies = await MarketingStrategy.find({
+      strategyId: { $in: goal.linkedStrategyIds }
+    }).select('strategyId name status currentValue targetValue successMetric');
+  }
+
+  // Calculate progress metrics
+  const range = goal.targetValue - goal.startValue;
+  const current = goal.currentValue - goal.startValue;
+  const progressPercent = range > 0 ? (current / range) * 100 : 0;
+
+  // Time-based trajectory
+  const now = new Date();
+  const totalDuration = goal.targetDate - goal.startDate;
+  const elapsed = now - goal.startDate;
+  const timeProgress = totalDuration > 0 ? (elapsed / totalDuration) * 100 : 0;
+
+  return {
+    message: 'Goal progress retrieved',
+    goal: {
+      id: goal._id,
+      goalId: goal.goalId,
+      name: goal.name,
+      type: goal.type,
+      status: goal.status,
+      description: goal.description,
+      progress: {
+        startValue: goal.startValue,
+        currentValue: goal.currentValue,
+        targetValue: goal.targetValue,
+        progressPercent: Math.min(100, Math.max(0, progressPercent)),
+        remaining: Math.max(0, goal.targetValue - goal.currentValue)
+      },
+      trajectory: {
+        trend: goal.trajectory?.trend || 'unknown',
+        timeProgress: Math.min(100, timeProgress),
+        valueProgress: Math.min(100, Math.max(0, progressPercent)),
+        projectedAchievementDate: goal.trajectory?.projectedAchievementDate
+      },
+      dates: {
+        startDate: goal.startDate,
+        targetDate: goal.targetDate,
+        daysRemaining: Math.max(0, Math.ceil((goal.targetDate - now) / (1000 * 60 * 60 * 24)))
+      },
+      milestones: goal.milestones || [],
+      linkedStrategies: linkedStrategies.map(s => ({
+        strategyId: s.strategyId,
+        name: s.name,
+        status: s.status,
+        progress: s.targetValue > 0
+          ? ((s.currentValue - s.currentBaseline) / (s.targetValue - s.currentBaseline)) * 100
+          : 0
+      })),
+      alerts: goal.alerts?.filter(a => !a.acknowledged) || []
+    }
+  };
+}
+
 export default {
   executeTool,
   // Approval-required tools
@@ -2664,6 +3047,13 @@ export default {
   completeStrategy,
   pauseStrategy,
   resumeStrategy,
+  // Goal tools - approval required
+  createGoal,
+  updateGoal,
+  linkStrategyToGoal,
+  // Goal tools - read only
+  getGoals,
+  getGoalProgress,
   // Read-only tools - existing
   getCampaignPerformance,
   getContentAnalytics,
@@ -2690,5 +3080,660 @@ export default {
   // Strategy memory tools - read only
   getStrategies,
   getStrategyDetails,
-  getStrategyHistory
+  getStrategyHistory,
+  // Experiment tools - approval required
+  createExperiment,
+  startExperiment,
+  completeExperiment,
+  pauseExperiment,
+  resumeExperiment,
+  // Experiment tools - read only
+  getExperiments,
+  getExperimentResults
 };
+
+/**
+ * ==============
+ * EXPERIMENT TOOLS
+ * ==============
+ */
+
+/**
+ * Create an experiment
+ */
+async function createExperiment({ name, description, hypothesis, successMetric, variants, duration, category, platform, relatedGoalIds, relatedStrategyIds, tags }) {
+  const experiment = new MarketingExperiment({
+    name,
+    description: description || '',
+    hypothesis,
+    successMetric,
+    variants: variants || [
+      { name: 'Control', isControl: true, allocation: 50 },
+      { name: 'Variant A', allocation: 50 }
+    ],
+    duration: duration || 14,
+    category,
+    platform,
+    relatedGoalIds,
+    relatedStrategyIds,
+    tags,
+    status: 'draft'
+  });
+
+  await experiment.save();
+
+  logger.info('Experiment created via tool', { experimentId: experiment.experimentId, name });
+
+  return {
+    message: `Created experiment "${name}" with ${variants?.length || 2} variants`,
+    experiment: {
+      id: experiment._id,
+      experimentId: experiment.experimentId,
+      name: experiment.name,
+      status: experiment.status,
+      variants: experiment.variants.map(v => ({ name: v.name, allocation: v.allocation }))
+    }
+  };
+}
+
+/**
+ * Start an experiment
+ */
+async function startExperiment({ experimentId }) {
+  const experiment = await MarketingExperiment.findOne({
+    $or: [{ _id: experimentId }, { experimentId }]
+  });
+
+  if (!experiment) {
+    throw new Error(`Experiment not found: ${experimentId}`);
+  }
+
+  await experiment.start();
+
+  logger.info('Experiment started via tool', { experimentId: experiment.experimentId });
+
+  return {
+    message: `Started experiment "${experiment.name}"`,
+    experiment: {
+      id: experiment._id,
+      experimentId: experiment.experimentId,
+      name: experiment.name,
+      status: experiment.status,
+      startDate: experiment.startDate,
+      endDate: experiment.endDate
+    }
+  };
+}
+
+/**
+ * Complete an experiment
+ */
+async function completeExperiment({ experimentId }) {
+  const experiment = await MarketingExperiment.findOne({
+    $or: [{ _id: experimentId }, { experimentId }]
+  });
+
+  if (!experiment) {
+    throw new Error(`Experiment not found: ${experimentId}`);
+  }
+
+  await experiment.complete();
+
+  // Run analysis
+  await experiment.analyze();
+
+  logger.info('Experiment completed via tool', { experimentId: experiment.experimentId, winner: experiment.winningVariant });
+
+  return {
+    message: `Completed experiment "${experiment.name}". Winner: ${experiment.winningVariant || 'None'}`,
+    experiment: {
+      id: experiment._id,
+      experimentId: experiment.experimentId,
+      name: experiment.name,
+      status: experiment.status,
+      winner: experiment.winningVariant,
+      results: experiment.results
+    }
+  };
+}
+
+/**
+ * Pause an experiment
+ */
+async function pauseExperiment({ experimentId, reason }) {
+  const experiment = await MarketingExperiment.findOne({
+    $or: [{ _id: experimentId }, { experimentId }]
+  });
+
+  if (!experiment) {
+    throw new Error(`Experiment not found: ${experimentId}`);
+  }
+
+  await experiment.pause(reason || '');
+
+  logger.info('Experiment paused via tool', { experimentId: experiment.experimentId, reason });
+
+  return {
+    message: `Paused experiment "${experiment.name}"`,
+    experiment: {
+      id: experiment._id,
+      experimentId: experiment.experimentId,
+      name: experiment.name,
+      status: experiment.status
+    }
+  };
+}
+
+/**
+ * Resume an experiment
+ */
+async function resumeExperiment({ experimentId }) {
+  const experiment = await MarketingExperiment.findOne({
+    $or: [{ _id: experimentId }, { experimentId }]
+  });
+
+  if (!experiment) {
+    throw new Error(`Experiment not found: ${experimentId}`);
+  }
+
+  await experiment.resume();
+
+  logger.info('Experiment resumed via tool', { experimentId: experiment.experimentId });
+
+  return {
+    message: `Resumed experiment "${experiment.name}"`,
+    experiment: {
+      id: experiment._id,
+      experimentId: experiment.experimentId,
+      name: experiment.name,
+      status: experiment.status
+    }
+  };
+}
+
+/**
+ * Get experiments
+ */
+async function getExperiments({ status, category, platform, limit = 50 }) {
+  const query = {};
+
+  if (status && status !== 'all') {
+    query.status = status;
+  }
+
+  if (category) {
+    query.category = category;
+  }
+
+  if (platform) {
+    query.platform = platform;
+  }
+
+  const experiments = await MarketingExperiment.find(query)
+    .sort({ createdAt: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    message: `Found ${experiments.length} experiment${experiments.length !== 1 ? 's' : ''}`,
+    experiments: experiments.map(e => ({
+      id: e._id,
+      experimentId: e.experimentId,
+      name: e.name,
+      hypothesis: e.hypothesis,
+      status: e.status,
+      successMetric: e.successMetric,
+      variants: e.variants.length,
+      duration: e.duration,
+      startDate: e.startDate,
+      endDate: e.endDate,
+      winner: e.winningVariant
+    }))
+  };
+}
+
+/**
+ * Get experiment results
+ */
+async function getExperimentResults({ experimentId }) {
+  const experiment = await MarketingExperiment.findOne({
+    $or: [{ _id: experimentId }, { experimentId }]
+  });
+
+  if (!experiment) {
+    throw new Error(`Experiment not found: ${experimentId}`);
+  }
+
+  // Build detailed results
+  const results = {
+    experiment: {
+      id: experiment._id,
+      experimentId: experiment.experimentId,
+      name: experiment.name,
+      hypothesis: experiment.hypothesis,
+      successMetric: experiment.successMetric,
+      status: experiment.status
+    },
+    winner: experiment.winningVariant,
+    variants: experiment.variants.map(v => ({
+      name: v.name,
+      isControl: v.isControl,
+      allocation: v.allocation,
+      sampleSize: v.sampleSize,
+      metrics: Object.fromEntries(v.metrics)
+    })),
+    analysis: experiment.results,
+    significance: {
+      threshold: experiment.significanceThreshold,
+      hasSufficientSample: experiment.hasSufficientSample()
+    },
+    learnings: experiment.learnings,
+    actionTaken: experiment.actionTaken
+  };
+
+  logger.info('Experiment results retrieved via tool', { experimentId: experiment.experimentId });
+
+  return {
+    message: `Results for experiment "${experiment.name}"`,
+    results
+  };
+}
+
+// ============================================================================
+// LEARNING TOOLS IMPLEMENTATIONS
+// ============================================================================
+
+/**
+ * Create a new learning
+ */
+async function createLearning({ pattern, category, confidence = 50, strength = 5, patternType = 'correlation', relatedExperimentId, relatedStrategyId }) {
+  // Check for duplicates first
+  const existing = await TinaLearning.findOne({
+    pattern: { $regex: pattern.split(' ').slice(0, 3).join('|'), $options: 'i' },
+    isValid: true
+  });
+
+  if (existing) {
+    return {
+      message: `Similar learning already exists: ${existing.learningId}`,
+      learning: existing,
+      isDuplicate: true
+    };
+  }
+
+  const learning = new TinaLearning({
+    pattern,
+    category: category || 'general',
+    confidence: confidence || 50,
+    strength: strength || 5,
+    patternType: patternType || 'correlation'
+  });
+
+  await learning.save();
+
+  logger.info('Learning created via tool', { learningId: learning.learningId, category });
+
+  return {
+    message: `Created learning: ${pattern.substring(0, 50)}...`,
+    learning: {
+      id: learning._id,
+      learningId: learning.learningId,
+      pattern: learning.pattern,
+      category: learning.category,
+      confidence: learning.confidence,
+      strength: learning.strength
+    }
+  };
+}
+
+/**
+ * Invalidate a learning
+ */
+async function invalidateLearning({ learningId, reason = '' }) {
+  const learning = await TinaLearning.findOne({
+    $or: [{ _id: learningId }, { learningId }]
+  });
+
+  if (!learning) {
+    throw new Error(`Learning not found: ${learningId}`);
+  }
+
+  await learning.invalidate(reason);
+
+  logger.info('Learning invalidated via tool', { learningId: learning.learningId, reason });
+
+  return {
+    message: `Learning invalidated: ${learning.learningId}`,
+    learning: {
+      id: learning._id,
+      learningId: learning.learningId,
+      pattern: learning.pattern,
+      isValid: false
+    }
+  };
+}
+
+/**
+ * Get learnings with filters
+ */
+async function getLearnings({ category, minConfidence, isValid = true, isActionable, limit = 50 }) {
+  const query = {};
+
+  if (category) {
+    query.category = category;
+  }
+
+  if (minConfidence !== undefined) {
+    query.confidence = { $gte: minConfidence };
+  }
+
+  if (isValid !== undefined) {
+    query.isValid = isValid;
+  }
+
+  if (isActionable !== undefined) {
+    query.isActionable = isActionable;
+  }
+
+  const learnings = await TinaLearning.find(query)
+    .sort({ confidence: -1, createdAt: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    message: `Found ${learnings.length} learning${learnings.length !== 1 ? 's' : ''}`,
+    learnings: learnings.map(l => ({
+      id: l._id,
+      learningId: l.learningId,
+      pattern: l.pattern,
+      category: l.category,
+      confidence: l.confidence,
+      strength: l.strength,
+      patternType: l.patternType,
+      isValid: l.isValid,
+      isActionable: l.isActionable,
+      validationCount: l.validationCount,
+      createdAt: l.createdAt
+    }))
+  };
+}
+
+/**
+ * Detect patterns from recent data
+ */
+async function detectPatterns({ days = 30, autoSave = true }) {
+  const patternDetection = (await import('../tinaPatternDetection.js')).default;
+
+  const results = await patternDetection.detectAllPatterns(days);
+
+  let created = [];
+  if (autoSave) {
+    const allPatterns = [
+      ...results.contentPatterns,
+      ...results.timePatterns,
+      ...results.hashtagPatterns,
+      ...results.platformPatterns,
+      ...results.experimentPatterns
+    ];
+
+    for (const pattern of allPatterns) {
+      if (pattern.confidence >= 60) {
+        // Check for similar existing learnings
+        const existing = await TinaLearning.findOne({
+          category: pattern.category,
+          pattern: { $regex: pattern.pattern.split(' ').slice(0, 3).join('|'), $options: 'i' },
+          isValid: true
+        });
+
+        if (!existing) {
+          const learning = new TinaLearning({
+            pattern: pattern.pattern,
+            category: pattern.category,
+            confidence: pattern.confidence,
+            strength: pattern.strength,
+            evidence: pattern.evidence || [],
+            supportingExperimentIds: pattern.supportingExperimentIds || []
+          });
+
+          await learning.save();
+          created.push(learning);
+        }
+      }
+    }
+  }
+
+  logger.info('Pattern detection completed via tool', {
+    patternsFound: results.totalPatterns,
+    learningsCreated: created.length
+  });
+
+  return {
+    message: `Detected ${results.totalPatterns} patterns, created ${created.length} new learnings`,
+    results: {
+      contentPatterns: results.contentPatterns.length,
+      timePatterns: results.timePatterns.length,
+      hashtagPatterns: results.hashtagPatterns.length,
+      platformPatterns: results.platformPatterns.length,
+      experimentPatterns: results.experimentPatterns.length,
+      totalPatterns: results.totalPatterns
+    },
+    created: created.map(l => ({
+      learningId: l.learningId,
+      pattern: l.pattern,
+      category: l.category,
+      confidence: l.confidence
+    }))
+  };
+}
+
+// ============================================================================
+// PLAN TOOLS IMPLEMENTATIONS
+// ============================================================================
+
+/**
+ * Create a new plan
+ */
+async function createPlan({ horizon, periodStart, periodEnd, focusAreas = [], scheduledActions = [], relatedGoalIds = [] }) {
+  const MarketingPlan = (await import('../../models/MarketingPlan.js')).default;
+
+  const plan = new MarketingPlan({
+    horizon,
+    period: {
+      start: new Date(periodStart),
+      end: new Date(periodEnd)
+    },
+    focusAreas: focusAreas.map(fa => ({
+      name: fa.name,
+      description: fa.description || '',
+      priority: fa.priority || 5,
+      relatedGoalId: fa.relatedGoalId
+    })),
+    scheduledActions: scheduledActions.map(sa => ({
+      name: sa.name,
+      description: sa.description || '',
+      type: sa.type || 'general',
+      scheduledFor: sa.scheduledFor ? new Date(sa.scheduledFor) : undefined,
+      estimatedEffort: sa.estimatedEffort
+    })),
+    relatedGoalIds: relatedGoalIds || [],
+    status: 'draft'
+  });
+
+  await plan.save();
+
+  logger.info('Plan created via tool', { planId: plan.planId, horizon });
+
+  return {
+    message: `Created ${horizon} plan from ${new Date(periodStart).toLocaleDateString()} to ${new Date(periodEnd).toLocaleDateString()}`,
+    plan: {
+      id: plan._id,
+      planId: plan.planId,
+      horizon: plan.horizon,
+      period: plan.period,
+      focusAreas: plan.focusAreas,
+      scheduledActions: plan.scheduledActions,
+      status: plan.status
+    }
+  };
+}
+
+/**
+ * Get current plan by horizon
+ */
+async function getCurrentPlan({ horizon }) {
+  const MarketingPlan = (await import('../../models/MarketingPlan.js')).default;
+
+  if (horizon === 'all') {
+    const plans = await MarketingPlan.getAllCurrent();
+    return {
+      message: `Found ${plans.length} current plan${plans.length !== 1 ? 's' : ''}`,
+      plans: plans.map(p => ({
+        id: p._id,
+        planId: p.planId,
+        horizon: p.horizon,
+        period: p.period,
+        status: p.status,
+        focusAreas: p.focusAreas
+      }))
+    };
+  }
+
+  const plan = await MarketingPlan.getCurrent(horizon);
+
+  if (!plan) {
+    return {
+      message: `No active ${horizon} plan found`,
+      plan: null
+    };
+  }
+
+  return {
+    message: `Found current ${horizon} plan`,
+    plan: {
+      id: plan._id,
+      planId: plan.planId,
+      horizon: plan.horizon,
+      period: plan.period,
+      status: plan.status,
+      focusAreas: plan.focusAreas,
+      scheduledActions: plan.scheduledActions,
+      progress: plan.progress
+    }
+  };
+}
+
+/**
+ * Get plans with filters
+ */
+async function getPlans({ horizon = 'all', status = 'all', limit = 50 }) {
+  const MarketingPlan = (await import('../../models/MarketingPlan.js')).default;
+
+  const query = {};
+
+  if (horizon !== 'all') {
+    query.horizon = horizon;
+  }
+
+  if (status !== 'all') {
+    query.status = status;
+  }
+
+  const plans = await MarketingPlan.find(query)
+    .sort({ 'period.start': -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    message: `Found ${plans.length} plan${plans.length !== 1 ? 's' : ''}`,
+    plans: plans.map(p => ({
+      id: p._id,
+      planId: p.planId,
+      horizon: p.horizon,
+      period: p.period,
+      status: p.status,
+      focusAreas: p.focusAreas,
+      progress: p.progress
+    }))
+  };
+}
+
+// ============================================================================
+// REFLECTION TOOLS IMPLEMENTATIONS
+// ============================================================================
+
+/**
+ * Get reflections with filters
+ */
+async function getReflections({ year, status = 'all', limit = 12 }) {
+  const TinaReflection = (await import('../../models/TinaReflection.js')).default;
+
+  const query = {};
+
+  if (year) {
+    query.year = parseInt(year);
+  }
+
+  if (status !== 'all') {
+    query.status = status;
+  }
+
+  const reflections = await TinaReflection.find(query)
+    .sort({ weekOf: -1 })
+    .limit(parseInt(limit))
+    .lean();
+
+  return {
+    message: `Found ${reflections.length} reflection${reflections.length !== 1 ? 's' : ''}`,
+    reflections: reflections.map(r => ({
+      id: r._id,
+      reflectionId: r.reflectionId,
+      weekOf: r.weekOf,
+      year: r.year,
+      weekNumber: r.weekNumber,
+      status: r.status,
+      sections: r.sections,
+      sentiment: r.sentiment,
+      improvementAreas: r.improvementAreas,
+      continueDoing: r.continueDoing,
+      stopDoing: r.stopDoing,
+      startDoing: r.startDoing,
+      nextWeekPriorities: r.nextWeekPriorities,
+      completedAt: r.completedAt
+    }))
+  };
+}
+
+/**
+ * Get current week's reflection
+ */
+async function getCurrentReflection() {
+  const TinaReflection = (await import('../../models/TinaReflection.js')).default;
+
+  const reflection = await TinaReflection.getCurrentWeek();
+
+  if (!reflection) {
+    return {
+      message: 'No reflection found for current week',
+      reflection: null
+    };
+  }
+
+  return {
+    message: 'Found current week reflection',
+    reflection: {
+      id: reflection._id,
+      reflectionId: reflection.reflectionId,
+      weekOf: reflection.weekOf,
+      year: reflection.year,
+      weekNumber: reflection.weekNumber,
+      status: reflection.status,
+      sections: reflection.sections,
+      sentiment: reflection.sentiment,
+      improvementAreas: reflection.improvementAreas,
+      continueDoing: reflection.continueDoing,
+      stopDoing: reflection.stopDoing,
+      startDoing: reflection.startDoing,
+      nextWeekPriorities: reflection.nextWeekPriorities
+    }
+  };
+}

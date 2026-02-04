@@ -446,6 +446,444 @@ export const APPROVAL_REQUIRED_TOOLS = [
       strategyId: 'strategy_1234567890_abcd'
     },
     expectedImpact: 'Resumes a paused strategy'
+  },
+  /**
+   * Goal Tools - Approval Required
+   */
+  {
+    name: 'create_goal',
+    description: 'Create a new marketing goal to track progress toward a target. Goals represent long-term objectives with measurable targets.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Goal name',
+          maxLength: 200
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the goal',
+          maxLength: 1000
+        },
+        type: {
+          type: 'string',
+          description: 'Goal type',
+          enum: ['revenue', 'growth', 'engagement', 'brand', 'experiment', 'custom']
+        },
+        targetValue: {
+          description: 'Target value to achieve'
+        },
+        targetDate: {
+          type: 'string',
+          description: 'Target date (ISO format)'
+        },
+        startValue: {
+          description: 'Starting value for progress calculation',
+          default: 0
+        },
+        checkInFrequency: {
+          type: 'string',
+          description: 'How often to check progress',
+          enum: ['daily', 'weekly', 'biweekly', 'monthly', 'quarterly'],
+          default: 'weekly'
+        },
+        priority: {
+          type: 'number',
+          description: 'Priority level (1-10)',
+          minimum: 1,
+          maximum: 10,
+          default: 5
+        }
+      },
+      required: ['name', 'type', 'targetValue', 'targetDate']
+    },
+    exampleUsage: {
+      name: 'Reach $10,000 MRR',
+      type: 'revenue',
+      targetValue: 10000,
+      targetDate: '2026-03-31T00:00:00',
+      startValue: 3000,
+      checkInFrequency: 'weekly',
+      priority: 8
+    },
+    expectedImpact: 'Creates a trackable goal with automatic progress monitoring and trajectory analysis'
+  },
+  {
+    name: 'update_goal',
+    description: 'Update an existing goal\'s target, status, or other properties. Use to adjust targets or mark progress.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        goalId: {
+          type: 'string',
+          description: 'Goal ID to update'
+        },
+        currentValue: {
+          description: 'New current value for progress tracking'
+        },
+        targetValue: {
+          description: 'New target value'
+        },
+        targetDate: {
+          type: 'string',
+          description: 'New target date (ISO format)'
+        },
+        status: {
+          type: 'string',
+          description: 'New status',
+          enum: ['draft', 'active', 'at_risk', 'achieved', 'missed', 'cancelled']
+        },
+        notes: {
+          type: 'string',
+          description: 'Notes about this update',
+          maxLength: 500
+        }
+      },
+      required: ['goalId']
+    },
+    exampleUsage: {
+      goalId: 'goal_1234567890_abcd',
+      currentValue: 5000,
+      notes: 'Good progress, halfway to target'
+    },
+    expectedImpact: 'Updates goal progress and tracking'
+  },
+  {
+    name: 'link_strategy_to_goal',
+    description: 'Connect a strategy to a goal for tracking. This links the strategic initiative to the objective it supports.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        goalId: {
+          type: 'string',
+          description: 'Goal ID'
+        },
+        strategyId: {
+          type: 'string',
+          description: 'Strategy ID to link'
+        }
+      },
+      required: ['goalId', 'strategyId']
+    },
+    exampleUsage: {
+      goalId: 'goal_1234567890_abcd',
+      strategyId: 'strategy_1234567890_abcd'
+    },
+    expectedImpact: 'Links strategy to goal for unified tracking'
+  },
+  /**
+   * Experiment Tools - Approval Required
+   */
+  {
+    name: 'create_experiment',
+    description: 'Create an A/B test or experiment to validate a hypothesis. Experiments help test different approaches to determine what works best.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Experiment name',
+          maxLength: 200
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of the experiment',
+          maxLength: 1000
+        },
+        hypothesis: {
+          type: 'string',
+          description: 'What we are testing and what we expect to happen',
+          maxLength: 500
+        },
+        successMetric: {
+          type: 'string',
+          description: 'How we measure success (e.g., "engagement_rate", "views", "shares", "saves", "clicks", "conversions")'
+        },
+        variants: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              description: { type: 'string' },
+              isControl: { type: 'boolean' },
+              allocation: { type: 'number' }
+            }
+          },
+          description: 'Test variants (minimum 2)',
+          minItems: 2
+        },
+        duration: {
+          type: 'number',
+          description: 'Duration in days',
+          minimum: 1,
+          maximum: 90,
+          default: 14
+        },
+        category: {
+          type: 'string',
+          description: 'Experiment category for grouping'
+        },
+        platform: {
+          type: 'string',
+          description: 'Platform (if applicable)',
+          enum: ['instagram', 'tiktok', 'youtube', 'general', 'other']
+        }
+      },
+      required: ['name', 'hypothesis', 'successMetric']
+    },
+    exampleUsage: {
+      name: 'Hook Format Test',
+      hypothesis: 'Question hooks outperform statement hooks for romance content',
+      successMetric: 'engagement_rate',
+      variants: [
+        { name: 'Question Hook', description: 'Start with a provocative question', isControl: false, allocation: 50 },
+        { name: 'Statement Hook', description: 'Start with a bold statement', isControl: true, allocation: 50 }
+      ],
+      duration: 7,
+      platform: 'tiktok'
+    },
+    expectedImpact: 'Creates a trackable experiment to validate hypotheses with real data'
+  },
+  {
+    name: 'start_experiment',
+    description: 'Start a draft experiment. Use this when ready to begin data collection for an experiment.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        experimentId: {
+          type: 'string',
+          description: 'Experiment ID'
+        }
+      },
+      required: ['experimentId']
+    },
+    exampleUsage: {
+      experimentId: 'exp_1234567890_abcd'
+    },
+    expectedImpact: 'Starts the experiment and begins data collection'
+  },
+  {
+    name: 'complete_experiment',
+    description: 'Complete a running experiment and analyze results. Use when the experiment has run long enough.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        experimentId: {
+          type: 'string',
+          description: 'Experiment ID'
+        }
+      },
+      required: ['experimentId']
+    },
+    exampleUsage: {
+      experimentId: 'exp_1234567890_abcd'
+    },
+    expectedImpact: 'Completes the experiment and runs analysis to determine winner'
+  },
+  {
+    name: 'pause_experiment',
+    description: 'Pause a running experiment temporarily. Use when you need to halt data collection.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        experimentId: {
+          type: 'string',
+          description: 'Experiment ID'
+        },
+        reason: {
+          type: 'string',
+          description: 'Why the experiment is being paused',
+          maxLength: 500
+        }
+      },
+      required: ['experimentId']
+    },
+    exampleUsage: {
+      experimentId: 'exp_1234567890_abcd',
+      reason: 'Pausing to review initial results'
+    },
+    expectedImpact: 'Pauses the experiment while preserving all data'
+  },
+  {
+    name: 'resume_experiment',
+    description: 'Resume a paused experiment. Use when ready to continue data collection.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        experimentId: {
+          type: 'string',
+          description: 'Experiment ID'
+        }
+      },
+      required: ['experimentId']
+    },
+    exampleUsage: {
+      experimentId: 'exp_1234567890_abcd'
+    },
+    expectedImpact: 'Resumes a paused experiment'
+  },
+  /**
+   * Learning Tools - Approval Required
+   */
+  {
+    name: 'create_learning',
+    description: 'Record a new pattern or insight discovered from data analysis. Use this when you identify a repeatable pattern that could inform future decisions.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'The pattern discovered (e.g., "Romance content gets 20% higher engagement on weekends")',
+          maxLength: 500
+        },
+        category: {
+          type: 'string',
+          description: 'Pattern category',
+          enum: ['content', 'timing', 'hashtags', 'format', 'platform', 'audience', 'creative', 'copy', 'general']
+        },
+        confidence: {
+          type: 'number',
+          description: 'Confidence in this pattern (0-100)',
+          minimum: 0,
+          maximum: 100,
+          default: 50
+        },
+        strength: {
+          type: 'number',
+          description: 'Strength of the pattern (0-10)',
+          minimum: 0,
+          maximum: 10,
+          default: 5
+        },
+        patternType: {
+          type: 'string',
+          description: 'Type of pattern',
+          enum: ['correlation', 'causation', 'trend', 'preference', 'optimal', 'avoidance'],
+          default: 'correlation'
+        },
+        relatedExperimentId: {
+          type: 'string',
+          description: 'Related experiment ID (if from experiment)'
+        },
+        relatedStrategyId: {
+          type: 'string',
+          description: 'Related strategy ID'
+        }
+      },
+      required: ['pattern', 'category']
+    },
+    exampleUsage: {
+      pattern: 'Posts with 5-7 hashtags get 30% more engagement than those with 10+',
+      category: 'hashtags',
+      confidence: 75,
+      strength: 7,
+      patternType: 'optimal'
+    },
+    expectedImpact: 'Creates a new learning that Tina can reference for future recommendations'
+  },
+  {
+    name: 'invalidate_learning',
+    description: 'Mark a learning as invalid because it no longer holds true or was incorrect',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        learningId: {
+          type: 'string',
+          description: 'Learning ID to invalidate'
+        },
+        reason: {
+          type: 'string',
+          description: 'Why this learning is being invalidated',
+          maxLength: 500
+        }
+      },
+      required: ['learningId']
+    },
+    exampleUsage: {
+      learningId: 'learning_1234567890_abcd',
+      reason: 'Recent data shows this pattern no longer holds'
+    },
+    expectedImpact: 'Marks learning as invalid so it won\'t be used for future recommendations'
+  },
+  {
+    name: 'create_plan',
+    description: 'Create a new multi-horizon plan (weekly, monthly, or quarterly). Plans organize focus areas and scheduled actions.',
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        horizon: {
+          type: 'string',
+          description: 'Planning horizon',
+          enum: ['weekly', 'monthly', 'quarterly']
+        },
+        periodStart: {
+          type: 'string',
+          description: 'Period start date (ISO format)'
+        },
+        periodEnd: {
+          type: 'string',
+          description: 'Period end date (ISO format)'
+        },
+        focusAreas: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              description: { type: 'string' },
+              priority: { type: 'number' },
+              relatedGoalId: { type: 'string' }
+            }
+          },
+          description: 'Key focus areas for this period'
+        },
+        scheduledActions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              description: { type: 'string' },
+              type: { type: 'string' },
+              scheduledFor: { type: 'string' },
+              estimatedEffort: { type: 'string' }
+            }
+          },
+          description: 'Scheduled actions for the period'
+        },
+        relatedGoalIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Related goal IDs'
+        }
+      },
+      required: ['horizon', 'periodStart', 'periodEnd']
+    },
+    exampleUsage: {
+      horizon: 'weekly',
+      periodStart: '2026-02-03T00:00:00',
+      periodEnd: '2026-02-09T23:59:59',
+      focusAreas: [
+        { name: 'Instagram Reels', description: 'Increase Reels output', priority: 8 }
+      ],
+      scheduledActions: [
+        { name: 'Create 5 Reels', type: 'content', scheduledFor: '2026-02-05T10:00:00' }
+      ]
+    },
+    expectedImpact: 'Creates a structured plan with focus areas and scheduled actions for tracking'
   }
 ];
 
@@ -526,7 +964,7 @@ IMPORTANT SCHEDULING INFO:
 - When user says "tomorrow evening", schedule for ~8pm the next day
 - AVOID scheduling at: 2am, 3am, 4am, 5am, 6am, 11pm, 12am (these are not optimal posting times)
 - Good posting hours: 8am-11am (morning), 2pm-5pm (afternoon), 7pm-10pm (evening)
-- Always use ISO 8601 format: YYYY-MM-DDTHH:mm:ss.sssZ (e.g., 2026-02-02T09:00:00.000Z)
+- Always use LOCAL time format: YYYY-MM-DDTHH:mm:ss (NO Z suffix! e.g., 2026-02-02T09:00:00)
 
 Creates draft posts that can be edited, generated, and approved later.`,
     requiresApproval: false,
@@ -609,7 +1047,7 @@ Creates draft posts that can be edited, generated, and approved later.`,
         },
         scheduleFor: {
           type: 'string',
-          description: 'ISO date string to schedule the post (e.g., 2026-02-02T15:30:00.000Z). You can schedule at ANY specific time - down to the minute. Time must be at least 5 minutes in the future. If not provided, uses the next optimal posting slot (within standard posting windows: 8-11am, 2-5pm, or 7-10pm).'
+          description: 'ISO date string to schedule the post in LOCAL timezone (e.g., 2026-02-02T15:30:00 - NO Z suffix!). You can schedule at ANY specific time - down to the minute. Time must be at least 5 minutes in the future. If not provided, uses the next optimal posting slot (within standard posting windows: 8-11am, 2-5pm, or 7-10pm).'
         }
       },
       required: ['storyId', 'platforms']
@@ -800,14 +1238,14 @@ Creates draft posts that can be edited, generated, and approved later.`,
         },
         scheduledAt: {
           type: 'string',
-          description: 'ISO date string for when to post (applies to all posts)'
+          description: 'ISO date string for when to post (use LOCAL timezone, format: YYYY-MM-DDTHH:mm:ss, NO Z suffix!)'
         }
       },
       required: ['postIds', 'scheduledAt']
     },
     exampleUsage: {
       postIds: ['507f1f77bcf86cd799439011', '507f1f77bcf86cd799439012'],
-      scheduledAt: '2025-02-01T14:00:00Z'
+      scheduledAt: '2025-02-01T14:00:00'
     },
     expectedImpact: 'Schedules approved posts for automatic publishing at the specified time'
   },
@@ -1333,6 +1771,287 @@ Creates draft posts that can be edited, generated, and approved later.`,
       days: 30,
       limit: 20
     }
+  },
+  /**
+   * Goal Memory Tools - Read Only (No Approval Required)
+   */
+  {
+    name: 'get_goals',
+    description: 'Get all marketing goals with optional filters. Returns goals including their status, progress, trajectory, and linked strategies. Use this to understand current objectives.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Filter by goal status',
+          enum: ['draft', 'active', 'at_risk', 'achieved', 'missed', 'cancelled', 'all'],
+          default: 'all'
+        },
+        type: {
+          type: 'string',
+          description: 'Filter by goal type',
+          enum: ['revenue', 'growth', 'engagement', 'brand', 'experiment', 'custom', 'all'],
+          default: 'all'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of goals to return',
+          minimum: 1,
+          maximum: 100,
+          default: 50
+        }
+      }
+    },
+    exampleUsage: {
+      status: 'active',
+      limit: 20
+    }
+  },
+  {
+    name: 'get_goal_progress',
+    description: 'Get detailed progress information for a specific goal including trajectory analysis, milestones, and linked strategies.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        goalId: {
+          type: 'string',
+          description: 'Goal ID (either MongoDB _id or goalId)'
+        }
+      },
+      required: ['goalId']
+    },
+    exampleUsage: {
+      goalId: 'goal_1234567890_abcd'
+    }
+  },
+  /**
+   * Experiment Tools - Read Only (No Approval Required)
+   */
+  {
+    name: 'get_experiments',
+    description: 'Get all marketing experiments with optional filters. Returns experiments including their status, variants, and results. Use this to understand current and past experiments.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Filter by experiment status',
+          enum: ['draft', 'running', 'paused', 'completed', 'cancelled', 'inconclusive', 'all'],
+          default: 'all'
+        },
+        category: {
+          type: 'string',
+          description: 'Filter by category (optional)'
+        },
+        platform: {
+          type: 'string',
+          description: 'Filter by platform (optional)',
+          enum: ['instagram', 'tiktok', 'youtube', 'general', 'other']
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of experiments to return',
+          minimum: 1,
+          maximum: 100,
+          default: 50
+        }
+      }
+    },
+    exampleUsage: {
+      status: 'running',
+      limit: 20
+    }
+  },
+  {
+    name: 'get_experiment_results',
+    description: 'Get detailed results for a completed experiment including variant comparison, statistical significance, winner, and recommendations.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        experimentId: {
+          type: 'string',
+          description: 'Experiment ID (either MongoDB _id or experimentId)'
+        }
+      },
+      required: ['experimentId']
+    },
+    exampleUsage: {
+      experimentId: 'exp_1234567890_abcd'
+    }
+  },
+  /**
+   * Learning Tools - Read Only (No Approval Required)
+   */
+  {
+    name: 'get_learnings',
+    description: 'Get discovered patterns and learnings with optional filters. Returns validated insights that can inform decisions.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        category: {
+          type: 'string',
+          description: 'Filter by category'
+        },
+        minConfidence: {
+          type: 'number',
+          description: 'Minimum confidence level',
+          minimum: 0,
+          maximum: 100
+        },
+        isValid: {
+          type: 'boolean',
+          description: 'Show only validated learnings',
+          default: true
+        },
+        isActionable: {
+          type: 'boolean',
+          description: 'Show only actionable learnings'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results',
+          minimum: 1,
+          maximum: 100,
+          default: 50
+        }
+      }
+    },
+    exampleUsage: {
+      category: 'content',
+      minConfidence: 70,
+      isValid: true,
+      limit: 20
+    }
+  },
+  {
+    name: 'detect_patterns',
+    description: 'Trigger automatic pattern detection from recent data. Analyzes posts, experiments, and other data to discover new patterns.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        days: {
+          type: 'number',
+          description: 'Number of days to look back for pattern detection',
+          minimum: 7,
+          maximum: 90,
+          default: 30
+        },
+        autoSave: {
+          type: 'boolean',
+          description: 'Automatically save high-confidence patterns as learnings',
+          default: true
+        }
+      }
+    },
+    exampleUsage: {
+      days: 30,
+      autoSave: true
+    }
+  },
+  /**
+   * Plan Tools - Read Only (No Approval Required)
+   */
+  {
+    name: 'get_current_plan',
+    description: 'Get the current active plan for a specific time horizon (week, month, or quarter)',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        horizon: {
+          type: 'string',
+          description: 'Planning horizon',
+          enum: ['weekly', 'monthly', 'quarterly', 'all']
+        }
+      },
+      required: ['horizon']
+    },
+    exampleUsage: {
+      horizon: 'weekly'
+    }
+  },
+  {
+    name: 'get_plans',
+    description: 'Get all marketing plans with optional filters. Returns plans including their status, focus areas, and progress.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        horizon: {
+          type: 'string',
+          description: 'Filter by planning horizon',
+          enum: ['weekly', 'monthly', 'quarterly', 'all'],
+          default: 'all'
+        },
+        status: {
+          type: 'string',
+          description: 'Filter by plan status',
+          enum: ['draft', 'active', 'completed', 'archived', 'all'],
+          default: 'all'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of plans to return',
+          minimum: 1,
+          maximum: 100,
+          default: 50
+        }
+      }
+    },
+    exampleUsage: {
+      horizon: 'weekly',
+      status: 'active'
+    }
+  },
+  /**
+   * Reflection Tools - Read Only (No Approval Required)
+   */
+  {
+    name: 'get_reflections',
+    description: 'Get weekly reflections with optional filters. Returns Tina\'s structured reflections including wins, losses, and learnings.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        year: {
+          type: 'number',
+          description: 'Filter by year'
+        },
+        status: {
+          type: 'string',
+          description: 'Filter by status',
+          enum: ['draft', 'completed', 'all'],
+          default: 'all'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of reflections to return',
+          minimum: 1,
+          maximum: 52,
+          default: 12
+        }
+      }
+    },
+    exampleUsage: {
+      status: 'completed',
+      limit: 10
+    }
+  },
+  {
+    name: 'get_current_reflection',
+    description: 'Get the current week\'s reflection if it exists.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {}
+    },
+    exampleUsage: {}
   }
 ];
 
@@ -1407,6 +2126,18 @@ export const TOOL_NAMES = {
   PAUSE_STRATEGY: 'pause_strategy',
   RESUME_STRATEGY: 'resume_strategy',
 
+  // Goal Tools - Approval required
+  CREATE_GOAL: 'create_goal',
+  UPDATE_GOAL: 'update_goal',
+  LINK_STRATEGY_TO_GOAL: 'link_strategy_to_goal',
+
+  // Experiment Tools - Approval required
+  CREATE_EXPERIMENT: 'create_experiment',
+  START_EXPERIMENT: 'start_experiment',
+  COMPLETE_EXPERIMENT: 'complete_experiment',
+  PAUSE_EXPERIMENT: 'pause_experiment',
+  RESUME_EXPERIMENT: 'resume_experiment',
+
   // Post Management - Read Only (no approval)
   GET_MUSIC: 'get_music',
   GET_STORIES: 'get_stories',
@@ -1450,7 +2181,34 @@ export const TOOL_NAMES = {
   // Strategy Memory Tools - Read Only
   GET_STRATEGIES: 'get_strategies',
   GET_STRATEGY_DETAILS: 'get_strategy_details',
-  GET_STRATEGY_HISTORY: 'get_strategy_history'
+  GET_STRATEGY_HISTORY: 'get_strategy_history',
+
+  // Goal Memory Tools - Read Only
+  GET_GOALS: 'get_goals',
+  GET_GOAL_PROGRESS: 'get_goal_progress',
+
+  // Experiment Tools - Read Only
+  GET_EXPERIMENTS: 'get_experiments',
+  GET_EXPERIMENT_RESULTS: 'get_experiment_results',
+
+  // Learning Tools - Approval Required
+  CREATE_LEARNING: 'create_learning',
+  INVALIDATE_LEARNING: 'invalidate_learning',
+
+  // Learning Tools - Read Only
+  GET_LEARNINGS: 'get_learnings',
+  DETECT_PATTERNS: 'detect_patterns',
+
+  // Plan Tools - Approval Required
+  CREATE_PLAN: 'create_plan',
+
+  // Plan Tools - Read Only
+  GET_CURRENT_PLAN: 'get_current_plan',
+  GET_PLANS: 'get_plans',
+
+  // Reflection Tools - Read Only
+  GET_REFLECTIONS: 'get_reflections',
+  GET_CURRENT_REFLECTION: 'get_current_reflection'
 };
 
 /**
@@ -1593,6 +2351,33 @@ export function formatToolCallForDisplay(toolName, parameters) {
   } else if (toolName === 'schedule_post') {
     description = `Schedule ${parameters.postIds?.length || 0} post(s)`;
     if (parameters.scheduledAt) description += ` for ${new Date(parameters.scheduledAt).toLocaleDateString()}`;
+  } else if (toolName === 'create_goal') {
+    description = `Create goal: ${parameters.name || 'New Goal'}`;
+  } else if (toolName === 'update_goal') {
+    description = `Update goal`;
+    if (parameters.status) description += ` to ${parameters.status}`;
+  } else if (toolName === 'link_strategy_to_goal') {
+    description = `Link strategy to goal`;
+  } else if (toolName === 'get_goals') {
+    description = `Get marketing goals`;
+    if (parameters.status && parameters.status !== 'all') description += ` (${parameters.status})`;
+  } else if (toolName === 'get_goal_progress') {
+    description = `Get goal progress details`;
+  } else if (toolName === 'get_experiments') {
+    description = `Get marketing experiments`;
+    if (parameters.status && parameters.status !== 'all') description += ` (${parameters.status})`;
+  } else if (toolName === 'get_experiment_results') {
+    description = `Get experiment results`;
+  } else if (toolName === 'create_experiment') {
+    description = `Create experiment: ${parameters.name || 'New Experiment'}`;
+  } else if (toolName === 'start_experiment') {
+    description = `Start experiment`;
+  } else if (toolName === 'complete_experiment') {
+    description = `Complete experiment and analyze results`;
+  } else if (toolName === 'pause_experiment') {
+    description = `Pause experiment`;
+  } else if (toolName === 'resume_experiment') {
+    description = `Resume experiment`;
   }
 
   return {

@@ -3,6 +3,7 @@ import MarketingRevenue from '../../models/MarketingRevenue.js';
 import MarketingPost from '../../models/MarketingPost.js';
 import DailySpend from '../../models/DailySpend.js';
 import ASOKeyword from '../../models/ASOKeyword.js';
+import MarketingGoal from '../../models/MarketingGoal.js';
 import { getSystemPrompt } from '../tinaPersonality.js';
 import { getLogger } from '../../utils/logger.js';
 
@@ -187,12 +188,38 @@ export async function fetchDataContext() {
     const monthlyBudget = parseFloat(process.env.MONTHLY_BUDGET_LIMIT || '3000');
     const budgetUtilization = (totalSpend / monthlyBudget) * 100;
 
+    // Fetch active goals for Tina's context
+    const goalsData = await MarketingGoal.find({
+      status: { $in: ['active', 'at_risk', 'behind', 'ahead'] }
+    })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    const goals = goalsData.map(g => ({
+      goalId: g.goalId,
+      name: g.name,
+      type: g.type,
+      status: g.status,
+      progressPercent: g.progressPercent || 0,
+      currentValue: g.currentValue,
+      targetValue: g.targetValue,
+      startValue: g.startValue,
+      trajectory: {
+        trend: g.trajectory?.trend || 'unknown',
+        lastCalculated: g.trajectory?.lastCalculated
+      },
+      targetDate: g.targetDate,
+      linkedStrategies: g.linkedStrategies?.length || 0
+    }));
+
     return {
       revenue,
       content,
       spend: totalSpend,
       budgetUtilization,
       keywords,
+      goals,
       lastFetched: now.toISOString()
     };
   } catch (error) {
@@ -205,6 +232,7 @@ export async function fetchDataContext() {
       content: { avgEngagement: 0, topCategories: [] },
       spend: 0,
       keywords: [],
+      goals: [],
       error: error.message
     };
   }
@@ -335,14 +363,24 @@ Remember: Be thorough. Don't just summarize - SYNTHESIZE and provide INSIGHT.`;
 function formatDataContext(dataContext) {
   const sections = ['**CURRENT DATA CONTEXT:**'];
 
+  // Goals first - highest priority for context
+  if (dataContext.goals && dataContext.goals.length > 0) {
+    sections.push(`
+**ACTIVE GOALS:**
+${dataContext.goals.map(g =>
+  `- ${g.name}: ${g.progressPercent?.toFixed(0) || 0}% complete (${g.status}, ${g.trajectory?.trend || 'unknown'} trajectory)`
+).join('\n')}
+**Current Focus:** ${dataContext.goals.find(g => g.status === 'at_risk')?.name || dataContext.goals[0]?.name || 'No active goals'}`);
+  }
+
   if (dataContext.revenue) {
     const { mrr, subscribers, arpu, trend, netRevenue, newUsers, churnedSubscribers } = dataContext.revenue;
     sections.push(`
 **REVENUE:**
 - MRR: $${mrr}
 - Subscribers: ${subscribers}
-- ARPU: $${arpu.toFixed(2)}
-- Net Revenue (month): $${netRevenue.toFixed(2)}
+- ARPU: $${arpu?.toFixed(2) || '0.00'}
+- Net Revenue (month): $${netRevenue?.toFixed(2) || '0.00'}
 - New Users: ${newUsers}
 - Churned: ${churnedSubscribers}
 - Trend: ${trend || 'stable'}`);
@@ -354,7 +392,7 @@ function formatDataContext(dataContext) {
 **CONTENT:**
 - Total Posts (30d): ${totalPosts}
 - Avg Engagement: ${(avgEngagement * 100).toFixed(1)}%
-- Top Categories: ${topCategories.slice(0, 3).map(c => `${c.category} (${(c.avgEngagement * 100).toFixed(1)}%)`).join(', ') || 'N/A'}
+- Top Categories: ${topCategories?.slice(0, 3).map(c => `${c.category} (${(c.avgEngagement * 100).toFixed(1)}%)`).join(', ') || 'N/A'}
 - By Platform: ${Object.entries(byPlatform || {}).map(([p, d]) => `${p}: ${d.count} posts`).join(', ') || 'N/A'}`);
   }
 

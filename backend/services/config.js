@@ -1116,6 +1116,82 @@ const configSchema = {
     validate: (value) => ['true', 'false'].includes(value),
     errorMessage: 'Must be either true or false'
   },
+
+  // Tina Monitoring Settings
+  TINA_MONITORING_ENABLED: {
+    required: false,
+    default: 'true',
+    description: 'Enable Tina proactive monitoring',
+    validate: (value) => ['true', 'false'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
+  TINA_MONITORING_INTERVAL_HOURS: {
+    required: false,
+    default: '6',
+    description: 'Tina monitoring check interval in hours',
+    validate: (value) => {
+      const hours = parseInt(value, 10);
+      return !isNaN(hours) && hours >= 1 && hours <= 24;
+    },
+    errorMessage: 'Must be a number between 1 and 24'
+  },
+
+  TINA_GOAL_PROGRESS_HOUR: {
+    required: false,
+    default: '7',
+    description: 'Hour of day to run goal progress update (UTC)',
+    validate: (value) => {
+      const hour = parseInt(value, 10);
+      return !isNaN(hour) && hour >= 0 && hour <= 23;
+    },
+    errorMessage: 'Must be an hour between 0 and 23'
+  },
+
+  // Thresholds
+  TINA_GOAL_TRAJECTORY_WARNING_THRESHOLD: {
+    required: false,
+    default: '0.8',
+    description: 'Threshold for trajectory warning (0-1)',
+    validate: (value) => {
+      const threshold = parseFloat(value);
+      return !isNaN(threshold) && threshold >= 0 && threshold <= 1;
+    },
+    errorMessage: 'Must be a number between 0 and 1'
+  },
+
+  TINA_ANOMALY_DETECTION_DROP_PERCENT: {
+    required: false,
+    default: '25',
+    description: 'Percentage drop for anomaly detection',
+    validate: (value) => {
+      const percent = parseInt(value, 10);
+      return !isNaN(percent) && percent >= 0 && percent <= 100;
+    },
+    errorMessage: 'Must be a number between 0 and 100'
+  },
+
+  TINA_ANOMALY_DETECTION_SPIKE_PERCENT: {
+    required: false,
+    default: '50',
+    description: 'Percentage spike for anomaly detection',
+    validate: (value) => {
+      const percent = parseInt(value, 10);
+      return !isNaN(percent) && percent >= 0 && percent <= 100;
+    },
+    errorMessage: 'Must be a number between 0 and 100'
+  },
+
+  TINA_STRATEGY_STAGNANT_DAYS: {
+    required: false,
+    default: '7',
+    description: 'Days before strategy is considered stagnant',
+    validate: (value) => {
+      const days = parseInt(value, 10);
+      return !isNaN(days) && days >= 1 && days <= 90;
+    },
+    errorMessage: 'Must be a number between 1 and 90'
+  },
 };
 
 class ConfigService {

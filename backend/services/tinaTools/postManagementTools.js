@@ -15,6 +15,7 @@ import captionGenerationService from '../captionGenerationService.js';
 import hashtagGenerationService from '../hashtagGenerationService.js';
 import hookGenerationService from '../hookGenerationService.js';
 import path from 'path';
+import { fromTinaTime, formatForTina, getLocalNow } from '../../utils/tz/timezone.js';
 
 const logger = getLogger('post-management-tools', 'post-management-tools');
 
@@ -1204,7 +1205,7 @@ export async function regeneratePostVideo(params = {}) {
  *
  * @param {Object} params - Scheduling parameters
  * @param {Array<string>} params.postIds - Post IDs to schedule
- * @param {string} params.scheduledAt - ISO date for scheduling
+ * @param {string} params.scheduledAt - ISO date for scheduling (interpreted as PACIFIC time)
  * @returns {Promise<Object>} Scheduling result
  */
 export async function schedulePosts(params = {}) {
@@ -1214,17 +1215,18 @@ export async function schedulePosts(params = {}) {
     throw new Error('At least one post ID must be provided');
   }
 
-  // Validate date
-  const scheduledDate = new Date(scheduledAt);
+  // IMPORTANT: scheduledAt from Tina is in LOCAL time (configurable via TIMEZONE env var)
+  // fromTinaTime() interprets the input as local time and converts to UTC for database storage
+  const scheduledDate = fromTinaTime(scheduledAt);
   if (isNaN(scheduledDate.getTime())) {
     throw new Error('Invalid scheduled date');
   }
 
   // Validate the date is in the future (at least 30 minutes from now)
-  const now = new Date();
-  const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
+  const nowLocal = getLocalNow();
+  const minScheduleTime = new Date(nowLocal.getTime() + 30 * 60 * 1000);
   if (scheduledDate < minScheduleTime) {
-    throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${now.toISOString()}, Minimum: ${minScheduleTime.toISOString()}`);
+    throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${formatForTina(nowLocal)}, Minimum: ${formatForTina(minScheduleTime)}`);
   }
 
   // Find all posts
@@ -1251,12 +1253,13 @@ export async function schedulePosts(params = {}) {
 
     // Schedule the post
     post.status = 'scheduled';
-    post.scheduledAt = scheduledDate;
+    post.scheduledAt = scheduledDate; // Stored as UTC in DB
     await post.save();
 
     scheduled.push({
       id: post._id.toString(),
-      scheduledFor: scheduledDate
+      scheduledFor: scheduledDate,
+      scheduledForDisplay: formatForTina(scheduledDate) // Local time for display
     });
 
     logger.info('Post scheduled', {

@@ -714,28 +714,21 @@ class GoogleAnalyticsService {
 
       logger.info('Fetching real-time users');
 
+      // Google Analytics Standard properties can only access up to 29 minutes ago for real-time data
+      // We only request the 30-minute range since 60-minute is not supported
       const response = await this.makeAPIRequest(`/properties/${this.propertyId}:runRealtimeReport`, {
         metrics: [{ name: 'activeUsers' }],
         minuteRanges: [
-          { name: 'last30Minutes', startMinutesAgo: 29, endMinutesAgo: 0 },
-          { name: 'last60Minutes', startMinutesAgo: 59, endMinutesAgo: 0 }
+          { name: 'last30Minutes', startMinutesAgo: 29, endMinutesAgo: 0 }
         ]
       });
 
       let activeUsers = 0;
       let activeLast30Minutes = 0;
-      let activeLast60Minutes = 0;
 
       if (response.totals) {
-        response.totals.forEach((total, index) => {
-          const value = parseInt(total.metricValues[0]?.value) || 0;
-          if (index === 0) {
-            activeLast30Minutes = value;
-            activeUsers = value; // Current active users
-          } else if (index === 1) {
-            activeLast60Minutes = value;
-          }
-        });
+        activeLast30Minutes = parseInt(response.totals[0]?.metricValues[0]?.value) || 0;
+        activeUsers = activeLast30Minutes;
       } else if (response.rows && response.rows[0]) {
         activeUsers = parseInt(response.rows[0].metricValues[0]?.value) || 0;
         activeLast30Minutes = activeUsers;
@@ -744,7 +737,7 @@ class GoogleAnalyticsService {
       const result = {
         activeUsers,
         activeLast30Minutes,
-        activeLast60Minutes,
+        activeLast60Minutes: activeLast30Minutes, // Use same value since 60-min not supported
         timestamp: new Date().toISOString()
       };
 

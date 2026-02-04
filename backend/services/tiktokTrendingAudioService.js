@@ -330,7 +330,7 @@ class TikTokTrendingAudioService {
         trackCount: this.audioLibrary.length
       });
     } catch (error) {
-      logger.warn('Could not load audio library from file, using built-in library', {
+      logger.debug('Could not load audio library from file, using built-in library', {
         error: error.message
       });
       this.audioLibrary = this.getBuiltInLibrary();

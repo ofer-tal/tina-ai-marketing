@@ -174,6 +174,19 @@ toolProposalSchema.methods.markFailed = function(error = '') {
 };
 
 /**
+ * Reset a failed proposal back to pending_approval for retry
+ * This is used when execution fails due to a technical error (not a business logic failure)
+ */
+toolProposalSchema.methods.resetForRetry = function() {
+  this.status = 'pending_approval';
+  this.executionError = undefined;
+  this.executedAt = undefined;
+  this.approvedAt = undefined;
+  this.approvedBy = undefined;
+  return this.save();
+};
+
+/**
  * Static method to get pending proposals
  */
 toolProposalSchema.statics.getPending = function() {

@@ -12,7 +12,7 @@
  * 4. Update metrics for already-matched posts
  *
  * Environment variables:
- * - TIKTOK_MATCHER_SCHEDULE: Cron schedule (default: every 30 minutes)
+ * - TIKTOK_MATCHER_SCHEDULE: Cron schedule (default: '10,25,40,55 * * * *' - :10, :25, :40, :55 of each hour)
  * - TIKTOK_MATCHER_TIMEZONE: Timezone (default: 'UTC')
  */
 
@@ -33,7 +33,7 @@ class TikTokVideoMatcherJob {
     this.lastMatchStats = null;
 
     // Configuration from environment
-    this.matchSchedule = process.env.TIKTOK_MATCHER_SCHEDULE || '*/30 * * * *'; // Every 30 minutes
+    this.matchSchedule = process.env.TIKTOK_MATCHER_SCHEDULE || '10,25,40,55 * * * *'; // :10, :25, :40, :55 of each hour
     this.timezone = process.env.TIKTOK_MATCHER_TIMEZONE || 'UTC';
 
     // Matching parameters

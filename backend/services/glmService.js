@@ -46,7 +46,7 @@ class GLMService {
     this.apiKey = process.env.GLM47_API_KEY;
     this.endpoint = process.env.GLM47_API_ENDPOINT || 'https://api.z.ai/api/paas/v4';
     this.model = 'glm-4.7'; // GLM4.7 model - supports function calling
-    this.timeout = 60000; // 60 second timeout
+    this.timeout = 600000; // 10 minute timeout (GLM can take longer with complex tool)
     this.maxRetries = 3;
     this.retryDelay = 1000; // Initial retry delay in ms
 

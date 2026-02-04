@@ -509,12 +509,29 @@ class MetricsAggregationJob {
       // Calculate churn from month start to now
       const churnRate = this.calculateMonthlyChurnRate(startDate, endDate);
 
+      // Generate month identifier (YYYY-MM format)
+      const monthIdentifier = `${currentYear}-${currentMonth.toString().padStart(2, '0')}`;
+
+      // Get month name
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+      const monthName = monthNames[currentMonth - 1];
+
+      // Calculate month start/end dates
+      const monthStart = new Date(currentYear, currentMonth - 1, 1);
+      monthStart.setHours(0, 0, 0, 0);
+      const monthEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59, 999);
+
       // Update or create monthly aggregate
       await MonthlyRevenueAggregate.findOneAndUpdate(
         { year: currentYear, month: currentMonth },
         {
           year: currentYear,
           month: currentMonth,
+          monthIdentifier,
+          monthName,
+          monthStart,
+          monthEnd,
           grossRevenue: monthlyData.grossRevenue,
           netRevenue: monthlyData.netRevenue,
           appleFees: monthlyData.appleFees,
