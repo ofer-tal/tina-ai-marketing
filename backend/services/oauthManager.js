@@ -155,7 +155,11 @@ class OAuthManager {
       getNewToken: async () => {
         const token = await AuthToken.getActiveToken(platform);
         if (token && token.accessToken) {
-          logger.debug(`Retrieved stored token for ${platform}`);
+          logger.debug(`Retrieved stored token for ${platform}`, {
+            hasRefreshToken: !!token.refreshToken,
+            expiresAt: token.expiresAt?.toISOString(),
+            isActive: token.isActive,
+          });
           return {
             accessToken: token.accessToken,
             refreshToken: token.refreshToken,
@@ -168,15 +172,29 @@ class OAuthManager {
 
       // Store updated token to database (after refresh)
       storeToken: async (token) => {
-        await AuthToken.saveToken(platform, {
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
-          expiresAt: new Date(token.expiresAt),
-        });
-        logger.info(`Token stored for ${platform}`, {
+        logger.info(`[OAUTH] Token refresh callback - storing new token for ${platform}`, {
+          hasAccessToken: !!token.accessToken,
           hasRefreshToken: !!token.refreshToken,
           expiresAt: new Date(token.expiresAt).toISOString(),
         });
+
+        // Use refreshToken method to UPDATE existing token (preserves isActive and metadata)
+        const activeToken = await AuthToken.getActiveToken(platform);
+        if (activeToken) {
+          await AuthToken.refreshToken(platform, {
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken || activeToken.refreshToken,
+            expiresAt: new Date(token.expiresAt),
+          });
+        } else {
+          // No active token exists, create new one (shouldn't happen during refresh)
+          logger.warn(`[OAUTH] No active token found during refresh, creating new token for ${platform}`);
+          await AuthToken.saveToken(platform, {
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken,
+            expiresAt: new Date(token.expiresAt),
+          });
+        }
       },
 
       // Get stored token for wrapper internal use
@@ -196,7 +214,19 @@ class OAuthManager {
       onError: (error) => {
         logger.error(`OAuth error for ${platform}`, {
           error: error.message,
+          errorName: error.name,
+          isAuthError: error.message?.includes('access_token') || error.message?.includes('unauthorized'),
         });
+
+        // If this is an auth error, invalidate the cached fetch wrapper
+        // This forces a fresh token load on next request
+        if (error.message?.includes('access_token') ||
+            error.message?.includes('unauthorized') ||
+            error.message?.includes('invalid') ||
+            error.message?.includes('401')) {
+          logger.warn(`[OAUTH] Auth error detected, invalidating fetch wrapper for ${platform}`);
+          this.fetchWrappers.delete(platform);
+        }
       },
     });
 
@@ -656,9 +686,23 @@ class OAuthManager {
       hasRefreshToken: !!token?.refreshToken,
       expiresAt: token?.expiresAt?.toISOString(),
       isActive: token?.isActive,
+      accessTokenLength: token?.accessToken?.length || 0,
     });
 
-    if (!token || !token.accessToken) return false;
+    if (!token) {
+      logger.warn(`[OAUTH] ${platform} NOT authenticated - no token found in database`);
+      return false;
+    }
+
+    if (!token.accessToken) {
+      logger.warn(`[OAUTH] ${platform} NOT authenticated - token exists but no accessToken`);
+      return false;
+    }
+
+    if (!token.isActive) {
+      logger.warn(`[OAUTH] ${platform} NOT authenticated - token exists but isActive=false`);
+      return false;
+    }
 
     // If we have a refresh token, consider authenticated even if access token is expired
     // OAuth2Fetch will automatically refresh it when making an API call
@@ -671,17 +715,77 @@ class OAuthManager {
     if (token.expiresAt) {
       const now = new Date();
       const expiresAt = new Date(token.expiresAt);
+      const timeUntilExpiry = expiresAt.getTime() - now.getTime();
+      const hoursUntilExpiry = timeUntilExpiry / (1000 * 60 * 60);
+
       if (now >= expiresAt) {
-        logger.warn(`[OAUTH] Token expired for ${platform} and NO refresh token available`, {
+        logger.error(`[OAUTH] ${platform} NOT authenticated - token expired and NO refresh token`, {
           now: now.toISOString(),
           expiresAt: expiresAt.toISOString(),
+          expiredSince: `${Math.abs(hoursUntilExpiry).toFixed(2)} hours`,
         });
         return false;
       }
+
+      // Warn if token expires soon (less than 24 hours)
+      if (hoursUntilExpiry < 24) {
+        logger.warn(`[OAUTH] ${platform} token expiring soon`, {
+          expiresAt: expiresAt.toISOString(),
+          hoursRemaining: hoursUntilExpiry.toFixed(2),
+          hasRefreshToken: false,
+        });
+      }
     }
 
-    logger.info(`[OAUTH] ${platform} is authenticated`);
+    logger.info(`[OAUTH] ${platform} is authenticated (valid access token)`);
     return true;
+  }
+
+  /**
+   * Get detailed token status for debugging
+   * Returns comprehensive status of the platform's authentication
+   */
+  async getTokenStatus(platform) {
+    const allTokens = await AuthToken.find({ platform }).sort({ createdAt: -1 });
+    const activeToken = allTokens.find(t => t.isActive);
+
+    const now = new Date();
+    const isExpired = activeToken?.expiresAt ? new Date(activeToken.expiresAt) < now : false;
+    const expiresInSeconds = activeToken?.expiresAt
+      ? Math.floor((new Date(activeToken.expiresAt).getTime() - now.getTime()) / 1000)
+      : null;
+
+    return {
+      platform,
+      hasAnyTokens: allTokens.length > 0,
+      totalTokens: allTokens.length,
+      hasActiveToken: !!activeToken,
+      activeToken: activeToken ? {
+        id: activeToken._id.toString(),
+        isActive: activeToken.isActive,
+        hasAccessToken: !!activeToken.accessToken,
+        accessTokenLength: activeToken.accessToken?.length || 0,
+        hasRefreshToken: !!activeToken.refreshToken,
+        refreshTokenLength: activeToken.refreshToken?.length || 0,
+        expiresAt: activeToken.expiresAt?.toISOString(),
+        isExpired,
+        expiresInSeconds,
+        expiresHuman: expiresInSeconds
+          ? expiresInSeconds < 0
+            ? `expired ${Math.abs(expiresInSeconds / 60).toFixed(0)} minutes ago`
+            : expiresInSeconds < 3600
+              ? `in ${Math.floor(expiresInSeconds / 60)} minutes`
+              : `in ${Math.floor(expiresInSeconds / 3600)} hours`
+          : 'unknown',
+        lastRefreshedAt: activeToken.lastRefreshedAt?.toISOString(),
+        createdAt: activeToken.createdAt?.toISOString(),
+      } : null,
+      inactiveTokens: allTokens.filter(t => !t.isActive).map(t => ({
+        id: t._id.toString(),
+        deactivatedAt: t.deactivatedAt?.toISOString(),
+        expiresAt: t.expiresAt?.toISOString(),
+      })),
+    };
   }
 
   /**

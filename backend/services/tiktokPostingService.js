@@ -417,6 +417,7 @@ class TikTokPostingService extends BaseApiClient {
 
   /**
    * Upload video file to TikTok
+   * IMPORTANT: Uses oauthManager.fetch() to inject Bearer token
    */
   async uploadVideo(publishId, videoBuffer, onProgress = null) {
     try {
@@ -449,7 +450,9 @@ class TikTokPostingService extends BaseApiClient {
         }
       }, 500);
 
-      const response = await rateLimiterService.fetch(uploadUrl, {
+      // CRITICAL: Use oauthManager.fetch() to inject Bearer token automatically
+      // rateLimiterService.fetch() does NOT add authentication headers
+      const response = await oauthManager.fetch('tiktok', uploadUrl, {
         method: 'POST',
         body: formData,
       });
@@ -457,7 +460,8 @@ class TikTokPostingService extends BaseApiClient {
       clearInterval(progressInterval);
 
       if (!response.ok) {
-        throw new Error(`Upload failed: ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || `Upload failed: ${response.statusText}`);
       }
 
       const result = await response.json();
