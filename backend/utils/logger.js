@@ -60,18 +60,20 @@ const createLogger = (service = 'app') => {
     new winston.transports.Console({
       level: LOG_LEVEL,
       format: consoleFormat,
-      handleExceptions: true,
-      handleRejections: true
+      handleExceptions: false, // Will handle at logger level
+      handleRejections: false  // Will handle at logger level
     }),
 
     // File transport for all logs
     new winston.transports.File({
-      filename: path.join(LOG_DIR, 'combined.log'),
+      filename: path.join(LOG_DIR, 'backend.log'),
       level: 'info',
       format: logFormat,
       maxsize: 10485760, // 10MB
       maxFiles: 5,
-      tailable: true
+      tailable: true,
+      handleExceptions: false, // Will handle at logger level
+      handleRejections: false  // Will handle at logger level
     }),
 
     // File transport for errors only
@@ -81,7 +83,9 @@ const createLogger = (service = 'app') => {
       format: logFormat,
       maxsize: 10485760, // 10MB
       maxFiles: 5,
-      tailable: true
+      tailable: true,
+      handleExceptions: false, // Will handle at logger level
+      handleRejections: false  // Will handle at logger level
     })
   ];
 
@@ -90,7 +94,24 @@ const createLogger = (service = 'app') => {
     format: logFormat,
     defaultMeta: { service },
     transports,
-    exitOnError: false
+    exitOnError: false,
+    // Handle exceptions and rejections at logger level
+    exceptionHandlers: [
+      new winston.transports.File({
+        filename: path.join(LOG_DIR, 'exceptions.log'),
+        format: logFormat,
+        maxsize: 10485760,
+        maxFiles: 3
+      })
+    ],
+    rejectionHandlers: [
+      new winston.transports.File({
+        filename: path.join(LOG_DIR, 'rejections.log'),
+        format: logFormat,
+        maxsize: 10485760,
+        maxFiles: 3
+      })
+    ]
   });
 
   return logger;

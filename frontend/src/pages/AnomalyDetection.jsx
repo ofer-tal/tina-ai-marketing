@@ -60,7 +60,7 @@ const AnomalyDetection = () => {
 
   const fetchSummary = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/anomaly-detection/summary?period=${period}`);
+      const response = await fetch(`/api/anomaly-detection/summary?period=${period}`);
       const result = await response.json();
 
       if (result.success) {
@@ -73,7 +73,7 @@ const AnomalyDetection = () => {
 
   const fetchAvailableMetrics = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/anomaly-detection/metrics');
+      const response = await fetch('/api/anomaly-detection/metrics');
       const result = await response.json();
 
       if (result.success) {
@@ -86,7 +86,7 @@ const AnomalyDetection = () => {
 
   const fetchAvailableMethods = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/anomaly-detection/methods');
+      const response = await fetch('/api/anomaly-detection/methods');
       const result = await response.json();
 
       if (result.success) {
@@ -101,7 +101,7 @@ const AnomalyDetection = () => {
     try {
       setLoading(true);
       const response = await fetch(
-        `http://localhost:3001/api/anomaly-detection/baseline?metric=${selectedMetric}&period=${period}`
+        `/api/anomaly-detection/baseline?metric=${selectedMetric}&period=${period}`
       );
       const result = await response.json();
 
@@ -118,7 +118,7 @@ const AnomalyDetection = () => {
   const fetchAnomalies = async () => {
     try {
       const response = await fetch(
-        `http://localhost:3001/api/anomaly-detection/detect?metric=${selectedMetric}&period=${period}&method=${method}&threshold=${threshold}`
+        `/api/anomaly-detection/detect?metric=${selectedMetric}&period=${period}&method=${method}&threshold=${threshold}`
       );
       const result = await response.json();
 
@@ -132,7 +132,7 @@ const AnomalyDetection = () => {
 
   const generateAlerts = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/anomaly-detection/alerts', {
+      const response = await fetch('/api/anomaly-detection/alerts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +198,7 @@ const AnomalyDetection = () => {
   const fetchContext = async (anomalyTimestamp) => {
     try {
       const response = await fetch(
-        `http://localhost:3001/api/anomaly-detection/context/${selectedMetric}?timestamp=${anomalyTimestamp.toISOString()}&period=7`
+        `/api/anomaly-detection/context/${selectedMetric}?timestamp=${anomalyTimestamp.toISOString()}&period=7`
       );
       const result = await response.json();
 

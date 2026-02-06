@@ -104,12 +104,13 @@
       const tiktokStatus = params.get('tiktok');
       const googleStatus = params.get('google');
       const youtubeStatus = params.get('youtube');
+      const instagramStatus = params.get('instagram');
       const message = params.get('message');
       const error = params.get('error');
 
       // Determine if authentication was successful
       const isSuccess =
-        (tiktokStatus === 'success' || googleStatus === 'success' || youtubeStatus === 'success') &&
+        (tiktokStatus === 'success' || googleStatus === 'success' || youtubeStatus === 'success' || instagramStatus === 'success') &&
         !error;
 
       if (isSuccess) {
@@ -118,6 +119,7 @@
         if (tiktokStatus === 'success') services.push('TikTok');
         if (googleStatus === 'success') services.push('Google Sheets');
         if (youtubeStatus === 'success') services.push('YouTube');
+        if (instagramStatus === 'success') services.push('Instagram');
 
         // Send success message to parent window
         if (window.opener) {

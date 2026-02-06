@@ -298,7 +298,7 @@ function DailyRevenueAggregates() {
       const startDate = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000); // Last 14 days
 
       const response = await fetch(
-        `http://localhost:3001/api/revenue/daily/aggregates?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
+        `/api/revenue/daily/aggregates?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`
       );
 
       if (!response.ok) {
@@ -323,7 +323,7 @@ function DailyRevenueAggregates() {
 
     try {
       const response = await fetch(
-        `http://localhost:3001/api/revenue/daily/${aggregate.date}/transactions`
+        `/api/revenue/daily/${aggregate.date}/transactions`
       );
 
       if (!response.ok) {

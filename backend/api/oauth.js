@@ -234,4 +234,18 @@ router.post('/:platform/refresh', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/oauth/debug/states
+ *
+ * Debug endpoint to see all stored OAuth states (for debugging state issues)
+ */
+router.get('/debug/states', (req, res) => {
+  // Import the state store from oauthManager (it's a Map, not exported)
+  // We'll need to access it indirectly or expose it via the manager
+  res.json({
+    success: true,
+    message: 'OAuth state debugging - check server logs for state information',
+  });
+});
+
 export default router;

@@ -495,7 +495,7 @@ function GenerateVideoOptions({
   const fetchMusic = async () => {
     setIsFetchingMusic(true);
     try {
-      const response = await fetch('http://localhost:3001/api/music/list');
+      const response = await fetch('/api/music/list');
       if (response.ok) {
         const data = await response.json();
         setAllMusic(data.data.tracks || []);
@@ -574,8 +574,8 @@ function GenerateVideoOptions({
       // Use different endpoint based on whether we're regenerating or creating new
       const isRegeneration = post?._id != null;
       const url = isRegeneration
-        ? `http://localhost:3001/api/tiered-video/regenerate/${post._id}`
-        : `http://localhost:3001/api/tiered-video/generate-tier1`;
+        ? `/api/tiered-video/regenerate/${post._id}`
+        : `/api/tiered-video/generate-tier1`;
 
       const body = isRegeneration
         ? {

@@ -95,7 +95,7 @@ const ErrorTestPage = () => {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3001${testCase.endpoint}`);
+      const response = await fetch(`${testCase.endpoint}`);
 
       // The request should fail and throw an error
       if (!response.ok) {

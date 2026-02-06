@@ -107,6 +107,10 @@ export async function executeTool(proposal) {
         result = await postManagementTools.getMusic(toolParameters);
         break;
 
+      case 'get_ai_avatars':
+        result = await getAIAvatars(toolParameters);
+        break;
+
       case 'get_stories':
         result = await postManagementTools.getStories(toolParameters);
         break;
@@ -3735,5 +3739,40 @@ async function getCurrentReflection() {
       startDoing: reflection.startDoing,
       nextWeekPriorities: reflection.nextWeekPriorities
     }
+  };
+}
+
+/**
+ * Get AI Avatars
+ * Returns available AI avatars for tier_2 video generation
+ */
+async function getAIAvatars(params = {}) {
+  const AIAvatar = (await import('../../models/AIAvatar.js')).default;
+
+  const { gender, style } = params;
+
+  const query = { isActive: true };
+
+  if (gender) {
+    query.gender = gender;
+  }
+  if (style) {
+    query.style = style;
+  }
+
+  const avatars = await AIAvatar.find(query).sort({ usageCount: -1 });
+
+  return {
+    message: `Found ${avatars.length} active AI avatar${avatars.length !== 1 ? 's' : ''}`,
+    avatars: avatars.map(a => ({
+      id: a._id,
+      name: a.name,
+      description: a.description,
+      gender: a.gender,
+      style: a.style,
+      usageCount: a.usageCount,
+      hasImage: !!a.imagePath,
+      heygenConfigured: !!a.heygenAvatarId
+    }))
   };
 }

@@ -16,7 +16,7 @@ const WeeklyRevenueAggregates = () => {
   const fetchAggregates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/revenue/weekly/aggregates');
+      const response = await fetch('/api/revenue/weekly/aggregates');
       const data = await response.json();
 
       if (data.success) {
@@ -38,7 +38,7 @@ const WeeklyRevenueAggregates = () => {
       setShowModal(true);
 
       const response = await fetch(
-        `http://localhost:3001/api/revenue/weekly/${week.year}/${week.weekNumber}/transactions`
+        `/api/revenue/weekly/${week.year}/${week.weekNumber}/transactions`
       );
       const data = await response.json();
 

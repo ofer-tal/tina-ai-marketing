@@ -62,6 +62,7 @@ coverage/
 .parcel-cache/
 .pnp/
 .pnp.js
+nul
 
 # Docker
 docker-compose.override.yml

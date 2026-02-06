@@ -115,7 +115,7 @@ export default function ASO() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3001/api/aso/keywords');
+      const response = await fetch('/api/aso/keywords');
       const data = await response.json();
 
       if (data.success) {

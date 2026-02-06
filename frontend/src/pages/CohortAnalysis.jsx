@@ -19,7 +19,7 @@ export default function CohortAnalysis() {
       const params = new URLSearchParams();
       if (channelFilter) params.append('channel', channelFilter);
 
-      const response = await fetch(`http://localhost:3001/api/cohort-analysis/analyze?${params}`);
+      const response = await fetch(`/api/cohort-analysis/analyze?${params}`);
       const result = await response.json();
 
       if (result.success) {

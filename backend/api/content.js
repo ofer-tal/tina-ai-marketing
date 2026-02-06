@@ -1,5 +1,6 @@
 import express from 'express';
 import winston from 'winston';
+import multer from 'multer';
 import contentGenerationJob from '../jobs/contentGeneration.js';
 import postingSchedulerJob from '../jobs/postingScheduler.js';
 import batchGenerationScheduler from '../jobs/batchGenerationScheduler.js';
@@ -12,7 +13,36 @@ import youtubeOptimizationService from '../services/youtubeOptimizationService.j
 import contentBatchingService from '../services/contentBatchingService.js';
 import contentModerationService from '../services/contentModerationService.js';
 import MarketingPost from '../models/MarketingPost.js';
+import AIAvatar from '../models/AIAvatar.js';
+import Story from '../models/Story.js';
 import { getStories, createPost } from '../services/tinaTools/postManagementTools.js';
+import storageService from '../services/storage.js';
+import ffmpegWrapper from '../utils/ffmpegWrapper.js';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs/promises';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configure multer for video uploads (memory storage)
+const videoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 500 * 1024 * 1024, // 500MB max
+  },
+  fileFilter: (req, file, cb) => {
+    // Only allow video files
+    const allowedTypes = /mp4|mov|avi|webm|mkv/;
+    const extname = allowedTypes.test(file.originalname.toLowerCase());
+    const mimetype = file.mimetype.startsWith('video/');
+
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error('Only video files are allowed (mp4, mov, avi, webm, mkv)'));
+  }
+});
 
 const router = express.Router();
 
@@ -2146,19 +2176,16 @@ router.post('/posts/bulk/reject', async (req, res) => {
 /**
  * PUT /api/content/posts/:id
  * Update a marketing post (caption, hashtags, etc.)
+ * For tier_2 posts: Allow editing caption, hashtags, script only before video is uploaded
  */
 router.put('/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { caption, hashtags, script, scheduledAt, ...otherUpdates } = req.body;
 
-    logger.info('Updating marketing post', { id, updates });
+    logger.info('Updating marketing post', { id, updates: req.body });
 
-    const post = await MarketingPost.findByIdAndUpdate(
-      id,
-      { $set: updates },
-      { new: true, runValidators: true }
-    );
+    const post = await MarketingPost.findById(id);
 
     if (!post) {
       return res.status(404).json({
@@ -2166,6 +2193,149 @@ router.put('/posts/:id', async (req, res) => {
         error: 'Marketing post not found'
       });
     }
+
+    // Handle tier_2 posts with special rules
+    if (post.contentTier === 'tier_2') {
+      // If video already exists, lock most fields
+      if (post.videoPath) {
+        // Only allow updating scheduledAt after video is uploaded
+        const allowedUpdates = {};
+        if (scheduledAt !== undefined) {
+          // Validate 4-hour minimum scheduling
+          const newScheduledDate = new Date(scheduledAt);
+          const now = new Date();
+          const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+
+          if (isNaN(newScheduledDate.getTime())) {
+            return res.status(400).json({
+              success: false,
+              error: 'scheduledAt must be a valid ISO date'
+            });
+          }
+
+          if (newScheduledDate < minScheduleTime) {
+            return res.status(400).json({
+              success: false,
+              error: `scheduledAt must be at least 4 hours in the future`
+            });
+          }
+
+          allowedUpdates.scheduledAt = newScheduledDate;
+        }
+
+        if (Object.keys(allowedUpdates).length > 0) {
+          Object.assign(post, allowedUpdates);
+          await post.save();
+        }
+
+        return res.json({
+          success: true,
+          data: post
+        });
+      }
+
+      // No video yet - allow editing caption, hashtags, script
+      if (caption !== undefined) {
+        post.caption = caption.trim();
+      }
+
+      if (hashtags !== undefined) {
+        // Handle both array (legacy) and object (platform-specific) formats
+        if (Array.isArray(hashtags)) {
+          // Legacy array format - convert to platform-specific structure
+          const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+          post.hashtags = {
+            tiktok: platformKey === 'tiktok' ? hashtags : (post.hashtags?.tiktok || []),
+            instagram: platformKey === 'instagram' ? hashtags : (post.hashtags?.instagram || []),
+            youtube_shorts: platformKey === 'youtube_shorts' ? hashtags : (post.hashtags?.youtube_shorts || [])
+          };
+        } else if (typeof hashtags === 'object' && hashtags !== null) {
+          // Platform-specific object format - validate it has the correct structure
+          post.hashtags = hashtags;
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: 'hashtags must be an array or platform-specific object'
+          });
+        }
+      }
+
+      if (script !== undefined) {
+        post.tierParameters.set('script', script.trim());
+        post.tierParameters.set('scriptPreview', script.trim().substring(0, 200));
+      }
+
+      if (scheduledAt !== undefined) {
+        // Validate 4-hour minimum scheduling
+        const newScheduledDate = new Date(scheduledAt);
+        const now = new Date();
+        const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+
+        if (isNaN(newScheduledDate.getTime())) {
+          return res.status(400).json({
+            success: false,
+            error: 'scheduledAt must be a valid ISO date'
+          });
+        }
+
+        if (newScheduledDate < minScheduleTime) {
+          return res.status(400).json({
+            success: false,
+            error: `scheduledAt must be at least 4 hours in the future`
+          });
+        }
+
+        post.scheduledAt = newScheduledDate;
+      }
+
+      await post.save();
+
+      return res.json({
+        success: true,
+        data: post
+      });
+    }
+
+    // Handle tier_1 and other posts
+    // Process caption
+    if (caption !== undefined) {
+      post.caption = caption.trim();
+    }
+
+    // Process hashtags - handle both array and platform-specific object formats
+    if (hashtags !== undefined) {
+      if (Array.isArray(hashtags)) {
+        // Legacy array format - convert to platform-specific structure
+        const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+        post.hashtags = {
+          tiktok: platformKey === 'tiktok' ? hashtags : (post.hashtags?.tiktok || []),
+          instagram: platformKey === 'instagram' ? hashtags : (post.hashtags?.instagram || []),
+          youtube_shorts: platformKey === 'youtube_shorts' ? hashtags : (post.hashtags?.youtube_shorts || [])
+        };
+      } else if (typeof hashtags === 'object' && hashtags !== null) {
+        // Platform-specific object format
+        post.hashtags = hashtags;
+      }
+    }
+
+    // Process scheduledAt - this was missing for tier_1 posts!
+    if (scheduledAt !== undefined) {
+      const newScheduledDate = new Date(scheduledAt);
+
+      if (isNaN(newScheduledDate.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: 'scheduledAt must be a valid ISO date'
+        });
+      }
+
+      post.scheduledAt = newScheduledDate;
+    }
+
+    // Apply other updates
+    Object.assign(post, otherUpdates);
+
+    await post.save();
 
     res.json({
       success: true,
@@ -3583,6 +3753,377 @@ router.post('/posts/bulk/reject', async (req, res) => {
 
   } catch (error) {
     logger.error('Bulk reject marketing posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/create-tier2
+ * Create a new tier_2 marketing post (AI-Avatar video)
+ */
+router.post('/posts/create-tier2', async (req, res) => {
+  try {
+    const {
+      storyId,
+      platform,
+      caption,
+      hashtags,
+      scheduledAt,
+      avatarId,
+      script
+    } = req.body;
+
+    // Validate required fields
+    if (!storyId) {
+      return res.status(400).json({
+        success: false,
+        error: 'storyId is required'
+      });
+    }
+
+    if (!platform) {
+      return res.status(400).json({
+        success: false,
+        error: 'platform is required'
+      });
+    }
+
+    const validPlatforms = ['tiktok', 'instagram', 'youtube_shorts'];
+    if (!validPlatforms.includes(platform)) {
+      return res.status(400).json({
+        success: false,
+        error: `platform must be one of: ${validPlatforms.join(', ')}`
+      });
+    }
+
+    if (!caption || caption.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'caption is required'
+      });
+    }
+
+    if (!hashtags || !Array.isArray(hashtags) || hashtags.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'hashtags is required and must be an array'
+      });
+    }
+
+    if (!scheduledAt) {
+      return res.status(400).json({
+        success: false,
+        error: 'scheduledAt is required'
+      });
+    }
+
+    // Validate scheduledAt is at least 4 hours in the future
+    const scheduledDate = new Date(scheduledAt);
+    const now = new Date();
+    const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 hours
+
+    if (isNaN(scheduledDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        error: 'scheduledAt must be a valid ISO date'
+      });
+    }
+
+    if (scheduledDate < minScheduleTime) {
+      return res.status(400).json({
+        success: false,
+        error: `scheduledAt must be at least 4 hours in the future. Current time: ${now.toISOString()}, Minimum: ${minScheduleTime.toISOString()}`
+      });
+    }
+
+    if (!avatarId) {
+      return res.status(400).json({
+        success: false,
+        error: 'avatarId is required for tier_2 posts'
+      });
+    }
+
+    if (!script || script.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'script is required for tier_2 posts'
+      });
+    }
+
+    logger.info('Creating tier_2 marketing post', {
+      storyId,
+      platform,
+      avatarId,
+      scriptLength: script.length
+    });
+
+    // Fetch and validate avatar
+    const avatar = await AIAvatar.findById(avatarId);
+    if (!avatar) {
+      return res.status(400).json({
+        success: false,
+        error: 'Avatar not found'
+      });
+    }
+
+    if (!avatar.isActive) {
+      return res.status(400).json({
+        success: false,
+        error: 'Avatar is not active'
+      });
+    }
+
+    // Fetch and validate story
+    const story = await Story.findById(storyId);
+    if (!story) {
+      return res.status(400).json({
+        success: false,
+        error: 'Story not found'
+      });
+    }
+
+    // Create tier_2 post with draft status (no video yet)
+    const post = new MarketingPost({
+      title: `${story.title} - Tier 2`,
+      description: `AI Avatar video featuring ${avatar.name}`,
+      platform,
+      status: 'draft', // Draft until video is uploaded
+      contentType: 'video',
+      contentTier: 'tier_2',
+      caption: caption.trim(),
+      hashtags: hashtags.map(tag => tag.trim().startsWith('#') ? tag.trim() : `#${tag.trim()}`),
+      scheduledAt: scheduledDate,
+      videoPath: null, // No video yet
+      thumbnailPath: null,
+      storyId,
+      storyName: story.title,
+      storyCategory: story.category,
+      storySpiciness: story.spiciness || 0,
+      // Store tier-specific parameters
+      tierParameters: new Map([
+        ['avatarId', avatarId],
+        ['avatarName', avatar.name],
+        ['script', script.trim()],
+        ['scriptPreview', script.trim().substring(0, 200)]
+      ]),
+      // Generation metadata for tier_2
+      generationMetadata: {
+        tier: 'tier_2',
+        imageModel: 'heygen_avatar',
+        videoModel: 'manual_upload'
+      }
+    });
+
+    await post.save();
+
+    // Increment avatar usage count
+    await avatar.incrementUsage();
+
+    logger.info('Tier_2 marketing post created', {
+      postId: post._id,
+      storyId,
+      avatarId
+    });
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: post._id,
+        title: post.title,
+        platform: post.platform,
+        status: post.status,
+        contentTier: post.contentTier,
+        caption: post.caption,
+        hashtags: post.hashtags,
+        scheduledAt: post.scheduledAt,
+        storyId: post.storyId,
+        storyName: post.storyName,
+        tierParameters: Object.fromEntries(post.tierParameters),
+        createdAt: post.createdAt
+      }
+    });
+
+  } catch (error) {
+    logger.error('Create tier_2 marketing post API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/posts/:id/upload-tier2-video
+ * Upload a manually generated video for a tier_2 post
+ */
+router.post('/posts/:id/upload-tier2-video', videoUpload.single('video'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        error: 'No video file provided'
+      });
+    }
+
+    logger.info('Uploading tier_2 video', {
+      postId: id,
+      filename: req.file.originalname,
+      size: req.file.size
+    });
+
+    // Fetch post
+    const post = await MarketingPost.findById(id);
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Marketing post not found'
+      });
+    }
+
+    // Verify it's a tier_2 post
+    if (post.contentTier !== 'tier_2') {
+      return res.status(400).json({
+        success: false,
+        error: 'This endpoint is only for tier_2 posts'
+      });
+    }
+
+    // Verify video doesn't already exist
+    if (post.videoPath) {
+      return res.status(400).json({
+        success: false,
+        error: 'Video already uploaded for this post'
+      });
+    }
+
+    // Ensure tier2 video directory exists
+    const tier2Dir = storageService.directories.tier2Videos;
+    await fs.mkdir(tier2Dir, { recursive: true });
+
+    // Generate filename
+    const filename = `tier2-${post._id}-${Date.now()}.mp4`;
+    const videoPath = path.join(tier2Dir, filename);
+
+    // Save video file
+    await fs.writeFile(videoPath, req.file.buffer);
+
+    logger.info('Video saved to storage', {
+      postId: id,
+      videoPath
+    });
+
+    // Generate thumbnail
+    const thumbnailFilename = `tier2-${post._id}-${Date.now()}-thumb.jpg`;
+    const thumbnailPath = path.join(storageService.directories.thumbnails, thumbnailFilename);
+
+    try {
+      await ffmpegWrapper.extractThumbnail(videoPath, thumbnailPath, {
+        timestamp: 1,
+        width: 320,
+        height: -1
+      });
+      logger.info('Thumbnail generated', {
+        postId: id,
+        thumbnailPath
+      });
+    } catch (thumbError) {
+      logger.warn('Failed to generate thumbnail', {
+        error: thumbError.message
+      });
+      // Continue without thumbnail
+    }
+
+    // Update post
+    post.videoPath = videoPath;
+    post.thumbnailPath = thumbnailPath;
+    post.status = 'ready'; // Ready for approval
+    await post.save();
+
+    logger.info('Tier_2 video uploaded successfully', {
+      postId: id,
+      videoPath,
+      thumbnailPath
+    });
+
+    res.json({
+      success: true,
+      data: {
+        id: post._id,
+        videoPath: post.videoPath,
+        videoUrl: `/storage/videos/tier2/final/${filename}`,
+        thumbnailPath: post.thumbnailPath,
+        thumbnailUrl: post.thumbnailPath ? `/storage/thumbnails/${thumbnailFilename}` : null,
+        status: post.status
+      }
+    });
+
+  } catch (error) {
+    logger.error('Upload tier_2 video API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/content/posts/tier2/pending
+ * Get tier_2 posts that are pending video upload
+ */
+router.get('/posts/tier2/pending', async (req, res) => {
+  try {
+    const { limit = 50 } = req.query;
+
+    logger.info('Fetching tier_2 posts pending video upload');
+
+    const posts = await MarketingPost.find({
+      contentTier: 'tier_2',
+      status: 'draft',
+      videoPath: null
+    })
+    .sort({ scheduledAt: 1 })
+    .limit(parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        count: posts.length,
+        posts: posts.map(post => ({
+          id: post._id,
+          title: post.title,
+          platform: post.platform,
+          status: post.status,
+          caption: post.caption,
+          hashtags: post.hashtags,
+          scheduledAt: post.scheduledAt,
+          tierParameters: Object.fromEntries(post.tierParameters),
+          storyId: post.storyId,
+          storyName: post.storyName,
+          createdAt: post.createdAt
+        }))
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get tier_2 pending posts API error', {
       error: error.message,
       stack: error.stack
     });

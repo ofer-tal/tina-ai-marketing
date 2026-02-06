@@ -313,7 +313,7 @@ const TrendingTopics = () => {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/trending-topics/comprehensive', {
+      const response = await fetch('/api/trending-topics/comprehensive', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ timeframe })

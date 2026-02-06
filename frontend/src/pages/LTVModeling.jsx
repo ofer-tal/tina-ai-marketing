@@ -363,14 +363,14 @@ const LTVModeling = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3001/api/ltv-modeling/dashboard');
+      const response = await fetch('/api/ltv-modeling/dashboard');
       if (!response.ok) throw new Error('Failed to fetch dashboard data');
 
       const data = await response.json();
       setDashboardData(data);
 
       // Also fetch full analytics
-      const analyticsResponse = await fetch('http://localhost:3001/api/ltv-modeling/analytics');
+      const analyticsResponse = await fetch('/api/ltv-modeling/analytics');
       if (!analyticsResponse.ok) throw new Error('Failed to fetch analytics');
 
       const analytics = await analyticsResponse.json();
@@ -389,7 +389,7 @@ const LTVModeling = () => {
       setPredicting(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3001/api/ltv-modeling/predict', {
+      const response = await fetch('/api/ltv-modeling/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(predictionForm)

@@ -4,6 +4,8 @@ import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import CreatePostModal from '../components/CreatePostModal.jsx';
 import GenerateVideoOptions from '../components/GenerateVideoOptions.jsx';
 import RegenerateVideoModal from '../components/RegenerateVideoModal.jsx';
+import Tier2VideoUpload from '../components/Tier2VideoUpload.jsx';
+import EditTier2PostModal from '../components/EditTier2PostModal.jsx';
 
 const LibraryContainer = styled.div`
   width: 100%;
@@ -366,6 +368,25 @@ const StatusBadge = styled.div`
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
   }
+`;
+
+const TierBadge = styled.div`
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: ${props => {
+    const colors = {
+      tier_1: '#7b2cbf',
+      tier_2: '#e94560',
+      tier_3: '#0d6efd'
+    };
+    return colors[props.tier] || '#6c757d';
+  }};
+  color: white;
 `;
 
 const PlatformIcon = styled.div`
@@ -2273,6 +2294,7 @@ function ContentLibrary() {
   const [filters, setFilters] = useState({
     platform: 'all',
     status: 'all',
+    tier: 'all', // 'all', 'tier_1', 'tier_2', 'tier_3'
     search: '',
     dateRange: 'all' // 'all', '7days', '30days', '90days', 'custom'
   });
@@ -2327,15 +2349,37 @@ function ContentLibrary() {
   const [isPageVisible, setIsPageVisible] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // Increment to trigger refresh
 
+  // Tier 2 video upload modal
+  const [tier2UploadModal, setTier2UploadModal] = useState(false);
+  const [selectedPostForTier2Upload, setSelectedPostForTier2Upload] = useState(null);
+  const [editTier2Modal, setEditTier2Modal] = useState(false);
+  const [selectedPostForTier2Edit, setSelectedPostForTier2Edit] = useState(null);
+
   // Function to trigger a refresh
   const triggerRefresh = () => {
     setRefreshKey(prev => prev + 1);
   };
 
   // Handle page visibility changes (for auto-refresh)
+  // Refresh data when user returns to this tab (e.g., after making changes in Tina Chat)
   useEffect(() => {
+    let lastHidden = document.hidden;
+    let lastRefreshTime = Date.now();
+
     const handleVisibilityChange = () => {
-      setIsPageVisible(!document.hidden);
+      const isNowHidden = document.hidden;
+      setIsPageVisible(!isNowHidden);
+
+      // If page just became visible and it's been at least 10 seconds since last refresh
+      if (lastHidden && !isNowHidden) {
+        const timeSinceRefresh = Date.now() - lastRefreshTime;
+        if (timeSinceRefresh > 10 * 1000) { // 10 seconds minimum between visibility-triggered refreshes
+          console.log('[ContentLibrary] Page became visible, refreshing posts...');
+          setRefreshKey(prev => prev + 1);
+          lastRefreshTime = Date.now();
+        }
+      }
+      lastHidden = isNowHidden;
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -2344,7 +2388,8 @@ function ContentLibrary() {
     };
   }, []);
 
-  // Auto-refresh every 5 minutes when page is visible and no modal is open
+  // Auto-refresh every 30 seconds when page is visible and no modal is open
+  // This ensures data stays fresh after changes made via Tina Chat or other interfaces
   useEffect(() => {
     if (!isPageVisible) return;
 
@@ -2369,7 +2414,7 @@ function ContentLibrary() {
     const interval = setInterval(() => {
       console.log('[ContentLibrary] Auto-refreshing posts...');
       fetchPosts();
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 30 * 1000); // 30 seconds - reduced from 5 minutes for better data freshness
 
     return () => clearInterval(interval);
   }, [
@@ -2400,7 +2445,7 @@ function ContentLibrary() {
       // Update individual generating posts with their progress
       for (const post of generatingPosts) {
         try {
-          const response = await fetch(`http://localhost:3001/api/tiered-video/progress/${post._id}`);
+          const response = await fetch(`/api/tiered-video/progress/${post._id}`);
           if (response.ok) {
             const data = await response.json();
             const progressData = data.data;
@@ -2441,6 +2486,7 @@ function ContentLibrary() {
       const params = new URLSearchParams();
       if (filters.platform !== 'all') params.append('platform', filters.platform);
       if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.tier !== 'all') params.append('contentTier', filters.tier);
       if (filters.search) params.append('search', filters.search);
       params.append('limit', pagination.limit);
       params.append('skip', (pagination.page - 1) * pagination.limit);
@@ -2478,7 +2524,9 @@ function ContentLibrary() {
       }
 
       // Try to fetch from API
-      const response = await fetch(`http://localhost:3001/api/content/posts?${params}`);
+      // Add cache-busting timestamp to ensure fresh data
+      params.append('_t', Date.now());
+      const response = await fetch(`/api/content/posts?${params}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch posts');
@@ -2720,13 +2768,53 @@ function ContentLibrary() {
       regenerated: 'Regenerated',
       edited: 'Edited'
     };
-    return labels[action] || 'Updated';
+    return labels[action] || action;
+  };
+
+  // Helper to get platform-specific hashtags from a post
+  // Handles both new platform-specific structure and legacy array format
+  const getPostHashtags = (post) => {
+    if (!post.hashtags) return [];
+
+    // New platform-specific structure
+    if (typeof post.hashtags === 'object' && !Array.isArray(post.hashtags)) {
+      const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+      return post.hashtags[platformKey] || post.hashtags.tiktok || [];
+    }
+
+    // Legacy array format
+    return post.hashtags || [];
+  };
+
+  // Helper to create platform-specific hashtags structure when saving
+  const createPlatformSpecificHashtags = (post, hashtagsArray) => {
+    // Check if post already has platform-specific structure
+    const hasPlatformStructure = post.hashtags &&
+      typeof post.hashtags === 'object' &&
+      !Array.isArray(post.hashtags);
+
+    if (hasPlatformStructure) {
+      // Update only the platform-specific hashtags
+      const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+      return {
+        ...post.hashtags,
+        [platformKey]: hashtagsArray
+      };
+    } else {
+      // Create new platform-specific structure from legacy format
+      const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+      return {
+        tiktok: platformKey === 'tiktok' ? hashtagsArray : (post.hashtags || []),
+        instagram: platformKey === 'instagram' ? hashtagsArray : [],
+        youtube_shorts: platformKey === 'youtube_shorts' ? hashtagsArray : []
+      };
+    }
   };
 
   // Fetch stories for post creation
   const fetchStories = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/content/stories');
+      const response = await fetch('/api/content/stories');
       if (response.ok) {
         const data = await response.json();
         setStories(data.data?.stories || []);
@@ -2886,7 +2974,7 @@ function ContentLibrary() {
 
     try {
       const utcTime = localDateTimeLocalToUtc(newScheduledTime);
-      const response = await fetch('http://localhost:3001/api/content/posts/' + selectedVideo._id, {
+      const response = await fetch('/api/content/posts/' + selectedVideo._id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledAt: utcTime })
@@ -2929,7 +3017,7 @@ function ContentLibrary() {
 
     try {
       // First approve the post
-      const approveResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/approve`, {
+      const approveResponse = await fetch(`/api/content/posts/${selectedVideo._id}/approve`, {
         method: 'POST'
       });
 
@@ -2941,7 +3029,7 @@ function ContentLibrary() {
       const utcTime = localDateTimeLocalToUtc(scheduledTimeForApproval);
 
       // Then schedule it
-      const scheduleResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/schedule`, {
+      const scheduleResponse = await fetch(`/api/content/posts/${selectedVideo._id}/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scheduledAt: utcTime })
@@ -3028,7 +3116,7 @@ function ContentLibrary() {
     // Poll every 500ms for progress updates
     const interval = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/tiktok/upload-progress/${postId}`);
+        const response = await fetch(`/api/tiktok/upload-progress/${postId}`);
         const data = await response.json();
 
         if (data.success) {
@@ -3074,7 +3162,7 @@ function ContentLibrary() {
       });
 
       // Start the upload
-      const response = await fetch(`http://localhost:3001/api/tiktok/post/${selectedVideo._id}`, {
+      const response = await fetch(`/api/tiktok/post/${selectedVideo._id}`, {
         method: 'POST'
       });
 
@@ -3115,7 +3203,7 @@ function ContentLibrary() {
       });
 
       // Start the upload using EventSource for SSE
-      const eventSource = new EventSource(`http://localhost:3001/api/instagram/post/${selectedVideo._id}`);
+      const eventSource = new EventSource(`/api/instagram/post/${selectedVideo._id}`);
 
       eventSource.onmessage = (event) => {
         const data = JSON.parse(event.data);
@@ -3276,7 +3364,7 @@ function ContentLibrary() {
 
     try {
       // Try API call first
-      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/approve`, {
+      const response = await fetch(`/api/content/posts/${selectedVideo._id}/approve`, {
         method: 'POST'
       });
 
@@ -3338,7 +3426,7 @@ function ContentLibrary() {
 
     try {
       // Try API call first for rejection
-      const rejectResponse = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/reject`, {
+      const rejectResponse = await fetch(`/api/content/posts/${selectedVideo._id}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectModal.reason })
@@ -3351,7 +3439,7 @@ function ContentLibrary() {
       // If blacklist is checked, call blacklist API
       if (rejectModal.blacklistStory && selectedVideo.storyId) {
         try {
-          const blacklistResponse = await fetch('http://localhost:3001/api/blacklist', {
+          const blacklistResponse = await fetch('/api/blacklist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -3421,7 +3509,7 @@ function ContentLibrary() {
     if (!confirmed) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/content/posts/${selectedVideo._id}/duplicate`, {
+      const response = await fetch(`/api/content/posts/${selectedVideo._id}/duplicate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -3467,7 +3555,7 @@ function ContentLibrary() {
     if (!deleteModal.postToDelete) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/content/posts/${deleteModal.postToDelete._id}`, {
+      const response = await fetch(`/api/content/posts/${deleteModal.postToDelete._id}`, {
         method: 'DELETE'
       });
 
@@ -3527,7 +3615,7 @@ function ContentLibrary() {
       console.log('🔄 Requesting content regeneration with feedback:', regenerateModal.feedback);
 
       // Call the regenerate API endpoint
-      const response = await fetch(`http://localhost:3001/api/content/${selectedVideo._id}/regenerate`, {
+      const response = await fetch(`/api/content/${selectedVideo._id}/regenerate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -3599,7 +3687,7 @@ function ContentLibrary() {
     }
 
     try {
-      const response = await fetch('http://localhost:3001/api/tiered-video/generate-tier1', {
+      const response = await fetch('/api/tiered-video/generate-tier1', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -3632,7 +3720,7 @@ function ContentLibrary() {
     if (!selectedVideo) return;
     setEditMode(true);
     setEditedCaption(selectedVideo.caption || '');
-    setEditedHashtags([...(selectedVideo.hashtags || [])]);
+    setEditedHashtags([...getPostHashtags(selectedVideo)]);
     setNewHashtag('');
   };
 
@@ -3668,13 +3756,16 @@ function ContentLibrary() {
     if (!selectedVideo) return;
 
     try {
+      // Create platform-specific hashtags structure
+      const updatedHashtags = createPlatformSpecificHashtags(selectedVideo, editedHashtags);
+
       // Try API call first (uses Vite proxy)
       const response = await fetch(`/api/content/posts/${selectedVideo._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           caption: editedCaption,
-          hashtags: editedHashtags
+          hashtags: updatedHashtags
         })
       });
 
@@ -3686,7 +3777,7 @@ function ContentLibrary() {
       setPosts(prevPosts =>
         prevPosts.map(post =>
           post._id === selectedVideo._id
-            ? { ...post, caption: editedCaption, hashtags: editedHashtags }
+            ? { ...post, caption: editedCaption, hashtags: updatedHashtags }
             : post
         )
       );
@@ -3695,7 +3786,7 @@ function ContentLibrary() {
       setSelectedVideo(prev => ({
         ...prev,
         caption: editedCaption,
-        hashtags: editedHashtags
+        hashtags: updatedHashtags
       }));
 
       alert('✅ Changes saved successfully!');
@@ -3703,17 +3794,18 @@ function ContentLibrary() {
     } catch (err) {
       console.error('Error saving post:', err);
       // For development, update local state anyway
+      const updatedHashtags = createPlatformSpecificHashtags(selectedVideo, editedHashtags);
       setPosts(prevPosts =>
         prevPosts.map(post =>
           post._id === selectedVideo._id
-            ? { ...post, caption: editedCaption, hashtags: editedHashtags }
+            ? { ...post, caption: editedCaption, hashtags: updatedHashtags }
             : post
         )
       );
       setSelectedVideo(prev => ({
         ...prev,
         caption: editedCaption,
-        hashtags: editedHashtags
+        hashtags: updatedHashtags
       }));
       alert('✅ Changes saved! (Note: Backend not connected)');
       setEditMode(false);
@@ -3792,7 +3884,7 @@ function ContentLibrary() {
     if (!confirmed) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts/bulk/delete', {
+      const response = await fetch('/api/content/posts/bulk/delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: bulkSelected })
@@ -3817,7 +3909,7 @@ function ContentLibrary() {
     if (bulkSelected.length === 0) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts/bulk/approve', {
+      const response = await fetch('/api/content/posts/bulk/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: bulkSelected })
@@ -3845,7 +3937,7 @@ function ContentLibrary() {
     if (reason === null) return; // User cancelled
 
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts/bulk/reject', {
+      const response = await fetch('/api/content/posts/bulk/reject', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: bulkSelected, reason })
@@ -3870,7 +3962,7 @@ function ContentLibrary() {
     if (bulkSelected.length === 0) return;
 
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts/bulk/export', {
+      const response = await fetch('/api/content/posts/bulk/export', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ids: bulkSelected })
@@ -3956,6 +4048,16 @@ function ContentLibrary() {
           <option value="scheduled">Scheduled</option>
           <option value="posted">Posted</option>
           <option value="rejected">Rejected</option>
+        </FilterSelect>
+
+        <FilterSelect
+          value={filters.tier}
+          onChange={(e) => handleFilterChange('tier', e.target.value)}
+        >
+          <option value="all">All Tiers</option>
+          <option value="tier_1">Tier 1 (AI Video)</option>
+          <option value="tier_2">Tier 2 (AI Avatar)</option>
+          <option value="tier_3">Tier 3 (Full Production)</option>
         </FilterSelect>
 
         <DateFilterContainer>
@@ -4083,6 +4185,11 @@ function ContentLibrary() {
                   <StatusBadge status={post.status}>
                     {post.status}
                   </StatusBadge>
+                  {post.contentTier && (
+                    <TierBadge tier={post.contentTier}>
+                      {post.contentTier === 'tier_1' ? '🎬 T1' : post.contentTier === 'tier_2' ? '🎭 T2' : post.contentTier === 'tier_3' ? '🎞️ T3' : post.contentTier}
+                    </TierBadge>
+                  )}
                   <PlatformIcon>
                     {getPlatformEmoji(post.platform)}
                   </PlatformIcon>
@@ -4145,13 +4252,26 @@ function ContentLibrary() {
                     <ActionButton onClick={() => handleThumbnailClick(post)}>
                       {post.contentType === 'video' ? '▶ Play' : 'View'}
                     </ActionButton>
-                    <ActionButton onClick={() => {
-                      setSelectedVideo(post);
-                      setEditMode(true);
-                      setEditedCaption(post.caption || '');
-                      setEditedHashtags([...(post.hashtags || [])]);
-                      setNewHashtag('');
-                    }}>Edit</ActionButton>
+                    {post.contentTier === 'tier_2' && !post.videoPath ? (
+                      <>
+                        <ActionButton onClick={() => {
+                          setSelectedPostForTier2Upload(post);
+                          setTier2UploadModal(true);
+                        }}>📤 Upload Video</ActionButton>
+                        <ActionButton onClick={() => {
+                          setSelectedPostForTier2Edit(post);
+                          setEditTier2Modal(true);
+                        }}>✏️ Edit Details</ActionButton>
+                      </>
+                    ) : (
+                      <ActionButton onClick={() => {
+                        setSelectedVideo(post);
+                        setEditMode(true);
+                        setEditedCaption(post.caption || '');
+                        setEditedHashtags([...getPostHashtags(post)]);
+                        setNewHashtag('');
+                      }}>Edit</ActionButton>
+                    )}
                   </CardActions>
                 </CardContent>
               </ContentCard>
@@ -4334,9 +4454,9 @@ function ContentLibrary() {
                       {selectedVideo.caption && (
                         <ModalCaption>{selectedVideo.caption}</ModalCaption>
                       )}
-                      {selectedVideo.hashtags && selectedVideo.hashtags.length > 0 && (
+                      {getPostHashtags(selectedVideo).length > 0 && (
                         <ModalHashtags>
-                          {selectedVideo.hashtags.map((tag, index) => (
+                          {getPostHashtags(selectedVideo).map((tag, index) => (
                             <Hashtag key={index}>{tag}</Hashtag>
                           ))}
                         </ModalHashtags>
@@ -4788,6 +4908,42 @@ function ContentLibrary() {
         onRegenerate={handleVideoRegenerated}
         post={selectedPostForVideo}
       />
+
+      {/* Tier 2 Video Upload Modal */}
+      {tier2UploadModal && selectedPostForTier2Upload && (
+        <Tier2VideoUpload
+          isOpen={tier2UploadModal}
+          onClose={() => {
+            setTier2UploadModal(false);
+            setSelectedPostForTier2Upload(null);
+            triggerRefresh();
+          }}
+          post={selectedPostForTier2Upload}
+          onUploadComplete={() => {
+            setTier2UploadModal(false);
+            setSelectedPostForTier2Upload(null);
+            triggerRefresh();
+          }}
+        />
+      )}
+
+      {/* Tier 2 Edit Modal */}
+      {editTier2Modal && selectedPostForTier2Edit && (
+        <EditTier2PostModal
+          isOpen={editTier2Modal}
+          onClose={() => {
+            setEditTier2Modal(false);
+            setSelectedPostForTier2Edit(null);
+            triggerRefresh();
+          }}
+          post={selectedPostForTier2Edit}
+          onSave={() => {
+            setEditTier2Modal(false);
+            setSelectedPostForTier2Edit(null);
+            triggerRefresh();
+          }}
+        />
+      )}
     </LibraryContainer>
   );
 }

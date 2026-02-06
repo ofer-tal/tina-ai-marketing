@@ -15,8 +15,9 @@ const __dirname = path.dirname(__filename);
  */
 class StorageService {
   constructor() {
-    // Base storage directory (project root + storage)
-    this.baseDir = path.join(path.dirname(__dirname), 'storage');
+    // Base storage directory - go up two levels from backend/services/ to project root, then storage/
+    // __dirname = backend/services/, so ../../storage = project root storage/
+    this.baseDir = path.join(__dirname, '../../storage');
 
     // Storage subdirectories
     this.directories = {
@@ -25,6 +26,8 @@ class StorageService {
       audio: path.join(this.baseDir, 'audio'),
       temp: path.join(this.baseDir, 'temp'),
       thumbnails: path.join(this.baseDir, 'thumbnails'),
+      avatars: path.join(this.baseDir, 'images', 'avatars'),
+      tier2Videos: path.join(this.baseDir, 'videos', 'tier2', 'final'),
     };
 
     // File size limits (in bytes)

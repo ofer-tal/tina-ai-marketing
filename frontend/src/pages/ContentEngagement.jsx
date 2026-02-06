@@ -199,7 +199,7 @@ const ContentEngagement = () => {
         requestBody.platform = filters.platform;
       }
 
-      const response = await fetch('http://localhost:3001/api/content-engagement/analyze', {
+      const response = await fetch('/api/content-engagement/analyze', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

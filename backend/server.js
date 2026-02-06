@@ -13,9 +13,11 @@ const projectRoot = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(projectRoot, '.env') });
 
 import express from "express";
+import https from "https";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import { getCertificatePaths } from "./utils/generate-cert.js";
 import databaseService from "./services/database.js";
 import configService, { configSchema } from "./services/config.js";
 import schedulerService from "./services/scheduler.js";
@@ -97,6 +99,7 @@ import tinaLearningsRouter from "./api/tina/learnings.js";
 import tinaThoughtsRouter from "./api/tina/thoughts.js";
 import tinaPlansRouter from "./api/tina/plans.js";
 import tinaReflectionsRouter from "./api/tina/reflections.js";
+import aiAvatarsRouter from "./api/aiAvatars.js";
 import serviceStatusRouter from "./api/service-status.js";
 import testErrorsRouter from "./api/test-errors.js";
 import errorMonitoringRouter from "./api/error-monitoring.js";
@@ -133,6 +136,8 @@ import tempFileCleanupJob from "./jobs/tempFileCleanup.js";
 import musicRouter from "./api/music.js";
 import googleRouter from "./api/google.js";
 import tikTokVideoMatcherJob from "./jobs/tikTokVideoMatcher.js";
+import instagramReelsMatcherJob from "./jobs/instagramReelsMatcher.js";
+import tokenCleanupJob from "./jobs/tokenCleanup.js";
 import googleSheetsService from "./services/googleSheetsService.js";
 import s3VideoUploader from "./services/s3VideoUploader.js";
 import tinaGoalProgressJob from "./jobs/tinaGoalProgressJob.js";
@@ -374,6 +379,7 @@ app.use("/api/tina/thoughts", tinaThoughtsRouter);
 app.use("/api/tina/observations", tinaObservationsRouter);
 app.use("/api/tina/plans", tinaPlansRouter);
 app.use("/api/tina/reflections", tinaReflectionsRouter);
+app.use("/api/ai-avatars", aiAvatarsRouter);
 app.use("/api/service-status", serviceStatusRouter);
 app.use("/api/test-errors", testErrorsRouter);
 app.use("/api/error-monitoring", errorMonitoringRouter);
@@ -464,9 +470,12 @@ app.use((req, res) => {
 let server = null;
 
 async function startServer() {
-  // Start Express server and save reference
-  server = app.listen(PORT, () => {
-    console.log("Blush Marketing Operations Center API Server running on port " + PORT);
+  // Generate or load self-signed certificate for HTTPS
+  const { cert, key } = await getCertificatePaths();
+
+  // Start HTTPS server (required for Facebook/Instagram OAuth)
+  server = https.createServer({ cert, key }, app).listen(PORT, () => {
+    console.log(`Blush Marketing Operations Center API Server running on https://localhost:${PORT}`);
   });
 
   // Try to connect to MongoDB (non-blocking in development)
@@ -669,6 +678,24 @@ async function startServer() {
       console.error("Failed to initialize TikTok video matcher job:", error.message);
       console.error(error.stack);
     }
+
+    // Start the Instagram Reels matcher job (every 30 minutes)
+    console.log("About to initialize Instagram Reels matcher job...");
+    try {
+      await instagramReelsMatcherJob.initialize();
+      console.log("Instagram Reels matcher job started");
+    } catch (error) {
+      console.error("Failed to initialize Instagram Reels matcher job:", error.message);
+      console.error(error.stack);
+    }
+
+    // Start the token cleanup job (daily at 3 AM UTC)
+    try {
+      await tokenCleanupJob.start();
+      console.log("Token cleanup job scheduled");
+    } catch (error) {
+      console.error("Failed to start token cleanup job:", error.message);
+    }
   } catch (error) {
     console.error("Failed during server startup:", error.message);
     if (process.env.NODE_ENV === "production") {
@@ -734,6 +761,7 @@ const gracefulShutdown = async (signal) => {
     retentionAnalyticsSyncJob.stop();
     tempFileCleanupJob.stop();
     tikTokVideoMatcherJob.stop();
+    tokenCleanupJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
     // Step 4: Cleanup resources (storage temp files, etc.)

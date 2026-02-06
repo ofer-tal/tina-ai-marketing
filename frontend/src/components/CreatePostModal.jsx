@@ -568,6 +568,81 @@ const TierPlaceholderDetail = styled.div`
   color: #a0a0a0;
 `;
 
+// Tier 2 AI Avatar styles
+const AvatarGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+`;
+
+const AvatarOption = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: ${props => props.$selected ? '#1e2a4a' : '#0f182e'};
+  border: 2px solid ${props => props.$selected ? '#e94560' : '#2d3561'};
+  border-radius: 12px;
+  cursor: ${props => props.$cursor || 'pointer'};
+  transition: all 0.2s;
+
+  &:hover {
+    border-color: #e94560;
+    transform: translateY(-2px);
+  }
+`;
+
+const AvatarImage = styled.img`
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #2d3561;
+`;
+
+const AvatarInfo = styled.div`
+  text-align: center;
+`;
+
+const AvatarName = styled.div`
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 0.95rem;
+`;
+
+const AvatarDesc = styled.div`
+  font-size: 0.8rem;
+  color: #a0a0a0;
+  margin-top: 0.25rem;
+`;
+
+const ScriptCharCount = styled.div`
+  text-align: right;
+  font-size: 0.8rem;
+  color: ${props => props.$warning ? '#e94560' : '#a0a0a0'};
+  margin-top: 0.5rem;
+`;
+
+const Tier2Notice = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: rgba(233, 69, 96, 0.1);
+  border: 1px solid rgba(233, 69, 96, 0.3);
+  border-radius: 8px;
+`;
+
+const NoticeIcon = styled.div`
+  font-size: 1.25rem;
+`;
+
+const NoticeText = styled.div`
+  font-size: 0.9rem;
+  color: #eaeaea;
+  line-height: 1.4;
+`;
+
 // Preset selector styles
 const PresetSelector = styled.div`
   display: grid;
@@ -693,6 +768,12 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   const [selectedMusic, setSelectedMusic] = useState(null);
   const [isFetchingMusic, setIsFetchingMusic] = useState(false);
 
+  // Tier 2 AI Avatar state
+  const [allAvatars, setAllAvatars] = useState([]);
+  const [selectedAvatar, setSelectedAvatar] = useState(null);
+  const [script, setScript] = useState('');
+  const [isFetchingAvatars, setIsFetchingAvatars] = useState(false);
+
   // Video generation progress state
   const [videoProgress, setVideoProgress] = useState(0);
   const [videoProgressStep, setVideoProgressStep] = useState('');
@@ -712,13 +793,14 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     if (isOpen) {
       fetchStories();
       fetchMusic();
+      fetchAvatars();
     }
   }, [isOpen]);
 
   const fetchStories = async (searchTerm = '') => {
     setIsFetchingStories(true);
     try {
-      const url = new URL('http://localhost:3001/api/content/stories/list');
+      const url = new URL('/api/content/stories/list');
       if (searchTerm) {
         url.searchParams.append('search', searchTerm);
       }
@@ -748,7 +830,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   const fetchMusic = async () => {
     setIsFetchingMusic(true);
     try {
-      const response = await fetch('http://localhost:3001/api/music/list');
+      const response = await fetch('/api/music/list');
       if (response.ok) {
         const data = await response.json();
         setAllMusic(data.data.tracks || []);
@@ -758,6 +840,23 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
       setAllMusic([]);
     } finally {
       setIsFetchingMusic(false);
+    }
+  };
+
+  // Fetch available AI avatars for tier_2
+  const fetchAvatars = async () => {
+    setIsFetchingAvatars(true);
+    try {
+      const response = await fetch('/api/ai-avatars/active');
+      if (response.ok) {
+        const data = await response.json();
+        setAllAvatars(data.data.avatars || []);
+      }
+    } catch (err) {
+      console.error('Error fetching avatars:', err);
+      setAllAvatars([]);
+    } finally {
+      setIsFetchingAvatars(false);
     }
   };
 
@@ -822,6 +921,22 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
       return;
     }
 
+    // Tier 2 specific validation
+    if (contentTier === 'tier_2') {
+      if (!selectedAvatar) {
+        setError('Please select an AI avatar for Tier 2 posts');
+        return;
+      }
+      if (!script || script.trim().length === 0) {
+        setError('Please enter a script for the AI avatar');
+        return;
+      }
+      if (selectedPlatforms.length > 1) {
+        setError('Tier 2 posts can only target one platform at a time');
+        return;
+      }
+    }
+
     const hashtagArray = hashtags
       .split(',')
       .map(h => h.trim())
@@ -838,8 +953,10 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     if (contentTier === 'tier_1') {
       tierParameters.animationStyle = animationStyle;
       tierParameters.preset = preset;
+    } else if (contentTier === 'tier_2') {
+      tierParameters.avatarId = selectedAvatar.id;
+      tierParameters.script = script;
     }
-    // tier_2 and tier_3 parameters will be added when those APIs are available
 
     const postData = {
       storyId: selectedStory.id,
@@ -850,28 +967,36 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
       contentType: 'video',
       contentTier,
       tierParameters,
-      voice,
-      preset,
-      generateVideo,
-      musicId: selectedMusic?.id || null
+      voice: contentTier === 'tier_1' ? voice : undefined,
+      preset: contentTier === 'tier_1' ? preset : undefined,
+      generateVideo: contentTier === 'tier_1' ? generateVideo : false,
+      musicId: selectedMusic?.id || null,
+      // Tier 2 specific params
+      avatarId: contentTier === 'tier_2' ? selectedAvatar.id : undefined,
+      script: contentTier === 'tier_2' ? script : undefined
     };
 
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts/create', {
+      const response = await fetch('/api/content/posts/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(postData)
       });
 
       if (!response.ok) {
-        throw new Error('Failed to create post');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create post');
       }
 
       const result = await response.json();
 
-      if (generateVideo && result.data?.posts) {
+      if (contentTier === 'tier_2') {
+        // Tier 2: No video generation, close after creation
+        onSave?.(result);
+        handleClose();
+      } else if (generateVideo && result.data?.posts) {
         // Video generation requested, show progress
         const createdPosts = result.data.posts;
         createdPostIdsRef.current = createdPosts.map(p => p._id || p.id);
@@ -914,7 +1039,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
 
       for (const postId of postIds) {
         try {
-          const response = await fetch(`http://localhost:3001/api/tiered-video/progress/${postId}`);
+          const response = await fetch(`/api/tiered-video/progress/${postId}`);
           if (response.ok) {
             const data = await response.json();
             const progressData = data.data;
@@ -989,6 +1114,9 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     setVideoProgressStep('');
     setShowVideoProgress(false);
     setLoading(false);
+    // Reset tier_2 state
+    setSelectedAvatar(null);
+    setScript('');
     onClose();
   };
 
@@ -1149,7 +1277,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
             <TierOption
               $selected={contentTier === 'tier_2'}
               onClick={() => !loading && setContentTier('tier_2')}
-              style={{ cursor: loading ? 'not-allowed' : 'pointer', opacity: 0.5 }}
+              style={{ cursor: loading ? 'not-allowed' : 'pointer' }}
             >
               <input
                 type="radio"
@@ -1161,7 +1289,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
               <div>
                 <TierIcon>🎭</TierIcon>
                 <TierName>Tier 2</TierName>
-                <TierDesc>UGC Style (Coming Soon)</TierDesc>
+                <TierDesc>AI Avatar Video</TierDesc>
               </div>
             </TierOption>
             <TierOption
@@ -1248,19 +1376,68 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
           </FormSection>
         )}
 
-        {/* Tier 2/3 placeholder parameters */}
+        {/* Tier 2 AI Avatar parameters */}
         {contentTier === 'tier_2' && (
-          <FormSection>
-            <TierPlaceholder>
-              <TierPlaceholderIcon>🎭</TierPlaceholderIcon>
-              <TierPlaceholderText>
-                Tier 2 (UGC Style) parameters coming soon...
-              </TierPlaceholderText>
-              <TierPlaceholderDetail>
-                Will include options for avatar selection, location/scene, and dialogue style
-              </TierPlaceholderDetail>
-            </TierPlaceholder>
-          </FormSection>
+          <>
+            <FormSection>
+              <FormLabel>
+                Select AI Avatar
+                <FormLabelRequired>*</FormLabelRequired>
+              </FormLabel>
+              {isFetchingAvatars ? (
+                <div style={{ color: '#a0a0a0', padding: '1rem' }}>Loading avatars...</div>
+              ) : allAvatars.length === 0 ? (
+                <div style={{ color: '#e94560', padding: '1rem' }}>
+                  No avatars available. Please create an avatar in the AI Avatars page first.
+                </div>
+              ) : (
+                <AvatarGrid>
+                  {allAvatars.map(avatar => (
+                    <AvatarOption
+                      key={avatar.id}
+                      $selected={selectedAvatar?.id === avatar.id}
+                      onClick={() => !loading && setSelectedAvatar(avatar)}
+                    >
+                      {avatar.imageUrl && (
+                        <AvatarImage src={avatar.imageUrl} alt={avatar.name} />
+                      )}
+                      <AvatarInfo>
+                        <AvatarName>{avatar.name}</AvatarName>
+                        <AvatarDesc>{avatar.description || avatar.style}</AvatarDesc>
+                      </AvatarInfo>
+                    </AvatarOption>
+                  ))}
+                </AvatarGrid>
+              )}
+            </FormSection>
+
+            <FormSection>
+              <FormLabel>
+                Script for Avatar
+                <FormLabelRequired>*</FormLabelRequired>
+              </FormLabel>
+              <FormTextarea
+                placeholder="Enter the script that the AI avatar will speak..."
+                value={script}
+                onChange={(e) => setScript(e.target.value)}
+                disabled={loading}
+                rows={6}
+              />
+              <ScriptCharCount $warning={script.length > 500}>
+                {script.length} characters
+              </ScriptCharCount>
+            </FormSection>
+
+            <FormSection>
+              <Tier2Notice>
+                <NoticeIcon>ℹ️</NoticeIcon>
+                <NoticeText>
+                  Tier 2 posts require manual video upload. After creating the post,
+                  you'll need to generate the video using HeyGen and upload it via the Content Library.
+                </NoticeText>
+              </Tier2Notice>
+            </FormSection>
+          </>
         )}
         {contentTier === 'tier_3' && (
           <FormSection>

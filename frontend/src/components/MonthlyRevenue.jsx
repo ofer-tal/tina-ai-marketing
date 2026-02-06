@@ -148,7 +148,7 @@ function MonthlyRevenue() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`http://localhost:3001/api/revenue/monthly/${year}/${month}`);
+      const response = await fetch(`/api/revenue/monthly/${year}/${month}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

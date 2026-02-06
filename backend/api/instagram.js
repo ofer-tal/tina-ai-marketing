@@ -346,6 +346,149 @@ router.post('/post/:postId', async (req, res) => {
 });
 
 /**
+ * GET /api/instagram/debug-token
+ * Debug endpoint to inspect OAuth token and accessible resources
+ * Shows: user info, accessible Pages, permissions, token details
+ */
+router.get('/debug-token', async (req, res) => {
+  try {
+    logger.info('Debugging Instagram OAuth token...');
+
+    const oauthManager = (await import('../services/oauthManager.js')).default;
+    const token = await oauthManager.getToken('instagram');
+
+    if (!token || !token.accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'No Instagram token found. Please authenticate first.',
+      });
+    }
+
+    const debugInfo = {
+      hasAccessToken: !!token.accessToken,
+      tokenPreview: token.accessToken ? token.accessToken.substring(0, 20) + '...' : null,
+      expiresAt: token.expiresAt?.toISOString(),
+    };
+
+    // First, debug the token itself to see what permissions it has
+    const debugTokenUrl = `https://graph.facebook.com/v18.0/debug_token?input_token=${token.accessToken}`;
+    const debugResponse = await fetch(debugTokenUrl);
+
+    if (debugResponse.ok) {
+      const debugData = await debugResponse.json();
+      debugInfo.tokenDebug = debugData.data;
+    } else {
+      debugInfo.tokenDebugError = await debugResponse.text();
+    }
+
+    // Get user info (who is this token for?)
+    const meUrl = `https://graph.facebook.com/v18.0/me?fields=id,name,email,accounts`;
+    const meResponse = await fetch(meUrl, {
+      headers: { 'Authorization': `Bearer ${token.accessToken}` }
+    });
+
+    if (meResponse.ok) {
+      const meData = await meResponse.json();
+      debugInfo.user = meData;
+    } else {
+      debugInfo.userError = await meResponse.text();
+    }
+
+    // Get Pages accessible to this token
+    const accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=id,name,category,instagram_business_account{id,username},tasks,access_token`;
+    const accountsResponse = await fetch(accountsUrl, {
+      headers: { 'Authorization': `Bearer ${token.accessToken}` }
+    });
+
+    debugInfo.accountsUrl = accountsUrl;
+    debugInfo.accountsResponseStatus = accountsResponse.status;
+    debugInfo.accountsResponseOk = accountsResponse.ok;
+
+    if (accountsResponse.ok) {
+      const accountsData = await accountsResponse.json();
+      debugInfo.pages = accountsData;
+      debugInfo.rawPagesResponse = JSON.stringify(accountsData);
+
+      // Count pages with Instagram accounts
+      if (accountsData.data) {
+        const pagesWithInstagram = accountsData.data.filter(p => p.instagram_business_account);
+        debugInfo.summary = {
+          totalPages: accountsData.data.length,
+          pagesWithInstagram: pagesWithInstagram.length,
+          pageNames: accountsData.data.map(p => p.name),
+          pagesWithInstagramDetails: pagesWithInstagram.map(p => ({
+            id: p.id,
+            name: p.name,
+            instagramUsername: p.instagram_business_account?.username,
+            instagramId: p.instagram_business_account?.id,
+          })),
+        };
+      }
+    } else {
+      const errorText = await accountsResponse.text();
+      debugInfo.pagesError = errorText;
+      try {
+        debugInfo.pagesErrorJson = JSON.parse(errorText);
+      } catch (e) {
+        // Not JSON
+      }
+    }
+
+    // Check token metadata from database
+    const { default: AuthToken } = await import('../models/AuthToken.js');
+    const storedToken = await AuthToken.getActiveToken('instagram');
+    if (storedToken) {
+      debugInfo.storedMetadata = storedToken.metadata || {};
+    }
+
+    // ANALYSIS: Check if Instagram Business Account is properly connected
+    debugInfo.analysis = {
+      hasPages: !!debugInfo.pages?.data && debugInfo.pages.data.length > 0,
+      pagesWithInstagram: debugInfo.summary?.pagesWithInstagram || 0,
+      instagramIdInScopes: debugInfo.debug?.granular_scopes?.find(s => s.scope === 'instagram_content_publish')?.target_ids?.[0] || null,
+      issue: null,
+      recommendation: null,
+    };
+
+    // Diagnose the issue
+    if (debugInfo.analysis.hasPages) {
+      if (debugInfo.analysis.pagesWithInstagram === 0) {
+        debugInfo.analysis.issue = 'NO_INSTAGRAM_CONNECTED';
+        debugInfo.analysis.recommendation = 'Your Facebook Page exists but has no Instagram Business Account connected. The Instagram account must be a Professional (Creator/Business) account and connected via Meta Business Suite.';
+      } else {
+        debugInfo.analysis.issue = 'OK';
+        debugInfo.analysis.recommendation = 'Instagram Business Account is connected.';
+      }
+    } else {
+      debugInfo.analysis.issue = 'NO_PAGES';
+      debugInfo.analysis.recommendation = 'No Facebook Pages found. You need to create a Facebook Page and connect your Instagram Professional account to it.';
+    }
+
+    // If we have an Instagram ID from scopes but no connected account, the account is not properly set up
+    if (debugInfo.analysis.instagramIdInScopes && debugInfo.analysis.pagesWithInstagram === 0) {
+      debugInfo.analysis.issue = 'INSTAGRAM_NOT_PROFESSIONAL_OR_NOT_CONNECTED';
+      debugInfo.analysis.recommendation = 'Your Instagram account (ID: ' + debugInfo.analysis.instagramIdInScopes + ') appears in OAuth permissions but is not connected to your Facebook Page as a Business/Creator account. Please ensure: 1) Instagram account is set to Professional (Creator or Business), 2) Connected to Facebook Page via Instagram Settings > Accounts Center > Linked Accounts.';
+    }
+
+    res.json({
+      success: true,
+      debug: debugInfo,
+    });
+
+  } catch (error) {
+    logger.error('Instagram token debug failed', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/instagram/health
  * Health check endpoint for Instagram service
  */

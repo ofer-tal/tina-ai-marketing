@@ -285,7 +285,7 @@ const SeoContentSuggestions = () => {
 
     try {
       const keywordArray = keywords.split(',').map(k => k.trim()).filter(k => k);
-      const response = await fetch('http://localhost:3001/api/seo-suggestions/generate', {
+      const response = await fetch('/api/seo-suggestions/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -325,7 +325,7 @@ const SeoContentSuggestions = () => {
 
     try {
       const keywordArray = keywords.split(',').map(k => k.trim()).filter(k => k);
-      const response = await fetch('http://localhost:3001/api/seo-suggestions/complete', {
+      const response = await fetch('/api/seo-suggestions/complete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

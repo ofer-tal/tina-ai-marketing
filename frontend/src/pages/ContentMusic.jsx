@@ -249,7 +249,7 @@ const GenerateMusicModal = ({ isOpen, onClose, onGenerated }) => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/music/generate', {
+      const response = await fetch('/api/music/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, prompt, style })
@@ -551,7 +551,7 @@ export default function ContentMusic() {
     setError(null);
 
     try {
-      const url = new URL('http://localhost:3001/api/music/list');
+      const url = new URL('/api/music/list');
       if (filterStyle !== 'all') {
         url.searchParams.append('style', filterStyle);
       }
@@ -579,7 +579,7 @@ export default function ContentMusic() {
     setDeletingId(id);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/music/${id}`, {
+      const response = await fetch(`/api/music/${id}`, {
         method: 'DELETE'
       });
 

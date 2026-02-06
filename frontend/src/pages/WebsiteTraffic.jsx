@@ -384,7 +384,7 @@ export default function WebsiteTraffic() {
       const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
       const response = await fetch(
-        `http://localhost:3001/api/website-traffic/dashboard?startDate=${startDate}&endDate=${endDate}`
+        `/api/website-traffic/dashboard?startDate=${startDate}&endDate=${endDate}`
       );
       const data = await response.json();
 
@@ -403,7 +403,7 @@ export default function WebsiteTraffic() {
   const handleRefresh = async () => {
     try {
       setRefreshing(true);
-      const response = await fetch('http://localhost:3001/api/website-traffic/refresh', {
+      const response = await fetch('/api/website-traffic/refresh', {
         method: 'POST'
       });
       const data = await response.json();

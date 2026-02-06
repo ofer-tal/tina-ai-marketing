@@ -212,10 +212,10 @@ const ContentPerformance = () => {
       startDate.setDate(startDate.getDate() - parseInt(dateRange));
 
       const [summaryRes, trendsRes, topContentRes, breakdownRes] = await Promise.all([
-        fetch(`http://localhost:3001/api/content-performance/summary?startDate=${startDate.toISOString()}&endDate=${new Date().toISOString()}`),
-        fetch(`http://localhost:3001/api/content-performance/trends/${dateRange}`),
-        fetch(`http://localhost:3001/api/content-performance/top/10?startDate=${startDate.toISOString()}&endDate=${new Date().toISOString()}`),
-        fetch(`http://localhost:3001/api/content-performance/breakdown?startDate=${startDate.toISOString()}&endDate=${new Date().toISOString()}`),
+        fetch(`/api/content-performance/summary?startDate=${startDate.toISOString()}&endDate=${new Date().toISOString()}`),
+        fetch(`/api/content-performance/trends/${dateRange}`),
+        fetch(`/api/content-performance/top/10?startDate=${startDate.toISOString()}&endDate=${new Date().toISOString()}`),
+        fetch(`/api/content-performance/breakdown?startDate=${startDate.toISOString()}&endDate=${new Date().toISOString()}`),
       ]);
 
       const [summaryData, trendsData, topContentData, breakdownData] = await Promise.all([

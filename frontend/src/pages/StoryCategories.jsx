@@ -20,8 +20,8 @@ export default function StoryCategories() {
       setError(null);
 
       const url = platform === 'all'
-        ? 'http://localhost:3001/api/story-category-analysis/analyze'
-        : `http://localhost:3001/api/story-category-analysis/platform/${platform}`;
+        ? '/api/story-category-analysis/analyze'
+        : `/api/story-category-analysis/platform/${platform}`;
 
       const response = await fetch(url);
       const data = await response.json();

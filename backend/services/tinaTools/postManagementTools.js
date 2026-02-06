@@ -320,6 +320,41 @@ async function validateCreatePost(params) {
     errors.push(`Invalid content tier: ${params.contentTier}. Valid options: ${VALID_CONTENT_TIERS.join(', ')}`);
   }
 
+  // Tier 2 specific validation
+  if (params.contentTier === 'tier_2') {
+    if (!params.avatarId) {
+      errors.push('avatarId is required for tier_2 posts');
+    } else {
+      // Validate avatar exists and is active
+      const AIAvatar = (await import('../../models/AIAvatar.js')).default;
+      const avatar = await AIAvatar.findById(params.avatarId);
+      if (!avatar) {
+        errors.push('Avatar not found');
+      } else if (!avatar.isActive) {
+        errors.push('Avatar is not active');
+      }
+    }
+
+    if (!params.script || params.script.trim().length === 0) {
+      errors.push('script is required for tier_2 posts');
+    }
+
+    // Tier 2 posts should only target one platform
+    if (params.platforms && params.platforms.length > 1) {
+      errors.push('Tier 2 posts can only target one platform at a time');
+    }
+
+    // Tier 2 posts must be scheduled at least 4 hours in the future
+    if (params.scheduleFor) {
+      const scheduledDate = new Date(params.scheduleFor);
+      const now = new Date();
+      const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 hours
+      if (scheduledDate < minScheduleTime) {
+        errors.push('Tier 2 posts must be scheduled at least 4 hours in the future');
+      }
+    }
+  }
+
   // Check if story is blacklisted
   const blacklisted = await StoryBlacklist.findOne({
     storyId: params.storyId,
@@ -375,7 +410,10 @@ export async function createPost(params = {}) {
     effects = {},
     voice = 'female_1',
     generateVideo = true,
-    scheduleFor
+    scheduleFor,
+    // Tier 2 specific parameters
+    avatarId,
+    script
   } = params;
 
   // Validate parameters
@@ -414,31 +452,48 @@ export async function createPost(params = {}) {
   }
 
   // Auto-generate hashtags if not provided
-  let hashtags = providedHashtags;
-  if (!hashtags || hashtags.length === 0) {
-    try {
-      hashtags = await hashtagGenerationService.generateForStory(story, {
-        platform: platforms[0],
-        count: 8
-      });
-    } catch (error) {
-      logger.warn('Hashtag generation failed, using fallback', { error: error.message });
-      hashtags = ['#blushapp', '#romance', '#storytime', '#fyp', '#viral'];
+  // Generate platform-specific hashtags for each platform
+  const platformHashtags = {};
+  const fallbackHashtags = ['#blushapp', '#romance', '#storytime', '#fyp', '#viral'];
+
+  for (const platform of platforms) {
+    if (providedHashtags && providedHashtags[platform]) {
+      // Platform-specific hashtags provided
+      platformHashtags[platform] = providedHashtags[platform];
+    } else if (providedHashtags && Array.isArray(providedHashtags)) {
+      // Legacy array format - use for all platforms
+      platformHashtags[platform] = providedHashtags;
+    } else {
+      // Generate hashtags for this specific platform
+      try {
+        platformHashtags[platform] = await hashtagGenerationService.generateForStory(story, {
+          platform,
+          count: 8
+        });
+      } catch (error) {
+        logger.warn(`Hashtag generation failed for ${platform}, using fallback`, { error: error.message });
+        platformHashtags[platform] = fallbackHashtags;
+      }
     }
   }
 
+  // For backward compatibility, set hashtags to the first platform's hashtags
+  const hashtags = platformHashtags[platforms[0]] || fallbackHashtags;
+
   // Determine scheduled date
+  // IMPORTANT: scheduleFor from Tina is in LOCAL time (configurable via TIMEZONE env var)
+  // fromTinaTime() interprets the input as local time and converts to UTC for database storage
   let scheduledDate;
   if (scheduleFor) {
-    scheduledDate = new Date(scheduleFor);
+    scheduledDate = fromTinaTime(scheduleFor);
 
     // Validate the date is valid
     if (isNaN(scheduledDate.getTime())) {
-      throw new Error('Invalid scheduled date format. Use ISO 8601 format (e.g., 2026-02-02T15:00:00Z)');
+      throw new Error('Invalid scheduled date format. Use ISO 8601 format (e.g., 2026-02-02T15:00:00)');
     }
 
     // Validate the date is in the future (at least 30 minutes from now to account for processing time)
-    const now = new Date();
+    const now = getLocalNow();
     const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
     if (scheduledDate < minScheduleTime) {
       // If the requested time is in the past, use the next available slot instead
@@ -458,15 +513,44 @@ export async function createPost(params = {}) {
   const generationResults = [];
 
   for (const platform of platforms) {
-    // Convert tierParameters object to Map format for Mongoose
-    const tierParametersMap = new Map(
-      Object.entries(tierParameters).map(([key, value]) => [key, { parameterKey: key, parameterValue: value }])
-    );
+    // Build tierParameters Map based on content tier
+    const tierParametersMap = new Map();
+
+    // Add base tierParameters
+    Object.entries(tierParameters).forEach(([key, value]) => {
+      tierParametersMap.set(key, { parameterKey: key, parameterValue: value });
+    });
+
+    // Add tier_2 specific parameters
+    if (contentTier === 'tier_2') {
+      if (avatarId) {
+        tierParametersMap.set('avatarId', { parameterKey: 'avatarId', parameterValue: avatarId });
+      }
+      if (script) {
+        tierParametersMap.set('script', { parameterKey: 'script', parameterValue: script.trim() });
+        tierParametersMap.set('scriptPreview', { parameterKey: 'scriptPreview', parameterValue: script.trim().substring(0, 200) });
+      }
+
+      // Fetch avatar details
+      const AIAvatar = (await import('../../models/AIAvatar.js')).default;
+      const avatar = await AIAvatar.findById(avatarId);
+      if (avatar) {
+        tierParametersMap.set('avatarName', { parameterKey: 'avatarName', parameterValue: avatar.name });
+        await avatar.incrementUsage();
+      }
+    }
 
     // Convert effects object to array of effect names (where value is true)
     const effectsArray = Object.entries(DEFAULT_EFFECTS)
       .filter(([_, enabled]) => enabled)
       .map(([name, _]) => name);
+
+    // Build platform-specific hashtags object
+    const postHashtags = {
+      tiktok: platformHashtags.tiktok || fallbackHashtags,
+      instagram: platformHashtags.instagram || platformHashtags.tiktok || fallbackHashtags,
+      youtube_shorts: platformHashtags.youtube_shorts || platformHashtags.tiktok || fallbackHashtags
+    };
 
     const post = new MarketingPost({
       title: `${story.name} - ${platform}`,
@@ -478,7 +562,7 @@ export async function createPost(params = {}) {
       caption,
       hook,
       cta,
-      hashtags,
+      hashtags: postHashtags,
       scheduledAt: scheduledDate,
       storyId: story._id,
       storyName: story.name,
@@ -500,12 +584,14 @@ export async function createPost(params = {}) {
     logger.info('Created marketing post', {
       postId: post._id,
       platform,
+      contentTier,
       storyId: story._id,
       status: post.status
     });
 
     // Generate video if requested - ASYNCHRONOUS (launch and forget)
-    if (generateVideo && contentType === 'video') {
+    // Note: Tier 2 posts skip video generation (manual upload required)
+    if (generateVideo && contentType === 'video' && contentTier !== 'tier_2') {
       // Merge provided effects with defaults
       const mergedEffects = { ...DEFAULT_EFFECTS, ...effects };
 
@@ -598,11 +684,48 @@ export async function createPost(params = {}) {
         launched: true,
         message: 'Video generation launched asynchronously'
       });
+    } else if (contentTier === 'tier_2') {
+      // Tier 2 posts: No automatic video generation, manual upload required
+      logger.info('Tier 2 post created - manual video upload required', {
+        postId: post._id,
+        platform
+      });
+
+      generationResults.push({
+        postId: post._id,
+        platform,
+        launched: false,
+        message: 'Tier 2 post created - manual video upload required. Use the upload endpoint to add the AI avatar video.'
+      });
+    } else {
+      // No video generation requested
+      generationResults.push({
+        postId: post._id,
+        platform,
+        launched: false,
+        message: 'Post created without video generation'
+      });
     }
   }
 
   // Note: Approval todo is created when async video generation completes
   // Not immediately, to avoid confusion with posts still generating
+  // For tier_2 posts, approval todo will be created after manual video upload
+
+  // Determine message based on content tier
+  let message;
+  const hasTier2 = createdPosts.some(p => p.contentTier === 'tier_2');
+  const hasTier1 = createdPosts.some(p => p.contentTier === 'tier_1');
+
+  if (hasTier2 && generateVideo) {
+    message = `Created ${createdPosts.length} post(s). Tier 2 posts require manual video upload - please upload the AI avatar video using the upload endpoint. Tier 1 posts are generating in the background.`;
+  } else if (hasTier2) {
+    message = `Created ${createdPosts.length} tier_2 post(s). Manual video upload required - please upload the AI avatar video using the upload endpoint.`;
+  } else if (generateVideo) {
+    message = `Launched async video generation for ${createdPosts.length} post(s). Videos are generating in the background. Approval todos will be created once generation completes (check back in a few minutes).`;
+  } else {
+    message = `${createdPosts.length} post(s) created without video generation.`;
+  }
 
   return {
     success: true,
@@ -612,14 +735,13 @@ export async function createPost(params = {}) {
       platform: p.platform,
       title: p.title,
       status: p.status,
+      contentTier: p.contentTier,
       scheduledAt: p.scheduledAt,
       hasVideo: !!p.videoPath,
       videoGenerationStatus: p.videoGenerationProgress?.status || 'not_started'
     })),
     videoGenerated: false, // Always false now - video generation is async
-    message: generateVideo
-      ? `Launched async video generation for ${createdPosts.length} post(s). Videos are generating in the background. Approval todos will be created once generation completes (check back in a few minutes).`
-      : `${createdPosts.length} post(s) created without video generation.`,
+    message,
     generationResults: generationResults.length > 0 ? generationResults : undefined,
     asyncVideoGeneration: true // Explicitly flag that this is async
   };

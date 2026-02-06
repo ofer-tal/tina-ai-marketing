@@ -335,7 +335,7 @@ const ROIOptimization = () => {
       const startDate = new Date(Date.now() - parseInt(period) * 24 * 60 * 60 * 1000).toISOString();
 
       const response = await fetch(
-        `http://localhost:3001/api/roi-optimization/report?startDate=${startDate}&endDate=${endDate}`
+        `/api/roi-optimization/report?startDate=${startDate}&endDate=${endDate}`
       );
 
       if (!response.ok) {

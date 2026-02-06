@@ -916,6 +916,30 @@ export const READ_ONLY_TOOLS = [
     }
   },
   {
+    name: 'get_ai_avatars',
+    description: 'Get available AI avatars for tier_2 video generation. Returns all active AI avatars with their details including name, description, gender, style, and image. Use this to see what avatars can be selected when creating tier_2 posts.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        gender: {
+          type: 'string',
+          description: 'Filter by avatar gender (optional)',
+          enum: ['male', 'female', 'neutral']
+        },
+        style: {
+          type: 'string',
+          description: 'Filter by avatar style (optional)',
+          enum: ['professional', 'casual', 'playful', 'elegant', 'friendly', 'authoritative']
+        }
+      }
+    },
+    exampleUsage: {
+      gender: 'female',
+      style: 'professional'
+    }
+  },
+  {
     name: 'get_stories',
     description: 'Get available common library stories for post creation. Only returns ready stories (userId: null, status: "ready") that can be used for marketing content.',
     requiresApproval: false,
@@ -2140,6 +2164,7 @@ export const TOOL_NAMES = {
 
   // Post Management - Read Only (no approval)
   GET_MUSIC: 'get_music',
+  GET_AI_AVATARS: 'get_ai_avatars',
   GET_STORIES: 'get_stories',
   CREATE_POST: 'create_post',
   EDIT_POST: 'edit_post',
@@ -2337,6 +2362,10 @@ export function formatToolCallForDisplay(toolName, parameters) {
   } else if (toolName === 'get_music') {
     description = `Get available background music tracks`;
     if (parameters.style && parameters.style !== 'all') description += ` (style: ${parameters.style})`;
+  } else if (toolName === 'get_ai_avatars') {
+    description = `Get available AI avatars for tier_2 videos`;
+    if (parameters.gender) description += ` (${parameters.gender})`;
+    if (parameters.style) description += ` - ${parameters.style}`;
   } else if (toolName === 'create_post') {
     description = `Create new marketing post from story`;
     if (parameters.platforms) description += ` for ${parameters.platforms.join(', ')}`;

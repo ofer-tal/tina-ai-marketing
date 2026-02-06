@@ -1712,7 +1712,7 @@ function Campaigns() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3001/api/searchAds/campaigns?limit=50');
+      const response = await fetch('/api/searchAds/campaigns?limit=50');
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1751,7 +1751,7 @@ function Campaigns() {
   // Feature #140: Fetch ROI data for all campaigns
   const fetchCampaignROI = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/revenue/attribution/campaigns');
+      const response = await fetch('/api/revenue/attribution/campaigns');
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -1824,7 +1824,7 @@ function Campaigns() {
         // Feature #144 Step 4: Automatically pause campaign at 90%
         try {
           // Call auto-pause API endpoint
-          const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/auto-pause`, {
+          const response = await fetch(`/api/searchAds/campaigns/${campaign.id}/auto-pause`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json'
@@ -1949,7 +1949,7 @@ function Campaigns() {
 
     try {
       // Step 4: Verify campaign paused via API
-      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/status`, {
+      const response = await fetch(`/api/searchAds/campaigns/${campaign.id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -1994,7 +1994,7 @@ function Campaigns() {
 
     try {
       // Step 5: Test resume functionality - verify campaign resumed via API
-      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/status`, {
+      const response = await fetch(`/api/searchAds/campaigns/${campaign.id}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -2051,7 +2051,7 @@ function Campaigns() {
 
     try {
       // Step 4: Confirm deletion - call API with confirmed=true
-      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}`, {
+      const response = await fetch(`/api/searchAds/campaigns/${campaign.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -2107,7 +2107,7 @@ function Campaigns() {
     setAdGroupsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/adgroups`);
+      const response = await fetch(`/api/searchAds/campaigns/${campaign.id}/adgroups`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2143,7 +2143,7 @@ function Campaigns() {
     setKeywordsLoading(true);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaign.id}/keywords`);
+      const response = await fetch(`/api/searchAds/campaigns/${campaign.id}/keywords`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -2479,7 +2479,7 @@ function Campaigns() {
   const fetchBidSuggestions = async (campaignId) => {
     try {
       // In production, this would call an API endpoint
-      // const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaignId}/bid-suggestions`);
+      // const response = await fetch(`/api/searchAds/campaigns/${campaignId}/bid-suggestions`);
       // For now, generate suggestions locally
       const suggestions = generateBidSuggestions(campaignId);
       return suggestions;
@@ -2494,7 +2494,7 @@ function Campaigns() {
     try {
       console.log('[Negative Keywords] Fetching for campaign:', campaignId);
       // In production, this would call an API endpoint
-      // const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${campaignId}/negative-keywords`);
+      // const response = await fetch(`/api/searchAds/campaigns/${campaignId}/negative-keywords`);
       // const data = await response.json();
 
       // For now, return mock data
@@ -2520,7 +2520,7 @@ function Campaigns() {
 
     try {
       // In production, this would call an API endpoint
-      // const response = await fetch(`http://localhost:3001/api/searchAds/campaigns/${selectedCampaign.id}/negative-keywords`, {
+      // const response = await fetch(`/api/searchAds/campaigns/${selectedCampaign.id}/negative-keywords`, {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({ keywordText, matchType: 'BROAD' })
@@ -2553,7 +2553,7 @@ function Campaigns() {
 
     try {
       // In production, this would call an API endpoint
-      // await fetch(`http://localhost:3001/api/searchAds/campaigns/${selectedCampaign.id}/negative-keywords/${keywordId}`, {
+      // await fetch(`/api/searchAds/campaigns/${selectedCampaign.id}/negative-keywords/${keywordId}`, {
       //   method: 'DELETE'
       // });
 
@@ -2629,7 +2629,7 @@ function Campaigns() {
       console.log('[Campaign Creation] Creating campaign:', newCampaign);
 
       // In production, this would call the Apple Search Ads API
-      // const response = await fetch('http://localhost:3001/api/searchAds/campaigns', {
+      // const response = await fetch('/api/searchAds/campaigns', {
       //   method: 'POST',
       //   headers: { 'Content-Type': 'application/json' },
       //   body: JSON.stringify({

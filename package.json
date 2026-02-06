@@ -55,6 +55,7 @@
     "react-router-dom": "^6.30.3",
     "recharts": "^2.10.3",
     "runpod-sdk": "^1.1.2",
+    "selfsigned": "^5.5.0",
     "styled-components": "^6.1.6",
     "winston": "^3.11.0",
     "ws": "^8.16.0"

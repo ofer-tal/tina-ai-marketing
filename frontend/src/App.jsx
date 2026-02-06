@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import StrategicDashboard from './pages/StrategicDashboard';
 import Chat from './pages/Chat';
 import ContentLibrary from './pages/ContentLibrary';
+import AIAvatars from './pages/AIAvatars';
 import BatchApprovalQueue from './pages/BatchApprovalQueue';
 import Campaigns from './pages/Campaigns';
 import RevenueAttributionTest from './pages/RevenueAttributionTest';
@@ -671,6 +672,7 @@ const NAV_SECTIONS = [
     items: [
       { path: '/content/library', icon: '◫', label: 'All Content' },
       { path: '/content/approval', icon: '✓', label: 'Approvals' },
+      { path: '/content/avatars', icon: '🎭', label: 'AI Avatars' },
       { path: '/content/music', icon: '🎵', label: 'Music' },
       { path: '/content/calendar', icon: '◷', label: 'Calendar' },
     ]
@@ -1125,6 +1127,7 @@ function App() {
                 <Route path="/content/trending-topics" element={<PageWithBreadcrumbs><TrendingTopics /></PageWithBreadcrumbs>} />
                 <Route path="/content/keyword-recommendations" element={<PageWithBreadcrumbs><KeywordRecommendations /></PageWithBreadcrumbs>} />
                 <Route path="/content/library" element={<PageWithBreadcrumbs><ContentLibrary /></PageWithBreadcrumbs>} />
+                <Route path="/content/avatars" element={<PageWithBreadcrumbs><AIAvatars /></PageWithBreadcrumbs>} />
                 <Route path="/content/approval" element={<PageWithBreadcrumbs><BatchApprovalQueue /></PageWithBreadcrumbs>} />
                 <Route path="/content/music" element={<PageWithBreadcrumbs><ContentMusic /></PageWithBreadcrumbs>} />
                 <Route path="/chat" element={<PageWithBreadcrumbs><Chat /></PageWithBreadcrumbs>} />

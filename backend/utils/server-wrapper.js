@@ -1,7 +1,7 @@
 /**
  * Server Wrapper Script
  *
- * Wraps the server startup to provide file logging on Windows.
+ * Wraps the server startup to provide file logging with rotation.
  * This script tee's output to both console and log file.
  */
 
@@ -13,12 +13,63 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const logDir = path.join(process.cwd(), 'logs');
-const logFilePath = process.env.LOG_FILE_PATH || path.join(logDir, 'backend.log');
+const logFileName = 'backend.log';
+const logFilePath = path.join(logDir, logFileName);
 
-// Ensure log directory exists
-if (!fs.existsSync(logDir)) {
-  fs.mkdirSync(logDir, { recursive: true });
+// Log rotation configuration
+const MAX_LOG_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_LOG_FILES = 5;
+
+/**
+ * Rotate log files if the current log is too large
+ * Keeps the 5 most recent log files
+ */
+function rotateLogsIfNeeded() {
+  // Ensure log directory exists
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+  }
+
+  // Check if current log file exists and needs rotation
+  if (fs.existsSync(logFilePath)) {
+    const stats = fs.statSync(logFilePath);
+
+    if (stats.size >= MAX_LOG_SIZE) {
+      console.log(`Log file size (${(stats.size / 1024 / 1024).toFixed(2)}MB) exceeds limit, rotating...`);
+
+      // Generate timestamp for rotated log
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const rotatedFileName = `backend-${timestamp}.log`;
+      const rotatedFilePath = path.join(logDir, rotatedFileName);
+
+      // Rename current log to timestamped file
+      fs.renameSync(logFilePath, rotatedFilePath);
+      console.log(`Rotated log to: ${rotatedFileName}`);
+
+      // Clean up old log files, keeping only MAX_LOG_FILES
+      const files = fs.readdirSync(logDir)
+        .filter(f => f.startsWith('backend-') && f.endsWith('.log'))
+        .map(f => ({
+          name: f,
+          path: path.join(logDir, f),
+          time: fs.statSync(path.join(logDir, f)).mtime.getTime()
+        }))
+        .sort((a, b) => b.time - a.time); // Sort by time descending (newest first)
+
+      // Delete files beyond MAX_LOG_FILES
+      if (files.length >= MAX_LOG_FILES) {
+        const filesToDelete = files.slice(MAX_LOG_FILES);
+        for (const file of filesToDelete) {
+          fs.unlinkSync(file.path);
+          console.log(`Deleted old log file: ${file.name}`);
+        }
+      }
+    }
+  }
 }
+
+// Perform rotation before creating new log stream
+rotateLogsIfNeeded();
 
 // Create write stream for log file
 const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
@@ -61,6 +112,7 @@ console.info = function(...args) {
 console.log('='.repeat(60));
 console.log('Backend server starting...');
 console.log(`Log file: ${logFilePath}`);
+console.log(`Log rotation: ${MAX_LOG_SIZE / 1024 / 1024}MB max, ${MAX_LOG_FILES} files retained`);
 console.log('='.repeat(60));
 
 // Handle cleanup on exit

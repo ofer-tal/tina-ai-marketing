@@ -14,6 +14,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 /**
+ * Get hashtags for a specific platform from a post
+ * Handles both new platform-specific structure and legacy array format
+ * @param {MarketingPost} post - The post
+ * @param {string} platform - The platform key (tiktok, instagram, youtube_shorts)
+ * @returns {Array<string>} Hashtags for the platform
+ */
+function getPlatformHashtags(post, platform) {
+  if (!post.hashtags) return [];
+
+  // New platform-specific structure
+  if (typeof post.hashtags === 'object' && !Array.isArray(post.hashtags)) {
+    return post.hashtags[platform] || post.hashtags.tiktok || [];
+  }
+
+  // Legacy array format - return as-is
+  return post.hashtags || [];
+}
+
+/**
  * Convert URL path to file system path
  * Handles paths stored as /storage/... which need to be resolved relative to project root
  * @param {string} urlPath - The URL path (e.g., /storage/videos/tier1/final/video.mp4)
@@ -76,12 +95,111 @@ class PostingSchedulerJob {
         posts: scheduledContent.map(p => ({
           id: p._id.toString(),
           title: p.title,
+          platform: p.platform,
           scheduledAt: p.scheduledAt
         }))
       });
 
       if (scheduledContent.length === 0) {
         return;
+      }
+
+      // GUARDRAIL: For TikTok, if multiple posts are ready in same cycle, only post the LATEST one
+      // This prevents posting multiple delayed posts at once which could flag the account as spam
+      const tiktokPosts = scheduledContent.filter(p => p.platform === 'tiktok');
+
+      if (tiktokPosts.length > 1) {
+        logger.warn(`Multiple TikTok posts ready in same cycle - only posting latest, marking others as failed`, {
+          totalReady: tiktokPosts.length,
+          platform: 'tiktok'
+        });
+
+        // Sort TikTok posts by scheduledAt DESC (most recent first)
+        tiktokPosts.sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+
+        const latestPost = tiktokPosts[0];
+        const delayedPosts = tiktokPosts.slice(1);
+
+        logger.info(`Latest TikTok post selected for posting: ${latestPost._id}`, {
+          scheduledAt: latestPost.scheduledAt,
+          title: latestPost.title
+        });
+
+        logger.warn(`Marking ${delayedPosts.length} delayed TikTok posts as failed`, {
+          delayedPostIds: delayedPosts.map(p => p._id.toString()),
+          latestScheduledAt: latestPost.scheduledAt,
+          oldestScheduledAt: delayedPosts[delayedPosts.length - 1].scheduledAt
+        });
+
+        // Mark all delayed TikTok posts as failed
+        for (const post of delayedPosts) {
+          post.status = 'failed';
+          post.error = 'Multiple posts ready in same cycle - skipped to prevent spam. Post was delayed beyond its scheduled time.';
+          post.failedAt = new Date();
+          post.failedReason = 'scheduler_guardrail_multiple_tiktok_posts';
+
+          await post.save();
+
+          logger.warn(`TikTok post marked as failed due to scheduler guardrail: ${post._id}`, {
+            scheduledAt: post.scheduledAt,
+            title: post.title
+          });
+        }
+
+        // Replace scheduledContent with only the latest TikTok post + other platforms
+        const otherPlatformPosts = scheduledContent.filter(p => p.platform !== 'tiktok');
+        scheduledContent = [latestPost, ...otherPlatformPosts];
+
+        logger.info(`Filtered posts to: ${scheduledContent.length} (1 TikTok + ${otherPlatformPosts.length} other platforms)`);
+      }
+
+      // GUARDRAIL: For Instagram, if multiple posts are ready in same cycle, only post the LATEST one
+      // This prevents posting multiple delayed posts at once which could flag the account as spam
+      const instagramPosts = scheduledContent.filter(p => p.platform === 'instagram');
+
+      if (instagramPosts.length > 1) {
+        logger.warn(`Multiple Instagram posts ready in same cycle - only posting latest, marking others as failed`, {
+          totalReady: instagramPosts.length,
+          platform: 'instagram'
+        });
+
+        // Sort Instagram posts by scheduledAt DESC (most recent first)
+        instagramPosts.sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+
+        const latestPost = instagramPosts[0];
+        const delayedPosts = instagramPosts.slice(1);
+
+        logger.info(`Latest Instagram post selected for posting: ${latestPost._id}`, {
+          scheduledAt: latestPost.scheduledAt,
+          title: latestPost.title
+        });
+
+        logger.warn(`Marking ${delayedPosts.length} delayed Instagram posts as failed`, {
+          delayedPostIds: delayedPosts.map(p => p._id.toString()),
+          latestScheduledAt: latestPost.scheduledAt,
+          oldestScheduledAt: delayedPosts[delayedPosts.length - 1].scheduledAt
+        });
+
+        // Mark all delayed Instagram posts as failed
+        for (const post of delayedPosts) {
+          post.status = 'failed';
+          post.error = 'Multiple posts ready in same cycle - skipped to prevent spam. Post was delayed beyond its scheduled time.';
+          post.failedAt = new Date();
+          post.failedReason = 'scheduler_guardrail_multiple_instagram_posts';
+
+          await post.save();
+
+          logger.warn(`Instagram post marked as failed due to scheduler guardrail: ${post._id}`, {
+            scheduledAt: post.scheduledAt,
+            title: post.title
+          });
+        }
+
+        // Replace scheduledContent with only the latest Instagram post + other platforms (excluding Instagram)
+        const otherPlatformPosts = scheduledContent.filter(p => p.platform !== 'instagram');
+        scheduledContent = [latestPost, ...otherPlatformPosts];
+
+        logger.info(`Filtered posts to: ${scheduledContent.length} (1 Instagram + ${otherPlatformPosts.length} other platforms)`);
       }
 
       // Process each scheduled post
@@ -312,8 +430,8 @@ class PostingSchedulerJob {
         selectedIndex: googleSheetsService.sheetTabNames.indexOf(targetSheet),
       });
 
-      const fullCaption = post.hashtags && post.hashtags.length > 0
-        ? `${post.caption}\n\n${post.hashtags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ')}`
+      const fullCaption = getPlatformHashtags(post, 'tiktok').length > 0
+        ? `${post.caption}\n\n${getPlatformHashtags(post, 'tiktok').map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ')}`
         : post.caption;
 
       logger.info(`  Caption length: ${fullCaption.length} chars`);
@@ -401,19 +519,53 @@ class PostingSchedulerJob {
       return { success: false, skipped: true, reason: 'Instagram posting disabled' };
     }
 
-    // Post the video as a Reel
+    // Check if S3 URL already exists (for retry scenarios)
+    let s3Url;
+    if (post.s3Url) {
+      // Use existing S3 URL (from previous upload or manual recovery)
+      s3Url = post.s3Url;
+      logger.info(`Using existing S3 URL for Instagram: ${s3Url}`);
+    } else {
+      // Upload to S3 first (Instagram requires public URL)
+      const videoFilePath = urlToFilePath(post.videoPath);
+      const s3Result = await s3VideoUploader.uploadVideo(
+        videoFilePath,
+        `instagram-${post._id.toString()}.mp4`
+      );
+
+      if (!s3Result.success) {
+        throw new Error(`S3 upload failed: ${s3Result.error}`);
+      }
+
+      s3Url = s3Result.publicUrl;
+      logger.info(`Uploaded video to S3 for Instagram: ${s3Url}`);
+    }
+
+    // Post the Reel with S3 URL and Instagram-specific hashtags
+    // Pass post object to enable container ID persistence for retries
     const result = await instagramPostingService.postVideo(
       post.videoPath,
       post.caption,
-      post.hashtags,
+      getPlatformHashtags(post, 'instagram'),
       (progress) => {
         logger.debug(`Instagram upload progress for ${post._id}: ${progress}%`);
-      }
+      },
+      s3Url, // Pass S3 URL (either newly uploaded or existing)
+      post // Pass post object for container state persistence
     );
 
     if (!result.success) {
       throw new Error(result.error || 'Instagram posting failed');
     }
+
+    // Update post with Instagram media ID
+    if (result.mediaId) {
+      post.instagramMediaId = result.mediaId;
+    }
+    if (result.permalink) {
+      post.instagramPermalink = result.permalink;
+    }
+    await post.save();
 
     return result;
   }

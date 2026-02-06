@@ -283,7 +283,7 @@ const Attribution = () => {
 
   const fetchModels = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/attribution/models');
+      const response = await fetch('/api/attribution/models');
       const result = await response.json();
       if (result.success) {
         setModels(result.data);
@@ -303,7 +303,7 @@ const Attribution = () => {
         params.append('platform', platform);
       }
 
-      const response = await fetch(`http://localhost:3001/api/attribution/report?${params}`);
+      const response = await fetch(`/api/attribution/report?${params}`);
 
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);

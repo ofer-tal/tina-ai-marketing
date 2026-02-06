@@ -52,14 +52,26 @@ const PLATFORM_CONFIGS = {
     tokenEndpoint: '/oauth/token/',
   },
   instagram: {
-    server: 'https://graph.facebook.com/v18.0/oauth/access_token',
+    server: 'https://graph.facebook.com/v18.0',
     authorizationEndpoint: 'https://www.facebook.com/v18.0/dialog/oauth',
     clientId: process.env.INSTAGRAM_APP_ID,
     clientSecret: process.env.INSTAGRAM_APP_SECRET,
     redirectUri: process.env.INSTAGRAM_REDIRECT_URI,
-    defaultScopes: ['instagram_basic', 'instagram_content_publish', 'pages_read_engagement', 'pages_show_list'],
+    // NOTE: instagram_basic was deprecated Dec 2024 with Instagram Basic Display API
+    // However, it may still be required for Instagram Business Account connection
+    // Only using approved permissions - pages_manage_posts and pages_read_user_content
+    // require app review and are not available in development mode
+    defaultScopes: [
+      'instagram_basic',  // Required for Instagram Business Account connection
+      'instagram_content_publish',
+      'instagram_manage_insights',
+      'pages_read_engagement',
+      'pages_show_list',
+    ],
     // Instagram/Facebook uses standard OAuth2
     usePkce: false,
+    // Custom token endpoint for Facebook OAuth
+    tokenEndpoint: '/oauth/access_token',
   },
 };
 
@@ -95,12 +107,19 @@ class OAuthManager {
       }
 
       try {
-        const client = new OAuth2Client({
+        const clientConfig = {
           server: config.server,
           clientId: config.clientId,
           clientSecret: config.clientSecret,
           authorizationEndpoint: config.authorizationEndpoint,
-        });
+        };
+
+        // Add custom token endpoint if configured
+        if (config.tokenEndpoint) {
+          clientConfig.tokenEndpoint = config.tokenEndpoint;
+        }
+
+        const client = new OAuth2Client(clientConfig);
 
         this.clients.set(platform, client);
         logger.info(`OAuth2 client initialized for ${platform}`);
@@ -482,11 +501,34 @@ class OAuthManager {
         tokenParams
       );
 
+      // Debug: log the full token object to see what we're working with
+      logger.info(`[OAUTH] Token object received from OAuth2 client`, {
+        platform,
+        hasAccessToken: !!token.accessToken,
+        hasRefreshToken: !!token.refreshToken,
+        expiresAt: token.expiresAt,
+        expiresAtType: typeof token.expiresAt,
+        expiresAtIsDate: token.expiresAt instanceof Date,
+        tokenKeys: Object.keys(token),
+        // Facebook short-lived tokens last ~60 days, let's use that if expiresAt is missing
+      });
+
+      // Handle missing or invalid expiresAt (Facebook tokens often don't include this in response)
+      // Default to 60 days for Facebook short-lived access tokens
+      let expiresAt = token.expiresAt;
+      if (!expiresAt || expiresAt === 0 || new Date(expiresAt).getFullYear() < 2025) {
+        expiresAt = Date.now() + (60 * 24 * 60 * 60 * 1000); // 60 days from now
+        logger.info(`[OAUTH] Invalid expiresAt detected, using default 60 days`, {
+          originalExpiresAt: token.expiresAt,
+          newExpiresAt: new Date(expiresAt).toISOString(),
+        });
+      }
+
       // Store token to database
-      await AuthToken.saveToken(platform, {
+      const savedToken = await AuthToken.saveToken(platform, {
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
-        expiresAt: new Date(token.expiresAt),
+        expiresAt: new Date(expiresAt),
       });
 
       // Clean up state
@@ -495,8 +537,40 @@ class OAuthManager {
       logger.info(`OAuth callback successful for ${platform}`, {
         hasAccessToken: !!token.accessToken,
         hasRefreshToken: !!token.refreshToken,
-        expiresAt: new Date(token.expiresAt).toISOString(),
+        expiresAt: new Date(expiresAt).toISOString(),
       });
+
+      // For Instagram: discover business account immediately after OAuth
+      // This retrieves and stores the Instagram User ID needed for posting
+      if (platform === 'instagram') {
+        try {
+          const { default: instagramPostingService } = await import('./instagramPostingService.js');
+          const discoveryResult = await instagramPostingService.discoverBusinessAccount();
+
+          if (discoveryResult.success && discoveryResult.businessAccount) {
+            // Store Instagram User ID in token metadata for persistence
+            savedToken.metadata = savedToken.metadata || {};
+            savedToken.metadata.instagramUserId = discoveryResult.businessAccount.id;
+            savedToken.metadata.instagramUsername = discoveryResult.businessAccount.username;
+            savedToken.metadata.pageId = discoveryResult.pageId;
+            await savedToken.save();
+
+            logger.info('Instagram business account discovered and stored after OAuth', {
+              instagramUserId: discoveryResult.businessAccount.id,
+              username: discoveryResult.businessAccount.username,
+            });
+          } else {
+            logger.warn('Instagram business account discovery failed after OAuth', {
+              error: discoveryResult.error,
+              code: discoveryResult.code,
+            });
+          }
+        } catch (discoverError) {
+          logger.error('Failed to discover Instagram business account after OAuth', {
+            error: discoverError.message,
+          });
+        }
+      }
 
       // Invalidate any cached fetch wrapper to force reload with new token
       this.fetchWrappers.delete(platform);
@@ -505,11 +579,18 @@ class OAuthManager {
         success: true,
         accessToken: token.accessToken,
         refreshToken: token.refreshToken,
-        expiresAt: new Date(token.expiresAt),
+        expiresAt: new Date(expiresAt),
       };
     } catch (error) {
+      // Enhanced error logging for Instagram/Facebook OAuth
       logger.error(`OAuth callback failed for ${platform}`, {
         error: error.message,
+        errorMessage: String(error),
+        errorName: error.name,
+        errorCode: error.code,
+        errorData: error.data,
+        responseBody: error.response?.body,
+        responseStatus: error.response?.status,
         stack: error.stack,
       });
 
@@ -518,7 +599,7 @@ class OAuthManager {
 
       return {
         success: false,
-        error: error.message,
+        error: `${error.name}: ${error.message}${error.response?.body ? ' - ' + JSON.stringify(error.response.body) : ''}`,
       };
     }
   }
@@ -651,15 +732,20 @@ class OAuthManager {
     const data = oauthStateStore.get(key);
 
     logger.info(`[OAUTH] Looking up OAuth state for ${platform}`, {
-      state: state.substring(0, 8) + '...',
+      state: state,
       fullKey: key,
       found: !!data,
       totalStatesStored: oauthStateStore.size,
-      allKeys: Array.from(oauthStateStore.keys()).map(k => k.substring(0, 40) + '...'),
+      allKeys: Array.from(oauthStateStore.keys()),
     });
 
     if (!data) {
-      logger.warn(`[OAUTH] State not found for ${platform}`, { state: state.substring(0, 8) + '...' });
+      logger.warn(`[OAUTH] State not found for ${platform}`, {
+        state,
+        lookingFor: key,
+        availableKeys: Array.from(oauthStateStore.keys()),
+        platform,
+      });
       return null;
     }
 
@@ -668,7 +754,7 @@ class OAuthManager {
     const ageSeconds = Math.floor(age / 1000);
     if (age > 30 * 60 * 1000) {
       oauthStateStore.delete(key);
-      logger.warn(`[OAUTH] State expired for ${platform}`, { state: state.substring(0, 8) + '...', ageSeconds });
+      logger.warn(`[OAUTH] State expired for ${platform}`, { state, ageSeconds });
       return null;
     }
 

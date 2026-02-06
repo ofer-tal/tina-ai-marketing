@@ -32,7 +32,7 @@ const Forecast = () => {
       setError(null);
 
       const response = await fetch(
-        `http://localhost:3001/api/predictive-analytics/forecast?period=${period}&horizon=${horizon}&metric=revenue&model=${model}`
+        `/api/predictive-analytics/forecast?period=${period}&horizon=${horizon}&metric=revenue&model=${model}`
       );
 
       if (!response.ok) {

@@ -422,7 +422,7 @@ function RegenerateVideoModal({
 
     pollingIntervalRef.current = setInterval(async () => {
       try {
-        const response = await fetch(`http://localhost:3001/api/tiered-video/progress/${postId}`);
+        const response = await fetch(`/api/tiered-video/progress/${postId}`);
         if (response.ok) {
           const data = await response.json();
           const progressData = data.data;
@@ -477,7 +477,7 @@ function RegenerateVideoModal({
     };
 
     try {
-      const response = await fetch(`http://localhost:3001/api/tiered-video/regenerate/${post._id}?force=${forceRegenerate}`, {
+      const response = await fetch(`/api/tiered-video/regenerate/${post._id}?force=${forceRegenerate}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(options)

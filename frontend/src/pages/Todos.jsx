@@ -455,7 +455,7 @@ function Todos() {
 
   const fetchTodos = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/todos');
+      const response = await fetch('/api/todos');
       const data = await response.json();
       if (data.success) {
         setTodos(data.todos);
@@ -512,7 +512,7 @@ function Todos() {
     e.preventDefault();
 
     try {
-      const response = await fetch('http://localhost:3001/api/todos', {
+      const response = await fetch('/api/todos', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -551,7 +551,7 @@ function Todos() {
     const newStatus = todo.status === 'completed' ? 'pending' : 'completed';
 
     try {
-      const response = await fetch(`http://localhost:3001/api/todos/${todo._id || todo.id}`, {
+      const response = await fetch(`/api/todos/${todo._id || todo.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
@@ -584,7 +584,7 @@ function Todos() {
     if (!selectedTodo || !snoozeUntil) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo._id || selectedTodo.id}/snooze`, {
+      const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo._id || selectedTodo.id}/snooze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -616,7 +616,7 @@ function Todos() {
     if (!selectedTodo) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+      const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json'
@@ -964,7 +964,7 @@ function Todos() {
                 onChange={async (e) => {
                   const newStatus = e.target.value;
                   try {
-                    const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+                    const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                       method: 'PUT',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ status: newStatus })
@@ -995,7 +995,7 @@ function Todos() {
                     $primary
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+                        const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'in_progress' })
@@ -1019,7 +1019,7 @@ function Todos() {
                   <Button
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+                        const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'cancelled' })
@@ -1043,7 +1043,7 @@ function Todos() {
                     $primary
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+                        const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'completed' })
@@ -1067,7 +1067,7 @@ function Todos() {
                   <Button
                     onClick={async () => {
                       try {
-                        const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+                        const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ status: 'pending' })
@@ -1089,7 +1089,7 @@ function Todos() {
                 <Button
                   onClick={async () => {
                     try {
-                      const response = await fetch(`http://localhost:3001/api/todos/${selectedTodo._id || selectedTodo.id}`, {
+                      const response = await fetch(`/api/todos/${selectedTodo._id || selectedTodo.id}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ status: 'pending' })

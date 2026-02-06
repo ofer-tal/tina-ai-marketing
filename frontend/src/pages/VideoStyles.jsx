@@ -424,7 +424,7 @@ function VideoStyles() {
       setError(null);
 
       const platform = platformFilter === 'all' ? undefined : platformFilter;
-      const response = await fetch(`http://localhost:3001/api/video-style-analysis/analyze${platform ? `?platform=${platform}` : ''}`);
+      const response = await fetch(`/api/video-style-analysis/analyze${platform ? `?platform=${platform}` : ''}`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch video style analysis');

@@ -331,7 +331,7 @@ class TikTokPostingService extends BaseApiClient {
   async getUserInfo() {
     try {
       const fields = 'open_id,union_id,avatar_url,display_name';
-      const url = `${this.endpoints.user.info}?fields=${encodeURIComponent(fields)}`;
+      const url = `${this.baseURL}${this.endpoints.user.info}?fields=${encodeURIComponent(fields)}`;
 
       const response = await oauthManager.fetch('tiktok', url);
 

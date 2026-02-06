@@ -93,26 +93,13 @@ authTokenSchema.index({ expiresAt: 1 }); // For cleanup of expired tokens
 
 // Static method to get active token for a platform
 authTokenSchema.statics.getActiveToken = async function(platform) {
-  logger.info(`[AuthToken] getActiveToken called for platform: ${platform}`);
+  logger.debug(`[AuthToken] getActiveToken called for platform: ${platform}`);
 
   const token = await this.findOne({ platform, isActive: true }).sort({ createdAt: -1 });
 
-  logger.info(`[AuthToken] getActiveToken result for ${platform}`, {
-    found: !!token,
-    hasAccessToken: !!token?.accessToken,
-    isActive: token?.isActive,
-    tokenId: token?._id?.toString(),
-    expiresAt: token?.expiresAt?.toISOString(),
-  });
-
-  // Also log ALL tokens for this platform for debugging
-  const allTokens = await this.find({ platform }).sort({ createdAt: -1 });
-  logger.info(`[AuthToken] All tokens for ${platform}`, {
-    totalCount: allTokens.length,
-    activeCount: allTokens.filter(t => t.isActive).length,
-    inactiveCount: allTokens.filter(t => !t.isActive).length,
-    allIds: allTokens.map(t => ({ id: t._id?.toString(), isActive: t.isActive, hasAccessToken: !!t.accessToken })),
-  });
+  if (!token) {
+    logger.warn(`[AuthToken] No active token found for platform: ${platform}`);
+  }
 
   return token;
 };
@@ -137,6 +124,8 @@ authTokenSchema.statics.saveToken = async function(platform, tokenData) {
   try {
     // Step 1: Deactivate the existing active token (only one, not all!)
     // This is safer than updateMany which affects all tokens
+    // Also, preserve its metadata for the new token
+    let preservedMetadata = {};
     const deactivatedResult = await this.findOneAndUpdate(
       { platform, isActive: true },
       {
@@ -152,17 +141,33 @@ authTokenSchema.statics.saveToken = async function(platform, tokenData) {
       logger.info('AuthToken.saveToken - deactivated previous active token', {
         platform,
         deactivatedTokenId: deactivatedResult._id.toString(),
-        wasActive: deactivatedResult.isActive
+        wasActive: deactivatedResult.isActive,
+        hadMetadata: !!deactivatedResult.metadata
       });
+      // Preserve metadata from the old token
+      if (deactivatedResult.metadata && Object.keys(deactivatedResult.metadata).length > 0) {
+        preservedMetadata = deactivatedResult.metadata;
+        logger.info('AuthToken.saveToken - preserving metadata from previous token', {
+          platform,
+          metadataKeys: Object.keys(preservedMetadata)
+        });
+      }
     } else {
       logger.info('AuthToken.saveToken - no previous active token found to deactivate', { platform });
     }
 
     // Step 2: Create the new active token
+    // Merge preserved metadata with any new metadata from tokenData
+    const mergedMetadata = {
+      ...preservedMetadata,  // Old metadata (Page ID, Instagram User ID, etc.)
+      ...tokenData.metadata,  // New metadata (if any)
+    };
+
     const newToken = await this.create({
       platform,
       isActive: true,
       ...tokenData,
+      metadata: mergedMetadata,
     });
 
     logger.info('AuthToken.saveToken - SUCCESS: new active token created and ACTIVE', {

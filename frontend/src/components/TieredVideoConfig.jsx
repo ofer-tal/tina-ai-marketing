@@ -395,7 +395,7 @@ function TieredVideoConfig() {
 
   const checkHealth = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/tiered-video/health');
+      const response = await fetch('/api/tiered-video/health');
       const data = await response.json();
       setHealthStatus(data.success ? data.data : { healthy: false });
     } catch (err) {
@@ -405,7 +405,7 @@ function TieredVideoConfig() {
 
   const fetchCostEstimate = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/tiered-video/cost-estimate');
+      const response = await fetch('/api/tiered-video/cost-estimate');
       const data = await response.json();
       if (data.success) {
         setCostEstimate(data.data);
@@ -427,7 +427,7 @@ function TieredVideoConfig() {
 
       // Save each setting
       for (const [key, value] of Object.entries(settings)) {
-        await fetch(`http://localhost:3001/api/settings/${key}`, {
+        await fetch(`/api/settings/${key}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value })
@@ -448,7 +448,7 @@ function TieredVideoConfig() {
   const handleTestConnection = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/tiered-video/health');
+      const response = await fetch('/api/tiered-video/health');
       const data = await response.json();
       if (data.success && data.data.healthy) {
         showSuccessToast('All video generation services are healthy!');

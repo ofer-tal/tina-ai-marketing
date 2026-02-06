@@ -407,7 +407,7 @@ function ChannelPerformance() {
       }
       setError(null);
 
-      const response = await fetch(`http://localhost:3001/api/channel-performance/compare?range=${range}`);
+      const response = await fetch(`/api/channel-performance/compare?range=${range}`);
       if (!response.ok) {
         throw new Error('Failed to fetch channel performance data');
       }

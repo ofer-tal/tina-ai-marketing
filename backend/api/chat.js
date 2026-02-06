@@ -344,9 +344,52 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
         const totalTime = Date.now() - startTime;
         const followUpContent = currentResponse.content?.[0]?.text || currentResponse.text || '';
 
+        // If no content was returned, check if it's a mock response (API not configured)
+        if (!followUpContent) {
+          if (currentResponse.mock) {
+            return {
+              role: "assistant",
+              content: currentResponse.content?.[0]?.text || 'The AI service is not configured. Please set GLM47_API_KEY in your environment.',
+              timestamp: new Date().toISOString(),
+              error: true,
+              metadata: {
+                configurationError: true,
+                model: currentResponse.model,
+                thinkingTime: totalTime,
+                toolsUsed: allExecutedTools.map(t => t.toolName)
+              }
+            };
+          }
+
+          logger.warn('GLM returned empty response after tool execution', {
+            hasContent: !!currentResponse.content,
+            hasText: !!currentResponse.text,
+            contentLength: currentResponse.content?.length,
+            recursionCount
+          });
+
+          return {
+            role: "assistant",
+            content: 'I processed your request but encountered an issue generating a response.',
+            timestamp: new Date().toISOString(),
+            error: true,
+            metadata: {
+              tokensUsed: (response.usage?.totalTokens || 0) + (currentResponse.usage?.totalTokens || 0),
+              thinkingTime: totalTime,
+              model: response.model,
+              queryType: queryType.type,
+              hasDataContext: Object.keys(dataContext).length > 0,
+              toolsUsed: allExecutedTools.map(t => t.toolName),
+              toolsData: allExecutedTools.map(t => ({ name: t.toolName, data: t.data })),
+              recursionCount: recursionCount,
+              emptyResponse: true
+            }
+          };
+        }
+
         return {
           role: "assistant",
-          content: followUpContent || 'I processed your request but encountered an issue generating a response.',
+          content: followUpContent,
           timestamp: new Date().toISOString(),
           metadata: {
             tokensUsed: (response.usage?.totalTokens || 0) + (currentResponse.usage?.totalTokens || 0),
@@ -399,24 +442,37 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
     }
 
     // Extract content from response (normal text response)
-    const content = response.content?.[0]?.text || response.text || '';
+    let content = response.content?.[0]?.text || response.text || '';
+
+    // If content is empty but this is a mock response, try to get the mock message
+    if (!content && response.mock) {
+      content = response.content?.[0]?.text || response.content?.text ||
+        'The AI service is not configured. Please set GLM47_API_KEY in your environment.';
+      logger.warn('GLM service returning mock response (API not configured)', {
+        hasContent: !!response.content,
+        mock: response.mock
+      });
+    }
 
     logger.info('GLM4.7 API response received', {
       contentLength: content.length,
       thinkingTime,
-      tokensUsed: response.usage?.totalTokens || 0
+      tokensUsed: response.usage?.totalTokens || 0,
+      isMock: response.mock
     });
 
     return {
       role: "assistant",
       content: content,
       timestamp: new Date().toISOString(),
+      error: response.mock, // Mark as error if it's a mock response
       metadata: {
         tokensUsed: response.usage?.totalTokens || 0,
         thinkingTime,
         model: response.model,
         queryType: queryType.type,
-        hasDataContext: Object.keys(dataContext).length > 0
+        hasDataContext: Object.keys(dataContext).length > 0,
+        isMockResponse: response.mock
       }
     };
 

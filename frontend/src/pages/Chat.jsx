@@ -999,7 +999,7 @@ function Chat({ onClose }) {
   useEffect(() => {
     const loadPendingProposals = async () => {
       try {
-        const response = await fetch('http://localhost:3001/api/chat/proposals/pending');
+        const response = await fetch('/api/chat/proposals/pending');
         if (response.ok) {
           const data = await response.json();
           if (data.success && data.proposals) {
@@ -1059,7 +1059,7 @@ function Chat({ onClose }) {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/chat/history');
+      const response = await fetch('/api/chat/history');
       const data = await response.json();
 
       if (data.success && data.conversations.length > 0) {
@@ -1106,7 +1106,7 @@ function Chat({ onClose }) {
 
   const loadDailyBriefing = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/chat/daily-briefing');
+      const response = await fetch('/api/chat/daily-briefing');
       const data = await response.json();
 
       if (data.success && data.briefing) {
@@ -1194,7 +1194,7 @@ What would you like to focus on today?`;
     setIsLoading(true);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat/message', {
+      const response = await fetch('/api/chat/message', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1295,7 +1295,7 @@ What would you like to focus on today?`;
     if (!confirm('Are you sure you want to clear all conversation history?')) return;
 
     try {
-      await fetch('http://localhost:3001/api/chat/history', {
+      await fetch('/api/chat/history', {
         method: 'DELETE'
       });
       setMessages([]);
@@ -1342,7 +1342,7 @@ What would you like to focus on today?`;
         priority = 'high';
       }
 
-      const response = await fetch('http://localhost:3001/api/chat/create-todo', {
+      const response = await fetch('/api/chat/create-todo', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1379,7 +1379,7 @@ What would you like to focus on today?`;
     setProcessingProposal(messageId);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat/approve', {
+      const response = await fetch('/api/chat/approve', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1423,7 +1423,7 @@ What would you like to focus on today?`;
     setProcessingProposal(messageId);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat/reject', {
+      const response = await fetch('/api/chat/reject', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1469,7 +1469,7 @@ What would you like to focus on today?`;
     setProcessingProposal(messageId);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat/tools/approve', {
+      const response = await fetch('/api/chat/tools/approve', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1534,7 +1534,7 @@ What would you like to focus on today?`;
     setProcessingProposal(messageId);
 
     try {
-      const response = await fetch('http://localhost:3001/api/chat/tools/reject', {
+      const response = await fetch('/api/chat/tools/reject', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -1676,7 +1676,7 @@ What would you like to focus on today?`;
     setIsSearching(true);
 
     try {
-      const response = await fetch(`http://localhost:3001/api/chat/search?q=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/chat/search?q=${encodeURIComponent(query)}`);
       const data = await response.json();
 
       if (data.success) {

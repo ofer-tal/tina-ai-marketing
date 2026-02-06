@@ -16,7 +16,7 @@ const MonthlyRevenueAggregates = () => {
   const fetchAggregates = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/revenue/monthly/aggregates/recent?months=12');
+      const response = await fetch('/api/revenue/monthly/aggregates/recent?months=12');
       const data = await response.json();
 
       if (data.success) {
@@ -38,7 +38,7 @@ const MonthlyRevenueAggregates = () => {
       setShowModal(true);
 
       const response = await fetch(
-        `http://localhost:3001/api/revenue/monthly/${month.year}/${month.month}/transactions`
+        `/api/revenue/monthly/${month.year}/${month.month}/transactions`
       );
       const data = await response.json();
 

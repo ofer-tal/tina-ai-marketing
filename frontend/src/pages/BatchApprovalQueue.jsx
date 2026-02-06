@@ -479,7 +479,7 @@ function BatchApprovalQueue() {
   const fetchPosts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('http://localhost:3001/api/content/posts');
+      const response = await fetch('/api/content/posts');
       if (!response.ok) throw new Error('Failed to fetch');
       const result = await response.json();
       // API returns { success: true, data: { posts: [...] } }
@@ -526,7 +526,7 @@ function BatchApprovalQueue() {
 
     try {
       const promises = Array.from(selectedPosts).map(id =>
-        fetch(`http://localhost:3001/api/content/posts/${id}`, {
+        fetch(`/api/content/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'approved' })
@@ -556,7 +556,7 @@ function BatchApprovalQueue() {
 
     try {
       const promises = Array.from(selectedPosts).map(id =>
-        fetch(`http://localhost:3001/api/content/posts/${id}`, {
+        fetch(`/api/content/posts/${id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'rejected', rejectionReason: reason })
@@ -580,7 +580,7 @@ function BatchApprovalQueue() {
 
   const handleQuickApprove = async (postId) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/content/posts/${postId}/approve`, {
+      const response = await fetch(`/api/content/posts/${postId}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -636,7 +636,7 @@ function BatchApprovalQueue() {
 
     try {
       // Try API call first for rejection
-      const rejectResponse = await fetch(`http://localhost:3001/api/content/posts/${rejectModal.postId}/reject`, {
+      const rejectResponse = await fetch(`/api/content/posts/${rejectModal.postId}/reject`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ reason: rejectModal.reason })
@@ -649,7 +649,7 @@ function BatchApprovalQueue() {
       // If blacklist is checked, call blacklist API
       if (rejectModal.blacklistStory && post.storyId) {
         try {
-          const blacklistResponse = await fetch('http://localhost:3001/api/blacklist', {
+          const blacklistResponse = await fetch('/api/blacklist', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

@@ -35,8 +35,8 @@ export default function HashtagAnalytics() {
       setError(null);
 
       const url = platform === 'all'
-        ? 'http://localhost:3001/api/hashtag-effectiveness/analyze'
-        : `http://localhost:3001/api/hashtag-effectiveness/analyze?platform=${platform}`;
+        ? '/api/hashtag-effectiveness/analyze'
+        : `/api/hashtag-effectiveness/analyze?platform=${platform}`;
 
       const response = await fetch(url);
       const data = await response.json();

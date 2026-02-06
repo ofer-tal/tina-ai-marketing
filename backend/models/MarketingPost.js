@@ -91,10 +91,21 @@ const marketingPostSchema = new mongoose.Schema({
     type: String,
     required: true
   },
-  hashtags: [{
-    type: String,
-    trim: true
-  }],
+  // Platform-specific hashtags - each platform can have its own set
+  hashtags: {
+    tiktok: [{
+      type: String,
+      trim: true
+    }],
+    instagram: [{
+      type: String,
+      trim: true
+    }],
+    youtube_shorts: [{
+      type: String,
+      trim: true
+    }]
+  },
 
   // Scheduling
   scheduledAt: {
@@ -251,6 +262,16 @@ const marketingPostSchema = new mongoose.Schema({
   instagramPermalink: {
     type: String,
     trim: true
+  },
+  // Instagram media container (for retry logic - containers persist for 24 hours)
+  instagramContainerId: {
+    type: String,
+    trim: true
+  },
+  instagramContainerStatus: {
+    type: String,
+    enum: ['null', 'IN_PROGRESS', 'FINISHED', 'ERROR', 'EXPIRED'],
+    default: 'null'
   },
   youtubeVideoId: {
     type: String,
@@ -572,13 +593,26 @@ marketingPostSchema.methods.markAsRejected = function(reason, feedback = null, u
 
 // Method to regenerate content with feedback
 marketingPostSchema.methods.regenerateWithFeedback = function(feedback, userId = 'Founder') {
+  // Get platform-specific hashtags or all hashtags for backward compatibility
+  const getHashtags = () => {
+    if (this.hashtags && typeof this.hashtags === 'object') {
+      // New platform-specific structure - get hashtags for this post's platform
+      const platformKey = this.platform === 'youtube_shorts' ? 'youtube_shorts' : this.platform;
+      return this.hashtags[platformKey] || this.hashtags.tiktok || [];
+    }
+    // Old structure - return as-is
+    return this.hashtags || [];
+  };
+
+  const currentHashtags = getHashtags();
+
   // Store previous values in history
   this.regenerationHistory = this.regenerationHistory || [];
   this.regenerationHistory.push({
     timestamp: new Date(),
     feedback: feedback,
     previousCaption: this.caption,
-    previousHashtags: this.hashtags,
+    previousHashtags: currentHashtags,
     previousHook: this.hook
   });
 
@@ -591,7 +625,7 @@ marketingPostSchema.methods.regenerateWithFeedback = function(feedback, userId =
     details: {
       feedback: feedback,
       previousCaption: this.caption,
-      previousHashtags: [...this.hashtags]
+      previousHashtags: [...currentHashtags]
     }
   });
 

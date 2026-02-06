@@ -229,7 +229,7 @@ const ChurnPrediction = () => {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/churn-prediction/dashboard');
+      const response = await fetch('/api/churn-prediction/dashboard');
       const data = await response.json();
 
       if (data.success) {

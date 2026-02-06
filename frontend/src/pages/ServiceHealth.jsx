@@ -439,9 +439,9 @@ function ServiceHealth() {
     try {
       // Fetch all health data in parallel
       const [healthRes, serviceRes, jobsRes] = await Promise.all([
-        fetch('http://localhost:3001/api/api-health/status'),
-        fetch('http://localhost:3001/api/service-status'),
-        fetch('http://localhost:3001/api/api-health/jobs')
+        fetch('/api/api-health/status'),
+        fetch('/api/service-status'),
+        fetch('/api/api-health/jobs')
       ]);
 
       const [healthData, serviceData, jobsData] = await Promise.all([
@@ -480,7 +480,7 @@ function ServiceHealth() {
 
   const handleTriggerJob = async (jobName) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/api-health/jobs/${jobName}/trigger`, {
+      const response = await fetch(`/api/api-health/jobs/${jobName}/trigger`, {
         method: 'POST'
       });
       const data = await response.json();
