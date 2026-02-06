@@ -251,41 +251,85 @@ class PostRetryJob {
   }
 
   /**
-   * Post to TikTok
+   * Post to TikTok via Buffer/Zapier flow
+   *
+   * IMPORTANT: TikTok posts MUST go through Buffer/Zapier flow (S3 + Google Sheets)
+   * Direct TikTok API posting is NOT supported (permissions not available)
+   *
    * @param {MarketingPost} post - The post to publish
    */
   async postToTikTok(post) {
-    logger.info(`Retrying TikTok post: ${post._id}`);
+    logger.info(`Retrying TikTok post via Buffer/Zapier flow: ${post._id}`);
 
     // Check if TikTok posting is enabled
     const isEnabled = process.env.ENABLE_TIKTOK_POSTING === 'true';
 
     if (!isEnabled) {
-      logger.warn('TikTok posting is disabled, skipping retry');
-      return { success: false, skipped: true, reason: 'TikTok posting disabled' };
+      throw new Error('TikTok posting is disabled');
     }
 
-    // Post the video
-    const result = await tiktokPostingService.postVideo(
-      post.videoPath,
-      post.caption,
-      post.hashtags
+    // Import the services we need for the Buffer/Zapier flow
+    const s3VideoUploader = (await import('../services/s3VideoUploader.js')).default;
+    const googleSheetsService = (await import('../services/googleSheetsService.js')).default;
+
+    // Check prerequisites
+    if (!s3VideoUploader.isConfigured()) {
+      throw new Error('S3 not configured - required for TikTok posting');
+    }
+
+    if (!googleSheetsService.isConfigured()) {
+      throw new Error('Google Sheets not configured - required for TikTok posting');
+    }
+
+    // Convert URL to file path if needed
+    let videoFilePath = post.videoPath;
+    if (videoFilePath?.startsWith('/storage/')) {
+      const path = await import('path');
+      videoFilePath = path.join(process.cwd(), 'storage', videoFilePath.substring('/storage/'.length));
+    }
+
+    // Step 1: Upload video to S3
+    logger.info(`[Retry TikTok] Step 1/3: Uploading to S3...`);
+    const uploadResult = await s3VideoUploader.uploadVideo(
+      videoFilePath,
+      `tiktok-retry-${post._id}-${Date.now()}.mp4`
     );
 
-    if (!result.success) {
-      throw new Error(result.error || 'TikTok posting failed');
+    if (!uploadResult.success) {
+      throw new Error(`S3 upload failed: ${uploadResult.error}`);
     }
 
-    // Update post with TikTok IDs
-    if (result.data.publishId) {
-      post.tiktokVideoId = result.data.publishId;
-    }
-    if (result.data.shareUrl) {
-      post.tiktokShareUrl = result.data.shareUrl;
-    }
+    // Store S3 URL
+    post.s3Url = uploadResult.publicUrl;
     await post.save();
 
-    return result;
+    logger.info(`[Retry TikTok] S3 upload complete: ${uploadResult.publicUrl}`);
+
+    // Step 2: Append to Google Sheets (triggers Zapier → Buffer → TikTok)
+    logger.info(`[Retry TikTok] Step 2/3: Appending to Google Sheets...`);
+
+    // Get hashtags for TikTok
+    const hashtags = post.hashtags?.tiktok || post.hashtags || [];
+    const hashtagString = hashtags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ');
+
+    const fullCaption = hashtagString
+      ? `${post.caption}\n\n${hashtagString}`
+      : post.caption;
+
+    await googleSheetsService.appendPostRow({
+      s3Url: uploadResult.publicUrl,
+      caption: fullCaption,
+      platform: 'tiktok',
+      postId: post._id.toString()
+    });
+
+    logger.info(`[Retry TikTok] Step 3/3: Waiting for Zapier → Buffer → TikTok flow...`);
+
+    return {
+      success: true,
+      postedViaBuffer: true,
+      message: 'TikTok post triggered via Buffer/Zapier flow. The tiktokVideoMatcher job will mark it as posted when live.'
+    };
   }
 
   /**

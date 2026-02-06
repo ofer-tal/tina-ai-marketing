@@ -257,13 +257,16 @@ router.post('/exchange-token', async (req, res) => {
 
 /**
  * POST /api/tiktok/post/:postId
- * Post a marketing post to TikTok
+ * Post a marketing post to TikTok via Buffer/Zapier flow
+ *
+ * IMPORTANT: TikTok posts MUST go through Buffer/Zapier flow (S3 + Google Sheets)
+ * Direct TikTok API posting is NOT supported (permissions not available)
  */
 router.post('/post/:postId', async (req, res) => {
   try {
     const { postId } = req.params;
 
-    logger.info('Posting to TikTok...', { postId });
+    logger.info('Posting to TikTok via Buffer/Zapier flow...', { postId });
 
     // Find the marketing post
     const post = await MarketingPost.findById(postId);
@@ -296,101 +299,124 @@ router.post('/post/:postId', async (req, res) => {
       });
     }
 
-    // Prepare caption and hashtags
-    const caption = post.caption;
-    const hashtags = post.hashtags || [];
+    // Import services for Buffer/Zapier flow
+    const s3VideoUploader = (await import('../services/s3VideoUploader.js')).default;
+    const googleSheetsService = (await import('../services/googleSheetsService.js')).default;
+    const path = await import('path');
 
-    // Initialize upload progress tracking
-    await post.updateUploadProgress('initializing', 0, 'Starting upload');
-
-    // Progress callback to update database
-    const onProgress = async (progressData) => {
-      try {
-        logger.info('Upload progress update', {
-          postId,
-          progress: progressData.progress,
-          stage: progressData.stage,
-          status: progressData.status,
-        });
-
-        await post.updateUploadProgress(
-          progressData.status,
-          progressData.progress,
-          progressData.stage,
-          progressData.status === 'initializing' ? null : post.uploadProgress?.publishId,
-          progressData.error
-        );
-      } catch (error) {
-        logger.error('Failed to update upload progress', {
-          error: error.message,
-        });
-      }
-    };
-
-    // Post to TikTok with progress tracking
-    const result = await tiktokPostingService.postVideo(
-      post.videoPath,
-      caption,
-      hashtags,
-      onProgress
-    );
-
-    if (result.success) {
-      // Update post status
-      post.status = 'posted';
-      post.postedAt = new Date();
-      post.tiktokVideoId = result.videoId;
-      post.tiktokShareUrl = result.shareUrl;
-
-      // Update progress to completed
-      await post.updateUploadProgress('completed', 100, 'Successfully posted', result.publishId);
-
-      await post.save();
-
-      logger.info('Successfully posted to TikTok', {
-        postId,
-        videoId: result.videoId,
-      });
-
-      res.json({
-        success: true,
-        message: 'Posted to TikTok successfully',
-        data: {
-          videoId: result.videoId,
-          shareUrl: result.shareUrl,
-          post: {
-            id: post._id,
-            status: post.status,
-            postedAt: post.postedAt,
-          },
-        },
-      });
-    } else {
-      // Update post status to failed
-      post.status = 'failed';
-      post.error = result.error;
-
-      // Update progress to failed
-      await post.updateUploadProgress('failed', post.uploadProgress?.progress || 0, 'Upload failed', null, result.error);
-
-      await post.save();
-
-      logger.error('Failed to post to TikTok', {
-        postId,
-        error: result.error,
-      });
-
-      res.status(500).json({
+    // Check prerequisites
+    if (!s3VideoUploader.isConfigured()) {
+      return res.status(500).json({
         success: false,
-        error: result.error,
-        code: result.code,
+        error: 'S3 not configured - required for TikTok posting',
       });
     }
+
+    if (!googleSheetsService.isConfigured()) {
+      return res.status(500).json({
+        success: false,
+        error: 'Google Sheets not configured - required for TikTok posting',
+      });
+    }
+
+    // Convert URL to file path if needed
+    let videoFilePath = post.videoPath;
+    if (videoFilePath?.startsWith('/storage/')) {
+      videoFilePath = path.join(process.cwd(), 'storage', videoFilePath.substring('/storage/'.length));
+    }
+
+    // Initialize upload progress tracking
+    await post.updateUploadProgress('initializing', 0, 'Starting S3 upload');
+
+    // Step 1: Upload video to S3
+    logger.info('[TikTok Post] Step 1/3: Uploading to S3...', { postId });
+
+    await post.updateUploadProgress('uploading', 10, 'Uploading to S3');
+
+    const uploadResult = await s3VideoUploader.uploadVideo(
+      videoFilePath,
+      `tiktok-${postId}-${Date.now()}.mp4`
+    );
+
+    if (!uploadResult.success) {
+      await post.updateUploadProgress('failed', 0, 'S3 upload failed', null, uploadResult.error);
+      post.status = 'failed';
+      post.error = `S3 upload failed: ${uploadResult.error}`;
+      await post.save();
+
+      return res.status(500).json({
+        success: false,
+        error: `S3 upload failed: ${uploadResult.error}`,
+      });
+    }
+
+    // Store S3 URL
+    post.s3Url = uploadResult.publicUrl;
+    await post.save();
+
+    logger.info('[TikTok Post] S3 upload complete', {
+      postId,
+      s3Url: uploadResult.publicUrl
+    });
+
+    // Step 2: Append to Google Sheets (triggers Zapier → Buffer → TikTok)
+    logger.info('[TikTok Post] Step 2/3: Appending to Google Sheets...', { postId });
+
+    await post.updateUploadProgress('processing', 50, 'Triggering Buffer via Zapier');
+
+    // Get hashtags for TikTok
+    const hashtags = post.hashtags?.tiktok || post.hashtags || [];
+    const hashtagString = hashtags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ');
+
+    const fullCaption = hashtagString
+      ? `${post.caption}\n\n${hashtagString}`
+      : post.caption;
+
+    await googleSheetsService.appendPostRow({
+      s3Url: uploadResult.publicUrl,
+      caption: fullCaption,
+      platform: 'tiktok',
+      postId: postId
+    });
+
+    // Step 3: Return success (posting will happen via Zapier → Buffer → TikTok)
+    logger.info('[TikTok Post] Step 3/3: Waiting for Zapier → Buffer → TikTok flow...', { postId });
+
+    await post.updateUploadProgress('completed', 100, 'Triggered Buffer posting');
+    await post.save();
+
+    logger.info('[TikTok Post] Successfully triggered Buffer posting', { postId });
+
+    res.json({
+      success: true,
+      message: 'TikTok post triggered via Buffer/Zapier flow',
+      data: {
+        postId,
+        s3Url: uploadResult.publicUrl,
+        note: 'The tiktokVideoMatcher job will mark this as posted when the video is live on TikTok',
+        post: {
+          id: post._id,
+          status: post.status,
+        },
+      },
+    });
   } catch (error) {
     logger.error('TikTok post failed', {
       error: error.message,
       stack: error.stack,
     });
+
+    // Update post status to failed
+    try {
+      const post = await MarketingPost.findById(req.params.postId);
+      if (post) {
+        post.status = 'failed';
+        post.error = error.message;
+        await post.save();
+      }
+    } catch (saveError) {
+      logger.error('Failed to update post status', { error: saveError.message });
+    }
 
     res.status(500).json({
       success: false,

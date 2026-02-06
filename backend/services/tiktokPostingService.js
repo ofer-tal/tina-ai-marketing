@@ -1,16 +1,21 @@
 /**
  * TikTok Posting Service
  *
- * Handles posting content to TikTok via the TikTok API.
- * Features:
- * - OAuth authentication via oauthManager with PKCE support
- * - Video upload to TikTok
- * - Caption and hashtag posting
- * - Post status tracking
- * - Error handling and retry logic
- * - Rate limit compliance
+ * WARNING: This service contains TikTok API code but it is NOT used for actual posting!
  *
- * Uses unified OAuth manager for automatic token refresh.
+ * The ACTUAL TikTok posting flow uses:
+ * - S3 upload + Google Sheets → Zapier → Buffer → TikTok
+ * - See: backend/jobs/postingScheduler.js (postToTikTok method)
+ *
+ * This service is ONLY used for:
+ * - OAuth token management and refresh
+ * - Fetching user videos (via getUserInfo/fetchUserVideos)
+ * - Connection testing and health checks
+ *
+ * Direct TikTok API posting requires permissions that are NOT available:
+ * - We use Buffer/Zapier flow instead because TikTok won't grant video.upload permission
+ *
+ * DO NOT use postVideo(), initializeVideoUpload(), uploadVideo(), or publishVideo() for actual posting!
  *
  * @see backend/services/oauthManager.js
  */
