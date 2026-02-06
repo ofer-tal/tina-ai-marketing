@@ -176,6 +176,8 @@ class InstagramReelsMatcherJob {
         likes: metrics.likes || post.performanceMetrics?.likes || 0,
         comments: metrics.comments || post.performanceMetrics?.comments || 0,
         shares: metrics.shares || post.performanceMetrics?.shares || 0,
+        saved: metrics.saved || post.performanceMetrics?.saved || 0,
+        reach: metrics.reach || post.performanceMetrics?.reach || 0,
         engagementRate: this._calculateEngagementRate(metrics),
       };
 
@@ -189,6 +191,8 @@ class InstagramReelsMatcherJob {
         likes: metrics.likes || 0,
         comments: metrics.comments || 0,
         shares: metrics.shares || 0,
+        saved: metrics.saved || 0,
+        reach: metrics.reach || 0,
         engagementRate: post.performanceMetrics.engagementRate,
       });
 
@@ -216,43 +220,44 @@ class InstagramReelsMatcherJob {
 
   /**
    * Fetch insights for a media ID from Instagram Graph API
+   * IMPORTANT: Requires Page Access Token, not User Access Token
+   *
+   * For Reels, the correct metric is 'views' (not 'impressions' or 'video_views')
+   * Valid Reels metrics: views, reach, likes, comments, shares, saved
+   *
    * @param {string} mediaId - Instagram media ID
    * @returns {Object|null} Insights data or null if not available
    */
   async _fetchMediaInsights(mediaId) {
     try {
-      // Get Instagram user ID from service
-      const instagramUserId = instagramPostingService.instagramUserId;
-      if (!instagramUserId) {
-        // Try to discover business account
-        const discoveryResult = await instagramPostingService.discoverBusinessAccount();
-        if (!discoveryResult.success) {
-          throw new Error('Could not discover Instagram business account');
-        }
+      // Ensure we have Page Access Token
+      const pageTokenResult = await instagramPostingService.ensurePageAccessToken();
+      if (!pageTokenResult.success) {
+        throw new Error(pageTokenResult.error);
       }
 
-      // Fetch media insights using the Instagram Graph API
-      // Endpoint: GET /{instagram-media-id}/insights?metric=impressions,reach,engagement
-      const token = await (await import('../services/oauthManager.js')).default.getToken('instagram');
-      if (!token || !token.accessToken) {
-        throw new Error('Not authenticated - no access token');
-      }
-
+      const pageAccessToken = instagramPostingService.pageAccessToken;
       const baseUrl = 'https://graph.facebook.com/v18.0';
-      const metrics = ['impressions', 'reach', 'engagement', 'likes', 'comments', 'shares'];
+
+      // For Reels, use 'views' metric (not 'impressions' or 'video_views')
+      // Valid Reels metrics: views, reach, likes, comments, shares, saved
+      const metrics = ['views', 'reach', 'likes', 'comments', 'shares', 'saved'];
       const metricsParam = metrics.join(',');
 
-      const url = `${baseUrl}/${mediaId}/insights?metric=${metricsParam}&access_token=${token.accessToken}`;
+      logger.debug(`Fetching insights for media ${mediaId}`, { metrics });
+
+      const url = `${baseUrl}/${mediaId}/insights?metric=${metricsParam}`;
 
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${pageAccessToken}`,
         },
       });
 
       if (!response.ok) {
-        throw new Error(`Insights fetch failed: ${response.status}`);
+        const errorText = await response.text();
+        throw new Error(`Insights fetch failed: ${response.status} - ${errorText.substring(0, 200)}`);
       }
 
       const data = await response.json();
@@ -262,14 +267,23 @@ class InstagramReelsMatcherJob {
       }
 
       // Also fetch basic media data (like_count, comments_count)
-      const mediaUrl = `${baseUrl}/${mediaId}?fields=like_count,comments_count,media_type&access_token=${token.accessToken}`;
-      const mediaResponse = await fetch(mediaUrl);
+      // Using the Page Access Token
+      const mediaUrl = `${baseUrl}/${mediaId}?fields=like_count,comments_count,media_type`;
+      const mediaResponse = await fetch(mediaUrl, {
+        headers: {
+          'Authorization': `Bearer ${pageAccessToken}`,
+        },
+      });
 
       if (mediaResponse.ok) {
         const mediaData = await mediaResponse.json();
         if (!mediaData.error) {
           data.mediaData = mediaData;
         }
+      } else {
+        logger.warn(`Failed to fetch media data for ${mediaId}`, {
+          status: mediaResponse.status,
+        });
       }
 
       return data;
@@ -293,6 +307,8 @@ class InstagramReelsMatcherJob {
       likes: 0,
       comments: 0,
       shares: 0,
+      saved: 0,
+      reach: 0,
     };
 
     // Extract from insights data
@@ -305,7 +321,8 @@ class InstagramReelsMatcherJob {
           const value = values[0].value || 0;
 
           switch (metricName) {
-            case 'impressions':
+            case 'views':
+              // Primary metric for Reels views count
               metrics.views = value;
               break;
             case 'likes':
@@ -317,6 +334,12 @@ class InstagramReelsMatcherJob {
             case 'shares':
               metrics.shares = value;
               break;
+            case 'saved':
+              metrics.saved = value;
+              break;
+            case 'reach':
+              metrics.reach = value;
+              break;
           }
         }
       }
@@ -324,10 +347,10 @@ class InstagramReelsMatcherJob {
 
     // Also check mediaData for direct counts (more reliable for likes/comments)
     if (insights.mediaData) {
-      if (insights.mediaData.like_count) {
+      if (insights.mediaData.like_count !== undefined) {
         metrics.likes = insights.mediaData.like_count;
       }
-      if (insights.mediaData.comments_count) {
+      if (insights.mediaData.comments_count !== undefined) {
         metrics.comments = insights.mediaData.comments_count;
       }
     }

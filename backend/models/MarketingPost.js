@@ -240,6 +240,14 @@ const marketingPostSchema = new mongoose.Schema({
       type: Number,
       default: 0
     },
+    saved: {
+      type: Number,
+      default: 0
+    },
+    reach: {
+      type: Number,
+      default: 0
+    },
     engagementRate: {
       type: Number,
       default: 0
