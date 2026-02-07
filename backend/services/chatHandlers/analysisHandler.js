@@ -4,6 +4,7 @@ import MarketingPost from '../../models/MarketingPost.js';
 import DailySpend from '../../models/DailySpend.js';
 import ASOKeyword from '../../models/ASOKeyword.js';
 import MarketingGoal from '../../models/MarketingGoal.js';
+import TinaLearning from '../../models/TinaLearning.js';
 import { getSystemPrompt } from '../tinaPersonality.js';
 import { getLogger } from '../../utils/logger.js';
 
@@ -213,6 +214,24 @@ export async function fetchDataContext() {
       linkedStrategies: g.linkedStrategies?.length || 0
     }));
 
+    // Fetch high-confidence, validated learnings for Tina's context
+    // These help Tina make better decisions based on past patterns
+    const learningsData = await TinaLearning.getValidated(70).limit(20).lean();
+    const learnings = learningsData.map(l => ({
+      learningId: l.learningId,
+      pattern: l.pattern,
+      category: l.category,
+      patternType: l.patternType,
+      confidence: l.confidence,
+      strength: l.strength,
+      isActionable: l.isActionable,
+      validationCount: l.validationCount,
+      evidence: l.evidence.slice(0, 2).map(e => ({
+        type: e.type,
+        description: e.description
+      }))
+    }));
+
     return {
       revenue,
       content,
@@ -220,6 +239,7 @@ export async function fetchDataContext() {
       budgetUtilization,
       keywords,
       goals,
+      learnings,
       lastFetched: now.toISOString()
     };
   } catch (error) {
@@ -233,6 +253,7 @@ export async function fetchDataContext() {
       spend: 0,
       keywords: [],
       goals: [],
+      learnings: [],
       error: error.message
     };
   }

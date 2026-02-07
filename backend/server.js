@@ -135,6 +135,8 @@ import retentionAnalyticsSyncJob from "./jobs/firebaseAnalyticsSyncJob.js";
 import tempFileCleanupJob from "./jobs/tempFileCleanup.js";
 import musicRouter from "./api/music.js";
 import googleRouter from "./api/google.js";
+import eventsRouter from "./api/events.js";
+import sseService from "./services/sseService.js";
 import tikTokVideoMatcherJob from "./jobs/tikTokVideoMatcher.js";
 import instagramReelsMatcherJob from "./jobs/instagramReelsMatcher.js";
 import tokenCleanupJob from "./jobs/tokenCleanup.js";
@@ -389,6 +391,8 @@ app.use("/api/database-status", databaseStatusRouter);
 app.use("/api/filesystem-errors", fileSystemErrorsRouter);
 app.use("/api/music", musicRouter);
 app.use("/api/google", googleRouter);
+// SSE endpoint for real-time updates (must be before error handling)
+app.use("/api", eventsRouter);
 
 // Error handling middleware (must be after all routes)
 // Integrates with error monitoring service to track all errors
@@ -490,6 +494,10 @@ async function startServer() {
     } catch (error) {
       console.error('Failed to initialize TikTok posting service:', error.message);
     }
+
+    // Start SSE service for real-time updates
+    sseService.start();
+    console.log("SSE service started");
 
     // IMPORTANT: Start the scheduler service FIRST before any jobs
     // Jobs are only started if scheduler.status === 'running'
@@ -731,8 +739,13 @@ const gracefulShutdown = async (signal) => {
     await new Promise(resolve => setTimeout(resolve, 2000));
     console.log('  ✓ In-flight requests completed');
 
-    // Step 3: Close database connections
-    console.log('  [3/5] Closing database connections...');
+    // Step 3: Stop SSE service
+    console.log('  [3/6] Stopping SSE service...');
+    sseService.stop();
+    console.log('  ✓ SSE service stopped');
+
+    // Step 4: Close database connections
+    console.log('  [4/6] Closing database connections...');
     await databaseService.disconnect();
     console.log('  ✓ Database disconnected');
 
@@ -764,8 +777,8 @@ const gracefulShutdown = async (signal) => {
     tokenCleanupJob.stop();
     console.log('  ✓ Scheduler jobs stopped');
 
-    // Step 4: Cleanup resources (storage temp files, etc.)
-    console.log('  [4/5] Running cleanup tasks...');
+    // Step 5: Cleanup resources (storage temp files, etc.)
+    console.log('  [5/6] Running cleanup tasks...');
     try {
       // Cleanup any temp files if needed
       await storageService.cleanupTemp();
@@ -774,9 +787,9 @@ const gracefulShutdown = async (signal) => {
       console.warn('  ⚠ Some cleanup tasks failed:', error.message);
     }
 
-    // Step 5: Exit
+    // Step 6: Exit
     const duration = Date.now() - startTime;
-    console.log(`  [5/5] Shutdown complete in ${duration}ms`);
+    console.log(`  [6/6] Shutdown complete in ${duration}ms`);
     console.log('Goodbye! 👋');
 
     process.exit(0);

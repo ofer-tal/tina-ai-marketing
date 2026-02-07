@@ -327,6 +327,10 @@ export async function executeTool(proposal) {
         result = await detectPatterns(toolParameters);
         break;
 
+      case 'suggest_learning':
+        result = await suggestLearning(toolParameters);
+        break;
+
       // Plan tools - approval required
       case 'create_plan':
         result = await createPlan(toolParameters);
@@ -360,10 +364,20 @@ export async function executeTool(proposal) {
       result: JSON.stringify(result).substring(0, 200)
     });
 
-    return {
+    const returnData = {
       success: true,
       data: result
     };
+
+    logger.info('Returning from executeTool', {
+      proposalId: proposal._id,
+      toolName,
+      returnDataKeys: Object.keys(returnData),
+      hasData: returnData.data !== null && returnData.data !== undefined,
+      dataType: typeof returnData.data
+    });
+
+    return returnData;
 
   } catch (error) {
     logger.error('Tool execution failed', {
@@ -3439,6 +3453,16 @@ async function getLearnings({ category, minConfidence, isValid = true, isActiona
     query.isActionable = isActionable;
   }
 
+  // Debug logging to understand why learnings might not be found
+  logger.info('get_learnings called', {
+    category,
+    minConfidence,
+    isValid,
+    isActionable,
+    limit,
+    query: JSON.stringify(query)
+  });
+
   const learnings = await TinaLearning.find(query)
     .sort({ confidence: -1, createdAt: -1 })
     .limit(parseInt(limit))
@@ -3528,6 +3552,59 @@ async function detectPatterns({ days = 30, autoSave = true }) {
       confidence: l.confidence
     }))
   };
+}
+
+/**
+ * Suggest a learning - check for similar learnings and advise on action
+ * This enables Tina to proactively suggest recording learnings
+ */
+async function suggestLearning({ pattern, category }) {
+  const TinaLearning = (await import('../../models/TinaLearning.js')).default;
+
+  // Use the model's similarity checking
+  const analysis = await TinaLearning.shouldSuggestLearning(pattern, category);
+
+  logger.info('Learning suggestion analysis', {
+    pattern,
+    category,
+    isNovel: analysis.isNovel,
+    similarCount: analysis.similarLearnings.length
+  });
+
+  if (analysis.isNovel) {
+    // This is a new learning - suggest creating it
+    return {
+      suggestedAction: 'create_new_learning',
+      isNovel: true,
+      message: `This appears to be a new learning worth recording. No similar existing learnings found.`,
+      pattern,
+      category,
+      suggestedLearning: {
+        pattern,
+        category,
+        confidence: 50, // Default for new learnings
+        strength: 5,
+        notes: analysis.similarLearnings.length > 0
+          ? `Related to existing learnings: ${analysis.similarLearnings.map(l => l.learningId).join(', ')}`
+          : 'Discovered during conversation analysis'
+      }
+    };
+  } else {
+    // Similar learning exists - suggest referencing instead
+    return {
+      suggestedAction: 'reference_existing',
+      isNovel: false,
+      message: analysis.message || 'Similar learning already exists.',
+      existingLearnings: analysis.similarLearnings.map(l => ({
+        learningId: l.learningId,
+        pattern: l.pattern,
+        category: l.category,
+        confidence: l.confidence,
+        similarity: Math.round(l.similarity * 100) + '%'
+      })),
+      recommendation: 'Reference the existing learning(s) above instead of creating a duplicate.'
+    };
+  }
 }
 
 // ============================================================================

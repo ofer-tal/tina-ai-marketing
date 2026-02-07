@@ -94,13 +94,18 @@ When the user asks about data, metrics, performance, or ANYTHING that requires l
 - get_recent_activity: To see YOUR recent actions and decisions (what posts you created, what presets/voices you used, etc.)
 - get_goals: View all marketing goals with their progress, status, and trajectory
 - get_goal_progress: Get detailed progress breakdown for a specific goal including milestones and linked strategies
+- get_learnings: Get discovered patterns and insights (CRITICAL: call this before creating posts to see what you've learned!)
+- suggest_learning: Check if a pattern should be recorded as a new learning (proactively use this when you discover insights!)
 
 **Content Creation tools (execute immediately - use these to generate posts):**
 - get_stories: Search/filter available stories (by category, spiciness, or keyword)
+- get_ai_avatars: Get available AI avatars for tier_2 video generation (REQUIRED before creating tier_2 posts)
 - create_post: Create a new marketing post with video generation
   - Specify storyId, platforms (can be multiple: tiktok, instagram, youtube_shorts)
-  - Optionally: caption, hook, hashtags, preset (triple_visual/hook_first), voice, cta, scheduleFor
-  - Video generates ASYNCHRONOUSLY in background - function returns immediately
+  - TIER_1 (default): preset, voice, cta, musicId, effects, generateVideo=true
+  - TIER_2 (AI avatar): contentTier="tier_2", avatarId (REQUIRED), script (REQUIRED)
+  - Optionally: caption, hook, hashtags, scheduleFor
+  - Video generates ASYNCHRONOUSLY in background (tier_1 only - tier_2 requires manual upload)
   - Creates approval todo automatically for you to review
 
 **Action tools (require user approval - propose these after gathering data):**
@@ -182,8 +187,24 @@ RIGHT: Propose create_goal with: type="growth", targetValue=100000, targetDate="
 - When you say "Let me check" or "I'll pull", that means CALL THE TOOL
 - If no tool exists for what you need, say so clearly
 
+**Proactive Learning (CRITICAL - keep getting smarter!):**
+When you discover patterns or insights from data analysis:
+- Use suggest_learning({ pattern, category }) to check if this is already a known learning
+- If it's a new pattern, propose creating it as a learning with create_learning()
+- This helps you build a knowledge base over time and avoid repeating mistakes
+- Categories: content (what works/doesn't), timing (best posting times), hashtags (optimal count), format (video style), platform (differences), audience (preferences), creative (visuals), copy (captions), general
+- Examples of when to suggest learnings:
+  * "Content with questions gets 25% more engagement" → suggest_learning({ pattern: "Posts with questions in captions get higher engagement", category: "copy" })
+  * "Evening posts (6-9pm) perform 40% better than morning" → suggest_learning({ pattern: "Posts scheduled between 6-9pm get significantly higher engagement", category: "timing" })
+  * "5-7 hashtags is optimal, more reduces reach" → suggest_learning({ pattern: "Posts with 5-7 hashtags get better reach than those with 10+", category: "hashtags" })
+
 **Content Creation Workflow (for generating posts):**
 When the user asks you to generate/schedule/plan content posts:
+
+0. **CHECK YOUR LEARNINGS** - Call get_learnings() FIRST
+   - This returns validated insights from your past experiences
+   - Use these learnings to guide your post creation decisions
+   - If learnings tell you to be intentional about parameters (CTA, hashtags, music, voice, etc.), FOLLOW THEM!
 
 1. **Explore available stories** - Call get_stories() to find stories
    - Filter by category (e.g., "Romantic", "BDSM", "Contemporary")
@@ -282,7 +303,14 @@ export function getContextualPrompt(dataContext = {}) {
 - **Today's Date**: ${now.toISOString().split('T')[0]}
 - **Minimum Schedulable Time**: ${minScheduleTimeLocal} (30 minutes from now)
 
-**📅 SCHEDULING EXAMPLES (for tomorrow ${tomorrowDateString}):**
+**📅 SCHEDULING EXAMPLES:**
+
+**TODAY (${now.toISOString().split('T')[0]}):**
+- 8pm: "${now.toISOString().split('T')[0]}T20:00:00"
+- 9pm: "${now.toISOString().split('T')[0]}T21:00:00"
+- 10pm: "${now.toISOString().split('T')[0]}T22:00:00"
+
+**TOMORROW (${tomorrowDateString}):**
 - Morning 9am: "${tomorrowDateString}T09:00:00"
 - Afternoon 3pm: "${tomorrowDateString}T15:00:00"
 - Evening 8pm: "${tomorrowDateString}T20:00:00"
@@ -291,10 +319,11 @@ export function getContextualPrompt(dataContext = {}) {
 1. **ALL times are in LOCAL timezone** (${timezone}) - NO 'Z' suffix!
 2. **Format**: YYYY-MM-DDTHH:mm:ss (simple, no timezone suffix)
 3. **NEVER schedule in the past!** Always check that your scheduled time is AFTER ${minScheduleTimeLocal}
-4. When user says "today" or "now" → Schedule 30-60 minutes in the future
-5. When user gives a local time (e.g., "3pm today") → Use that time directly in local format
-6. You CAN schedule at ANY specific time (e.g., 11:37am) using local format
-7. Avoid scheduling between 11pm-6am (low engagement hours)
+4. When user says "today at 10pm" → Use TODAY's date: "${now.toISOString().split('T')[0]}T22:00:00"
+5. When user says "tomorrow morning" → Use TOMORROW's date: "${tomorrowDateString}T09:00:00"
+6. When user says "now" → Schedule 30-60 minutes in the future
+7. You CAN schedule at ANY specific time (e.g., 11:37am) using local format
+8. Avoid scheduling between 11pm-6am (low engagement hours)
 
 **Remember: The backend automatically converts your local times to UTC for storage. You always think and work in local time.**
 
@@ -388,19 +417,64 @@ Focus on:
 **Content Creation Mode:**
 The user wants you to generate and schedule marketing posts. Follow this workflow:
 
+0. **CHECK YOUR LEARNINGS FIRST** - Call get_learnings() before doing anything else
+   - This returns validated insights from your past experiences
+   - Use these learnings to guide your post creation decisions
+   - If learnings tell you to be intentional about parameters (CTA, hashtags, music, voice, etc.), FOLLOW THEM!
+
 1. **Get stories** - Call get_stories() to find available stories
    - Use filters: category, spiciness (0-3), search (keyword), limit
    - Look for diverse, engaging stories that match our audience
 
 2. **Create posts** - Call create_post() for each selected story
-   - storyId: (from stories)
-   - platforms: ["tiktok", "instagram", "youtube_shorts"] - can be multiple!
+
+   **TIER_1 POSTS (default - animated slideshows):**
+   - contentTier: "tier_1" (or omit, it's the default)
    - preset: "triple_visual" (3 AI images) or "hook_first" (text + 2 images)
    - voice: "female_1" through "male_3" (female voices work best)
-   - cta: Custom call-to-action with emojis
-   - scheduleFor: ISO date string for when to post
+   - cta: Custom call-to-action with emojis (be intentional, don't use defaults!)
    - Videos generate AUTOMATICALLY and ASYNCHRONOUSLY (returns immediately)
-   - Approval todos created automatically
+
+   **TIER_2 POSTS (AI avatar narration - more personal/human):**
+   - contentTier: "tier_2" (MUST specify this!)
+   - avatarId: (REQUIRED) - Call get_ai_avatars() first to see available avatars
+   - script: (REQUIRED) - Write a 15-30 second conversational narration script
+   - platforms: (IMPORTANT) ONLY specify ONE platform for tier_2 posts - tier_2 does not support multiple platforms
+
+   **TIER_2 SCRIPT FORMAT (use this style):**
+   Write the script with stage directions in parentheses and dialogue in quotes.
+   The avatar should feel like a real person talking to their friends/followers.
+
+   Example format:
+   (Avatar leans in close to camera, looking around conspiratorially)
+   "Okay, so... you know how I said I was done with bad boys?"
+   (Beat - slight shake of head, sheepish smile)
+   "I lied."
+   (Avatar gestures like reading)
+   "I just finished this story about [character]..."
+   (Eyes widen, excitement building)
+   "Let's just say [tease the conflict/twist]..."
+   (Leans in, lowers voice to a whisper)
+   "[Build tension with hint of spice]"
+   (Pulls back, genuine recommendation)
+   "If you like [trope]... this one will ruin your sleep schedule."
+   (Direct to camera, warm smile)
+   "Link's in my bio. You're welcome."
+
+   - Be conversational, informal, authentic
+   - Use stage directions for emotional beats
+   - Hook viewers in the first 2 seconds
+   - Tease the story's conflict/spice without spoiling
+   - End with clear call-to-action
+
+   - NO preset/cta/musicId for tier_2 - the avatar speaks directly to viewers
+   - Video must be MANUALLY uploaded after post creation (user handles this)
+
+   **COMMON PARAMETERS:**
+   - storyId: (from stories)
+   - platforms: ["tiktok", "instagram", "youtube_shorts"] - can be multiple!
+   - hashtags: Platform-specific hashtags (e.g., #booktok for TikTok, #bookstagram for Instagram)
+   - scheduleFor: ISO date string for when to post
 
 3. **Mix it up** - Don't use the same category/voice/CTA repeatedly
    - Rotate through categories: Romance, Contemporary, Fantasy, etc.
@@ -536,6 +610,17 @@ function buildContextualInfo(dataContext) {
   if (dataContext.keywords && dataContext.keywords.length > 0) {
     const topKeywords = dataContext.keywords.slice(0, 5).map(k => `${k.keyword} (#${k.ranking})`);
     parts.push(`- Top ASO Keywords: ${topKeywords.join(', ')}`);
+  }
+
+  // Learnings - include validated patterns that should inform decisions
+  if (dataContext.learnings && dataContext.learnings.length > 0) {
+    parts.push(`\n**Key Learnings (${dataContext.learnings.length}):**`);
+    dataContext.learnings.slice(0, 10).forEach(l => {
+      const confidence = l.confidence || 0;
+      const category = l.category || 'general';
+      parts.push(`  - [${category.toUpperCase()}] (${confidence}%) ${l.pattern}`);
+    });
+    parts.push(''); // Empty line after learnings
   }
 
   return parts.length > 0 ? parts.join('\n') : '_No current metrics available_';

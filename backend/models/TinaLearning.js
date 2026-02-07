@@ -391,7 +391,7 @@ tinaLearningSchema.statics.getStrongPatterns = function(minStrength = 7) {
 /**
  * Get recent learnings
  */
-tinaLearningSchema.statics.getRecent = function(days = 30, isValid = true) {
+tinaLearningSchema.statics.getRecount = function(days = 30, isValid = true) {
   const threshold = new Date();
   threshold.setDate(threshold.getDate() - days);
 
@@ -400,6 +400,175 @@ tinaLearningSchema.statics.getRecent = function(days = 30, isValid = true) {
     createdAt: { $gte: threshold }
   }).sort({ createdAt: -1 });
 };
+
+/**
+ * Find similar learnings based on pattern text similarity
+ * Uses keyword extraction and matching to find potential duplicates
+ *
+ * @param {string} pattern - The pattern text to search for similar learnings
+ * @param {string} [category] - Optional category to restrict search
+ * @param {number} [minSimilarity=0.3] - Minimum similarity threshold (0-1)
+ * @returns {Array} Similar learnings with similarity scores
+ */
+tinaLearningSchema.statics.findSimilar = async function(pattern, category = null, minSimilarity = 0.3) {
+  // Extract keywords from the input pattern
+  const keywords = extractKeywords(pattern);
+  if (keywords.length === 0) return [];
+
+  // Build query - search within the same category if specified
+  const query = { isValid: true };
+  if (category) {
+    query.category = category;
+  }
+
+  // Get all valid learnings (in the same category if specified)
+  const learnings = await this.find(query).lean();
+
+  // Calculate similarity scores
+  const similar = learnings
+    .map(learning => {
+      const similarity = calculateSimilarity(pattern, learning.pattern, keywords);
+      return {
+        ...learning,
+        similarity
+      };
+    })
+    .filter(l => l.similarity >= minSimilarity)
+    .sort((a, b) => b.similarity - a.similarity);
+
+  return similar;
+};
+
+/**
+ * Check if a learning should be suggested as new
+ * Returns existing similar learnings and whether this is truly novel
+ *
+ * @param {string} pattern - The pattern to check
+ * @param {string} category - The category
+ * @returns {Object} { isNovel: boolean, similarLearnings: Array, suggestedAction: string }
+ */
+tinaLearningSchema.statics.shouldSuggestLearning = async function(pattern, category) {
+  // Find similar learnings with a lower threshold for checking
+  const similar = await this.findSimilar(pattern, category, 0.25);
+
+  if (similar.length === 0) {
+    return {
+      isNovel: true,
+      similarLearnings: [],
+      suggestedAction: 'suggest_create'
+    };
+  }
+
+  // Check if any are very similar (high confidence match)
+  const verySimilar = similar.filter(l => l.similarity >= 0.6);
+
+  if (verySimilar.length > 0) {
+    return {
+      isNovel: false,
+      similarLearnings: verySimilar,
+      suggestedAction: 'reference_existing',
+      message: `This learning is very similar to existing learning(s): ${verySimilar.map(l => l.learningId).join(', ')}`
+    };
+  }
+
+  // Moderately similar - might be worth adding as a refinement
+  const moderatelySimilar = similar.filter(l => l.similarity >= 0.4);
+
+  return {
+    isNovel: true,
+    similarLearnings: moderatelySimilar,
+    suggestedAction: 'suggest_with_context',
+    message: `This learning is novel but related to: ${moderatelySimilar.map(l => l.learningId).join(', ')}`
+  };
+};
+
+/**
+ * Extract meaningful keywords from text
+ */
+function extractKeywords(text) {
+  if (!text) return [];
+
+  const stopWords = new Set([
+    'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+    'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should',
+    'could', 'might', 'may', 'must', 'can', 'to', 'of', 'in', 'on', 'at',
+    'by', 'for', 'with', 'from', 'as', 'or', 'and', 'but', 'not', 'this',
+    'that', 'these', 'those', 'it', 'its', 'get', 'gets', 'got', 'more',
+    'less', 'most', 'least', 'than', 'when', 'where', 'what', 'which', 'who',
+    'how', 'why', 'if', 'then', 'so', 'such', 'up', 'down', 'out', 'over'
+  ]);
+
+  // Convert to lowercase and split into words
+  const words = text.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .split(/\s+/)
+    .filter(word => word.length > 3 && !stopWords.has(word));
+
+  // Return unique words
+  return [...new Set(words)];
+}
+
+/**
+ * Calculate similarity between two text strings
+ * Uses Jaccard-like similarity on keyword intersection
+ */
+function calculateSimilarity(text1, text2, keywords1) {
+  const keywords2 = extractKeywords(text2);
+
+  if (keywords1.length === 0 || keywords2.length === 0) return 0;
+
+  // Find intersection
+  const intersection = keywords1.filter(k => keywords2.includes(k));
+  const union = [...new Set([...keywords1, ...keywords2])];
+
+  // Jaccard similarity
+  const jaccard = union.length > 0 ? intersection.length / union.length : 0;
+
+  // Boost for exact phrase matches (consecutive words)
+  const words1 = text1.toLowerCase().split(/\s+/);
+  const words2 = text2.toLowerCase().split(/\s+/);
+  let phraseMatch = 0;
+
+  for (let i = 0; i < words1.length - 2; i++) {
+    const phrase = words1.slice(i, i + 3).join(' ');
+    if (text2.toLowerCase().includes(phrase)) {
+      phraseMatch += 0.2;
+    }
+  }
+
+  for (let i = 0; i < words2.length - 2; i++) {
+    const phrase = words2.slice(i, i + 3).join(' ');
+    if (text1.toLowerCase().includes(phrase)) {
+      phraseMatch += 0.2;
+    }
+  }
+
+  return Math.min(1, jaccard + phraseMatch);
+}
+
+/**
+ * ROADMAP: Semantic Search for Learnings
+ * -------------------------------------
+ * When the learnings database grows larger (1000+ entries), we should implement
+ * RAG-like semantic search using embeddings:
+ *
+ * 1. Generate embeddings for each learning using OpenAI/text-embedding-3-small
+ *    or a lightweight local model (e.g., sentence-transformers)
+ *
+ * 2. Store embeddings in a vector database (MongoDB Atlas Vector Search, Pinecone, etc.)
+ *
+ * 3. At query time, embed the user's question/instruction and retrieve
+ *    semantically similar learnings using cosine similarity
+ *
+ * 4. This will allow Tina to find relevant learnings even when the wording
+ *    is different but the meaning is related (e.g., "posts do better in evening"
+ *    would match "content scheduled after 6pm gets higher engagement")
+ *
+ * Implementation timeline:
+ * - Phase 1 (Current): Keyword-based similarity matching
+ * - Phase 2 (1000+ learnings): Implement embeddings and vector search
+ * - Phase 3 (Advanced): Hierarchical embeddings + temporal weighting
+ */
 
 const TinaLearning = mongoose.model('TinaLearning', tinaLearningSchema);
 

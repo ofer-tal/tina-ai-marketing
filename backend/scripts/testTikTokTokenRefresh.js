@@ -1,54 +1,87 @@
-import databaseService from '../services/database.js';
-import AuthToken from '../models/AuthToken.js';
-import { config } from 'dotenv';
-import path from 'path';
+/**
+ * Test TikTok token refresh
+ */
+
+import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
-const projectRoot = path.resolve(path.dirname(__filename), '..', '..');
-config({ path: path.join(projectRoot, '.env') });
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, '../../.env') });
 
-async function testTikTokTokenRefresh() {
-  console.log('Connecting to database...');
-  await databaseService.connect();
-  console.log('Testing TikTok token status and refresh logic...\n');
+const dbModule = await import('../services/database.js');
+const databaseService = dbModule.default;
+await databaseService.connect();
 
-  // Get active TikTok token
-  const tokenDoc = await AuthToken.getActiveToken('tiktok');
+const { default: AuthToken } = await import('../models/AuthToken.js');
+const oauthManager = (await import('../services/oauthManager.js')).default;
 
-  if (!tokenDoc) {
-    console.log('NO ACTIVE TIKTOK TOKEN FOUND!');
-    return;
-  }
+console.log('=== Testing TikTok Token Refresh ===\n');
 
-  const now = new Date();
-  const expiresAt = new Date(tokenDoc.expiresAt);
-  const isExpired = tokenDoc.expiresAt && now >= expiresAt;
-  const willExpireSoon = tokenDoc.expiresAt && (expiresAt - now) < (5 * 60 * 1000);
+// Get the active token
+const activeToken = await AuthToken.getActiveToken('tiktok');
 
-  console.log('Active TikTok Token:');
-  console.log(`  ID: ${tokenDoc._id}`);
-  console.log(`  isActive: ${tokenDoc.isActive}`);
-  console.log(`  expiresAt: ${tokenDoc.expiresAt}`);
-  console.log(`  refreshToken exists: ${!!tokenDoc.refreshToken}`);
-  console.log(`  Current time: ${now.toISOString()}`);
-  console.log(`  Is expired: ${isExpired}`);
-  console.log(`  Will expire soon: ${willExpireSoon}`);
-
-  if (isExpired) {
-    console.log('\n❌ Token is EXPIRED!');
-    console.log('   The ensureValidToken() method should catch this and refresh.');
-    console.log(`   Time since expiration: ${Math.round((now - expiresAt) / 1000 / 60)} minutes`);
-  } else if (willExpireSoon) {
-    console.log('\n⚠️  Token will expire soon!');
-    console.log('   The ensureValidToken() method should proactively refresh.');
-  } else {
-    console.log('\n✅ Token is valid');
-    console.log(`   Time until expiration: ${Math.round((expiresAt - now) / 1000 / 60)} minutes`);
-  }
+if (!activeToken) {
+  console.log('ERROR: No active TikTok token found!');
+  process.exit(1);
 }
 
-testTikTokTokenRefresh().then(() => process.exit(0)).catch(err => {
-  console.error('Error:', err);
+console.log('Current Token:');
+console.log('  ID:', activeToken._id.toString());
+console.log('  isActive:', activeToken.isActive);
+console.log('  expiresAt:', activeToken.expiresAt?.toISOString());
+console.log('  hasRefreshToken:', !!activeToken.refreshToken);
+console.log('  refreshTokenLength:', activeToken.refreshToken?.length || 0);
+console.log('');
+
+// Check if token is expired
+const now = new Date();
+const isExpired = activeToken.expiresAt && now >= activeToken.expiresAt;
+
+if (isExpired) {
+  console.log('Token is EXPIRED - testing refresh...\n');
+} else {
+  console.log('Token is not yet expired - will test refresh anyway...\n');
+}
+
+// Test the manual refresh method
+console.log('Calling oauthManager._refreshTikTokToken()...');
+
+try {
+  const newTokenData = await oauthManager._refreshTikTokToken(activeToken.refreshToken);
+
+  console.log('\nRefresh SUCCESS!');
+  console.log('  New accessToken:', newTokenData.accessToken.substring(0, 20) + '...');
+  console.log('  New expiresAt:', newTokenData.expiresAt.toISOString());
+  console.log('  Has new refresh token:', !!newTokenData.refreshToken);
+  console.log('');
+
+  // Update the token in database
+  console.log('Updating token in database...');
+  const updatedToken = await AuthToken.refreshToken('tiktok', {
+    accessToken: newTokenData.accessToken,
+    refreshToken: newTokenData.refreshToken || activeToken.refreshToken,
+    expiresAt: newTokenData.expiresAt,
+  });
+
+  console.log('Token updated in database:');
+  console.log('  ID:', updatedToken._id.toString());
+  console.log('  isActive:', updatedToken.isActive);
+  console.log('  New expiresAt:', updatedToken.expiresAt.toISOString());
+  console.log('');
+
+} catch (error) {
+  console.error('\nRefresh FAILED:', error.message);
+  console.error('\nThis likely means:');
+  console.error('1. The refresh token has expired (TikTok refresh tokens expire after 365 days)');
+  console.error('2. The refresh token has been revoked');
+  console.error('3. The app credentials (TIKTOK_APP_KEY/SECRET) are incorrect');
+  console.error('\nYou will need to re-authenticate with TikTok.');
   process.exit(1);
-});
+}
+
+console.log('=== SUCCESS ===');
+console.log('TikTok token has been refreshed and is now valid.');
+
+process.exit(0);

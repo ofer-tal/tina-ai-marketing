@@ -234,8 +234,25 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
   React.useEffect(() => {
     if (post) {
       setCaption(post.caption || '');
-      setHashtags((post.hashtags || []).join(', '));
-      setScript(post.tierParameters?.script || post.tierParameters?.get?.('script') || '');
+
+      // Handle hashtags - both array and platform-specific object formats
+      let hashtagsStr = '';
+      if (post.hashtags) {
+        if (Array.isArray(post.hashtags)) {
+          hashtagsStr = post.hashtags.join(', ');
+        } else if (typeof post.hashtags === 'object') {
+          // Platform-specific structure - get hashtags for this post's platform
+          const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+          const platformHashtags = post.hashtags[platformKey] || post.hashtags.tiktok || [];
+          hashtagsStr = platformHashtags.join(', ');
+        }
+      }
+      setHashtags(hashtagsStr);
+
+      // tierParameters is a plain object from backend
+      const scriptValue = post.tierParameters?.script || '';
+      setScript(scriptValue);
+
       setScheduledAt(post.scheduledAt ? new Date(post.scheduledAt).toISOString().slice(0, 16) : '');
     }
   }, [post]);
@@ -291,7 +308,8 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
 
   if (!isOpen || !post) return null;
 
-  const avatarName = post.tierParameters?.avatarName || post.tierParameters?.get?.('avatarName') || 'Unknown Avatar';
+  // tierParameters is a plain object from backend (after serialization)
+  const avatarName = post.tierParameters?.avatarName || 'AI Avatar';
 
   return (
     <ModalOverlay onClick={(e) => e.target === e.currentTarget && onClose()}>

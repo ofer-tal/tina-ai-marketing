@@ -979,7 +979,13 @@ export const READ_ONLY_TOOLS = [
     name: 'create_post',
     description: `Create a new marketing post from a story with optional video generation.
 
+VIDEO TIERS:
+- tier_1 (default): Animated slideshow with story images, hooks, and CTA. Uses preset, cta, musicId, voice, effects parameters.
+- tier_2: AI avatar video narration. Requires avatarId and script parameters. More personal/human feel. Video must be manually uploaded after creation.
+- tier_3: (Coming soon) Advanced video production
+
 VIDEO GENERATION IS ASYNCHRONOUS: When generateVideo=true, the function returns immediately after launching generation. The post status will be 'generating' and you can check progress later.
+NOTE: Tier 2 posts skip automatic video generation - they require manual upload of the AI avatar video.
 
 IMPORTANT SCHEDULING INFO:
 - Current date will be provided in the system context
@@ -1002,7 +1008,7 @@ Creates draft posts that can be edited, generated, and approved later.`,
         platforms: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Target platforms: can specify multiple (tiktok, instagram, youtube_shorts)',
+          description: 'Target platforms (tiktok, instagram, youtube_shorts). IMPORTANT: For tier_2 posts, ONLY specify one platform - tier_2 does not support multiple platforms.',
           uniqueItems: true
         },
         caption: {
@@ -1064,14 +1070,23 @@ Creates draft posts that can be edited, generated, and approved later.`,
           enum: ['female_1', 'female_2', 'female_3', 'male_1', 'male_2', 'male_3'],
           default: 'female_1'
         },
+        // Tier 2 specific parameters (REQUIRED for tier_2 posts)
+        avatarId: {
+          type: 'string',
+          description: 'AI Avatar ID for tier_2 video generation (REQUIRED when contentTier="tier_2"). Use get_ai_avatars to see available avatars. Tier 2 uses AI avatar video narration instead of animated slides.'
+        },
+        script: {
+          type: 'string',
+          description: 'Narration script for the AI avatar to speak in tier_2 video (REQUIRED when contentTier="tier_2"). Write an engaging 15-30 second script that the avatar will narrate. Should be conversational and hook viewers immediately.'
+        },
         generateVideo: {
           type: 'boolean',
-          description: 'Generate video immediately (default: true, runs ASYNCHRONOUSLY - returns immediately)',
+          description: 'Generate video immediately (default: true, runs ASYNCHRONOUSLY - returns immediately). Note: For tier_2, video generation is manual - you must upload the AI avatar video separately.',
           default: true
         },
         scheduleFor: {
           type: 'string',
-          description: 'ISO date string to schedule the post in LOCAL timezone (e.g., 2026-02-02T15:30:00 - NO Z suffix!). You can schedule at ANY specific time - down to the minute. Time must be at least 5 minutes in the future. If not provided, uses the next optimal posting slot (within standard posting windows: 8-11am, 2-5pm, or 7-10pm).'
+          description: 'ISO date string to schedule the post in LOCAL timezone. Format: YYYY-MM-DDTHH:mm:ss (NO Z suffix!). CRITICAL: Use TODAY\'S date (provided in system prompt) when user says "today at Xpm". Example: if today is 2026-02-07 and user says "10pm today", use "2026-02-07T22:00:00". Time must be at least 5 minutes in the future. If not provided, uses the next optimal posting slot.'
         }
       },
       required: ['storyId', 'platforms']
@@ -1084,7 +1099,42 @@ Creates draft posts that can be edited, generated, and approved later.`,
       cta: 'Download now on Blush 🔥',
       generateVideo: true
     },
-    expectedImpact: 'Creates a new marketing post with generated video. Post is marked as draft and requires approval before publishing.'
+    exampleUsageTier2: {
+      storyId: '507f1f77bcf86cd799439011',
+      platforms: ['instagram'],
+      contentTier: 'tier_2',
+      avatarId: 'avatar_123',
+      script: `(Avatar leans in close to camera, looking around conspiratorially)
+
+"Okay, so... you know how I said I was done with bad boys?"
+
+(Beat - slight shake of head, sheepish smile)
+
+"I lied."
+
+(Avatar gestures like reading)
+
+"I just finished this story about Sophia — a devout woman who thought she had life figured out. Then she discovers Father Michael's secret collection..."
+
+(Eyes widen, excitement building)
+
+"Let's just say the church confessional will never be the same."
+
+(Leans in, lowers voice to a whisper)
+
+"Forbidden desires. Hidden passions. A twist that will leave you breathless."
+
+(Pulls back, genuine recommendation)
+
+"If you like your romance taboo and your priests... less than priestly... this one will ruin your sleep schedule."
+
+(Direct to camera, warm smile)
+
+"Link's in my bio. You're welcome."`,
+      voice: 'female_1',
+      generateVideo: false
+    },
+    expectedImpact: 'Creates a new marketing post with generated video. Post is marked as draft and requires approval before publishing. Tier 2 posts require manual video upload after creation.'
   },
   {
     name: 'edit_post',
@@ -1117,8 +1167,16 @@ Creates draft posts that can be edited, generated, and approved later.`,
         },
         contentTier: {
           type: 'string',
-          description: 'New content tier (for regeneration)',
+          description: 'New content tier. When changing to tier_2, you must also provide avatarId and script',
           enum: ['tier_1', 'tier_2', 'tier_3']
+        },
+        avatarId: {
+          type: 'string',
+          description: 'AI Avatar ID for tier_2 posts. REQUIRED when changing contentTier to tier_2 if the post does not already have an avatar'
+        },
+        script: {
+          type: 'string',
+          description: 'Narration script for tier_2 avatar videos. REQUIRED when changing contentTier to tier_2 if the post does not already have a script'
         }
       },
       required: ['postId']
@@ -1978,6 +2036,31 @@ Creates draft posts that can be edited, generated, and approved later.`,
       autoSave: true
     }
   },
+  {
+    name: 'suggest_learning',
+    description: 'Check if a potential learning should be recorded. Proactively checks for similar existing learnings and suggests whether to create a new one or reference existing ones. Use this when you receive instructions or discover patterns that seem like they should be learnings.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: {
+          type: 'string',
+          description: 'The pattern or insight that should be recorded as a learning',
+          maxLength: 500
+        },
+        category: {
+          type: 'string',
+          description: 'The category this learning belongs to',
+          enum: ['content', 'timing', 'hashtags', 'format', 'platform', 'audience', 'creative', 'copy', 'general']
+        }
+      },
+      required: ['pattern', 'category']
+    },
+    exampleUsage: {
+      pattern: 'Posts with questions in the caption get higher engagement',
+      category: 'copy'
+    }
+  },
   /**
    * Plan Tools - Read Only (No Approval Required)
    */
@@ -2223,6 +2306,7 @@ export const TOOL_NAMES = {
   // Learning Tools - Read Only
   GET_LEARNINGS: 'get_learnings',
   DETECT_PATTERNS: 'detect_patterns',
+  SUGGEST_LEARNING: 'suggest_learning',
 
   // Plan Tools - Approval Required
   CREATE_PLAN: 'create_plan',

@@ -18,6 +18,7 @@ import Story from '../models/Story.js';
 import { getStories, createPost } from '../services/tinaTools/postManagementTools.js';
 import storageService from '../services/storage.js';
 import ffmpegWrapper from '../utils/ffmpegWrapper.js';
+import sseService from '../services/sseService.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -292,7 +293,10 @@ router.post('/posts/create', async (req, res) => {
       voice = 'female_1',
       generateVideo = false,
       musicId = null,
-      scheduleFor
+      scheduleFor,
+      // Tier 2 specific parameters
+      avatarId,
+      script
     } = req.body;
 
     // Validate required fields
@@ -327,13 +331,26 @@ router.post('/posts/create', async (req, res) => {
       voice,
       generateVideo,
       musicId,
-      scheduleFor
+      scheduleFor,
+      // Pass tier_2 specific parameters
+      avatarId,
+      script
     });
 
     logger.info('Marketing post(s) created', {
       created: result.created,
       videoGenerated: result.videoGenerated
     });
+
+    // Broadcast SSE events for each created post
+    if (result.posts && Array.isArray(result.posts)) {
+      for (const postData of result.posts) {
+        const fullPost = await MarketingPost.findById(postData.id);
+        if (fullPost) {
+          sseService.broadcastPostCreated(fullPost);
+        }
+      }
+    }
 
     res.json({
       success: true,
@@ -2201,22 +2218,13 @@ router.put('/posts/:id', async (req, res) => {
         // Only allow updating scheduledAt after video is uploaded
         const allowedUpdates = {};
         if (scheduledAt !== undefined) {
-          // Validate 4-hour minimum scheduling
+          // Validate date is valid - no 4-hour minimum for UI edits
           const newScheduledDate = new Date(scheduledAt);
-          const now = new Date();
-          const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
 
           if (isNaN(newScheduledDate.getTime())) {
             return res.status(400).json({
               success: false,
               error: 'scheduledAt must be a valid ISO date'
-            });
-          }
-
-          if (newScheduledDate < minScheduleTime) {
-            return res.status(400).json({
-              success: false,
-              error: `scheduledAt must be at least 4 hours in the future`
             });
           }
 
@@ -2261,15 +2269,17 @@ router.put('/posts/:id', async (req, res) => {
       }
 
       if (script !== undefined) {
+        // Ensure tierParameters Map exists
+        if (!post.tierParameters || typeof post.tierParameters.set !== 'function') {
+          post.tierParameters = new Map();
+        }
         post.tierParameters.set('script', script.trim());
         post.tierParameters.set('scriptPreview', script.trim().substring(0, 200));
       }
 
       if (scheduledAt !== undefined) {
-        // Validate 4-hour minimum scheduling
+        // Validate date is valid
         const newScheduledDate = new Date(scheduledAt);
-        const now = new Date();
-        const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
 
         if (isNaN(newScheduledDate.getTime())) {
           return res.status(400).json({
@@ -2278,17 +2288,14 @@ router.put('/posts/:id', async (req, res) => {
           });
         }
 
-        if (newScheduledDate < minScheduleTime) {
-          return res.status(400).json({
-            success: false,
-            error: `scheduledAt must be at least 4 hours in the future`
-          });
-        }
-
+        // No 4-hour minimum for UI edits - user can schedule whenever they want
         post.scheduledAt = newScheduledDate;
       }
 
       await post.save();
+
+      // Broadcast SSE event for updated post
+      sseService.broadcastPostUpdated(post);
 
       return res.json({
         success: true,
@@ -2337,6 +2344,9 @@ router.put('/posts/:id', async (req, res) => {
 
     await post.save();
 
+    // Broadcast SSE event for updated post
+    sseService.broadcastPostUpdated(post);
+
     res.json({
       success: true,
       data: post
@@ -2373,6 +2383,9 @@ router.delete('/posts/:id', async (req, res) => {
         error: 'Marketing post not found'
       });
     }
+
+    // Broadcast SSE event for deleted post
+    sseService.broadcastPostDeleted(id);
 
     res.json({
       success: true,
@@ -2412,7 +2425,11 @@ router.post('/posts/:id/approve', async (req, res) => {
       });
     }
 
+    const oldStatus = post.status;
     await post.markAsApproved();
+
+    // Broadcast SSE event for status change
+    sseService.broadcastPostStatusChanged(post, oldStatus);
 
     res.json({
       success: true,
@@ -2543,7 +2560,11 @@ router.post('/posts/:id/reject', async (req, res) => {
       });
     }
 
+    const oldStatus = post.status;
     await post.markAsRejected(reason);
+
+    // Broadcast SSE event for status change
+    sseService.broadcastPostStatusChanged(post, oldStatus);
 
     res.json({
       success: true,
@@ -2590,7 +2611,11 @@ router.post('/posts/:id/schedule', async (req, res) => {
       });
     }
 
+    const oldStatus = post.status;
     await post.scheduleFor(new Date(scheduledAt));
+
+    // Broadcast SSE event for status change
+    sseService.broadcastPostStatusChanged(post, oldStatus);
 
     res.json({
       success: true,
@@ -2665,12 +2690,21 @@ router.get('/posts', async (req, res) => {
     const total = await MarketingPost.countDocuments(query);
 
     // Convert file paths to URLs for frontend access
-    const postsWithUrls = posts.map(post => ({
-      ...post.toObject(),
-      videoPath: storagePathToUrl(post.videoPath),
-      imagePath: storagePathToUrl(post.imagePath),
-      thumbnailPath: storagePathToUrl(post.thumbnailPath)
-    }));
+    const postsWithUrls = posts.map(post => {
+      const plainPost = post.toObject();
+
+      // Explicitly convert tierParameters Map to plain object
+      if (plainPost.tierParameters instanceof Map) {
+        plainPost.tierParameters = Object.fromEntries(plainPost.tierParameters);
+      }
+
+      return {
+        ...plainPost,
+        videoPath: storagePathToUrl(post.videoPath),
+        imagePath: storagePathToUrl(post.imagePath),
+        thumbnailPath: storagePathToUrl(post.thumbnailPath)
+      };
+    });
 
     res.json({
       success: true,
@@ -2914,6 +2948,9 @@ router.post('/:id/regenerate', async (req, res) => {
       captionChanged: newCaption !== originalCaption,
       hashtagsChanged: JSON.stringify(newHashtags) !== JSON.stringify(originalHashtags)
     });
+
+    // Broadcast SSE event for updated post
+    sseService.broadcastPostUpdated(content);
 
     res.json({
       success: true,

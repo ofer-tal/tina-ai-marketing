@@ -3,6 +3,7 @@ import MarketingPost from '../models/MarketingPost.js';
 import instagramPostingService from '../services/instagramPostingService.js';
 import s3VideoUploader from '../services/s3VideoUploader.js';
 import googleSheetsService from '../services/googleSheetsService.js';
+import sseService from '../services/sseService.js';
 import { getLogger } from '../utils/logger.js';
 import crypto from 'crypto';
 import path from 'path';
@@ -89,7 +90,7 @@ class PostingSchedulerJob {
         status: 'approved',
         scheduledAt: { $lte: new Date() },
         videoPath: { $exists: true, $ne: null } // Must have video
-      }).populate('storyId');
+      });
 
       logger.info(`Found ${scheduledContent.length} posts ready for posting`, {
         posts: scheduledContent.map(p => ({
@@ -242,8 +243,12 @@ class PostingSchedulerJob {
       }
 
       // Update status to indicate posting is in progress
+      const oldStatus = post.status;
       post.status = 'ready';
       await post.save();
+
+      // Broadcast SSE event for status change
+      sseService.broadcastPostStatusChanged(post, oldStatus);
 
       // Post to the appropriate platform
       let result;
@@ -258,6 +263,8 @@ class PostingSchedulerJob {
           result = await this.postToInstagram(post);
           // Direct posting - mark as posted immediately
           await post.markAsPosted();
+          // Broadcast SSE event for status change to 'posted'
+          sseService.broadcastPostStatusChanged(post, 'approved');
           break;
 
         case 'youtube_shorts':
@@ -285,6 +292,7 @@ class PostingSchedulerJob {
       // Calculate time since scheduled
       const timeSinceScheduled = Date.now() - new Date(post.scheduledAt).getTime();
       const RETRY_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+      const oldStatus = post.status;
 
       if (timeSinceScheduled < RETRY_WINDOW) {
         // Keep as 'approved' so it will be retried in the next scheduler run
@@ -312,6 +320,10 @@ class PostingSchedulerJob {
       }
 
       await post.save();
+
+      // Broadcast SSE event for status change
+      sseService.broadcastPostStatusChanged(post, oldStatus);
+
       throw error;
     }
   }
@@ -450,8 +462,12 @@ class PostingSchedulerJob {
       post.sheetTabUsed = targetSheet;
       post.sheetTriggeredAt = new Date();
       post.publishingStatus = 'triggered_zapier';
+      const oldStatus = post.status;
       post.status = 'posting'; // Prevent scheduler from picking it up again
       await post.save();
+
+      // Broadcast SSE event for status change
+      sseService.broadcastPostStatusChanged(post, oldStatus);
 
       logger.info(`  ✓ Row appended to Google Sheets`);
       logger.info(`  Sheet: ${targetSheet}`);

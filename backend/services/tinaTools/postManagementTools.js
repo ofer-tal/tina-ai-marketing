@@ -14,6 +14,7 @@ import tieredVideoGenerator from '../tieredVideoGenerator.js';
 import captionGenerationService from '../captionGenerationService.js';
 import hashtagGenerationService from '../hashtagGenerationService.js';
 import hookGenerationService from '../hookGenerationService.js';
+import sseService from '../sseService.js';
 import path from 'path';
 import { fromTinaTime, formatForTina, getLocalNow } from '../../utils/tz/timezone.js';
 
@@ -345,12 +346,13 @@ async function validateCreatePost(params) {
     }
 
     // Tier 2 posts must be scheduled at least 4 hours in the future
+    // (requires time for manual video upload and approval)
     if (params.scheduleFor) {
-      const scheduledDate = new Date(params.scheduleFor);
-      const now = new Date();
+      const scheduledDate = fromTinaTime(params.scheduleFor);
+      const now = getLocalNow();
       const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 hours
       if (scheduledDate < minScheduleTime) {
-        errors.push('Tier 2 posts must be scheduled at least 4 hours in the future');
+        errors.push('Tier 2 posts must be scheduled at least 4 hours in the future (allows time for manual video upload and review)');
       }
     }
   }
@@ -428,10 +430,10 @@ export async function createPost(params = {}) {
   let caption = providedCaption;
   if (!caption) {
     try {
-      caption = await captionGenerationService.generateForStory(story, {
-        platform: platforms[0],
+      const result = await captionGenerationService.generateCaption(story, platforms[0], {
         maxLength: 500
       });
+      caption = result.success ? result.caption : null;
     } catch (error) {
       logger.warn('Caption generation failed, using fallback', { error: error.message });
       caption = `Check out this amazing ${story.category || story.parameters?.category || 'Other'} story! "${story.name}" - available now on the blush app. 💕`;
@@ -442,9 +444,8 @@ export async function createPost(params = {}) {
   let hook = providedHook;
   if (!hook) {
     try {
-      hook = await hookGenerationService.generateForStory(story, {
-        platform: platforms[0]
-      });
+      const result = await hookGenerationService.generateHooks(story, { count: 1 });
+      hook = result.success && result.hooks.length > 0 ? result.hooks[0].text : null;
     } catch (error) {
       logger.warn('Hook generation failed, using fallback', { error: error.message });
       hook = `You won't believe what happens next...`;
@@ -466,10 +467,13 @@ export async function createPost(params = {}) {
     } else {
       // Generate hashtags for this specific platform
       try {
-        platformHashtags[platform] = await hashtagGenerationService.generateForStory(story, {
+        const result = hashtagGenerationService.generateHashtags(story, {
           platform,
-          count: 8
+          includeTrending: true,
+          includeBroad: true,
+          includeBrand: true
         });
+        platformHashtags[platform] = result.hashtags || fallbackHashtags;
       } catch (error) {
         logger.warn(`Hashtag generation failed for ${platform}, using fallback`, { error: error.message });
         platformHashtags[platform] = fallbackHashtags;
@@ -492,15 +496,16 @@ export async function createPost(params = {}) {
       throw new Error('Invalid scheduled date format. Use ISO 8601 format (e.g., 2026-02-02T15:00:00)');
     }
 
-    // Validate the date is in the future (at least 30 minutes from now to account for processing time)
+    // Validate the date is in the future
+    // Note: Both scheduledDate and now use the "local-as-UTC" format from fromTinaTime()/getLocalNow()
+    // so they can be compared directly
     const now = getLocalNow();
-    const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
-    if (scheduledDate < minScheduleTime) {
-      // If the requested time is in the past, use the next available slot instead
+    if (scheduledDate < now) {
+      // If the requested time is actually in the past, use the next available slot instead
       logger.warn('Requested scheduled time is in the past, using next available slot', {
         requestedTime: scheduleFor,
-        currentTime: now.toISOString(),
-        minScheduleTime: minScheduleTime.toISOString()
+        scheduledFor: scheduledDate.toISOString(),
+        currentTime: now.toISOString()
       });
       scheduledDate = getNextAvailableSlot();
     }
@@ -524,18 +529,18 @@ export async function createPost(params = {}) {
     // Add tier_2 specific parameters
     if (contentTier === 'tier_2') {
       if (avatarId) {
-        tierParametersMap.set('avatarId', { parameterKey: 'avatarId', parameterValue: avatarId });
+        tierParametersMap.set('avatarId', avatarId);
       }
       if (script) {
-        tierParametersMap.set('script', { parameterKey: 'script', parameterValue: script.trim() });
-        tierParametersMap.set('scriptPreview', { parameterKey: 'scriptPreview', parameterValue: script.trim().substring(0, 200) });
+        tierParametersMap.set('script', script.trim());
+        tierParametersMap.set('scriptPreview', script.trim().substring(0, 200));
       }
 
       // Fetch avatar details
       const AIAvatar = (await import('../../models/AIAvatar.js')).default;
       const avatar = await AIAvatar.findById(avatarId);
       if (avatar) {
-        tierParametersMap.set('avatarName', { parameterKey: 'avatarName', parameterValue: avatar.name });
+        tierParametersMap.set('avatarName', avatar.name);
         await avatar.incrementUsage();
       }
     }
@@ -580,6 +585,9 @@ export async function createPost(params = {}) {
 
     await post.save();
     createdPosts.push(post);
+
+    // Broadcast SSE event for new post
+    sseService.broadcastPostCreated(post);
 
     logger.info('Created marketing post', {
       postId: post._id,
@@ -647,6 +655,8 @@ export async function createPost(params = {}) {
           });
           // Create approval todo NOW that video is ready
           await createApprovalTodo(post, story);
+          // Broadcast SSE event for post update (video ready)
+          sseService.broadcastPostUpdated(post);
         } else {
           post.status = 'draft';
           post.videoGenerationProgress = {
@@ -660,6 +670,8 @@ export async function createPost(params = {}) {
             postId: post._id,
             error: videoResult.error
           });
+          // Broadcast SSE event for post update (generation failed)
+          sseService.broadcastPostUpdated(post);
         }
         await post.save();
       }).catch(async (error) => {
@@ -676,6 +688,8 @@ export async function createPost(params = {}) {
           errorMessage: error.message
         };
         await post.save();
+        // Broadcast SSE event for post update (generation error)
+        sseService.broadcastPostUpdated(post);
       });
 
       generationResults.push({
@@ -847,6 +861,8 @@ function getAvailableSlot(timePreference = 'any', daysFromNow = 0) {
  * @param {Array<string>} params.hashtags - New hashtags
  * @param {string} params.voice - New voice
  * @param {string} params.contentTier - New content tier
+ * @param {string} params.avatarId - AI Avatar ID (required when changing to tier_2)
+ * @param {string} params.script - Avatar script (required when changing to tier_2)
  * @returns {Promise<Object>} Updated post data
  */
 export async function editPost(params = {}) {
@@ -856,7 +872,9 @@ export async function editPost(params = {}) {
     hook,
     hashtags,
     voice,
-    contentTier
+    contentTier,
+    avatarId,
+    script
   } = params;
 
   // Find post
@@ -905,9 +923,70 @@ export async function editPost(params = {}) {
     if (!VALID_CONTENT_TIERS.includes(contentTier)) {
       throw new Error(`Invalid content tier: ${contentTier}`);
     }
+
+    // When changing to tier_2, validate tier_2 requirements
+    if (contentTier === 'tier_2') {
+      // Helper to get value from tierParameters (handles both Map and plain object)
+      const getTierParam = (key) => {
+        if (!post.tierParameters) return null;
+        if (typeof post.tierParameters.get === 'function') {
+          return post.tierParameters.get(key);
+        }
+        return post.tierParameters[key];
+      };
+
+      // Check avatarId
+      const existingAvatarId = getTierParam('avatarId');
+      if (!existingAvatarId && !avatarId) {
+        throw new Error('avatarId is required when changing to tier_2. Either the post must already have an avatar assigned, or you must provide avatarId.');
+      }
+
+      // Check script
+      const existingScript = getTierParam('script');
+      if ((!existingScript || existingScript.trim().length === 0) && (!script || script.trim().length === 0)) {
+        throw new Error('script is required when changing to tier_2. Either the post must already have a script, or you must provide one.');
+      }
+    }
+
     updates.contentTier = contentTier;
     updates.generationMetadata = { ...post.generationMetadata, tier: contentTier };
     changes.push('contentTier');
+  }
+
+  // Handle tier_2 specific parameters (avatarId, script)
+  if (avatarId !== undefined || script !== undefined) {
+    // Get or initialize tierParameters as a Map
+    let tierParamsMap = post.tierParameters;
+    if (!tierParamsMap || !(tierParamsMap instanceof Map)) {
+      tierParamsMap = new Map();
+      // Copy existing values if it was a plain object
+      if (post.tierParameters && typeof post.tierParameters === 'object') {
+        Object.entries(post.tierParameters).forEach(([k, v]) => {
+          tierParamsMap.set(k, v);
+        });
+      }
+    }
+
+    if (avatarId !== undefined) {
+      tierParamsMap.set('avatarId', avatarId);
+      changes.push('avatarId');
+
+      // Fetch and store avatar name
+      const AIAvatar = (await import('../../models/AIAvatar.js')).default;
+      const avatar = await AIAvatar.findById(avatarId);
+      if (avatar) {
+        tierParamsMap.set('avatarName', avatar.name);
+        await avatar.incrementUsage();
+      }
+    }
+
+    if (script !== undefined) {
+      tierParamsMap.set('script', script.trim());
+      tierParamsMap.set('scriptPreview', script.trim().substring(0, 200));
+      changes.push('script');
+    }
+
+    updates.tierParameters = tierParamsMap;
   }
 
   if (Object.keys(updates).length === 0) {
@@ -941,6 +1020,9 @@ export async function editPost(params = {}) {
   // Apply updates
   Object.assign(post, updates);
   await post.save();
+
+  // Broadcast SSE event for updated post
+  sseService.broadcastPostUpdated(post);
 
   logger.info('Post edited', {
     postId: post._id,
@@ -1146,6 +1228,9 @@ export async function generatePostVideo(params = {}) {
   // Create approval todo for regenerated video
   await createApprovalTodo(post, story);
 
+  // Broadcast SSE event for updated post
+  sseService.broadcastPostUpdated(post);
+
   logger.info('Video generated for post', {
     postId: post._id,
     videoPath: result.videoPath,
@@ -1302,6 +1387,9 @@ export async function regeneratePostVideo(params = {}) {
   // Create approval todo for regenerated video
   await createApprovalTodo(post, story);
 
+  // Broadcast SSE event for updated post
+  sseService.broadcastPostUpdated(post);
+
   logger.info('Video regenerated for post', {
     postId: post._id,
     feedback,
@@ -1344,11 +1432,12 @@ export async function schedulePosts(params = {}) {
     throw new Error('Invalid scheduled date');
   }
 
-  // Validate the date is in the future (at least 30 minutes from now)
+  // Validate the date is in the future
+  // Note: Both scheduledDate and nowLocal use the "local-as-UTC" format from fromTinaTime()/getLocalNow()
+  // so they can be compared directly
   const nowLocal = getLocalNow();
-  const minScheduleTime = new Date(nowLocal.getTime() + 30 * 60 * 1000);
-  if (scheduledDate < minScheduleTime) {
-    throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${formatForTina(nowLocal)}, Minimum: ${formatForTina(minScheduleTime)}`);
+  if (scheduledDate < nowLocal) {
+    throw new Error(`Scheduled date must be in the future. Current time: ${formatForTina(nowLocal)}, Requested: ${formatForTina(scheduledDate)}`);
   }
 
   // Find all posts
@@ -1374,9 +1463,13 @@ export async function schedulePosts(params = {}) {
     }
 
     // Schedule the post
+    const oldStatus = post.status;
     post.status = 'scheduled';
     post.scheduledAt = scheduledDate; // Stored as UTC in DB
     await post.save();
+
+    // Broadcast SSE event for status change
+    sseService.broadcastPostStatusChanged(post, oldStatus);
 
     scheduled.push({
       id: post._id.toString(),

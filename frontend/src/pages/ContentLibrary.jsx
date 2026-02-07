@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styled from 'styled-components';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import CreatePostModal from '../components/CreatePostModal.jsx';
@@ -6,6 +6,13 @@ import GenerateVideoOptions from '../components/GenerateVideoOptions.jsx';
 import RegenerateVideoModal from '../components/RegenerateVideoModal.jsx';
 import Tier2VideoUpload from '../components/Tier2VideoUpload.jsx';
 import EditTier2PostModal from '../components/EditTier2PostModal.jsx';
+import { useSseEvents } from '../hooks/useSseEvents.js';
+import {
+  mergeUpdatedPost,
+  mergeNewPosts,
+  removeDeletedPost,
+  mergeProgressUpdate
+} from '../utils/postUpdater.js';
 
 const LibraryContainer = styled.div`
   width: 100%;
@@ -481,6 +488,50 @@ const ActionButton = styled.button`
   &:hover {
     background: #e94560;
   }
+`;
+
+// Tier 2 script preview
+const ScriptPreview = styled.div`
+  margin-top: 0.75rem;
+  padding: 0.6rem;
+  background: rgba(123, 44, 191, 0.1);
+  border: 1px solid rgba(123, 44, 191, 0.3);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: #c0c0c0;
+  line-height: 1.4;
+  max-height: 80px;
+  overflow: hidden;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 30px;
+    background: linear-gradient(transparent, rgba(22, 33, 62, 0.9));
+  }
+`;
+
+const ScriptLabel = styled.div`
+  font-weight: 600;
+  color: #7b2cbf;
+  margin-bottom: 0.3rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+
+  &::before {
+    content: '📜';
+  }
+`;
+
+const NoScriptMessage = styled.div`
+  font-style: italic;
+  color: #888;
+  padding: 0.5rem 0;
 `;
 
 // Posted content link and stats
@@ -2346,7 +2397,6 @@ function ContentLibrary() {
   const [regenerateVideoModal, setRegenerateVideoModal] = useState(false);
   const [selectedPostForVideo, setSelectedPostForVideo] = useState(null);
   const [stories, setStories] = useState([]);
-  const [isPageVisible, setIsPageVisible] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0); // Increment to trigger refresh
 
   // Tier 2 video upload modal
@@ -2356,120 +2406,89 @@ function ContentLibrary() {
   const [selectedPostForTier2Edit, setSelectedPostForTier2Edit] = useState(null);
 
   // Function to trigger a refresh
-  const triggerRefresh = () => {
+  const triggerRefresh = useCallback(() => {
     setRefreshKey(prev => prev + 1);
-  };
-
-  // Handle page visibility changes (for auto-refresh)
-  // Refresh data when user returns to this tab (e.g., after making changes in Tina Chat)
-  useEffect(() => {
-    let lastHidden = document.hidden;
-    let lastRefreshTime = Date.now();
-
-    const handleVisibilityChange = () => {
-      const isNowHidden = document.hidden;
-      setIsPageVisible(!isNowHidden);
-
-      // If page just became visible and it's been at least 10 seconds since last refresh
-      if (lastHidden && !isNowHidden) {
-        const timeSinceRefresh = Date.now() - lastRefreshTime;
-        if (timeSinceRefresh > 10 * 1000) { // 10 seconds minimum between visibility-triggered refreshes
-          console.log('[ContentLibrary] Page became visible, refreshing posts...');
-          setRefreshKey(prev => prev + 1);
-          lastRefreshTime = Date.now();
-        }
-      }
-      lastHidden = isNowHidden;
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
   }, []);
-
-  // Auto-refresh every 30 seconds when page is visible and no modal is open
-  // This ensures data stays fresh after changes made via Tina Chat or other interfaces
-  useEffect(() => {
-    if (!isPageVisible) return;
-
-    // Check if any modal is open - if so, don't auto-refresh
-    const isAnyModalOpen =
-      rejectModal.isOpen ||
-      regenerateModal.isOpen ||
-      deleteModal.isOpen ||
-      exportModal.isOpen ||
-      createPostModal ||
-      generateVideoModal ||
-      regenerateVideoModal ||
-      editMode ||
-      rescheduleMode ||
-      scheduleMode;
-
-    if (isAnyModalOpen) {
-      console.log('[ContentLibrary] Modal open, skipping auto-refresh');
-      return;
-    }
-
-    const interval = setInterval(() => {
-      console.log('[ContentLibrary] Auto-refreshing posts...');
-      fetchPosts();
-    }, 30 * 1000); // 30 seconds - reduced from 5 minutes for better data freshness
-
-    return () => clearInterval(interval);
-  }, [
-    isPageVisible,
-    rejectModal.isOpen,
-    regenerateModal.isOpen,
-    deleteModal.isOpen,
-    exportModal.isOpen,
-    createPostModal,
-    generateVideoModal,
-    regenerateVideoModal,
-    editMode,
-    rescheduleMode,
-    scheduleMode
-  ]);
 
   // Initial fetch and fetch on filter/pagination/refresh changes
   useEffect(() => {
     fetchPosts();
   }, [filters, pagination.page, refreshKey]);
 
-  // Auto-refresh posts that are in 'generating' status
-  useEffect(() => {
-    const generatingPosts = posts.filter(p => p.status === 'generating');
-    if (generatingPosts.length === 0) return;
+  // ============================================================
+  // SSE (Server-Sent Events) - Real-time updates
+  // Replaces 30-second auto-refresh and 2-second progress polling
+  // ============================================================
 
-    const pollInterval = setInterval(async () => {
-      // Update individual generating posts with their progress
-      for (const post of generatingPosts) {
-        try {
-          const response = await fetch(`/api/tiered-video/progress/${post._id}`);
-          if (response.ok) {
-            const data = await response.json();
-            const progressData = data.data;
+  // Determine if we should suppress SSE updates (when editing posts)
+  // Note: We NO LONGER suppress updates when modals are open - the key
+  // improvement of SSE is that background updates don't disrupt modals
+  const lastSseUpdateRef = useRef(Date.now());
 
-            // Update the post in the posts array
-            setPosts(prevPosts => prevPosts.map(p =>
-              p._id === post._id
-                ? { ...p, status: progressData.status, videoGenerationProgress: progressData }
-                : p
-            ));
+  // Track when SSE resumes after being paused (to catch up on missed events)
+  const [sseResumeTrigger, setSseResumeTrigger] = useState(0);
 
-            // If generation is complete or failed, refresh the full list
-            if (progressData.status === 'ready' || progressData.errorMessage) {
-              setTimeout(() => fetchPosts(), 1000);
-            }
-          }
-        } catch (err) {
-          console.error('Error polling post progress:', err);
-        }
-      }
-    }, 2000); // Poll every 2 seconds
+  // SSE event handlers with smart in-place merging (renamed to avoid conflicts)
+  const handleSsePostCreated = useCallback((newPost) => {
+    console.log('[SSE] Post created:', newPost._id);
+    setPosts(prevPosts => mergeUpdatedPost(prevPosts, newPost));
+    lastSseUpdateRef.current = Date.now();
+  }, []);
 
-    return () => clearInterval(pollInterval);
-  }, [posts]);
+  const handleSsePostUpdated = useCallback((updatedPost) => {
+    console.log('[SSE] Post updated:', updatedPost._id);
+    setPosts(prevPosts => mergeUpdatedPost(prevPosts, updatedPost));
+    lastSseUpdateRef.current = Date.now();
+  }, []);
+
+  const handleSsePostDeleted = useCallback((deletedPostId) => {
+    console.log('[SSE] Post deleted:', deletedPostId);
+    setPosts(prevPosts => removeDeletedPost(prevPosts, deletedPostId));
+    lastSseUpdateRef.current = Date.now();
+  }, []);
+
+  const handleSsePostStatusChanged = useCallback((data) => {
+    console.log('[SSE] Post status changed:', data.postId, data.newStatus);
+    if (data.post) {
+      setPosts(prevPosts => mergeUpdatedPost(prevPosts, data.post));
+    }
+    lastSseUpdateRef.current = Date.now();
+  }, []);
+
+  const handleSsePostProgress = useCallback((data) => {
+    console.log('[SSE] Post progress:', data.postId, data.percent + '%');
+    setPosts(prevPosts => mergeProgressUpdate(prevPosts, data.postId, data));
+    lastSseUpdateRef.current = Date.now();
+  }, []);
+
+  // Handle SSE connection state
+  const handleSseError = useCallback((error) => {
+    console.warn('[SSE] Connection error:', error);
+    // SSE will auto-reconnect, no action needed
+  }, []);
+
+  const handleSseConnected = useCallback(() => {
+    console.log('[SSE] Connected - real-time updates enabled');
+  }, []);
+
+  // Ref to track if we need to refresh on resume (to catch up on missed events)
+  const handleSseResumed = useCallback(() => {
+    console.log('[SSE] Resumed - triggering refresh to catch up on missed events');
+    // Increment to trigger refresh effect
+    setSseResumeTrigger(prev => prev + 1);
+  }, []);
+
+  // Establish SSE connection
+  const { isConnected: sseConnected } = useSseEvents({
+    onPostCreated: handleSsePostCreated,
+    onPostUpdated: handleSsePostUpdated,
+    onPostDeleted: handleSsePostDeleted,
+    onPostStatusChanged: handleSsePostStatusChanged,
+    onPostProgress: handleSsePostProgress,
+    onConnected: handleSseConnected,
+    onResumed: handleSseResumed,
+    onError: handleSseError
+  });
 
   // Cleanup: stop polling when component unmounts or modal closes
   useEffect(() => {
@@ -2477,6 +2496,15 @@ function ContentLibrary() {
       stopPollingUploadProgress();
     };
   }, []);
+
+  // Refetch posts when SSE resumes after being paused (tab was hidden)
+  // This catches up on any status changes that happened while disconnected
+  useEffect(() => {
+    if (sseResumeTrigger > 0) {
+      console.log('[SSE] Refreshing posts after resume');
+      fetchPosts();
+    }
+  }, [sseResumeTrigger]);
 
   const fetchPosts = async () => {
     try {
@@ -2784,6 +2812,13 @@ function ContentLibrary() {
 
     // Legacy array format
     return post.hashtags || [];
+  };
+
+  // Helper to get Tier 2 script from post
+  const getTier2Script = (post) => {
+    if (!post.tierParameters) return null;
+    // tierParameters is serialized as plain object from backend
+    return post.tierParameters.script || null;
   };
 
   // Helper to create platform-specific hashtags structure when saving
@@ -4246,6 +4281,18 @@ function ContentLibrary() {
                         </StatsRow>
                       )}
                     </>
+                  )}
+
+                  {/* Tier 2 script preview */}
+                  {post.contentTier === 'tier_2' && !post.videoPath && (
+                    <ScriptPreview>
+                      <ScriptLabel>Avatar Script</ScriptLabel>
+                      {getTier2Script(post) ? (
+                        <div>{getTier2Script(post).substring(0, 150)}...</div>
+                      ) : (
+                        <NoScriptMessage>No script available. Click "Edit Details" to add one.</NoScriptMessage>
+                      )}
+                    </ScriptPreview>
                   )}
 
                   <CardActions>

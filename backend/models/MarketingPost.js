@@ -62,12 +62,10 @@ const marketingPostSchema = new mongoose.Schema({
   },
 
   // Tier-specific parameters (flexible map for different tiers)
+  // Stores string values directly (e.g., script, avatarId, avatarName)
   tierParameters: {
     type: Map,
-    of: new mongoose.Schema({
-      parameterKey: String,
-      parameterValue: mongoose.Schema.Types.Mixed
-    }),
+    of: String,
     default: new Map(),
     required: false
   },

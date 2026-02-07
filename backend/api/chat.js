@@ -208,11 +208,22 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
         };
       }
 
-      // If all read-only tools were executed, prepare follow-up with all results
-      if (executedTools.length > 0 && executedTools.length === toolProposals.length) {
-        logger.info('All read-only tools executed, preparing follow-up with all results', {
-          toolCount: executedTools.length,
-          toolNames: executedTools.map(t => t.toolName)
+      // If there are errored tools, we need to handle them differently
+      // Include error results so Tina knows what went wrong
+      if (erroredTools.length > 0) {
+        logger.warn('Some tools failed, preparing follow-up with errors', {
+          errorCount: erroredTools.length,
+          errorTools: erroredTools.map(t => ({ tool: t.toolName, error: t.error }))
+        });
+      }
+
+      // Prepare follow-up with results (including errors) for all tools that were attempted
+      // We include both successful results AND error messages
+      if (executedTools.length > 0 || erroredTools.length > 0) {
+        logger.info('Preparing follow-up with tool results (including any errors)', {
+          executed: executedTools.length,
+          errored: erroredTools.length,
+          toolNames: toolProposals.map(t => t.toolName)
         });
 
         // The assistant's message with tool_calls
@@ -222,11 +233,14 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
           tool_calls: response.rawToolCalls
         };
 
-        // Build tool result messages - one for each tool call
-        const toolResultMessages = executedTools.map((toolProposal, index) => ({
+        // Build tool result messages - one for EACH tool call (including errors)
+        const toolResultMessages = toolProposals.map((toolProposal, index) => ({
           role: 'tool',
           tool_call_id: response.rawToolCalls?.[index]?.id || response.toolCalls[index]?.id || `tool_${Date.now()}_${index}`,
-          content: JSON.stringify(toolProposal.data)
+          // For errored tools, include the error message so Tina sees it
+          content: toolProposal.error
+            ? JSON.stringify({ error: toolProposal.error, message: toolProposal.message, success: false })
+            : JSON.stringify(toolProposal.data || { success: true })
         }));
 
         // Build the message array for follow-up call

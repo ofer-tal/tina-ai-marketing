@@ -87,17 +87,34 @@ export async function handleToolCallProposal(toolCall, messages = [], conversati
       // Execute the tool
       const result = await executeTool(mockProposal);
 
-      logger.info('Read-only tool executed successfully', {
+      logger.info('Read-only tool executed', {
         toolName,
         success: result.success,
-        hasData: !!result.data
+        hasError: !!result.error,
+        hasData: !!result.data,
+        dataType: typeof result.data,
+        dataKeys: result.data ? Object.keys(result.data) : [],
+        resultPreview: result.data ? JSON.stringify(result.data).substring(0, 200) : 'undefined',
+        errorMessage: result.error || 'none'
       });
 
       // Update proposal with execution result
       proposal.executionResult = result.data;
       proposal.executedAt = new Date();
       proposal.status = 'executed';
+
+      logger.info('About to save proposal with execution result', {
+        proposalId: proposal._id,
+        hasExecutionResult: proposal.executionResult !== null && proposal.executionResult !== undefined,
+        executionResultType: typeof proposal.executionResult
+      });
+
       await proposal.save();
+
+      logger.info('Proposal saved successfully', {
+        proposalId: proposal._id,
+        status: proposal.status
+      });
 
       // Return result with tool data for the AI to use in its response
       return {

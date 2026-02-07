@@ -39,7 +39,8 @@ const PLATFORM_CONFIGS = {
     usePkce: false,
   },
   tiktok: {
-    // Library will append /token to this, so we use the base API URL
+    // CRITICAL: OAuth2Client needs the FULL token endpoint URL for refresh to work
+    // The library does NOT append the tokenEndpoint to server - it uses tokenEndpoint directly
     server: 'https://open.tiktokapis.com/v2',
     authorizationEndpoint: 'https://www.tiktok.com/v2/auth/authorize',
     clientId: process.env.TIKTOK_APP_KEY,
@@ -48,8 +49,8 @@ const PLATFORM_CONFIGS = {
     defaultScopes: ['video.upload', 'video.publish'],
     // TikTok REQUIRES PKCE
     usePkce: true,
-    // Custom token endpoint (TikTok uses /oauth/token/ not /token)
-    tokenEndpoint: '/oauth/token/',
+    // CRITICAL: Must be FULL URL for OAuth2Client.refreshToken() to work
+    tokenEndpoint: 'https://open.tiktokapis.com/v2/oauth/token/',
   },
   instagram: {
     server: 'https://graph.facebook.com/v18.0',
@@ -137,6 +138,9 @@ class OAuthManager {
   /**
    * Get or create OAuth2Fetch wrapper for a platform
    * The wrapper handles automatic token injection and refresh
+   *
+   * CRITICAL FOR TIKTOK: TikTok uses non-standard parameter names (client_key vs client_id)
+   * so we use a custom wrapper that handles manual token refresh
    */
   getFetchWrapper(platform) {
     if (this.fetchWrappers.has(platform)) {
@@ -146,6 +150,11 @@ class OAuthManager {
     const client = this.clients.get(platform);
     if (!client) {
       throw new Error(`OAuth client for ${platform} not configured`);
+    }
+
+    // TikTok needs custom wrapper due to non-standard parameter names
+    if (platform === 'tiktok') {
+      return this._getTikTokFetchWrapper();
     }
 
     const fetchWrapper = new OAuth2Fetch({
@@ -233,6 +242,182 @@ class OAuthManager {
     this.fetchWrappers.set(platform, fetchWrapper);
     logger.debug(`OAuth2Fetch wrapper created for ${platform}`);
     return fetchWrapper;
+  }
+
+  /**
+   * Custom fetch wrapper for TikTok that handles manual token refresh
+   *
+   * TikTok uses non-standard parameter names:
+   * - client_key instead of client_id
+   * - client_secret instead of client_secret (this one is standard)
+   * - The OAuth2Client library can't handle this, so we implement custom refresh
+   *
+   * @returns {Object} Fetch wrapper with token refresh
+   */
+  _getTikTokFetchWrapper() {
+    const config = PLATFORM_CONFIGS.tiktok;
+    const self = this; // Capture `this` for use in async function
+
+    const wrapper = {
+      /**
+       * Make authenticated fetch request with auto-refresh
+       */
+      fetch: async function(url, options = {}) {
+        // Get current token
+        let token = await AuthToken.getActiveToken('tiktok');
+        if (!token) {
+          throw new Error('No TikTok token found. Please re-authenticate.');
+        }
+
+        // Check if token needs refresh (expired or expires within 5 minutes)
+        const now = new Date();
+        const expiresAt = token.expiresAt ? new Date(token.expiresAt) : null;
+        const needsRefresh = !expiresAt || now >= new Date(expiresAt.getTime() - 5 * 60 * 1000);
+
+        if (needsRefresh && token.refreshToken) {
+          logger.info('[TIKTOK] Token expired or expiring soon, refreshing...', {
+            expiresAt: expiresAt?.toISOString(),
+            now: now.toISOString()
+          });
+
+          try {
+            const newTokenData = await self._refreshTikTokToken(token.refreshToken);
+
+            // Update the token in database
+            token = await AuthToken.refreshToken('tiktok', {
+              accessToken: newTokenData.accessToken,
+              refreshToken: newTokenData.refreshToken || token.refreshToken,
+              expiresAt: newTokenData.expiresAt,
+            });
+
+            logger.info('[TIKTOK] Token refresh successful', {
+              newExpiresAt: newTokenData.expiresAt.toISOString(),
+            });
+          } catch (refreshError) {
+            logger.error('[TIKTOK] Token refresh failed', {
+              error: refreshError.message,
+            });
+            throw new Error(`TikTok token refresh failed: ${refreshError.message}. Please re-authenticate.`);
+          }
+        }
+
+        // Add Bearer token to request
+        const authOptions = {
+          ...options,
+          headers: {
+            ...options.headers,
+            'Authorization': `Bearer ${token.accessToken}`,
+          },
+        };
+
+        const response = await fetch(url, authOptions);
+
+        // Handle 401 errors - token might have been revoked
+        if (response.status === 401) {
+          logger.warn('[TIKTOK] Got 401 response, attempting token refresh...');
+
+          if (token.refreshToken) {
+            try {
+              const newTokenData = await self._refreshTikTokToken(token.refreshToken);
+              token = await AuthToken.refreshToken('tiktok', {
+                accessToken: newTokenData.accessToken,
+                refreshToken: newTokenData.refreshToken || token.refreshToken,
+                expiresAt: newTokenData.expiresAt,
+              });
+
+              // Retry the request with new token
+              authOptions.headers['Authorization'] = `Bearer ${token.accessToken}`;
+              return await fetch(url, authOptions);
+            } catch (retryError) {
+              logger.error('[TIKTOK] Retry after 401 also failed', {
+                error: retryError.message,
+              });
+              throw new Error(`TikTok authentication failed. Please re-authenticate.`);
+            }
+          } else {
+            throw new Error('TikTok authentication failed and no refresh token available. Please re-authenticate.');
+          }
+        }
+
+        return response;
+      },
+    };
+
+    this.fetchWrappers.set('tiktok', wrapper);
+    return wrapper;
+  }
+
+  /**
+   * Manually refresh TikTok token using correct parameter names
+   *
+   * TikTok requires:
+   * - client_key (not client_id)
+   * - client_secret
+   * - grant_type=refresh_token
+   * - refresh_token
+   *
+   * @param {string} refreshToken - The refresh token
+   * @returns {Promise<{accessToken: string, refreshToken: string, expiresAt: Date}>}
+   */
+  async _refreshTikTokToken(refreshToken) {
+    const config = PLATFORM_CONFIGS.tiktok;
+    const tokenUrl = 'https://open.tiktokapis.com/v2/oauth/token/';
+
+    const params = new URLSearchParams();
+    params.append('client_key', config.clientId);
+    params.append('client_secret', config.clientSecret);
+    params.append('grant_type', 'refresh_token');
+    params.append('refresh_token', refreshToken);
+
+    logger.info('[TIKTOK] Manually refreshing token', {
+      hasRefreshToken: !!refreshToken,
+    });
+
+    const response = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      logger.error('[TIKTOK] Token refresh failed', {
+        status: response.status,
+        error: errorText,
+      });
+      throw new Error(`TikTok token refresh failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // TikTok returns data in a nested structure
+    const accessToken = data.access_token || data.data?.access_token;
+    const newRefreshToken = data.refresh_token || data.data?.refresh_token;
+    const expiresInSeconds = data.expires_in || data.data?.expires_in;
+
+    if (!accessToken) {
+      logger.error('[TIKTOK] Token refresh response missing access_token', {
+        responseKeys: Object.keys(data),
+      });
+      throw new Error('Token refresh response missing access_token');
+    }
+
+    const expiresAt = expiresInSeconds
+      ? new Date(Date.now() + expiresInSeconds * 1000)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours default
+
+    logger.info('[TIKTOK] Token refreshed successfully', {
+      expiresAt: expiresAt.toISOString(),
+      hasNewRefreshToken: !!newRefreshToken,
+    });
+
+    return {
+      accessToken,
+      refreshToken: newRefreshToken || refreshToken,
+      expiresAt,
+    };
   }
 
   /**
