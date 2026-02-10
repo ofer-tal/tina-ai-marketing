@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styled from 'styled-components';
+import { FaTiktok, FaInstagram, FaYoutube } from 'react-icons/fa';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import CreatePostModal from '../components/CreatePostModal.jsx';
 import GenerateVideoOptions from '../components/GenerateVideoOptions.jsx';
@@ -364,7 +365,8 @@ const StatusBadge = styled.div`
       posted: '#40c057', // bright green - already posted
       failed: '#dc3545',
       rejected: '#ff6b6b',
-      generating: '#e94560'
+      generating: '#e94560',
+      partial_posted: '#ffc107' // yellow for partial posting
     };
     return colors[props.status] || '#6c757d';
   }};
@@ -375,6 +377,72 @@ const StatusBadge = styled.div`
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
   }
+`;
+
+// Multi-platform status indicator
+const MultiPlatformIndicator = styled.div`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 0.25rem;
+`;
+
+const PlatformStatusDot = styled.div`
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: ${props => {
+    const colors = {
+      pending: '#6c757d',
+      posting: '#e94560',
+      posted: '#40c057',
+      failed: '#dc3545',
+      skipped: '#6c757d'
+    };
+    return colors[props.status] || '#6c757d';
+  }};
+  border: 1px solid white;
+  cursor: pointer;
+  transition: transform 0.2s;
+  z-index: 2;
+
+  &:hover {
+    transform: scale(1.2);
+  }
+`;
+
+const PlatformStatusTooltip = styled.div`
+  position: absolute;
+  top: 35px;
+  right: 0;
+  background: rgba(0, 0, 0, 0.9);
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+  z-index: 10;
+  display: ${props => props.$visible ? 'block' : 'none'};
+  pointer-events: none;
+`;
+
+const MultiPlatformBadge = styled.div`
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #7b2cbf;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
 `;
 
 const TierBadge = styled.div`
@@ -394,20 +462,6 @@ const TierBadge = styled.div`
     return colors[props.tier] || '#6c757d';
   }};
   color: white;
-`;
-
-const PlatformIcon = styled.div`
-  position: absolute;
-  bottom: 10px;
-  left: 10px;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
 `;
 
 const CardContent = styled.div`
@@ -554,6 +608,13 @@ const PostedLink = styled.a`
   }
 `;
 
+const PostedLinksContainer = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+`;
+
 const StatsRow = styled.div`
   display: flex;
   gap: 0.75rem;
@@ -567,6 +628,42 @@ const StatItem = styled.span`
   gap: 0.2rem;
   font-size: 0.7rem;
   color: #a0a0a0;
+
+  .stat-value {
+    color: #eaeaea;
+    font-weight: 500;
+  }
+`;
+
+const PerPlatformStats = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+`;
+
+const PlatformStatsRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: #a0a0a0;
+  padding: 0.25rem 0;
+`;
+
+const PlatformStatsLabel = styled.span`
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 80px;
+  color: #eaeaea;
+  font-weight: 500;
+`;
+
+const PlatformMetrics = styled.span`
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 
   .stat-value {
     color: #eaeaea;
@@ -641,15 +738,45 @@ const ModalOverlay = styled.div`
   justify-content: center;
   z-index: 1000;
   backdrop-filter: blur(4px);
+  padding: 1rem;
 `;
 
 const ModalContent = styled.div`
   position: relative;
-  max-width: 90vw;
+  width: 95vw;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+
+  /* On wide screens, use side-by-side layout */
+  @media (min-width: 1024px) {
+    flex-direction: row;
+    max-width: 1400px;
+    align-items: flex-start;
+  }
+`;
+
+const ModalVideoSection = styled.div`
+  flex-shrink: 0;
+
+  @media (min-width: 1024px) {
+    max-width: 450px;
+  }
+`;
+
+const ModalDetailsSection = styled.div`
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+
+  @media (min-width: 1024px) {
+    max-height: 85vh;
+  }
+
+  @media (max-width: 1023px) {
+    max-height: 40vh;
+  }
 `;
 
 const ModalInfo = styled.div`
@@ -657,6 +784,10 @@ const ModalInfo = styled.div`
   border-radius: 12px;
   padding: 1.5rem;
   max-width: 600px;
+
+  @media (min-width: 1024px) {
+    max-width: 100%;
+  }
 `;
 
 const ModalTitle = styled.h3`
@@ -1141,11 +1272,20 @@ const VideoContainer = styled.div`
   background: #1a1a2e;
   border-radius: 12px;
   overflow: hidden;
+
+  @media (min-width: 1024px) {
+    min-height: 70vh;
+    max-height: 85vh;
+  }
+
+  @media (max-width: 1023px) {
+    max-height: 50vh;
+  }
 `;
 
 const VideoPlayer = styled.video`
   max-width: 100%;
-  max-height: 65vh;
+  max-height: 100%;
   max-width: 450px; /* Limit width for vertical 9:16 videos */
   object-fit: contain;
 `;
@@ -1157,11 +1297,21 @@ const ImageContainer = styled.div`
   background: #1a1a2e;
   border-radius: 12px;
   overflow: hidden;
+
+  @media (min-width: 1024px) {
+    min-height: 70vh;
+    max-height: 85vh;
+  }
+
+  @media (max-width: 1023px) {
+    max-height: 50vh;
+  }
 `;
 
 const ImagePreview = styled.img`
   max-width: 100%;
-  max-height: 80vh;
+  max-height: 100%;
+  max-width: 450px;
   object-fit: contain;
 `;
 
@@ -1180,10 +1330,10 @@ const VideoPlaceholder = styled.div`
 
 const CloseButton = styled.button`
   position: absolute;
-  top: -40px;
-  right: 0;
+  top: 10px;
+  right: 10px;
   padding: 0.5rem 1rem;
-  background: #e94560;
+  background: rgba(233, 69, 96, 0.9);
   border: none;
   border-radius: 6px;
   color: white;
@@ -1191,10 +1341,17 @@ const CloseButton = styled.button`
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 
   &:hover {
     background: #ff6b6b;
     transform: scale(1.05);
+  }
+
+  @media (max-width: 1023px) {
+    top: -45px;
+    right: 0;
   }
 `;
 
@@ -1552,6 +1709,84 @@ const VideoIndicator = styled.div`
   gap: 0.25rem;
 `;
 
+// Platform icons indicator for post cards
+const PlatformIcons = styled.div`
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+`;
+
+const PlatformIconBadge = styled.div`
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: ${props => {
+    const colors = {
+      tiktok: '#000000',
+      instagram: '#E1306C',
+      youtube_shorts: '#FF0000'
+    };
+    return colors[props.$platform] || '#666';
+  }};
+  font-size: 0.7rem;
+  position: relative;
+  svg {
+    width: 14px;
+    height: 14px;
+    fill: white;
+  }
+`;
+
+// Platform status text section
+const PlatformStatusList = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+`;
+
+const PlatformStatusItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background: ${props => {
+    const statusColors = {
+      posted: 'rgba(74, 222, 128, 0.1)',
+      pending: 'rgba(251, 191, 36, 0.1)',
+      posting: 'rgba(96, 165, 250, 0.1)',
+      failed: 'rgba(248, 113, 113, 0.1)',
+      skipped: 'rgba(156, 163, 175, 0.1)'
+    };
+    return statusColors[props.$status] || 'rgba(156, 163, 175, 0.1)';
+  }};
+  color: ${props => {
+    const statusColors = {
+      posted: '#4ade80',
+      pending: '#fbbf24',
+      posting: '#60a5fa',
+      failed: '#f87171',
+      skipped: '#9ca3af'
+    };
+    return statusColors[props.$status] || '#9ca3af';
+  }};
+`;
+
+// Social platform icons using react-icons
+const TikTokIcon = () => <FaTiktok />;
+const InstagramIcon = () => <FaInstagram />;
+const YouTubeIcon = () => <FaYoutube />;
+
 // Video Generation Progress Components
 const GeneratingProgress = styled.div`
   position: absolute;
@@ -1600,6 +1835,27 @@ const ModalActions = styled.div`
   padding-top: 1rem;
   border-top: 1px solid #2d3561;
   flex-wrap: wrap;
+`;
+
+const TierBadgeInActions = styled.div`
+  width: 100%;
+  padding: 0.5rem;
+  background: ${props => props.tier === 'tier_1' ? 'rgba(233, 69, 96, 0.15)' :
+                      props.tier === 'tier_2' ? 'rgba(115, 203, 229, 0.15)' :
+                      props.tier === 'tier_3' ? 'rgba(255, 193, 7, 0.15)' :
+                      'rgba(255, 255, 255, 0.1)'};
+  border: 1px solid ${props => props.tier === 'tier_1' ? '#e94560' :
+                          props.tier === 'tier_2' ? '#73cbe5' :
+                          props.tier === 'tier_3' ? '#ffc107' :
+                          '#888'};
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: ${props => props.tier === 'tier_1' ? '#e94560' :
+                  props.tier === 'tier_2' ? '#73cbe5' :
+                  props.tier === 'tier_3' ? '#ffc107' :
+                  '#eaeaea'};
+  text-align: center;
 `;
 
 const ApproveButton = styled.button`
@@ -2426,6 +2682,7 @@ function ContentLibrary() {
   const lastSseUpdateRef = useRef(Date.now());
 
   // Track when SSE resumes after being paused (to catch up on missed events)
+  // Note: We no longer do full refresh on resume - SSE incremental updates handle sync
   const [sseResumeTrigger, setSseResumeTrigger] = useState(0);
 
   // SSE event handlers with smart in-place merging (renamed to avoid conflicts)
@@ -2473,9 +2730,9 @@ function ContentLibrary() {
 
   // Ref to track if we need to refresh on resume (to catch up on missed events)
   const handleSseResumed = useCallback(() => {
-    console.log('[SSE] Resumed - triggering refresh to catch up on missed events');
-    // Increment to trigger refresh effect
-    setSseResumeTrigger(prev => prev + 1);
+    console.log('[SSE] Resumed - NOT triggering full refresh, SSE will sync any missed events');
+    // NO LONGER trigger full fetchPosts() - SSE should keep us in sync
+    // The mergeUpdatedPost function handles incremental updates
   }, []);
 
   // Establish SSE connection
@@ -2497,14 +2754,13 @@ function ContentLibrary() {
     };
   }, []);
 
-  // Refetch posts when SSE resumes after being paused (tab was hidden)
-  // This catches up on any status changes that happened while disconnected
-  useEffect(() => {
-    if (sseResumeTrigger > 0) {
-      console.log('[SSE] Refreshing posts after resume');
-      fetchPosts();
-    }
-  }, [sseResumeTrigger]);
+  // Note: SSE resume no longer triggers full refresh - incremental updates keep us in sync
+  // useEffect(() => {
+  //   if (sseResumeTrigger > 0) {
+  //     console.log('[SSE] Refreshing posts after resume');
+  //     fetchPosts();
+  //   }
+  // }, [sseResumeTrigger]);
 
   const fetchPosts = async () => {
     try {
@@ -2720,16 +2976,101 @@ function ContentLibrary() {
     };
   };
 
-  const getPlatformEmoji = (platform) => {
-    const emojis = {
-      tiktok: '🎵',
-      instagram: '📷',
-      youtube_shorts: '▶️'
-    };
-    return emojis[platform] || '📱';
+  // Get display text for post status, considering partial states for multi-platform posts
+  const getStatusDisplayText = (post) => {
+    // For multi-platform posts, show more descriptive status
+    if (isMultiPlatform(post) && post.platformStatus) {
+      const platforms = getPostPlatforms(post);
+      const statuses = platforms.map(p => post.platformStatus?.[p]?.status).filter(Boolean);
+
+      const postedCount = statuses.filter(s => s === 'posted').length;
+      const pendingCount = statuses.filter(s => s === 'pending' || s === 'posting').length;
+      const failedCount = statuses.filter(s => s === 'failed').length;
+      const totalCount = platforms.length;
+
+      // All posted = Posted
+      if (postedCount === totalCount) return 'Posted';
+      // Some posted, some not = Partial
+      if (postedCount > 0 && (pendingCount > 0 || failedCount > 0)) return `Partial (${postedCount}/${totalCount})`;
+      // All failed = Failed
+      if (failedCount === totalCount) return 'Failed';
+      // For everything else (all pending but not started posting yet), use overall status
+      // This correctly distinguishes between "approved" (scheduled) and "pending" (actively posting)
+      return post.status === 'posting' ? 'Posting...' : post.status;
+    }
+
+    // For single-platform or legacy posts
+    if (post.status === 'partial_posted') return 'Partial';
+    if (post.status === 'posting') return 'Posting...';
+    return post.status;
+  };
+
+  // Check if post is multi-platform
+  const isMultiPlatform = (post) => {
+    return post.platforms && Array.isArray(post.platforms) && post.platforms.length > 1;
+  };
+
+  // Get platforms for a post (handles both new platforms array and legacy platform field)
+  const getPostPlatforms = (post) => {
+    if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0) {
+      return post.platforms;
+    }
+    return post.platform ? [post.platform] : [];
+  };
+
+  // Get platform status for a post
+  const getPlatformStatus = (post, platform) => {
+    if (post.platformStatus && post.platformStatus[platform]) {
+      return post.platformStatus[platform].status;
+    }
+    // For legacy single-platform posts, infer from overall status
+    if (post.status === 'posted' && post.platform === platform) return 'posted';
+    if (post.status === 'failed' && post.platform === platform) return 'failed';
+    return 'pending';
   };
 
   const getPostedLink = (post) => {
+    const platforms = getPostPlatforms(post);
+    const isMultiPlatform = platforms.length > 1;
+
+    if (isMultiPlatform) {
+      // For multi-platform posts, return links for each platform
+      const links = [];
+
+      platforms.forEach(platform => {
+        const platformData = post.platformStatus?.[platform];
+        const shareUrl = platformData?.shareUrl || platformData?.permalink;
+
+        // Also check legacy fields as fallback
+        let url = shareUrl;
+        if (!url) {
+          if (platform === 'tiktok') url = post.tiktokShareUrl;
+          if (platform === 'instagram') url = post.instagramPermalink;
+          if (platform === 'youtube_shorts') url = post.youtubeUrl;
+        }
+
+        if (url) {
+          const label = platform === 'tiktok' ? 'TikTok' :
+                       platform === 'instagram' ? 'Instagram' :
+                       platform === 'youtube_shorts' ? 'YouTube' : platform;
+          links.push(
+            <PostedLink
+              key={platform}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`View on ${label}`}
+            >
+              🔗 {label}
+            </PostedLink>
+          );
+        }
+      });
+
+      return links.length > 0 ? <PostedLinksContainer>{links}</PostedLinksContainer> : null;
+    }
+
+    // Single-platform posts (legacy behavior)
     let url = null;
     let label = '';
 
@@ -4215,28 +4556,45 @@ function ContentLibrary() {
                 </CheckboxContainer>
                 <ThumbnailContainer onClick={() => handleThumbnailClick(post)}>
                   <Thumbnail platform={post.platform} $thumbnail={post.thumbnailPath}>
-                    {!post.thumbnailPath && getPlatformEmoji(post.platform)}
+                    {!post.thumbnailPath && '📹'}
                   </Thumbnail>
-                  <StatusBadge status={post.status}>
-                    {post.status}
-                  </StatusBadge>
+                  {isMultiPlatform(post) ? (
+                    <>
+                      <MultiPlatformIndicator>
+                        <MultiPlatformBadge>{getPostPlatforms(post).length}</MultiPlatformBadge>
+                      </MultiPlatformIndicator>
+                      <StatusBadge status={post.status}>
+                        {getStatusDisplayText(post)}
+                      </StatusBadge>
+                    </>
+                  ) : (
+                    <StatusBadge status={post.status}>
+                      {getStatusDisplayText(post)}
+                    </StatusBadge>
+                  )}
                   {post.contentTier && (
                     <TierBadge tier={post.contentTier}>
                       {post.contentTier === 'tier_1' ? '🎬 T1' : post.contentTier === 'tier_2' ? '🎭 T2' : post.contentTier === 'tier_3' ? '🎞️ T3' : post.contentTier}
                     </TierBadge>
                   )}
-                  <PlatformIcon>
-                    {getPlatformEmoji(post.platform)}
-                  </PlatformIcon>
-                  {post.contentType === 'video' && (
-                    <>
-                      <VideoIndicator>🎬 Video</VideoIndicator>
-                      <PlayButton />
-                    </>
-                  )}
-                  {post.contentType === 'image' && (
-                    <VideoIndicator>🖼️ Image</VideoIndicator>
-                  )}
+                  {/* Platform icons indicator with status dots */}
+                  <PlatformIcons>
+                    {getPostPlatforms(post).map(platform => {
+                      const platformData = post.platformStatus?.[platform];
+                      const platformStatus = platformData?.status || 'pending';
+                      return (
+                        <PlatformIconBadge key={platform} $platform={platform}>
+                          {platform === 'tiktok' && <TikTokIcon />}
+                          {platform === 'instagram' && <InstagramIcon />}
+                          {platform === 'youtube_shorts' && <YouTubeIcon />}
+                          <PlatformStatusDot
+                            status={platformStatus}
+                            title={`${platform}: ${platformStatus}`}
+                          />
+                        </PlatformIconBadge>
+                      );
+                    })}
+                  </PlatformIcons>
                   {post.status === 'generating' && (
                     <GeneratingProgress>
                       <GeneratingProgressBar>
@@ -4254,10 +4612,29 @@ function ContentLibrary() {
                     {post.title}
                   </CardTitle>
 
-                  <StoryName>
-                    📖 {post.storyName}
-                  </StoryName>
+                  {post.storyName && (
+                    <StoryName>
+                      📖 {post.storyName}
+                    </StoryName>
+                  )}
 
+                  {/* Platform status list for multi-platform posts */}
+                  {isMultiPlatform(post) && (
+                    <PlatformStatusList>
+                      {getPostPlatforms(post).map(platform => {
+                        const platformData = post.platformStatus?.[platform];
+                        const platformStatus = platformData?.status || 'pending';
+                        const platformName = platform === 'youtube_shorts' ? 'YT' :
+                          platform === 'tiktok' ? 'TT' :
+                          platform === 'instagram' ? 'IG' : platform;
+                        return (
+                          <PlatformStatusItem key={platform} $status={platformStatus}>
+                            {platformName}: {platformStatus}
+                          </PlatformStatusItem>
+                        );
+                      })}
+                    </PlatformStatusList>
+                  )}
                   <CardMeta>
                     <ScheduledTime>
                       🕒 <TimeLabel $color={getTimeDisplay(post).color}>{getTimeDisplay(post).text}</TimeLabel>
@@ -4268,18 +4645,65 @@ function ContentLibrary() {
                   {post.status === 'posted' && (
                     <>
                       {getPostedLink(post)}
-                      {post.performanceMetrics && (post.performanceMetrics.views > 0 || post.performanceMetrics.likes > 0) && (
-                        <StatsRow>
-                          <StatItem>👁️ <span className="stat-value">{formatNumber(post.performanceMetrics.views)}</span></StatItem>
-                          <StatItem>❤️ <span className="stat-value">{formatNumber(post.performanceMetrics.likes)}</span></StatItem>
-                          {post.performanceMetrics.comments > 0 && (
-                            <StatItem>💬 <span className="stat-value">{formatNumber(post.performanceMetrics.comments)}</span></StatItem>
-                          )}
-                          {post.performanceMetrics.shares > 0 && (
-                            <StatItem>🔗 <span className="stat-value">{formatNumber(post.performanceMetrics.shares)}</span></StatItem>
-                          )}
-                        </StatsRow>
-                      )}
+                      {(() => {
+                        const platforms = getPostPlatforms(post);
+                        const isMultiPlatform = platforms.length > 1;
+                        const hasPlatformMetrics = post.platformStatus &&
+                          Object.values(post.platformStatus).some(p => p?.performanceMetrics && (p.performanceMetrics.views > 0 || p.performanceMetrics.likes > 0));
+                        const hasAggregateMetrics = post.performanceMetrics && (post.performanceMetrics.views > 0 || post.performanceMetrics.likes > 0);
+
+                        if (isMultiPlatform && hasPlatformMetrics) {
+                          // Show per-platform stats for multi-platform posts
+                          return (
+                            <PerPlatformStats>
+                              {platforms.map(platform => {
+                                const platformData = post.platformStatus?.[platform];
+                                const metrics = platformData?.performanceMetrics;
+                                if (!metrics || (metrics.views === 0 && metrics.likes === 0)) return null;
+
+                                const platformName = platform === 'youtube_shorts' ? 'YouTube' :
+                                  platform.charAt(0).toUpperCase() + platform.slice(1);
+
+                                return (
+                                  <PlatformStatsRow key={platform}>
+                                    <PlatformStatsLabel>
+                                      {platform === 'tiktok' && <TikTokIcon />}
+                                      {platform === 'instagram' && <InstagramIcon />}
+                                      {platform === 'youtube_shorts' && <YouTubeIcon />}
+                                      {platformName}
+                                    </PlatformStatsLabel>
+                                    <PlatformMetrics>
+                                      <span>👁️ <span className="stat-value">{formatNumber(metrics.views)}</span></span>
+                                      <span>❤️ <span className="stat-value">{formatNumber(metrics.likes)}</span></span>
+                                      {metrics.comments > 0 && (
+                                        <span>💬 <span className="stat-value">{formatNumber(metrics.comments)}</span></span>
+                                      )}
+                                      {metrics.shares > 0 && (
+                                        <span>🔗 <span className="stat-value">{formatNumber(metrics.shares)}</span></span>
+                                      )}
+                                    </PlatformMetrics>
+                                  </PlatformStatsRow>
+                                );
+                              })}
+                            </PerPlatformStats>
+                          );
+                        } else if (hasAggregateMetrics) {
+                          // Show aggregate stats for single-platform or legacy posts
+                          return (
+                            <StatsRow>
+                              <StatItem>👁️ <span className="stat-value">{formatNumber(post.performanceMetrics.views)}</span></StatItem>
+                              <StatItem>❤️ <span className="stat-value">{formatNumber(post.performanceMetrics.likes)}</span></StatItem>
+                              {post.performanceMetrics.comments > 0 && (
+                                <StatItem>💬 <span className="stat-value">{formatNumber(post.performanceMetrics.comments)}</span></StatItem>
+                              )}
+                              {post.performanceMetrics.shares > 0 && (
+                                <StatItem>🔗 <span className="stat-value">{formatNumber(post.performanceMetrics.shares)}</span></StatItem>
+                              )}
+                            </StatsRow>
+                          );
+                        }
+                        return null;
+                      })()}
                     </>
                   )}
 
@@ -4313,9 +4737,9 @@ function ContentLibrary() {
                     ) : (
                       <ActionButton onClick={() => {
                         setSelectedVideo(post);
-                        setEditMode(true);
-                        setEditedCaption(post.caption || '');
-                        setEditedHashtags([...getPostHashtags(post)]);
+                        setEditMode(false);  // View mode, not edit mode
+                        setEditedCaption('');
+                        setEditedHashtags([]);
                         setNewHashtag('');
                       }}>Edit</ActionButton>
                     )}
@@ -4328,49 +4752,57 @@ function ContentLibrary() {
           {selectedVideo && (
             <ModalOverlay onClick={handleCloseModal}>
               <ModalContent onClick={(e) => e.stopPropagation()}>
+                {/* Close button positioned absolutely */}
                 <CloseButton onClick={handleCloseModal}>✕ Close</CloseButton>
-                {selectedVideo.contentType === 'video' ? (
-                  selectedVideo.videoPath ? (
-                    <VideoContainer>
-                      <VideoPlayer
-                        key={selectedVideo.videoPath}  // Force remount when videoPath changes
-                        src={selectedVideo.videoPath}
-                        controls
-                        autoPlay
-                        onError={(e) => {
-                          console.error('Video error:', e);
-                          alert('Failed to load video. The video file may not exist yet.');
-                        }}
-                      />
-                    </VideoContainer>
+
+                {/* Video/Image section - left side on wide screens */}
+                <ModalVideoSection>
+                  {selectedVideo.contentType === 'video' ? (
+                    selectedVideo.videoPath ? (
+                      <VideoContainer>
+                        <VideoPlayer
+                          key={selectedVideo.videoPath}  // Force remount when videoPath changes
+                          src={selectedVideo.videoPath}
+                          controls
+                          autoPlay
+                          onError={(e) => {
+                            console.error('Video error:', e);
+                            alert('Failed to load video. The video file may not exist yet.');
+                          }}
+                        />
+                      </VideoContainer>
+                    ) : (
+                      <VideoContainer>
+                        <VideoPlaceholder>
+                          🎬 Video not generated yet
+                        </VideoPlaceholder>
+                      </VideoContainer>
+                    )
                   ) : (
-                    <VideoContainer>
-                      <VideoPlaceholder>
-                        🎬 Video not generated yet
-                      </VideoPlaceholder>
-                    </VideoContainer>
-                  )
-                ) : (
-                  selectedVideo.imagePath ? (
-                    <ImageContainer>
-                      <ImagePreview
-                        src={selectedVideo.imagePath}
-                        alt={selectedVideo.title || 'Content preview'}
-                        onError={(e) => {
-                          console.error('Image error:', e);
-                          alert('Failed to load image. The image file may not exist yet.');
-                        }}
-                      />
-                    </ImageContainer>
-                  ) : (
-                    <ImageContainer>
-                      <VideoPlaceholder>
-                        📷 Image not generated yet
-                      </VideoPlaceholder>
-                    </ImageContainer>
-                  )
-                )}
-                <ModalInfo>
+                    selectedVideo.imagePath ? (
+                      <ImageContainer>
+                        <ImagePreview
+                          src={selectedVideo.imagePath}
+                          alt={selectedVideo.title || 'Content preview'}
+                          onError={(e) => {
+                            console.error('Image error:', e);
+                            alert('Failed to load image. The image file may not exist yet.');
+                          }}
+                        />
+                      </ImageContainer>
+                    ) : (
+                      <ImageContainer>
+                        <VideoPlaceholder>
+                          📷 Image not generated yet
+                        </VideoPlaceholder>
+                      </ImageContainer>
+                    )
+                  )}
+                </ModalVideoSection>
+
+                {/* Details section - right side on wide screens */}
+                <ModalDetailsSection>
+                  <ModalInfo>
                   <ModalTitle>{selectedVideo.title}</ModalTitle>
                   <PostIdBadge>ID: {selectedVideo._id}</PostIdBadge>
 
@@ -4588,103 +5020,156 @@ function ContentLibrary() {
                     </ApprovalHistory>
                   )}
 
-                  {/* Show approve/reject/edit buttons for non-rejected posts when not in edit mode */}
-                  {selectedVideo.status !== 'rejected' && !editMode && (
+                  {/* Show action buttons for non-rejected posts */}
+                  {selectedVideo.status !== 'rejected' && !scheduleMode && (
                     <ModalActions>
-                      {selectedVideo.status === 'approved' && selectedVideo.platform === 'tiktok' ? (
+                      {/* Tier indicator for context */}
+                      <TierBadgeInActions tier={selectedVideo.contentTier}>
+                        {selectedVideo.contentTier === 'tier_1' ? '🎬 Tier 1 (AI Video)' :
+                         selectedVideo.contentTier === 'tier_2' ? '🎭 Tier 2 (AI Avatar)' :
+                         selectedVideo.contentTier === 'tier_3' ? '🎞️ Tier 3 (Full Production)' :
+                         selectedVideo.contentTier}
+                      </TierBadgeInActions>
+
+                      {/* POST TO PLATFORM - shown for approved posts */}
+                      {selectedVideo.status === 'approved' && selectedVideo.platform === 'tiktok' && (
+                        <PostToTikTokButton
+                          onClick={handlePostToTikTok}
+                          disabled={uploadProgress && uploadProgress.status === 'uploading'}
+                        >
+                          {uploadProgress && uploadProgress.status === 'uploading'
+                            ? '📤 Posting...'
+                            : '📤 Post to TikTok'}
+                        </PostToTikTokButton>
+                      )}
+                      {selectedVideo.status === 'approved' && selectedVideo.platform === 'instagram' && (
+                        <PostToInstagramButton
+                          onClick={handlePostToInstagram}
+                          disabled={uploadProgress && uploadProgress.status === 'uploading'}
+                        >
+                          {uploadProgress && uploadProgress.status === 'uploading'
+                            ? '📤 Posting...'
+                            : '📤 Post to Instagram'}
+                        </PostToInstagramButton>
+                      )}
+
+                      {/* GENERATE VIDEO - only for Tier 1 */}
+                      {selectedVideo.contentTier === 'tier_1' && (
+                        <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
+                          🎬 Generate Video
+                        </GenerateVideoButton>
+                      )}
+
+                      {/* TIER 2: Generate/Upload Avatar Video */}
+                      {selectedVideo.contentTier === 'tier_2' && !selectedVideo.videoPath && (
                         <>
-                          {/* Show Post to TikTok button for approved TikTok posts */}
-                          <PostToTikTokButton
-                            onClick={handlePostToTikTok}
-                            disabled={uploadProgress && uploadProgress.status === 'uploading'}
-                          >
-                            {uploadProgress && uploadProgress.status === 'uploading'
-                              ? '📤 Posting...'
-                              : '📤 Post to TikTok'}
-                          </PostToTikTokButton>
-                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
-                            🎬 Generate Video
+                          <GenerateVideoButton onClick={() => {
+                            setSelectedPostForTier2Upload(selectedVideo);
+                            setTier2UploadModal(true);
+                          }}>
+                            🎭 Generate Avatar
                           </GenerateVideoButton>
-                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
-                            🔄 Regenerate
-                          </RegenerateButton>
-                          <ExportButton onClick={handleExportForManual}>
-                            📥 Export for Manual
-                          </ExportButton>
-                          <DeleteButton onClick={handleDelete}>
-                            🗑️ Delete
-                          </DeleteButton>
-                        </>
-                      ) : selectedVideo.status === 'approved' && selectedVideo.platform === 'instagram' ? (
-                        <>
-                          {/* Show Post to Instagram button for approved Instagram posts */}
-                          <PostToInstagramButton
-                            onClick={handlePostToInstagram}
-                            disabled={uploadProgress && uploadProgress.status === 'uploading'}
-                          >
-                            {uploadProgress && uploadProgress.status === 'uploading'
-                              ? '📤 Posting...'
-                              : '📤 Post to Instagram'}
-                          </PostToInstagramButton>
-                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
-                            🎬 Generate Video
+                          <GenerateVideoButton onClick={() => {
+                            setSelectedPostForTier2Upload(selectedVideo);
+                            setTier2UploadModal(true);
+                          }}>
+                            📤 Upload Video
                           </GenerateVideoButton>
-                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
-                            🔄 Regenerate
-                          </RegenerateButton>
-                          <ExportButton onClick={handleExportForManual}>
-                            📥 Export for Manual
-                          </ExportButton>
-                          <DeleteButton onClick={handleDelete}>
-                            🗑️ Delete
-                          </DeleteButton>
-                        </>
-                      ) : scheduleMode ? (
-                        <>
-                          {/* Show schedule datetime picker */}
-                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
-                            🎬 Generate Video
-                          </GenerateVideoButton>
-                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
-                            🔄 Regenerate
-                          </RegenerateButton>
-                          <DuplicateButton onClick={handleDuplicate}>
-                            📋 Duplicate
-                          </DuplicateButton>
-                          <ApproveButton onClick={handleApprove}>
-                            ✅ Approve Now
-                          </ApproveButton>
-                        </>
-                      ) : (
-                        <>
-                          {/* Show approve/reject/schedule for non-approved posts */}
-                          <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
-                            🎬 Generate Video
-                          </GenerateVideoButton>
-                          <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
-                          <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
-                            🔄 Regenerate
-                          </RegenerateButton>
-                          <DuplicateButton onClick={handleDuplicate}>
-                            📋 Duplicate
-                          </DuplicateButton>
-                          <ApproveButton onClick={handleApprove}>
-                            ✅ Approve
-                          </ApproveButton>
-                          <ScheduleButton onClick={handleStartSchedule}>
-                            📅 Schedule
-                          </ScheduleButton>
-                          <RejectButton onClick={handleReject}>
-                            ❌ Reject
-                          </RejectButton>
-                          <DeleteButton onClick={handleDelete}>
-                            🗑️ Delete
-                          </DeleteButton>
                         </>
                       )}
+
+                      {/* EDIT button - only show when NOT in edit mode */}
+                      {!editMode && (
+                        <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      )}
+
+                      {/* REGENERATE - available for all tiers, including in edit mode */}
+                      <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
+                        🔄 Regenerate
+                      </RegenerateButton>
+
+                      {/* DUPLICATE - available for all tiers except posted */}
+                      {selectedVideo.status !== 'posted' && (
+                        <DuplicateButton onClick={handleDuplicate}>
+                          📋 Duplicate
+                        </DuplicateButton>
+                      )}
+
+                      {/* APPROVE - for draft/ready posts */}
+                      {(selectedVideo.status === 'draft' || selectedVideo.status === 'ready') && (
+                        <ApproveButton onClick={handleApprove}>
+                          ✅ Approve
+                        </ApproveButton>
+                      )}
+
+                      {/* SCHEDULE - for draft/ready posts */}
+                      {(selectedVideo.status === 'draft' || selectedVideo.status === 'ready') && (
+                        <ScheduleButton onClick={handleStartSchedule}>
+                          📅 Schedule
+                        </ScheduleButton>
+                      )}
+
+                      {/* EXPORT FOR MANUAL - for approved posts */}
+                      {selectedVideo.status === 'approved' && (
+                        <ExportButton onClick={handleExportForManual}>
+                          📥 Export for Manual
+                        </ExportButton>
+                      )}
+
+                      {/* REJECT - for draft/ready/approved posts */}
+                      {(selectedVideo.status === 'draft' || selectedVideo.status === 'ready' || selectedVideo.status === 'approved') && (
+                        <RejectButton onClick={handleReject}>
+                          ❌ Reject
+                        </RejectButton>
+                      )}
+
+                      {/* DELETE - available for all tiers */}
+                      <DeleteButton onClick={handleDelete}>
+                        🗑️ Delete
+                      </DeleteButton>
+                    </ModalActions>
+                  )}
+
+                  {/* Edit Mode UI - show caption/hashtag editor with action buttons */}
+                  {editMode && (
+                    <>
+                      <EditActionsRow>
+                        <EditButton onClick={handleCancelEdit}>✖ Cancel Edit</EditButton>
+                        <SaveButton onClick={handleSaveEdit}>💾 Save Changes</SaveButton>
+                      </EditActionsRow>
+                    </>
+                  )}
+
+                  {/* Schedule Mode Actions */}
+                  {scheduleMode && (
+                    <ModalActions>
+                      <TierBadgeInActions tier={selectedVideo.contentTier}>
+                        {selectedVideo.contentTier === 'tier_1' ? '🎬 Tier 1 (AI Video)' :
+                         selectedVideo.contentTier === 'tier_2' ? '🎭 Tier 2 (AI Avatar)' :
+                         selectedVideo.contentTier === 'tier_3' ? '🎞️ Tier 3 (Full Production)' :
+                         selectedVideo.contentTier}
+                      </TierBadgeInActions>
+
+                      {/* Tier 1: Generate Video */}
+                      {selectedVideo.contentTier === 'tier_1' && (
+                        <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
+                          🎬 Generate Video
+                        </GenerateVideoButton>
+                      )}
+
+                      <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
+                        🔄 Regenerate
+                      </RegenerateButton>
+                      <DuplicateButton onClick={handleDuplicate}>
+                        📋 Duplicate
+                      </DuplicateButton>
+                      <ApproveButton onClick={handleApprove}>
+                        ✅ Approve Now
+                      </ApproveButton>
+                      <CancelButton onClick={handleCancelSchedule}>
+                        ✖ Cancel Schedule
+                      </CancelButton>
                     </ModalActions>
                   )}
 
@@ -4729,6 +5214,7 @@ function ContentLibrary() {
                     </UploadProgressContainer>
                   )}
                 </ModalInfo>
+                </ModalDetailsSection>
               </ModalContent>
             </ModalOverlay>
           )}

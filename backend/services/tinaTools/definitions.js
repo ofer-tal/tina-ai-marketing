@@ -984,6 +984,11 @@ VIDEO TIERS:
 - tier_2: AI avatar video narration. Requires avatarId and script parameters. More personal/human feel. Video must be manually uploaded after creation.
 - tier_3: (Coming soon) Advanced video production
 
+STORY-LESS ENGAGEMENT VIDEOS (Tier 2 only):
+- For tier_2 posts, you can omit storyId to create community engagement videos not tied to a specific story
+- If omitting storyId, you MUST provide a title parameter
+- Examples: "What's Your Romance Trope?", "Let's Talk Book Boyfriends", "My Favorite Romance Tropes"
+
 VIDEO GENERATION IS ASYNCHRONOUS: When generateVideo=true, the function returns immediately after launching generation. The post status will be 'generating' and you can check progress later.
 NOTE: Tier 2 posts skip automatic video generation - they require manual upload of the AI avatar video.
 
@@ -1003,12 +1008,16 @@ Creates draft posts that can be edited, generated, and approved later.`,
       properties: {
         storyId: {
           type: 'string',
-          description: 'Story ID to base the post on (must be a ready common library story)'
+          description: 'Story ID to base the post on (required for tier_1, optional for tier_2 engagement videos). For tier_2 without story, omit this and provide title instead.'
+        },
+        title: {
+          type: 'string',
+          description: 'Post title (required if storyId is not provided for tier_2, optional otherwise). For tier_1, defaults to story name if not provided.'
         },
         platforms: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Target platforms (tiktok, instagram, youtube_shorts). IMPORTANT: For tier_2 posts, ONLY specify one platform - tier_2 does not support multiple platforms.',
+          description: 'Target platforms (tiktok, instagram, youtube_shorts). Multi-platform posts are supported for all tiers including tier_2.',
           uniqueItems: true
         },
         caption: {
@@ -1020,9 +1029,34 @@ Creates draft posts that can be edited, generated, and approved later.`,
           description: 'Hook text for opening (optional - auto-generated if not provided)'
         },
         hashtags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'Hashtags for the post (optional - auto-generated if not provided)'
+          oneOf: [
+            {
+              type: 'object',
+              description: 'Platform-specific hashtags (recommended for multi-platform posts)',
+              properties: {
+                tiktok: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'TikTok-specific hashtags'
+                },
+                instagram: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Instagram-specific hashtags'
+                },
+                youtube_shorts: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'YouTube Shorts-specific hashtags'
+                }
+              }
+            },
+            {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Hashtags for all platforms (legacy format - same hashtags used for all platforms)'
+            }
+          ]
         },
         contentType: {
           type: 'string',
@@ -1060,8 +1094,8 @@ Creates draft posts that can be edited, generated, and approved later.`,
             pan: { type: 'boolean', default: false },
             textOverlay: { type: 'boolean', default: true },
             vignette: { type: 'boolean', default: true },
-            fadeIn: { type: 'boolean', default: true },
-            fadeOut: { type: 'boolean', default: true }
+            fadeIn: { type: 'boolean', default: false },
+            fadeOut: { type: 'boolean', default: false }
           }
         },
         voice: {
@@ -1089,7 +1123,7 @@ Creates draft posts that can be edited, generated, and approved later.`,
           description: 'ISO date string to schedule the post in LOCAL timezone. Format: YYYY-MM-DDTHH:mm:ss (NO Z suffix!). CRITICAL: Use TODAY\'S date (provided in system prompt) when user says "today at Xpm". Example: if today is 2026-02-07 and user says "10pm today", use "2026-02-07T22:00:00". Time must be at least 5 minutes in the future. If not provided, uses the next optimal posting slot.'
         }
       },
-      required: ['storyId', 'platforms']
+      required: ['platforms']
     },
     exampleUsage: {
       storyId: '507f1f77bcf86cd799439011',
@@ -1131,6 +1165,33 @@ Creates draft posts that can be edited, generated, and approved later.`,
 (Direct to camera, warm smile)
 
 "Link's in my bio. You're welcome."`,
+      voice: 'female_1',
+      generateVideo: false
+    },
+    exampleUsageTier2Storyless: {
+      platforms: ['tiktok', 'instagram'],
+      contentTier: 'tier_2',
+      title: 'What\'s Your Favorite Romance Trope?',
+      avatarId: 'avatar_123',
+      script: `(Avatar smiles at camera, enthusiastic energy)
+
+"Okay, quick question - and be honest!"
+
+"Enemies to lovers... friends to lovers... fake dating..."
+
+"Which romance trope makes YOU absolutely weak in the knees?"
+
+(Leans in closer, excited)
+
+"Personally? I\'m a sucker for the grumpy sunshine pairing. You know the one - grumpy, brooding character who can\'t stand anyone... except for THAT one sunshine person who just... gets them."
+
+(Sighs dreamily)
+
+"The character development? The forced proximity? The slow burn? It\'s perfection."
+
+"So tell me - what\'s YOUR go-to romance trope? Drop it in the comments!"
+
+"And if you want MORE tropes in your life... you know where to find us."`,
       voice: 'female_1',
       generateVideo: false
     },

@@ -53,7 +53,16 @@ async function test() {
 
   // STEP 1: Create container
   console.log('=== STEP 1: CREATING CONTAINER ===');
-  const hashtags = ['#Blush', '#SpicyStories', '#Romance', '#BookTok', '#AudioBooks'];
+  // Use the post's actual Instagram hashtags from the database
+  const getPlatformHashtags = (post, platform) => {
+    if (!post.hashtags) return [];
+    if (typeof post.hashtags === 'object' && !Array.isArray(post.hashtags)) {
+      return post.hashtags[platform] || post.hashtags.tiktok || [];
+    }
+    return post.hashtags || [];
+  };
+  const hashtags = getPlatformHashtags(post, 'instagram');
+  console.log('Using hashtags from post:', hashtags);
   const fullCaption = `${post.caption}\n\n${hashtags.join(' ')}`;
 
   const params = new URLSearchParams({

@@ -2198,7 +2198,7 @@ router.post('/posts/bulk/reject', async (req, res) => {
 router.put('/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { caption, hashtags, script, scheduledAt, ...otherUpdates } = req.body;
+    const { caption, hashtags, script, scheduledAt, platforms, ...otherUpdates } = req.body;
 
     logger.info('Updating marketing post', { id, updates: req.body });
 
@@ -2242,9 +2242,52 @@ router.put('/posts/:id', async (req, res) => {
         });
       }
 
-      // No video yet - allow editing caption, hashtags, script
+      // No video yet - allow editing caption, hashtags, script, platforms
       if (caption !== undefined) {
         post.caption = caption.trim();
+      }
+
+      // Handle platforms update
+      if (platforms !== undefined) {
+        if (Array.isArray(platforms) && platforms.length > 0) {
+          // Validate platforms
+          const validPlatforms = ['tiktok', 'instagram', 'youtube_shorts'];
+          const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
+
+          if (invalidPlatforms.length > 0) {
+            return res.status(400).json({
+              success: false,
+              error: `Invalid platforms: ${invalidPlatforms.join(', ')}`
+            });
+          }
+
+          // Update platforms array
+          post.platforms = platforms;
+
+          // Update legacy platform field (first platform)
+          post.platform = platforms[0];
+
+          // Initialize platformStatus for any new platforms
+          for (const platform of platforms) {
+            if (!post.platformStatus) {
+              post.platformStatus = {};
+            }
+            if (!post.platformStatus[platform]) {
+              post.platformStatus[platform] = {
+                status: 'pending',
+                postedAt: null,
+                mediaId: null,
+                error: null,
+                retryCount: 0
+              };
+            }
+          }
+
+          logger.info('Updated platforms for post', {
+            postId: post._id,
+            platforms
+          });
+        }
       }
 
       if (hashtags !== undefined) {
@@ -2663,14 +2706,30 @@ router.get('/posts', async (req, res) => {
 
     // Build query
     const query = {};
-    if (platform) query.platform = platform;
+    if (platform) {
+      // Support both legacy platform field and new platforms array
+      query.$or = [
+        { platform: platform },
+        { platforms: platform }
+      ];
+    }
     if (status) query.status = status;
     if (search) {
-      query.$or = [
+      const searchQuery = [
         { title: { $regex: search, $options: 'i' } },
         { storyName: { $regex: search, $options: 'i' } },
         { caption: { $regex: search, $options: 'i' } }
       ];
+      // If there's already a $or from platform filter, combine with $and
+      if (query.$or) {
+        query.$and = [
+          { $or: query.$or },
+          { $or: searchQuery }
+        ];
+        delete query.$or;
+      } else {
+        query.$or = searchQuery;
+      }
       logger.info('Search query built', { search, query });
     }
     if (startDate || endDate) {
@@ -3015,6 +3074,62 @@ router.get('/:id/regeneration-history', async (req, res) => {
 
   } catch (error) {
     logger.error('Get regeneration history API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/:id/fetch-metrics
+ * Manually trigger metrics fetch for a post
+ */
+router.post('/:id/fetch-metrics', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const content = await MarketingPost.findById(id);
+
+    if (!content) {
+      return res.status(404).json({
+        success: false,
+        error: 'Content not found'
+      });
+    }
+
+    // Use performance metrics service to fetch latest metrics
+    const performanceMetricsService = (await import('../services/performanceMetricsService.js')).default;
+    const result = await performanceMetricsService.fetchPostMetrics(id);
+
+    if (result.success) {
+      // Fetch updated post to return current metrics
+      const updatedPost = await MarketingPost.findById(id);
+
+      res.json({
+        success: true,
+        data: {
+          message: 'Metrics fetched successfully',
+          results: result.results,
+          aggregate: result.aggregate,
+          performanceMetrics: updatedPost.performanceMetrics,
+          platformStatus: updatedPost.platformStatus
+        }
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error,
+        code: result.code
+      });
+    }
+
+  } catch (error) {
+    logger.error('Fetch metrics API error', {
       error: error.message,
       stack: error.stack
     });
@@ -4084,9 +4199,9 @@ router.post('/posts/:id/upload-tier2-video', videoUpload.single('video'), async 
       // Continue without thumbnail
     }
 
-    // Update post
-    post.videoPath = videoPath;
-    post.thumbnailPath = thumbnailPath;
+    // Update post - store URL paths for frontend access (not local file paths)
+    post.videoPath = `/storage/videos/tier2/final/${filename}`;
+    post.thumbnailPath = `/storage/thumbnails/${thumbnailFilename}`;
     post.status = 'ready'; // Ready for approval
     await post.save();
 
@@ -4161,6 +4276,35 @@ router.get('/posts/tier2/pending', async (req, res) => {
 
   } catch (error) {
     logger.error('Get tier_2 pending posts API error', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * POST /api/content/sync-metrics
+ * Manually trigger the content metrics sync job
+ */
+router.post('/sync-metrics', async (req, res) => {
+  try {
+    logger.info('Manual trigger of content metrics sync');
+
+    const contentMetricsSyncJob = (await import('../jobs/contentMetricsSyncJob.js')).default;
+    const result = await contentMetricsSyncJob.execute();
+
+    res.json({
+      success: true,
+      message: 'Content metrics sync completed',
+      data: result
+    });
+  } catch (error) {
+    logger.error('Failed to trigger content metrics sync', {
       error: error.message,
       stack: error.stack
     });

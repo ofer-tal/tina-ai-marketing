@@ -278,7 +278,12 @@ router.post('/post/:postId', async (req, res) => {
       });
     }
 
-    if (post.platform !== 'tiktok') {
+    // Check if post targets TikTok (handles both new platforms array and legacy platform field)
+    const platforms = post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0
+      ? post.platforms
+      : [post.platform];
+
+    if (!platforms.includes('tiktok')) {
       return res.status(400).json({
         success: false,
         error: 'Post is not a TikTok post',
@@ -541,8 +546,13 @@ router.post('/sync-videos', async (req, res) => {
     const updatedPosts = [];
     const importedPosts = [];
 
-    // Get existing posts
-    const existingPosts = await MarketingPost.find({ platform: 'tiktok' });
+    // Get existing posts (handles both new platforms array and legacy platform field)
+    const existingPosts = await MarketingPost.find({
+      $or: [
+        { platform: 'tiktok' },
+        { platforms: 'tiktok' }
+      ]
+    });
 
     for (const video of videos) {
       const existingPost = existingPosts.find(p => p.tiktokVideoId === video.id);
@@ -687,6 +697,60 @@ router.get('/videos', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/tiktok/matcher/trigger
+ * Manually trigger the TikTok video matcher job
+ */
+router.post('/matcher/trigger', async (req, res) => {
+  try {
+    logger.info('Manual trigger of TikTok video matcher');
+
+    const tikTokVideoMatcherJob = (await import('../jobs/tikTokVideoMatcher.js')).default;
+    const result = await tikTokVideoMatcherJob.trigger();
+
+    res.json({
+      success: true,
+      message: 'TikTok video matcher completed',
+      data: result
+    });
+  } catch (error) {
+    logger.error('Failed to trigger TikTok video matcher', {
+      error: error.message,
+      stack: error.stack
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * GET /api/tiktok/matcher/status
+ * Get status of the TikTok video matcher job
+ */
+router.get('/matcher/status', async (req, res) => {
+  try {
+    const tikTokVideoMatcherJob = (await import('../jobs/tikTokVideoMatcher.js')).default;
+    const status = tikTokVideoMatcherJob.getStatus();
+
+    res.json({
+      success: true,
+      data: status
+    });
+  } catch (error) {
+    logger.error('Failed to get TikTok video matcher status', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 });

@@ -101,10 +101,11 @@ When the user asks about data, metrics, performance, or ANYTHING that requires l
 - get_stories: Search/filter available stories (by category, spiciness, or keyword)
 - get_ai_avatars: Get available AI avatars for tier_2 video generation (REQUIRED before creating tier_2 posts)
 - create_post: Create a new marketing post with video generation
-  - Specify storyId, platforms (can be multiple: tiktok, instagram, youtube_shorts)
-  - TIER_1 (default): preset, voice, cta, musicId, effects, generateVideo=true
-  - TIER_2 (AI avatar): contentTier="tier_2", avatarId (REQUIRED), script (REQUIRED)
-  - Optionally: caption, hook, hashtags, scheduleFor
+  - TIER_1 (default): storyId (REQUIRED), platforms (can be multiple: tiktok, instagram, youtube_shorts), preset, voice, cta, musicId, effects, generateVideo=true
+  - TIER_2 (AI avatar): contentTier="tier_2", avatarId (REQUIRED), script (REQUIRED), storyId (OPTIONAL - omit for engagement videos)
+    - For tier_2 WITHOUT story: Omit storyId, provide title instead (e.g., "What's Your Favorite Romance Trope?")
+    - For tier_2 WITH story: Provide storyId to promote a specific story
+  - Optionally: caption, hook, hashtags, scheduleFor, title
   - Video generates ASYNCHRONOUSLY in background (tier_1 only - tier_2 requires manual upload)
   - Creates approval todo automatically for you to review
 

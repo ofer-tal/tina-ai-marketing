@@ -47,6 +47,75 @@ function buildIdQuery(id, customIdField) {
 }
 
 /**
+ * Get aggregated performance metrics for a post
+ * For multi-platform posts, aggregates metrics from all platforms
+ * For single-platform posts, uses performanceMetrics or platformStatus
+ *
+ * @param {object} post - MarketingPost document
+ * @returns {object} Aggregated metrics { views, likes, comments, shares, engagementRate }
+ */
+function getAggregatedMetrics(post) {
+  // For multi-platform posts, sum up metrics from all platforms
+  if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0 && post.platformStatus) {
+    let totalViews = 0;
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalShares = 0;
+
+    post.platforms.forEach(platform => {
+      const platformMetrics = post.platformStatus[platform]?.performanceMetrics;
+      if (platformMetrics) {
+        totalViews += platformMetrics.views || 0;
+        totalLikes += platformMetrics.likes || 0;
+        totalComments += platformMetrics.comments || 0;
+        totalShares += platformMetrics.shares || 0;
+      }
+    });
+
+    const engagementRate = totalViews > 0
+      ? ((totalLikes + totalComments + totalShares) / totalViews) * 100
+      : 0;
+
+    return {
+      views: totalViews,
+      likes: totalLikes,
+      comments: totalComments,
+      shares: totalShares,
+      engagementRate
+    };
+  }
+
+  // For single-platform posts, use legacy performanceMetrics
+  return {
+    views: post.performanceMetrics?.views || 0,
+    likes: post.performanceMetrics?.likes || 0,
+    comments: post.performanceMetrics?.comments || 0,
+    shares: post.performanceMetrics?.shares || 0,
+    engagementRate: post.performanceMetrics?.engagementRate || 0
+  };
+}
+
+/**
+ * Build a platform-aware query for finding posts
+ * Handles both legacy 'platform' field and new 'platforms' array
+ *
+ * @param {string} platform - Platform filter ('all', 'tiktok', 'instagram', etc.)
+ * @returns {object} Query object for MongoDB
+ */
+function buildPlatformQuery(platform = 'all') {
+  if (platform === 'all') {
+    return {};
+  }
+  // Match both legacy platform field and new platforms array
+  return {
+    $or: [
+      { platform: platform },
+      { platforms: platform }
+    ]
+  };
+}
+
+/**
  * Tool Executor
  *
  * Executes approved tool proposals.
@@ -563,7 +632,10 @@ async function approvePendingPosts({ count, criteria = 'newest', platforms }) {
   // Build query for pending posts
   const query = { status: 'pending' };
   if (platforms && platforms.length > 0) {
-    query.platform = { $in: platforms };
+    // Use platform-aware query for multiple platforms
+    query.$or = platforms.map(p => ({ platform: p })).concat(
+      platforms.map(p => ({ platforms: p }))
+    );
   }
 
   // Determine sort order based on criteria
@@ -766,38 +838,60 @@ async function getContentAnalytics({ days = 7, platform = 'all', category }) {
     postedAt: { $gte: startDate }
   };
 
+  // Use platform-aware query
   if (platform !== 'all') {
-    query.platform = platform;
+    Object.assign(query, buildPlatformQuery(platform));
   }
 
   if (category) {
-    query.category = category;
+    query.storyCategory = category;
   }
 
   const posts = await MarketingPost.find(query).sort({ postedAt: -1 });
 
-  // Calculate analytics
-  const totalPosts = posts.length;
-  const totalViews = posts.reduce((sum, p) => sum + (p.performanceMetrics?.views || 0), 0);
-  const totalLikes = posts.reduce((sum, p) => sum + (p.performanceMetrics?.likes || 0), 0);
-  const totalShares = posts.reduce((sum, p) => sum + (p.performanceMetrics?.shares || 0), 0);
-  const avgEngagement = totalViews > 0 ? (totalLikes + totalShares) / totalViews / totalPosts : 0;
+  // Calculate analytics using aggregated metrics for multi-platform posts
+  let totalViews = 0;
+  let totalLikes = 0;
+  let totalShares = 0;
+  let totalComments = 0;
 
-  // Top performing posts
-  const topPosts = posts
-    .sort((a, b) => (b.performanceMetrics?.engagementRate || 0) - (a.performanceMetrics?.engagementRate || 0))
-    .slice(0, 5);
+  const postsWithMetrics = posts.map(p => {
+    const metrics = getAggregatedMetrics(p);
+    totalViews += metrics.views;
+    totalLikes += metrics.likes;
+    totalShares += metrics.shares;
+    totalComments += metrics.comments;
+    return { post: p, metrics };
+  });
+
+  const totalPosts = posts.length;
+  const totalEngagement = totalLikes + totalShares + totalComments;
+  const avgEngagement = totalViews > 0 ? totalEngagement / totalViews : 0;
+
+  // Top performing posts (by engagement rate)
+  const topPosts = postsWithMetrics
+    .sort((a, b) => b.metrics.engagementRate - a.metrics.engagementRate)
+    .slice(0, 5)
+    .map(({ post, metrics }) => ({
+      id: post._id,
+      title: post.title,
+      platforms: post.platforms || [post.platform],
+      category: post.storyCategory,
+      views: metrics.views,
+      likes: metrics.likes,
+      engagementRate: Math.round(metrics.engagementRate * 100) / 100
+    }));
 
   // Category breakdown
   const categoryStats = {};
-  posts.forEach(p => {
-    const cat = p.category || 'uncategorized';
+  postsWithMetrics.forEach(({ post, metrics }) => {
+    const cat = post.storyCategory || 'uncategorized';
     if (!categoryStats[cat]) {
       categoryStats[cat] = { count: 0, totalViews: 0, totalEngagement: 0 };
     }
     categoryStats[cat].count++;
-    categoryStats[cat].totalViews += p.performanceMetrics?.views || 0;
-    categoryStats[cat].totalEngagement += p.performanceMetrics?.engagementRate || 0;
+    categoryStats[cat].totalViews += metrics.views;
+    categoryStats[cat].totalEngagement += metrics.engagementRate;
   });
 
   return {
@@ -811,17 +905,10 @@ async function getContentAnalytics({ days = 7, platform = 'all', category }) {
       totalViews: totalViews,
       totalLikes: totalLikes,
       totalShares: totalShares,
+      totalComments: totalComments,
       avgEngagementRate: Math.round(avgEngagement * 10000) / 100 // percentage
     },
-    topPosts: topPosts.map(p => ({
-      id: p._id,
-      title: p.title,
-      platform: p.platform,
-      category: p.category,
-      views: p.performanceMetrics?.views || 0,
-      likes: p.performanceMetrics?.likes || 0,
-      engagementRate: Math.round((p.performanceMetrics?.engagementRate || 0) * 10000) / 100
-    })),
+    topPosts: topPosts,
     categoryBreakdown: Object.entries(categoryStats).map(([cat, stats]) => ({
       category: cat,
       count: stats.count,
@@ -983,8 +1070,9 @@ async function getRevenueSummary({ days = 30 }) {
 async function getPendingPosts({ platform = 'all', limit = 20 }) {
   const query = { status: 'pending' };
 
+  // Use platform-aware query
   if (platform !== 'all') {
-    query.platform = platform;
+    Object.assign(query, buildPlatformQuery(platform));
   }
 
   const posts = await MarketingPost.find(query)
@@ -996,9 +1084,9 @@ async function getPendingPosts({ platform = 'all', limit = 20 }) {
     posts: posts.map(p => ({
       id: p._id,
       title: p.title,
-      category: p.category,
-      platform: p.platform,
-      spicinessLevel: p.spicinessLevel,
+      category: p.storyCategory,
+      platforms: p.platforms || [p.platform],
+      spicinessLevel: p.storySpiciness,
       createdAt: p.createdAt,
       hasVideo: !!p.videoUrl,
       hasImage: !!p.imageUrl,
@@ -2216,15 +2304,16 @@ async function getOptimalPostingTimes({ platform = 'all', category }) {
   // Get all posts with engagement metrics
   const query = {
     status: 'posted',
-    'performanceMetrics.views': { $exists: true, $gt: 0 }
+    postedAt: { $exists: true }
   };
 
+  // Use platform-aware query
   if (platform !== 'all') {
-    query.platform = platform;
+    Object.assign(query, buildPlatformQuery(platform));
   }
 
   if (category) {
-    query.category = category;
+    query.storyCategory = category;
   }
 
   const posts = await MarketingPost.find(query)
@@ -2251,28 +2340,28 @@ async function getOptimalPostingTimes({ platform = 'all', category }) {
     const hour = date.getHours();
     const day = date.toLocaleDateString('en-US', { weekday: 'long' });
 
-    const engagement = (post.performanceMetrics?.likes || 0) +
-                      (post.performanceMetrics?.shares || 0) +
-                      (post.performanceMetrics?.comments || 0);
-    const views = post.performanceMetrics?.views || 0;
-    const engagementRate = views > 0 ? (engagement / views) * 100 : 0;
+    // Use aggregated metrics for multi-platform posts
+    const metrics = getAggregatedMetrics(post);
+
+    // Skip posts with no views
+    if (metrics.views === 0) return;
 
     // Hour stats
     if (!hourStats[hour]) {
       hourStats[hour] = { totalEngagement: 0, totalViews: 0, count: 0, totalRate: 0 };
     }
-    hourStats[hour].totalEngagement += engagement;
-    hourStats[hour].totalViews += views;
-    hourStats[hour].totalRate += engagementRate;
+    hourStats[hour].totalEngagement += (metrics.likes + metrics.comments + metrics.shares);
+    hourStats[hour].totalViews += metrics.views;
+    hourStats[hour].totalRate += metrics.engagementRate;
     hourStats[hour].count++;
 
     // Day stats
     if (!dayStats[day]) {
       dayStats[day] = { totalEngagement: 0, totalViews: 0, count: 0, totalRate: 0 };
     }
-    dayStats[day].totalEngagement += engagement;
-    dayStats[day].totalViews += views;
-    dayStats[day].totalRate += engagementRate;
+    dayStats[day].totalEngagement += (metrics.likes + metrics.comments + metrics.shares);
+    dayStats[day].totalViews += metrics.views;
+    dayStats[day].totalRate += metrics.engagementRate;
     dayStats[day].count++;
   });
 

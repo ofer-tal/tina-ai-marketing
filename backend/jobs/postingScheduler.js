@@ -96,7 +96,7 @@ class PostingSchedulerJob {
         posts: scheduledContent.map(p => ({
           id: p._id.toString(),
           title: p.title,
-          platform: p.platform,
+          platforms: p.platforms || [p.platform],
           scheduledAt: p.scheduledAt
         }))
       });
@@ -105,112 +105,168 @@ class PostingSchedulerJob {
         return;
       }
 
-      // GUARDRAIL: For TikTok, if multiple posts are ready in same cycle, only post the LATEST one
-      // This prevents posting multiple delayed posts at once which could flag the account as spam
-      const tiktokPosts = scheduledContent.filter(p => p.platform === 'tiktok');
+      // Flatten platforms from all posts into individual posting tasks
+      // Each post may have multiple platforms to post to
+      const postingTasks = [];
 
-      if (tiktokPosts.length > 1) {
-        logger.warn(`Multiple TikTok posts ready in same cycle - only posting latest, marking others as failed`, {
-          totalReady: tiktokPosts.length,
-          platform: 'tiktok'
-        });
+      for (const post of scheduledContent) {
+        // Get platforms - handle both new platforms array and legacy platform field
+        const platforms = post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0
+          ? post.platforms
+          : [post.platform];
 
-        // Sort TikTok posts by scheduledAt DESC (most recent first)
-        tiktokPosts.sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+        for (const platform of platforms) {
+          // Check if this platform can be posted to (not already posted, not permanently failed)
+          const platformStatus = post.platformStatus?.[platform];
 
-        const latestPost = tiktokPosts[0];
-        const delayedPosts = tiktokPosts.slice(1);
+          // Skip if already posted for this platform
+          if (platformStatus?.status === 'posted') {
+            logger.info(`Skipping already posted platform`, {
+              postId: post._id,
+              platform,
+              platformStatus: platformStatus.status
+            });
+            continue;
+          }
 
-        logger.info(`Latest TikTok post selected for posting: ${latestPost._id}`, {
-          scheduledAt: latestPost.scheduledAt,
-          title: latestPost.title
-        });
+          // Skip if platform failed but retry count exceeded
+          const MAX_RETRIES = 3;
+          if (platformStatus?.status === 'failed' && platformStatus.retryCount >= MAX_RETRIES) {
+            logger.info(`Skipping platform with exceeded retries`, {
+              postId: post._id,
+              platform,
+              retryCount: platformStatus.retryCount
+            });
+            continue;
+          }
 
-        logger.warn(`Marking ${delayedPosts.length} delayed TikTok posts as failed`, {
-          delayedPostIds: delayedPosts.map(p => p._id.toString()),
-          latestScheduledAt: latestPost.scheduledAt,
-          oldestScheduledAt: delayedPosts[delayedPosts.length - 1].scheduledAt
-        });
-
-        // Mark all delayed TikTok posts as failed
-        for (const post of delayedPosts) {
-          post.status = 'failed';
-          post.error = 'Multiple posts ready in same cycle - skipped to prevent spam. Post was delayed beyond its scheduled time.';
-          post.failedAt = new Date();
-          post.failedReason = 'scheduler_guardrail_multiple_tiktok_posts';
-
-          await post.save();
-
-          logger.warn(`TikTok post marked as failed due to scheduler guardrail: ${post._id}`, {
-            scheduledAt: post.scheduledAt,
-            title: post.title
+          postingTasks.push({
+            post,
+            platform
           });
         }
-
-        // Replace scheduledContent with only the latest TikTok post + other platforms
-        const otherPlatformPosts = scheduledContent.filter(p => p.platform !== 'tiktok');
-        scheduledContent = [latestPost, ...otherPlatformPosts];
-
-        logger.info(`Filtered posts to: ${scheduledContent.length} (1 TikTok + ${otherPlatformPosts.length} other platforms)`);
       }
 
-      // GUARDRAIL: For Instagram, if multiple posts are ready in same cycle, only post the LATEST one
+      logger.info(`Expanded to ${postingTasks.length} platform posting tasks`, {
+        tasks: postingTasks.map(t => ({
+          postId: t.post._id.toString(),
+          platform: t.platform
+        }))
+      });
+
+      if (postingTasks.length === 0) {
+        logger.info('No platforms ready for posting');
+        return;
+      }
+
+      // GUARDRAIL: For each platform, if multiple posts are ready in same cycle, only post the LATEST one
       // This prevents posting multiple delayed posts at once which could flag the account as spam
-      const instagramPosts = scheduledContent.filter(p => p.platform === 'instagram');
+      const tasksByPlatform = {
+        tiktok: postingTasks.filter(t => t.platform === 'tiktok'),
+        instagram: postingTasks.filter(t => t.platform === 'instagram'),
+        youtube_shorts: postingTasks.filter(t => t.platform === 'youtube_shorts')
+      };
 
-      if (instagramPosts.length > 1) {
-        logger.warn(`Multiple Instagram posts ready in same cycle - only posting latest, marking others as failed`, {
-          totalReady: instagramPosts.length,
-          platform: 'instagram'
-        });
+      const filteredTasks = [];
 
-        // Sort Instagram posts by scheduledAt DESC (most recent first)
-        instagramPosts.sort((a, b) => new Date(b.scheduledAt) - new Date(a.scheduledAt));
+      for (const [platformName, tasks] of Object.entries(tasksByPlatform)) {
+        if (!tasks || tasks.length === 0) continue;
 
-        const latestPost = instagramPosts[0];
-        const delayedPosts = instagramPosts.slice(1);
-
-        logger.info(`Latest Instagram post selected for posting: ${latestPost._id}`, {
-          scheduledAt: latestPost.scheduledAt,
-          title: latestPost.title
-        });
-
-        logger.warn(`Marking ${delayedPosts.length} delayed Instagram posts as failed`, {
-          delayedPostIds: delayedPosts.map(p => p._id.toString()),
-          latestScheduledAt: latestPost.scheduledAt,
-          oldestScheduledAt: delayedPosts[delayedPosts.length - 1].scheduledAt
-        });
-
-        // Mark all delayed Instagram posts as failed
-        for (const post of delayedPosts) {
-          post.status = 'failed';
-          post.error = 'Multiple posts ready in same cycle - skipped to prevent spam. Post was delayed beyond its scheduled time.';
-          post.failedAt = new Date();
-          post.failedReason = 'scheduler_guardrail_multiple_instagram_posts';
-
-          await post.save();
-
-          logger.warn(`Instagram post marked as failed due to scheduler guardrail: ${post._id}`, {
-            scheduledAt: post.scheduledAt,
-            title: post.title
+        if (tasks.length > 1) {
+          logger.warn(`Multiple ${platformName} posting tasks ready in same cycle - only posting latest`, {
+            totalReady: tasks.length,
+            platform: platformName
           });
+
+          // Sort by scheduledAt DESC (most recent first)
+          tasks.sort((a, b) => new Date(b.post.scheduledAt) - new Date(a.post.scheduledAt));
+
+          const latestTask = tasks[0];
+          const delayedTasks = tasks.slice(1);
+
+          logger.info(`Latest ${platformName} task selected for posting: ${latestTask.post._id}`, {
+            scheduledAt: latestTask.post.scheduledAt,
+            title: latestTask.post.title
+          });
+
+          logger.warn(`Marking ${delayedTasks.length} delayed ${platformName} tasks as failed`, {
+            delayedPostIds: delayedTasks.map(t => t.post._id.toString()),
+            latestScheduledAt: latestTask.post.scheduledAt
+          });
+
+          // Mark all delayed tasks as failed for this platform
+          for (const task of delayedTasks) {
+            await task.post.setPlatformStatus(platformName, 'failed', {
+              error: 'Multiple posts ready in same cycle - skipped to prevent spam',
+              lastFailedAt: new Date()
+            });
+
+            // Update overall post status
+            const overallStatus = task.post.getOverallStatus();
+            task.post.status = overallStatus;
+            await task.post.save();
+
+            logger.warn(`${platformName} platform marked as failed due to scheduler guardrail`, {
+              postId: task.post._id,
+              scheduledAt: task.post.scheduledAt
+            });
+          }
+
+          filteredTasks.push(latestTask);
+        } else {
+          filteredTasks.push(tasks[0]);
         }
-
-        // Replace scheduledContent with only the latest Instagram post + other platforms (excluding Instagram)
-        const otherPlatformPosts = scheduledContent.filter(p => p.platform !== 'instagram');
-        scheduledContent = [latestPost, ...otherPlatformPosts];
-
-        logger.info(`Filtered posts to: ${scheduledContent.length} (1 Instagram + ${otherPlatformPosts.length} other platforms)`);
       }
 
-      // Process each scheduled post
+      logger.info(`Filtered to ${filteredTasks.length} platform posting tasks`, {
+        tasks: filteredTasks.map(t => ({
+          postId: t.post._id.toString(),
+          platform: t.platform
+        }))
+      });
+
+      // Process each platform posting task
+      // CRITICAL: Group tasks by post to avoid parallel save() calls on the same document
+      const tasksByPost = new Map();
+      for (const task of filteredTasks) {
+        const postId = task.post._id.toString();
+        if (!tasksByPost.has(postId)) {
+          tasksByPost.set(postId, []);
+        }
+        tasksByPost.get(postId).push(task);
+      }
+
+      logger.info(`Grouped ${filteredTasks.length} tasks into ${tasksByPost.size} posts`, {
+        postsWithMultiplePlatforms: Array.from(tasksByPost.entries())
+          .filter(([_, tasks]) => tasks.length > 1)
+          .map(([postId, tasks]) => ({ postId, platformCount: tasks.length }))
+      });
+
+      // Process posts sequentially, platforms within a post sequentially, but posts in parallel
       const results = await Promise.allSettled(
-        scheduledContent.map(post => this.processScheduledPost(post))
+        Array.from(tasksByPost.values()).map(tasks =>
+          // Process platforms for the same post sequentially to avoid parallel save() errors
+          (async () => {
+            const postResults = [];
+            for (const task of tasks) {
+              try {
+                const result = await this.processPlatformPosting(task.post, task.platform);
+                postResults.push({ status: 'fulfilled', value: result, platform: task.platform });
+              } catch (error) {
+                postResults.push({ status: 'rejected', reason: error, platform: task.platform });
+              }
+            }
+            return postResults;
+          })()
+        )
       );
 
-      // Count successes and failures
-      const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
+      // Flatten results and count successes/failures
+      const flatResults = results.flatMap(r =>
+        r.status === 'fulfilled' ? r.value : [{ status: 'rejected', reason: r.reason }]
+      );
+      const succeeded = flatResults.filter(r => r.status === 'fulfilled').length;
+      const failed = flatResults.filter(r => r.status === 'rejected').length;
 
       logger.info(`Scheduled posting complete: ${succeeded} succeeded, ${failed} failed`, {
         duration: Date.now() - startTime
@@ -227,12 +283,24 @@ class PostingSchedulerJob {
   }
 
   /**
-   * Process a single scheduled post
+   * Process a single scheduled post (legacy - for single-platform posts)
    * @param {MarketingPost} post - The post to process
+   * @deprecated Use processPlatformPosting instead
    */
   async processScheduledPost(post) {
-    logger.info(`Processing scheduled post: ${post._id}`, {
-      platform: post.platform,
+    const platform = post.platforms?.[0] || post.platform;
+    return this.processPlatformPosting(post, platform);
+  }
+
+  /**
+   * Process posting to a specific platform for a multi-platform post
+   * @param {MarketingPost} post - The post to process
+   * @param {string} platform - The platform to post to (tiktok, instagram, youtube_shorts)
+   */
+  async processPlatformPosting(post, platform) {
+    logger.info(`Processing platform posting: ${post._id} -> ${platform}`, {
+      postId: post._id,
+      platform,
       title: post.title
     });
 
@@ -242,17 +310,16 @@ class PostingSchedulerJob {
         throw new Error('No video or image path found');
       }
 
-      // Update status to indicate posting is in progress
+      // Set platform status to 'posting'
+      await post.setPlatformStatus(platform, 'posting');
       const oldStatus = post.status;
-      post.status = 'ready';
-      await post.save();
 
       // Broadcast SSE event for status change
       sseService.broadcastPostStatusChanged(post, oldStatus);
 
       // Post to the appropriate platform
       let result;
-      switch (post.platform) {
+      switch (platform) {
         case 'tiktok':
           result = await this.postToTikTok(post);
           // TikTok posts via Buffer/Zapier - don't mark as posted yet
@@ -261,10 +328,20 @@ class PostingSchedulerJob {
 
         case 'instagram':
           result = await this.postToInstagram(post);
-          // Direct posting - mark as posted immediately
-          await post.markAsPosted();
-          // Broadcast SSE event for status change to 'posted'
-          sseService.broadcastPostStatusChanged(post, 'approved');
+          // Direct posting - mark as posted immediately for this platform
+          await post.setPlatformStatus(platform, 'posted', {
+            postedAt: new Date(),
+            mediaId: result.mediaId,
+            permalink: result.permalink
+          });
+
+          // Update overall status
+          const overallStatus = post.getOverallStatus();
+          post.status = overallStatus;
+          await post.save();
+
+          // Broadcast SSE event for status change
+          sseService.broadcastPostStatusChanged(post, oldStatus);
           break;
 
         case 'youtube_shorts':
@@ -273,56 +350,67 @@ class PostingSchedulerJob {
           break;
 
         default:
-          throw new Error(`Unknown platform: ${post.platform}`);
+          throw new Error(`Unknown platform: ${platform}`);
       }
 
-      logger.info(`Successfully posted scheduled content: ${post._id}`, {
-        platform: post.platform,
+      logger.info(`Successfully posted scheduled content: ${post._id} -> ${platform}`, {
+        platform,
         postId: result.postId
       });
 
       return result;
 
     } catch (error) {
-      logger.error(`Failed to post scheduled content: ${post._id}`, {
+      logger.error(`Failed to post scheduled content: ${post._id} -> ${platform}`, {
         error: error.message,
-        platform: post.platform
+        platform
       });
 
       // Calculate time since scheduled
       const timeSinceScheduled = Date.now() - new Date(post.scheduledAt).getTime();
       const RETRY_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
-      const oldStatus = post.status;
+
+      // Get current retry count for this platform
+      const platformStatus = post.platformStatus?.[platform];
+      const currentRetryCount = platformStatus?.retryCount || 0;
 
       if (timeSinceScheduled < RETRY_WINDOW) {
-        // Keep as 'approved' so it will be retried in the next scheduler run
-        post.status = 'approved';
-        post.error = error.message;
-        post.retryCount = (post.retryCount || 0) + 1;
-        post.lastRetriedAt = new Date();
+        // Set platform status back to pending for retry
+        await post.setPlatformStatus(platform, 'pending', {
+          error: error.message,
+          lastFailedAt: new Date()
+        });
 
-        logger.info(`Keeping post as 'approved' for retry (${post.retryCount} attempts, ${Math.round(timeSinceScheduled / 60000)} min since scheduled)`, {
+        // Keep overall status as 'approved' so it will be retried
+        post.status = 'approved';
+
+        logger.info(`Keeping platform as 'pending' for retry (${currentRetryCount} attempts, ${Math.round(timeSinceScheduled / 60000)} min since scheduled)`, {
           postId: post._id,
-          retryCount: post.retryCount
+          platform,
+          retryCount: currentRetryCount
         });
       } else {
-        // Mark as failed after 1 hour of attempts
-        post.status = 'failed';
-        post.error = error.message;
-        post.failedAt = new Date();
-        post.retryCount = (post.retryCount || 0) + 1;
+        // Mark platform as failed after 1 hour of attempts
+        await post.setPlatformStatus(platform, 'failed', {
+          error: error.message,
+          lastFailedAt: new Date()
+        });
 
-        logger.warn(`Post marked as failed after ${post.retryCount} attempts over 1 hour`, {
+        // Update overall status
+        const overallStatus = post.getOverallStatus();
+        post.status = overallStatus;
+        await post.save();
+
+        logger.warn(`Platform marked as failed after ${currentRetryCount} attempts over 1 hour`, {
           postId: post._id,
-          totalAttempts: post.retryCount,
+          platform,
+          totalAttempts: currentRetryCount,
           timeSinceScheduled: Math.round(timeSinceScheduled / 60000) + ' minutes'
         });
       }
 
-      await post.save();
-
       // Broadcast SSE event for status change
-      sseService.broadcastPostStatusChanged(post, oldStatus);
+      sseService.broadcastPostStatusChanged(post, post.status);
 
       throw error;
     }
@@ -334,7 +422,7 @@ class PostingSchedulerJob {
    * 2. Get public URL
    * 3. Append row to Google Sheets (triggers Zapier → Buffer → TikTok)
    * 4. Update post with tracking info
-   * 5. Keep status = 'approved' (actual posting happens via Buffer, tiktokVideoMatcher will mark as 'posted')
+   * 5. Keep platform status = 'posting' (actual posting happens via Buffer, tiktokVideoMatcher will mark as 'posted')
    *
    * CRITICAL: This is the ONLY posting method. Direct TikTok API posting is NOT supported
    * as we don't have approval for direct posting.
@@ -344,7 +432,7 @@ class PostingSchedulerJob {
   async postToTikTok(post) {
     logger.info(`========================================`);
     logger.info(`TikTok Auto-Posting: Starting for post ${post._id}`);
-    logger.info(`Platform: ${post.platform}, Title: ${post.title}`);
+    logger.info(`Platform: TikTok, Title: ${post.title}`);
     logger.info(`========================================`);
 
     // Check if TikTok posting is enabled
@@ -462,12 +550,19 @@ class PostingSchedulerJob {
       post.sheetTabUsed = targetSheet;
       post.sheetTriggeredAt = new Date();
       post.publishingStatus = 'triggered_zapier';
-      const oldStatus = post.status;
-      post.status = 'posting'; // Prevent scheduler from picking it up again
+
+      // Keep overall status as 'posting' to prevent scheduler from picking it up again
+      // The tiktokVideoMatcher job will set it to 'posted' when the video is live
+      // CRITICAL: Set postingStartedAt for accurate timeout detection by postMonitoringService
+      if (!post.postingStartedAt) {
+        post.postingStartedAt = new Date();
+      }
+      post.status = 'posting';
+
       await post.save();
 
       // Broadcast SSE event for status change
-      sseService.broadcastPostStatusChanged(post, oldStatus);
+      sseService.broadcastPostStatusChanged(post, 'posting');
 
       logger.info(`  ✓ Row appended to Google Sheets`);
       logger.info(`  Sheet: ${targetSheet}`);
@@ -492,28 +587,15 @@ class PostingSchedulerJob {
       logger.error(`Error: ${error.message}`);
       logger.error(`========================================`);
 
-      // Calculate time since scheduled
-      const timeSinceScheduled = Date.now() - new Date(post.scheduledAt).getTime();
-      const RETRY_WINDOW = 60 * 60 * 1000; // 1 hour in milliseconds
+      // Set platform status to failed
+      await post.setPlatformStatus('tiktok', 'failed', {
+        error: error.message,
+        lastFailedAt: new Date()
+      });
 
-      if (timeSinceScheduled < RETRY_WINDOW) {
-        // Keep as 'approved' so it will be retried in the next scheduler run
-        post.status = 'approved';
-        post.error = error.message;
-        post.retryCount = (post.retryCount || 0) + 1;
-        post.lastRetriedAt = new Date();
-
-        logger.info(`Keeping post as 'approved' for retry (${post.retryCount} attempts, ${Math.round(timeSinceScheduled / 60000)} min since scheduled)`);
-      } else {
-        // Mark as failed after 1 hour of attempts
-        post.status = 'failed';
-        post.error = error.message;
-        post.failedAt = new Date();
-        post.retryCount = (post.retryCount || 0) + 1;
-
-        logger.warn(`Post marked as failed after ${post.retryCount} attempts over 1 hour`);
-      }
-
+      // Update overall status
+      const overallStatus = post.getOverallStatus();
+      post.status = overallStatus;
       await post.save();
 
       throw error;
@@ -532,6 +614,12 @@ class PostingSchedulerJob {
 
     if (!isEnabled) {
       logger.warn('Instagram posting is disabled, skipping');
+
+      // Mark platform as skipped
+      await post.setPlatformStatus('instagram', 'skipped', {
+        error: 'Instagram posting disabled'
+      });
+
       return { success: false, skipped: true, reason: 'Instagram posting disabled' };
     }
 
@@ -574,7 +662,8 @@ class PostingSchedulerJob {
       throw new Error(result.error || 'Instagram posting failed');
     }
 
-    // Update post with Instagram media ID
+    // Update platform status with media ID and permalink
+    // Note: The actual status update to 'posted' happens in processPlatformPosting
     if (result.mediaId) {
       post.instagramMediaId = result.mediaId;
     }

@@ -298,8 +298,8 @@ async function generateTier1Video(options) {
       pan: false,
       textOverlay: true,
       vignette: true,
-      fadeIn: true,
-      fadeOut: true
+      fadeIn: false,
+      fadeOut: false
     },
     preset = DEFAULT_PRESET,
     outputPath: customOutputPath = null

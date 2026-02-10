@@ -74,6 +74,7 @@ class PerformanceMetricsService extends BaseApiClient {
 
   /**
    * Fetch metrics for a single post from the platform API
+   * Supports both single-platform (legacy) and multi-platform posts
    */
   async fetchPostMetrics(postId) {
     try {
@@ -85,74 +86,124 @@ class PerformanceMetricsService extends BaseApiClient {
         throw new Error(`Post ${postId} not found`);
       }
 
-      // Only fetch metrics for posted posts
-      if (post.status !== 'posted') {
+      // Get platforms array (handle both new and legacy format)
+      const platforms = post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0
+        ? post.platforms
+        : post.platform ? [post.platform] : [];
+
+      if (platforms.length === 0) {
         return {
           success: false,
-          error: 'Post must be posted before fetching metrics',
-          code: 'INVALID_STATUS',
+          error: 'No platforms specified for this post',
+          code: 'NO_PLATFORMS',
         };
       }
 
-      // Check if post has platform-specific ID
-      const platformVideoId = this.getPlatformVideoId(post);
-      if (!platformVideoId) {
-        return {
-          success: false,
-          error: 'No platform video ID found. Post may not have been published successfully.',
-          code: 'MISSING_VIDEO_ID',
-        };
+      const results = {};
+      const errors = {};
+
+      // Fetch metrics for each platform
+      for (const platform of platforms) {
+        try {
+          // Get mediaId from platformStatus (new format) or legacy fields
+          const mediaId = post.platformStatus?.[platform]?.mediaId || this.getPlatformVideoId(post, platform);
+
+          if (!mediaId) {
+            errors[platform] = 'No media ID found for this platform';
+            continue;
+          }
+
+          // Check if platform is actually posted
+          const platformStatus = post.platformStatus?.[platform]?.status;
+          if (platformStatus && platformStatus !== 'posted') {
+            errors[platform] = `Platform not posted (status: ${platformStatus})`;
+            continue;
+          }
+
+          // Fetch metrics for this platform
+          let metrics;
+          switch (platform) {
+            case 'tiktok':
+              metrics = await this.fetchTikTokMetrics(mediaId);
+              break;
+            case 'instagram':
+              metrics = await this.fetchInstagramMetrics(mediaId);
+              break;
+            case 'youtube_shorts':
+              metrics = await this.fetchYouTubeMetrics(mediaId);
+              break;
+            default:
+              errors[platform] = `Unsupported platform: ${platform}`;
+              continue;
+          }
+
+          if (metrics.success) {
+            // Calculate engagement rate for this platform
+            const engagementRate = this.calculateEngagementRate(metrics.data);
+
+            // Store in platformStatus with timestamp
+            await MarketingPost.findByIdAndUpdate(postId, {
+              [`platformStatus.${platform}.performanceMetrics`]: {
+                views: metrics.data.views || 0,
+                likes: metrics.data.likes || 0,
+                comments: metrics.data.comments || 0,
+                shares: metrics.data.shares || 0,
+                saved: metrics.data.saved || 0,
+                reach: metrics.data.reach || 0,
+                engagementRate: engagementRate,
+              },
+              [`platformStatus.${platform}.lastFetchedAt`]: new Date()
+            });
+
+            results[platform] = {
+              views: metrics.data.views || 0,
+              likes: metrics.data.likes || 0,
+              comments: metrics.data.comments || 0,
+              shares: metrics.data.shares || 0,
+              saved: metrics.data.saved || 0,
+              reach: metrics.data.reach || 0,
+              engagementRate: engagementRate,
+            };
+
+            logger.info(`Metrics updated for ${platform} on post ${postId}`, {
+              views: results[platform].views,
+              likes: results[platform].likes,
+              engagementRate: results[platform].engagementRate,
+            });
+          } else {
+            errors[platform] = metrics.error || 'Unknown error';
+          }
+        } catch (error) {
+          logger.error(`Failed to fetch ${platform} metrics for post ${postId}`, {
+            error: error.message,
+          });
+          errors[platform] = error.message;
+        }
+
+        // Small delay between platform requests to avoid rate limiting
+        if (platforms.indexOf(platform) < platforms.length - 1) {
+          await this.delay(200);
+        }
       }
 
-      // Fetch platform-specific metrics
-      let metrics;
-      switch (post.platform) {
-        case 'tiktok':
-          metrics = await this.fetchTikTokMetrics(platformVideoId);
-          break;
-        case 'instagram':
-          metrics = await this.fetchInstagramMetrics(platformVideoId);
-          break;
-        case 'youtube_shorts':
-          metrics = await this.fetchYouTubeMetrics(platformVideoId);
-          break;
-        default:
-          throw new Error(`Unsupported platform: ${post.platform}`);
-      }
+      // Calculate and update aggregate metrics (sum of all platforms for backward compatibility)
+      const aggregate = this.calculateAggregateMetrics(results);
+      await MarketingPost.findByIdAndUpdate(postId, {
+        performanceMetrics: aggregate,
+        metricsLastFetchedAt: new Date()
+      });
 
-      if (!metrics.success) {
-        return metrics;
-      }
-
-      // Calculate engagement rate
-      const engagementRate = this.calculateEngagementRate(metrics.data);
-
-      // Update post in database
-      post.performanceMetrics = {
-        views: metrics.data.views || 0,
-        likes: metrics.data.likes || 0,
-        comments: metrics.data.comments || 0,
-        shares: metrics.data.shares || 0,
-        engagementRate: engagementRate,
-      };
-
-      // Add metrics timestamp
-      post.metricsLastFetchedAt = new Date();
-
-      await post.save();
-
-      logger.info(`Metrics updated for post ${postId}`, {
-        platform: post.platform,
-        views: post.performanceMetrics.views,
-        likes: post.performanceMetrics.likes,
-        engagementRate: post.performanceMetrics.engagementRate,
+      logger.info(`Aggregate metrics updated for post ${postId}`, {
+        totalViews: aggregate.views,
+        totalLikes: aggregate.likes,
+        engagementRate: aggregate.engagementRate,
       });
 
       return {
         success: true,
-        data: post.performanceMetrics,
-        platform: post.platform,
-        fetchedAt: post.metricsLastFetchedAt,
+        results: results,
+        aggregate: aggregate,
+        errors: Object.keys(errors).length > 0 ? errors : null,
       };
 
     } catch (error) {
@@ -169,10 +220,54 @@ class PerformanceMetricsService extends BaseApiClient {
   }
 
   /**
+   * Calculate aggregate metrics from multiple platforms
+   */
+  calculateAggregateMetrics(platformResults) {
+    let totalViews = 0;
+    let totalLikes = 0;
+    let totalComments = 0;
+    let totalShares = 0;
+    let totalSaved = 0;
+    let totalReach = 0;
+
+    Object.values(platformResults).forEach(result => {
+      totalViews += result.views || 0;
+      totalLikes += result.likes || 0;
+      totalComments += result.comments || 0;
+      totalShares += result.shares || 0;
+      totalSaved += result.saved || 0;
+      totalReach += result.reach || 0;
+    });
+
+    const totalEngagement = totalLikes + totalComments + totalShares;
+    const engagementRate = totalViews > 0 ? (totalEngagement / totalViews) * 100 : 0;
+
+    return {
+      views: totalViews,
+      likes: totalLikes,
+      comments: totalComments,
+      shares: totalShares,
+      saved: totalSaved,
+      reach: totalReach,
+      engagementRate: engagementRate,
+    };
+  }
+
+  /**
+   * Helper: delay between requests
+   */
+  async delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Get platform-specific video ID from post
    */
-  getPlatformVideoId(post) {
-    switch (post.platform) {
+  getPlatformVideoId(post, platform) {
+    // If platform is specified, use it; otherwise use legacy post.platform
+    const targetPlatform = platform || post.platform;
+
+    switch (targetPlatform) {
       case 'tiktok':
         return post.tiktokVideoId;
       case 'instagram':
@@ -284,27 +379,81 @@ class PerformanceMetricsService extends BaseApiClient {
 
       logger.info(`Fetching Instagram metrics for media ${mediaId}...`);
 
-      // Use oauthManager for authenticated request
-      const response = await oauthManager.fetch('instagram', `${this.platforms.instagram.baseURL}/${mediaId}/insights?metric=engagement,impressions,reach,shares`, {
+      // First, fetch basic media data (like_count, comments_count) - more reliable for Instagram Reels
+      const mediaResponse = await oauthManager.fetch('instagram', `${this.platforms.instagram.baseURL}/${mediaId}?fields=like_count,comments_count,media_type`, {
         method: 'GET',
       });
 
-      if (response.error) {
-        throw new Error(`Instagram API error: ${response.error.message}`);
+      let likes = 0;
+      let comments = 0;
+      let mediaType = null;
+
+      if (!mediaResponse.error && mediaResponse) {
+        likes = mediaResponse.like_count || 0;
+        comments = mediaResponse.comments_count || 0;
+        mediaType = mediaResponse.media_type;
+        logger.debug(`Instagram basic media data: likes=${likes}, comments=${comments}, type=${mediaType}`);
       }
 
-      // Extract metrics from response
-      const metrics = response.data || {};
-      const views = metrics.impressions?.values?.[0]?.value || 0;
-      const likes = metrics.likes || 0;
-      const comments = metrics.comments || 0;
-      const shares = metrics.shares || 0;
+      // Then try to fetch insights for additional metrics (views, reach, etc.)
+      let views = 0;
+      let reach = 0;
+      let shares = 0;
+      let saved = 0;
+
+      try {
+        // For Reels, try specific metrics
+        const insightsMetrics = mediaType === 'VIDEO'
+          ? 'views,likes,comments,saved,reach'
+          : 'engagement,impressions,reach';
+
+        const insightsResponse = await oauthManager.fetch('instagram', `${this.platforms.instagram.baseURL}/${mediaId}/insights?metric=${insightsMetrics}`, {
+          method: 'GET',
+        });
+
+        if (!insightsResponse.error && insightsResponse.data) {
+          // Parse insights data
+          insightsResponse.data.forEach(metric => {
+            const value = metric.values?.[0]?.value || 0;
+            switch (metric.name) {
+              case 'views':
+              case 'impressions':
+                views = value;
+                break;
+              case 'likes':
+                // Use insights likes if available, otherwise use media data
+                if (value > 0) likes = value;
+                break;
+              case 'comments':
+                // Use insights comments if available, otherwise use media data
+                if (value > 0) comments = value;
+                break;
+              case 'saved':
+                saved = value;
+                break;
+              case 'reach':
+                reach = value;
+                break;
+              case 'shares':
+                shares = value;
+                break;
+            }
+          });
+          logger.debug(`Instagram insights parsed: views=${views}, reach=${reach}, saved=${saved}, shares=${shares}`);
+        }
+      } catch (insightsError) {
+        logger.debug(`Could not fetch Instagram insights for ${mediaId}: ${insightsError.message}`);
+        // Continue with basic metrics
+      }
 
       logger.info(`Instagram metrics fetched for media ${mediaId}`, {
+        mediaType,
         views,
         likes,
         comments,
         shares,
+        saved,
+        reach,
       });
 
       return {
@@ -314,6 +463,8 @@ class PerformanceMetricsService extends BaseApiClient {
           likes,
           comments,
           shares,
+          saved,
+          reach,
         },
       };
 

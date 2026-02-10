@@ -110,6 +110,10 @@ async function triggerPost() {
 
     // Update post status
     console.log('\n=== UPDATING POST STATUS ===');
+    // CRITICAL: Set postingStartedAt for accurate timeout detection by postMonitoringService
+    if (!post.postingStartedAt) {
+      post.postingStartedAt = new Date();
+    }
     post.status = 'posting';
     post.sheetTriggeredAt = new Date();
     post.s3VideoUrl = publicUrl;

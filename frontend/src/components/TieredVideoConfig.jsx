@@ -383,8 +383,8 @@ function TieredVideoConfig() {
     pan: false,
     textOverlay: true,
     vignette: true,
-    fadeIn: true,
-    fadeOut: true
+    fadeIn: false,
+    fadeOut: false
   });
   const [costEstimate, setCostEstimate] = useState(null);
 

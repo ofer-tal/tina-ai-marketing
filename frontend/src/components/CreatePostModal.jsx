@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled from 'styled-components';
+import { FaTiktok, FaInstagram, FaYoutube } from 'react-icons/fa';
 
 const ModalOverlay = styled.div`
   position: fixed;
@@ -160,11 +161,27 @@ const PlatformOption = styled.label`
   input[type="checkbox"] {
     display: none;
   }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
 `;
 
 const PlatformIcon = styled.span`
   font-size: 1.2rem;
+  svg {
+    width: 20px;
+    height: 20px;
+    fill: currentColor;
+  }
 `;
+
+// Social platform icons using react-icons
+const TikTokIcon = () => <FaTiktok />;
+const InstagramIcon = () => <FaInstagram />;
+const YouTubeIcon = () => <FaYoutube />;
 
 const VoiceSelector = styled.div`
   display: grid;
@@ -697,6 +714,29 @@ const PresetSlides = styled.div`
   margin-top: 0.25rem;
 `;
 
+// Platform-specific hashtag input styles
+const PlatformHashtagsSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const PlatformHashtagWrapper = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+`;
+
+const PlatformLabel = styled.div`
+  min-width: 100px;
+  font-weight: 600;
+  color: #eaeaea;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+`;
+
 const PresetSlide = styled.span`
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
@@ -707,9 +747,9 @@ const PresetSlide = styled.span`
 
 // Platform configurations
 const PLATFORMS = [
-  { id: 'tiktok', name: 'TikTok', icon: '🎵' },
-  { id: 'instagram', name: 'Instagram', icon: '📷' },
-  { id: 'youtube_shorts', name: 'YouTube Shorts', icon: '▶️' }
+  { id: 'tiktok', name: 'TikTok', icon: <TikTokIcon /> },
+  { id: 'instagram', name: 'Instagram', icon: <InstagramIcon /> },
+  { id: 'youtube_shorts', name: 'YouTube Shorts', icon: <YouTubeIcon /> }
 ];
 
 // Voice configurations
@@ -753,7 +793,12 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   const [showStoryDropdown, setShowStoryDropdown] = useState(false);
   const [caption, setCaption] = useState('');
   const [hook, setHook] = useState('');
-  const [hashtags, setHashtags] = useState('');
+  // Platform-specific hashtags - object with keys for each platform
+  const [hashtags, setHashtags] = useState({
+    tiktok: '#blushapp #romance #storytime #fyp #viral',
+    instagram: '',
+    youtube_shorts: ''
+  });
   const [preset, setPreset] = useState('triple_visual');
   const [voice, setVoice] = useState('female_1');
   const [contentTier, setContentTier] = useState('tier_1');
@@ -772,6 +817,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   const [allAvatars, setAllAvatars] = useState([]);
   const [selectedAvatar, setSelectedAvatar] = useState(null);
   const [script, setScript] = useState('');
+  const [videoTitle, setVideoTitle] = useState('');
   const [isFetchingAvatars, setIsFetchingAvatars] = useState(false);
 
   // Video generation progress state
@@ -891,6 +937,11 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     setStorySearch(story.name || story.title);
     setShowStoryDropdown(false);
 
+    // Auto-generate video title from story name (can be overridden)
+    if (!videoTitle) {
+      setVideoTitle(story.name || story.title);
+    }
+
     // Auto-generate caption preview
     if (!caption) {
       setCaption(`Check out this amazing ${story.category} story! "${story.name || story.title}" 💕`);
@@ -901,9 +952,12 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
       setHook('You won\'t believe what happens next...');
     }
 
-    // Auto-generate hashtags preview
-    if (!hashtags) {
-      setHashtags('#blushapp #romance #storytime #fyp #viral');
+    // Auto-generate hashtags preview (only for TikTok by default)
+    if (!hashtags.tiktok) {
+      setHashtags(prev => ({
+        ...prev,
+        tiktok: '#blushapp #romance #storytime #fyp #viral'
+      }));
     }
   };
 
@@ -911,8 +965,14 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     setError(null);
 
     // Validation
-    if (!selectedStory) {
+    // Story is required for tier_1, optional for tier_2
+    if (contentTier !== 'tier_2' && !selectedStory) {
       setError('Please select a story');
+      return;
+    }
+    // For tier_2, either story or title is required
+    if (contentTier === 'tier_2' && !selectedStory && !videoTitle) {
+      setError('Please select a story or enter a video title');
       return;
     }
 
@@ -931,22 +991,29 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
         setError('Please enter a script for the AI avatar');
         return;
       }
-      if (selectedPlatforms.length > 1) {
-        setError('Tier 2 posts can only target one platform at a time');
-        return;
-      }
     }
 
-    const hashtagArray = hashtags
-      .split(',')
-      .map(h => h.trim())
-      .filter(h => h.length > 0 && !h.startsWith('#'))
-      .map(h => h.startsWith('#') ? h : `#${h}`);
+    // Build platform-specific hashtags object
+    // Parse hashtags for each platform (space or comma separated, add # if missing)
+    const defaultHashtags = ['#blushapp', '#romance', '#storytime', '#fyp', '#viral'];
 
-    // If no hashtags after processing, add default
-    const finalHashtags = hashtagArray.length > 0
-      ? hashtagArray
-      : ['#blushapp', '#romance', '#storytime', '#fyp'];
+    const parseHashtags = (hashtagString) => {
+      if (!hashtagString || !hashtagString.trim()) return defaultHashtags;
+      return hashtagString
+        .split(/[\s,]+/)
+        .map(h => h.trim())
+        .filter(h => h.length > 0)
+        .map(h => h.startsWith('#') ? h : `#${h}`);
+    };
+
+    const platformHashtags = {};
+    selectedPlatforms.forEach(platform => {
+      const platformHashtagString = hashtags[platform] || hashtags.tiktok || '';
+      platformHashtags[platform] = parseHashtags(platformHashtagString);
+    });
+
+    // For backward compatibility, also provide hashtags array for first platform
+    const finalHashtags = platformHashtags[selectedPlatforms[0]] || defaultHashtags;
 
     // Build tier parameters based on selected tier
     const tierParameters = {};
@@ -959,11 +1026,12 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
     }
 
     const postData = {
-      storyId: selectedStory.id,
+      storyId: selectedStory?.id || null,
+      title: videoTitle || selectedStory?.name || 'Untitled Post',
       platforms: selectedPlatforms,
-      caption: caption || `Check out this amazing ${selectedStory.category} story!`,
+      caption: caption || (selectedStory ? `Check out this amazing ${selectedStory.category} story!` : 'Join the conversation! 💕'),
       hook: hook || 'You won\'t believe what happens next...',
-      hashtags: finalHashtags,
+      hashtags: platformHashtags, // Send platform-specific hashtags
       contentType: 'video',
       contentTier,
       tierParameters,
@@ -1152,49 +1220,122 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
           </VideoProgressSection>
         )}
 
-        {/* Story Selection */}
-        <FormSection>
-          <FormLabel>
-            Select Story <FormLabelRequired>*</FormLabelRequired>
-          </FormLabel>
-          <StorySelector>
-            <StorySearchInput
-              type="text"
-              placeholder="Search stories by title or category..."
-              value={storySearch}
-              onChange={(e) => {
-                setStorySearch(e.target.value);
-                setShowStoryDropdown(true);
-              }}
-              onFocus={() => setShowStoryDropdown(true)}
-            />
-            {showStoryDropdown && (
-              <StoryDropdown $visible={showStoryDropdown}>
-                {isFetchingStories ? (
-                  <StoryOption style={{ cursor: 'default', justifyContent: 'center' }}>
-                    <StoryOptionTitle>Loading stories...</StoryOptionTitle>
-                  </StoryOption>
-                ) : filteredStories.length === 0 ? (
-                  <StoryOption style={{ cursor: 'default', justifyContent: 'center' }}>
-                    <StoryOptionTitle>No stories found</StoryOptionTitle>
-                  </StoryOption>
-                ) : (
-                  filteredStories.map(story => (
-                    <StoryOption
-                      key={story.id}
-                      onClick={() => handleSelectStory(story)}
-                    >
-                      <StoryOptionTitle>{story.name || story.title || 'Untitled Story'}</StoryOptionTitle>
-                      <StoryOptionMeta>
-                        {story.category || 'Other'} • Spice: {story.spiciness ?? 0}/3
-                      </StoryOptionMeta>
+        {/* Story Selection - Required for tier_1, Optional for tier_2 */}
+        {contentTier !== 'tier_2' && (
+          <FormSection>
+            <FormLabel>
+              Select Story <FormLabelRequired>*</FormLabelRequired>
+            </FormLabel>
+            <StorySelector>
+              <StorySearchInput
+                type="text"
+                placeholder="Search stories by title or category..."
+                value={storySearch}
+                onChange={(e) => {
+                  setStorySearch(e.target.value);
+                  setShowStoryDropdown(true);
+                }}
+                onFocus={() => setShowStoryDropdown(true)}
+              />
+              {showStoryDropdown && (
+                <StoryDropdown $visible={showStoryDropdown}>
+                  {isFetchingStories ? (
+                    <StoryOption style={{ cursor: 'default', justifyContent: 'center' }}>
+                      <StoryOptionTitle>Loading stories...</StoryOptionTitle>
                     </StoryOption>
-                  ))
-                )}
-              </StoryDropdown>
-            )}
-          </StorySelector>
-        </FormSection>
+                  ) : filteredStories.length === 0 ? (
+                    <StoryOption style={{ cursor: 'default', justifyContent: 'center' }}>
+                      <StoryOptionTitle>No stories found</StoryOptionTitle>
+                    </StoryOption>
+                  ) : (
+                    filteredStories.map(story => (
+                      <StoryOption
+                        key={story.id}
+                        onClick={() => handleSelectStory(story)}
+                      >
+                        <StoryOptionTitle>{story.name || story.title || 'Untitled Story'}</StoryOptionTitle>
+                        <StoryOptionMeta>
+                          {story.category || 'Other'} • Spice: {story.spiciness ?? 0}/3
+                        </StoryOptionMeta>
+                      </StoryOption>
+                    ))
+                  )}
+                </StoryDropdown>
+              )}
+            </StorySelector>
+          </FormSection>
+        )}
+
+        {/* Video Title Input - For tier_2 without story */}
+        {contentTier === 'tier_2' && (
+          <FormSection>
+            <FormLabel>
+              Video Title {!selectedStory ? <FormLabelRequired>*</FormLabelRequired> : '(optional - defaults to story name)'}
+            </FormLabel>
+            <FormInput
+              type="text"
+              placeholder="Enter a title for this video (e.g., What's Your Favorite Romance Trope?)"
+              value={videoTitle}
+              onChange={(e) => setVideoTitle(e.target.value)}
+            />
+            <div style={{ fontSize: '0.8rem', color: '#a0a0a0', marginTop: '0.5rem' }}>
+              {selectedStory
+                ? 'Story is selected. Title will default to story name if left empty.'
+                : 'Create an engagement video without a story. Enter a catchy title!'}
+            </div>
+          </FormSection>
+        )}
+
+        {/* Optional Story Selection for tier_2 */}
+        {contentTier === 'tier_2' && (
+          <FormSection>
+            <FormLabel>
+              Optional: Link to a Story
+            </FormLabel>
+            <StorySelector>
+              <StorySearchInput
+                type="text"
+                placeholder="Search stories to link (optional)..."
+                value={storySearch}
+                onChange={(e) => {
+                  setStorySearch(e.target.value);
+                  setShowStoryDropdown(true);
+                }}
+                onFocus={() => setShowStoryDropdown(true)}
+              />
+              {showStoryDropdown && (
+                <StoryDropdown $visible={showStoryDropdown}>
+                  {isFetchingStories ? (
+                    <StoryOption style={{ cursor: 'default', justifyContent: 'center' }}>
+                      <StoryOptionTitle>Loading stories...</StoryOptionTitle>
+                    </StoryOption>
+                  ) : filteredStories.length === 0 ? (
+                    <StoryOption style={{ cursor: 'default', justifyContent: 'center' }}>
+                      <StoryOptionTitle>No stories found</StoryOptionTitle>
+                    </StoryOption>
+                  ) : (
+                    filteredStories.map(story => (
+                      <StoryOption
+                        key={story.id}
+                        onClick={() => handleSelectStory(story)}
+                      >
+                        <StoryOptionTitle>{story.name || story.title || 'Untitled Story'}</StoryOptionTitle>
+                        <StoryOptionMeta>
+                          {story.category || 'Other'} • Spice: {story.spiciness ?? 0}/3
+                        </StoryOptionMeta>
+                      </StoryOption>
+                    ))
+                  )}
+                </StoryDropdown>
+              )}
+            </StorySelector>
+            <div style={{ fontSize: '0.8rem', color: '#a0a0a0', marginTop: '0.5rem' }}>
+              {selectedStory
+                ? `Linked to: ${selectedStory.name || selectedStory.title}`
+                : 'No story linked - this will be a general engagement video'}
+            </div>
+          </FormSection>
+        )}
 
         {/* Platform Selection */}
         <FormSection>
@@ -1244,12 +1385,42 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
         {/* Hashtags Input */}
         <FormSection>
           <FormLabel>Hashtags</FormLabel>
-          <FormInput
-            type="text"
-            placeholder="#hashtag1 #hashtag2..."
-            value={hashtags}
-            onChange={(e) => setHashtags(e.target.value)}
-          />
+          <PlatformHashtagsSection>
+            {selectedPlatforms.length === 1 ? (
+              // Single platform - show one input
+              <PlatformHashtagWrapper>
+                <FormInput
+                  type="text"
+                  placeholder="#hashtag1 #hashtag2..."
+                  value={hashtags[selectedPlatforms[0]] || ''}
+                  onChange={(e) => setHashtags(prev => ({
+                    ...prev,
+                    [selectedPlatforms[0]]: e.target.value
+                  }))}
+                />
+              </PlatformHashtagWrapper>
+            ) : (
+              // Multiple platforms - show platform-specific inputs
+              selectedPlatforms.map(platform => (
+                <PlatformHashtagWrapper key={platform}>
+                  <PlatformLabel>
+                    {platform === 'tiktok' && '🎵 TikTok'}
+                    {platform === 'instagram' && '📸 Instagram'}
+                    {platform === 'youtube_shorts' && '▶️ YouTube'}
+                  </PlatformLabel>
+                  <FormInput
+                    type="text"
+                    placeholder={`#hashtag1 #hashtag2...`}
+                    value={hashtags[platform] || ''}
+                    onChange={(e) => setHashtags(prev => ({
+                      ...prev,
+                      [platform]: e.target.value
+                    }))}
+                  />
+                </PlatformHashtagWrapper>
+              ))
+            )}
+          </PlatformHashtagsSection>
         </FormSection>
 
         {/* Content Tier Selection */}
@@ -1583,9 +1754,19 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
                 <strong>Caption:</strong> {caption || `Check out this amazing ${selectedStory.category} story!`}
               </PreviewCaption>
               <PreviewHashtags>
-                {(hashtags || '#blushapp #romance #storytime').split(' ').map((tag, i) => (
-                  <span key={i}>{tag} </span>
-                ))}
+                {selectedPlatforms.length === 1
+                  ? (hashtags[selectedPlatforms[0]] || hashtags.tiktok || '#blushapp #romance #storytime').split(' ').map((tag, i) => (
+                      <span key={i}>{tag} </span>
+                    ))
+                  : selectedPlatforms.map(platform => (
+                      <div key={platform}>
+                        <strong>{platform === 'tiktok' ? 'TikTok' : platform === 'instagram' ? 'Instagram' : 'YouTube'}:</strong>{' '}
+                        {(hashtags[platform] || hashtags.tiktok || '#blushapp #romance').split(' ').map((tag, i) => (
+                          <span key={i}>{tag} </span>
+                        ))}
+                      </div>
+                    ))
+                }
               </PreviewHashtags>
             </PreviewContent>
           </PreviewSection>

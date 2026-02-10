@@ -67,8 +67,8 @@ const DEFAULT_EFFECTS = {
   pan: false,
   textOverlay: true,
   vignette: true,
-  fadeIn: true,
-  fadeOut: true
+  fadeIn: false,
+  fadeOut: false
 };
 
 /**
@@ -88,7 +88,16 @@ async function createApprovalTodo(post, story) {
       return { success: false, error: 'Database connection not available' };
     }
 
-    const platformDisplay = post.platform.charAt(0).toUpperCase() + post.platform.slice(1).replace('_', ' ');
+    // Get platforms - handle both new platforms array and legacy platform field
+    const platforms = post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0
+      ? post.platforms
+      : [post.platform];
+
+    // Create platform display string
+    const platformDisplay = platforms
+      .map(p => p.charAt(0).toUpperCase() + p.slice(1).replace('_', ' '))
+      .join(' + ');
+
     const title = `✅ Approve Post: ${platformDisplay} - ${post.title.substring(0, 40)}...`;
 
     // Calculate priority based on scheduled time
@@ -103,8 +112,8 @@ async function createApprovalTodo(post, story) {
 
     const todo = {
       title,
-      description: `Review and approve the marketing post for "${story.name}" scheduled for ${scheduledAt.toLocaleString()}.\n\n` +
-        `Platform: ${platformDisplay}\n` +
+      description: `Review and approve the marketing post${story ? ` for "${story.name}"` : ''} scheduled for ${scheduledAt.toLocaleString()}.\n\n` +
+        `Platforms: ${platformDisplay}\n` +
         `Caption: ${post.caption?.substring(0, 100) || 'N/A'}...\n` +
         `Hook: ${post.hook || 'N/A'}\n` +
         `CTA: ${post.cta || 'N/A'}`,
@@ -116,16 +125,17 @@ async function createApprovalTodo(post, story) {
       completedAt: null,
       resources: [
         { type: 'post', id: post._id.toString(), label: `View Post: ${post.title}` },
-        { type: 'story', id: story._id.toString(), label: `View Story: ${story.name}` }
+        ...(story ? [{ type: 'story', id: story._id.toString(), label: `View Story: ${story.name}` }] : [])
       ],
       estimatedTime: 5, // 5 minutes to review
       actualTime: null,
       createdBy: 'tina',
       relatedPostId: post._id.toString(),
-      relatedStoryId: story._id.toString(),
+      relatedStoryId: story?._id?.toString() || null,
       metadata: {
         taskType: 'post_approval',
-        platform: post.platform,
+        platforms: platforms, // Store as array for multi-platform posts
+        platform: post.platform, // Legacy: keep first platform
         contentType: post.contentType,
         contentTier: post.contentTier,
         hasVideo: !!post.videoPath,
@@ -140,6 +150,7 @@ async function createApprovalTodo(post, story) {
     logger.info('Approval todo created', {
       todoId: result.insertedId,
       postId: post._id,
+      platforms,
       priority
     });
 
@@ -287,17 +298,20 @@ export async function getMusic({ style = 'all' } = {}) {
  */
 async function validateCreatePost(params) {
   const errors = [];
+  let story = null;
 
-  // Validate storyId exists and is available
-  const story = await Story.findOne({
-    _id: params.storyId,
-    userId: null,     // Common library only
-    status: 'ready'   // Ready stories only
-  });
+  // Validate storyId exists and is available (unless it's tier_2 without story)
+  if (params.contentTier !== 'tier_2' || params.storyId) {
+    story = await Story.findOne({
+      _id: params.storyId,
+      userId: null,     // Common library only
+      status: 'ready'   // Ready stories only
+    });
 
-  if (!story) {
-    errors.push('Story not found or not available for post creation (must be a ready common library story)');
-    return { valid: false, errors, story: null };
+    if (!story) {
+      errors.push('Story not found or not available for post creation (must be a ready common library story)');
+      return { valid: false, errors, story: null };
+    }
   }
 
   // Validate platforms
@@ -340,11 +354,6 @@ async function validateCreatePost(params) {
       errors.push('script is required for tier_2 posts');
     }
 
-    // Tier 2 posts should only target one platform
-    if (params.platforms && params.platforms.length > 1) {
-      errors.push('Tier 2 posts can only target one platform at a time');
-    }
-
     // Tier 2 posts must be scheduled at least 4 hours in the future
     // (requires time for manual video upload and approval)
     if (params.scheduleFor) {
@@ -357,14 +366,16 @@ async function validateCreatePost(params) {
     }
   }
 
-  // Check if story is blacklisted
-  const blacklisted = await StoryBlacklist.findOne({
-    storyId: params.storyId,
-    isActive: true
-  });
+  // Check if story is blacklisted (only if story is provided)
+  if (params.storyId) {
+    const blacklisted = await StoryBlacklist.findOne({
+      storyId: params.storyId,
+      isActive: true
+    });
 
-  if (blacklisted) {
-    errors.push(`Story is blacklisted. Reason: ${blacklisted.reason || 'No reason provided'}`);
+    if (blacklisted) {
+      errors.push(`Story is blacklisted. Reason: ${blacklisted.reason || 'No reason provided'}`);
+    }
   }
 
   return {
@@ -402,6 +413,7 @@ export async function createPost(params = {}) {
     caption: providedCaption,
     hook: providedHook,
     hashtags: providedHashtags,
+    title,
     contentType = 'video',
     contentTier = 'tier_1',
     tierParameters = {},
@@ -429,14 +441,19 @@ export async function createPost(params = {}) {
   // Auto-generate caption if not provided
   let caption = providedCaption;
   if (!caption) {
-    try {
-      const result = await captionGenerationService.generateCaption(story, platforms[0], {
-        maxLength: 500
-      });
-      caption = result.success ? result.caption : null;
-    } catch (error) {
-      logger.warn('Caption generation failed, using fallback', { error: error.message });
-      caption = `Check out this amazing ${story.category || story.parameters?.category || 'Other'} story! "${story.name}" - available now on the blush app. 💕`;
+    if (story) {
+      try {
+        const result = await captionGenerationService.generateCaption(story, platforms[0], {
+          maxLength: 500
+        });
+        caption = result.success ? result.caption : null;
+      } catch (error) {
+        logger.warn('Caption generation failed, using fallback', { error: error.message });
+        caption = `Check out this amazing ${story.category || story.parameters?.category || 'Other'} story! "${story.name}" - available now on the blush app. 💕`;
+      }
+    } else if (contentTier === 'tier_2') {
+      // Generic engagement caption for tier_2 without story
+      caption = "Join the conversation! What's your favorite romance trope? Drop it below! 💕";
     }
   }
 
@@ -513,213 +530,223 @@ export async function createPost(params = {}) {
     scheduledDate = getNextAvailableSlot();
   }
 
-  // Create posts for each platform
-  const createdPosts = [];
-  const generationResults = [];
+  // Build tierParameters Map based on content tier
+  const tierParametersMap = new Map();
 
-  for (const platform of platforms) {
-    // Build tierParameters Map based on content tier
-    const tierParametersMap = new Map();
+  // Add base tierParameters
+  Object.entries(tierParameters).forEach(([key, value]) => {
+    tierParametersMap.set(key, { parameterKey: key, parameterValue: value });
+  });
 
-    // Add base tierParameters
-    Object.entries(tierParameters).forEach(([key, value]) => {
-      tierParametersMap.set(key, { parameterKey: key, parameterValue: value });
-    });
-
-    // Add tier_2 specific parameters
-    if (contentTier === 'tier_2') {
-      if (avatarId) {
-        tierParametersMap.set('avatarId', avatarId);
-      }
-      if (script) {
-        tierParametersMap.set('script', script.trim());
-        tierParametersMap.set('scriptPreview', script.trim().substring(0, 200));
-      }
-
-      // Fetch avatar details
-      const AIAvatar = (await import('../../models/AIAvatar.js')).default;
-      const avatar = await AIAvatar.findById(avatarId);
-      if (avatar) {
-        tierParametersMap.set('avatarName', avatar.name);
-        await avatar.incrementUsage();
-      }
+  // Add tier_2 specific parameters
+  if (contentTier === 'tier_2') {
+    if (avatarId) {
+      tierParametersMap.set('avatarId', avatarId);
+    }
+    if (script) {
+      tierParametersMap.set('script', script.trim());
+      tierParametersMap.set('scriptPreview', script.trim().substring(0, 200));
     }
 
-    // Convert effects object to array of effect names (where value is true)
-    const effectsArray = Object.entries(DEFAULT_EFFECTS)
-      .filter(([_, enabled]) => enabled)
-      .map(([name, _]) => name);
+    // Fetch avatar details
+    const AIAvatar = (await import('../../models/AIAvatar.js')).default;
+    const avatar = await AIAvatar.findById(avatarId);
+    if (avatar) {
+      tierParametersMap.set('avatarName', avatar.name);
+      await avatar.incrementUsage();
+    }
+  }
 
-    // Build platform-specific hashtags object
-    const postHashtags = {
-      tiktok: platformHashtags.tiktok || fallbackHashtags,
-      instagram: platformHashtags.instagram || platformHashtags.tiktok || fallbackHashtags,
-      youtube_shorts: platformHashtags.youtube_shorts || platformHashtags.tiktok || fallbackHashtags
+  // Convert effects object to array of effect names (where value is true)
+  const effectsArray = Object.entries(DEFAULT_EFFECTS)
+    .filter(([_, enabled]) => enabled)
+    .map(([name, _]) => name);
+
+  // Build platform-specific hashtags object
+  const postHashtags = {
+    tiktok: platformHashtags.tiktok || fallbackHashtags,
+    instagram: platformHashtags.instagram || platformHashtags.tiktok || fallbackHashtags,
+    youtube_shorts: platformHashtags.youtube_shorts || platformHashtags.tiktok || fallbackHashtags
+  };
+
+  // Initialize platformStatus for each platform
+  const platformStatus = {};
+  for (const platform of platforms) {
+    platformStatus[platform] = {
+      status: 'pending',
+      postedAt: null,
+      mediaId: null,
+      error: null,
+      retryCount: 0
     };
+  }
 
-    const post = new MarketingPost({
-      title: `${story.name} - ${platform}`,
-      description: story.description || `Marketing post for ${story.name}`,
-      platform,
-      status: 'draft',
-      contentType,
-      contentTier,
-      caption,
-      hook,
-      cta,
-      hashtags: postHashtags,
-      scheduledAt: scheduledDate,
-      storyId: story._id,
-      storyName: story.name,
-      storyCategory: story.category || story.parameters?.category || 'Other',
-      storySpiciness: story.spiciness ?? story.parameters?.spiciness ?? 1,
-      tierParameters: tierParametersMap,
-      generationMetadata: {
-        tier: contentTier,
-        preset,
-        voice,
-        musicId,
-        effects: effectsArray
-      }
-    });
+  // Create a SINGLE post document with multiple platforms
+  const post = new MarketingPost({
+    title: title || story?.name || 'Untitled Post',
+    description: story?.description || title || `Marketing post for ${story?.name || 'engagement content'}`,
+    platforms: platforms, // NEW: Array of platforms
+    platform: platforms[0], // Legacy: Keep first platform for backward compatibility
+    status: 'draft',
+    contentType,
+    contentTier,
+    caption,
+    hook,
+    cta,
+    hashtags: postHashtags,
+    scheduledAt: scheduledDate,
+    storyId: story?._id || null,
+    storyName: story?.name || null,
+    storyCategory: story?.category || story?.parameters?.category || null,
+    storySpiciness: story?.spiciness ?? story?.parameters?.spiciness ?? null,
+    tierParameters: tierParametersMap,
+    platformStatus: platformStatus, // NEW: Per-platform status tracking
+    generationMetadata: {
+      tier: contentTier,
+      preset,
+      voice,
+      musicId,
+      effects: effectsArray
+    }
+  });
 
-    await post.save();
-    createdPosts.push(post);
+  await post.save();
 
-    // Broadcast SSE event for new post
-    sseService.broadcastPostCreated(post);
+  // Broadcast SSE event for new post
+  sseService.broadcastPostCreated(post);
 
-    logger.info('Created marketing post', {
+  logger.info('Created multi-platform marketing post', {
+    postId: post._id,
+    platforms,
+    contentTier,
+    storyId: story?._id || 'none',
+    status: post.status
+  });
+
+  // Generate video if requested - ASYNCHRONOUS (launch and forget)
+  // Note: Tier 2 posts skip video generation (manual upload required)
+  const generationResults = [];
+
+  if (generateVideo && contentType === 'video' && contentTier !== 'tier_2') {
+    // Merge provided effects with defaults
+    const mergedEffects = { ...DEFAULT_EFFECTS, ...effects };
+
+    logger.info('Launching ASYNCHRONOUS video generation for post', {
       postId: post._id,
-      platform,
-      contentTier,
-      storyId: story._id,
-      status: post.status
+      platforms,
+      musicId,
+      hasMusic: !!musicId
     });
 
-    // Generate video if requested - ASYNCHRONOUS (launch and forget)
-    // Note: Tier 2 posts skip video generation (manual upload required)
-    if (generateVideo && contentType === 'video' && contentTier !== 'tier_2') {
-      // Merge provided effects with defaults
-      const mergedEffects = { ...DEFAULT_EFFECTS, ...effects };
+    // Mark post as generating - this happens synchronously
+    post.status = 'generating';
+    post.videoGenerationProgress = {
+      status: 'initializing',
+      progress: 0,
+      currentStep: 'Initializing...',
+      totalSteps: 7,
+      startedAt: new Date()
+    };
+    await post.save();
 
-      logger.info('Launching ASYNCHRONOUS video generation for post', {
-        postId: post._id,
-        platform,
-        musicId,
-        hasMusic: !!musicId
-      });
-
-      // Mark post as generating - this happens synchronously
-      post.status = 'generating';
-      post.videoGenerationProgress = {
-        status: 'initializing',
-        progress: 0,
-        currentStep: 'Initializing...',
-        totalSteps: 7,
-        startedAt: new Date()
-      };
-      await post.save();
-
-      // Launch async generation WITHOUT awaiting
-      // This returns immediately to the LLM
-      generatePostVideoInternal(post, story, {
-        voice,
-        preset,
-        cta,
-        musicId,
-        effects: mergedEffects
-      }).then(async (videoResult) => {
-        if (videoResult.success) {
-          post.videoPath = videoResult.videoPath;
-          post.thumbnailPath = videoResult.thumbnailPath;
-          post.status = 'ready';
-          post.videoGenerationProgress = {
-            status: 'completed',
-            progress: 100,
-            currentStep: 'Complete',
-            completedAt: new Date(),
-            result: {
-              videoPath: videoResult.videoPath,
-              duration: videoResult.duration,
-              metadata: videoResult.metadata
-            }
-          };
-          post.generationMetadata = {
-            ...post.generationMetadata,
-            ...videoResult.metadata
-          };
-          logger.info('Async video generation completed', {
-            postId: post._id,
-            videoPath: videoResult.videoPath
-          });
-          // Create approval todo NOW that video is ready
-          await createApprovalTodo(post, story);
-          // Broadcast SSE event for post update (video ready)
-          sseService.broadcastPostUpdated(post);
-        } else {
-          post.status = 'draft';
-          post.videoGenerationProgress = {
-            status: 'failed',
-            progress: 0,
-            currentStep: 'Failed',
-            completedAt: new Date(),
-            errorMessage: videoResult.error
-          };
-          logger.error('Async video generation failed', {
-            postId: post._id,
-            error: videoResult.error
-          });
-          // Broadcast SSE event for post update (generation failed)
-          sseService.broadcastPostUpdated(post);
-        }
-        await post.save();
-      }).catch(async (error) => {
-        logger.error('Async video generation error', {
+    // Launch async generation WITHOUT awaiting
+    // This returns immediately to the LLM
+    generatePostVideoInternal(post, story, {
+      voice,
+      preset,
+      cta,
+      musicId,
+      effects: mergedEffects
+    }).then(async (videoResult) => {
+      if (videoResult.success) {
+        post.videoPath = videoResult.videoPath;
+        post.thumbnailPath = videoResult.thumbnailPath;
+        post.status = 'ready';
+        post.videoGenerationProgress = {
+          status: 'completed',
+          progress: 100,
+          currentStep: 'Complete',
+          completedAt: new Date(),
+          result: {
+            videoPath: videoResult.videoPath,
+            duration: videoResult.duration,
+            metadata: videoResult.metadata
+          }
+        };
+        post.generationMetadata = {
+          ...post.generationMetadata,
+          ...videoResult.metadata
+        };
+        logger.info('Async video generation completed', {
           postId: post._id,
-          error: error.message
+          videoPath: videoResult.videoPath
         });
+        // Create approval todo NOW that video is ready
+        await createApprovalTodo(post, story);
+        // Broadcast SSE event for post update (video ready)
+        sseService.broadcastPostUpdated(post);
+      } else {
         post.status = 'draft';
         post.videoGenerationProgress = {
           status: 'failed',
           progress: 0,
           currentStep: 'Failed',
           completedAt: new Date(),
-          errorMessage: error.message
+          errorMessage: videoResult.error
         };
-        await post.save();
-        // Broadcast SSE event for post update (generation error)
+        logger.error('Async video generation failed', {
+          postId: post._id,
+          error: videoResult.error
+        });
+        // Broadcast SSE event for post update (generation failed)
         sseService.broadcastPostUpdated(post);
+      }
+      await post.save();
+    }).catch(async (error) => {
+      logger.error('Async video generation error', {
+        postId: post._id,
+        error: error.message
       });
+      post.status = 'draft';
+      post.videoGenerationProgress = {
+        status: 'failed',
+        progress: 0,
+        currentStep: 'Failed',
+        completedAt: new Date(),
+        errorMessage: error.message
+      };
+      await post.save();
+      // Broadcast SSE event for post update (generation error)
+      sseService.broadcastPostUpdated(post);
+    });
 
-      generationResults.push({
-        postId: post._id,
-        platform,
-        launched: true,
-        message: 'Video generation launched asynchronously'
-      });
-    } else if (contentTier === 'tier_2') {
-      // Tier 2 posts: No automatic video generation, manual upload required
-      logger.info('Tier 2 post created - manual video upload required', {
-        postId: post._id,
-        platform
-      });
+    generationResults.push({
+      postId: post._id.toString(),
+      platforms,
+      launched: true,
+      message: 'Video generation launched asynchronously'
+    });
+  } else if (contentTier === 'tier_2') {
+    // Tier 2 posts: No automatic video generation, manual upload required
+    logger.info('Tier 2 post created - manual video upload required', {
+      postId: post._id,
+      platforms
+    });
 
-      generationResults.push({
-        postId: post._id,
-        platform,
-        launched: false,
-        message: 'Tier 2 post created - manual video upload required. Use the upload endpoint to add the AI avatar video.'
-      });
-    } else {
-      // No video generation requested
-      generationResults.push({
-        postId: post._id,
-        platform,
-        launched: false,
-        message: 'Post created without video generation'
-      });
-    }
+    generationResults.push({
+      postId: post._id.toString(),
+      platforms,
+      launched: false,
+      message: 'Tier 2 post created - manual video upload required. Use the upload endpoint to add the AI avatar video.'
+    });
+  } else {
+    // No video generation requested
+    generationResults.push({
+      postId: post._id.toString(),
+      platforms,
+      launched: false,
+      message: 'Post created without video generation.'
+    });
   }
 
   // Note: Approval todo is created when async video generation completes
@@ -728,32 +755,31 @@ export async function createPost(params = {}) {
 
   // Determine message based on content tier
   let message;
-  const hasTier2 = createdPosts.some(p => p.contentTier === 'tier_2');
-  const hasTier1 = createdPosts.some(p => p.contentTier === 'tier_1');
+  const isTier2 = contentTier === 'tier_2';
 
-  if (hasTier2 && generateVideo) {
-    message = `Created ${createdPosts.length} post(s). Tier 2 posts require manual video upload - please upload the AI avatar video using the upload endpoint. Tier 1 posts are generating in the background.`;
-  } else if (hasTier2) {
-    message = `Created ${createdPosts.length} tier_2 post(s). Manual video upload required - please upload the AI avatar video using the upload endpoint.`;
+  if (isTier2 && generateVideo) {
+    message = `Created post for ${platforms.length} platform(s). Tier 2 posts require manual video upload - please upload the AI avatar video using the upload endpoint. Tier 1 posts are generating in the background.`;
+  } else if (isTier2) {
+    message = `Created tier_2 post for ${platforms.length} platform(s). Manual video upload required - please upload the AI avatar video using the upload endpoint.`;
   } else if (generateVideo) {
-    message = `Launched async video generation for ${createdPosts.length} post(s). Videos are generating in the background. Approval todos will be created once generation completes (check back in a few minutes).`;
+    message = `Created post for ${platforms.length} platform(s) and launched async video generation. Video is generating in the background. Approval todo will be created once generation completes (check back in a few minutes).`;
   } else {
-    message = `${createdPosts.length} post(s) created without video generation.`;
+    message = `Post created for ${platforms.length} platform(s) without video generation.`;
   }
 
   return {
     success: true,
-    created: createdPosts.length,
-    posts: createdPosts.map(p => ({
-      id: p._id.toString(),
-      platform: p.platform,
-      title: p.title,
-      status: p.status,
-      contentTier: p.contentTier,
-      scheduledAt: p.scheduledAt,
-      hasVideo: !!p.videoPath,
-      videoGenerationStatus: p.videoGenerationProgress?.status || 'not_started'
-    })),
+    created: 1, // Always 1 post now (with multiple platforms)
+    posts: [{
+      id: post._id.toString(),
+      platforms: post.platforms,
+      title: post.title,
+      status: post.status,
+      contentTier: post.contentTier,
+      scheduledAt: post.scheduledAt,
+      hasVideo: !!post.videoPath,
+      videoGenerationStatus: post.videoGenerationProgress?.status || 'not_started'
+    }],
     videoGenerated: false, // Always false now - video generation is async
     message,
     generationResults: generationResults.length > 0 ? generationResults : undefined,
@@ -1158,6 +1184,11 @@ export async function generatePostVideo(params = {}) {
     throw new Error('Post not found');
   }
 
+  // Tier 2 posts don't support automatic video generation (they use manual upload)
+  if (post.contentTier === 'tier_2') {
+    throw new Error('Tier 2 posts require manual video upload. Use the upload endpoint to add the AI avatar video.');
+  }
+
   if (!post.storyId) {
     throw new Error('Post has no associated story');
   }
@@ -1341,6 +1372,11 @@ export async function regeneratePostVideo(params = {}) {
   post.feedback = feedback;
 
   await post.save();
+
+  // Tier 2 posts don't support automatic video generation (they use manual upload)
+  if (post.contentTier === 'tier_2') {
+    throw new Error('Tier 2 posts require manual video upload. Use the upload endpoint to add the AI avatar video.');
+  }
 
   // Get story
   const story = await Story.findById(post.storyId);

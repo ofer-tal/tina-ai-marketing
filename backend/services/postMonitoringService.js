@@ -118,10 +118,14 @@ class PostMonitoringService {
       }
 
       // Check if post has been in posting state for too long
+      // CRITICAL: Use postingStartedAt if available (set when post entered 'posting' state)
+      // Otherwise fall back to sheetTriggeredAt, uploadProgress.startedAt, or updatedAt (NOT createdAt!)
+      // Using createdAt is wrong because posts can be created hours/days before actually posting
       const postingStartedAt =
+        post.postingStartedAt ||  // When the post actually entered 'posting' state
         post.sheetTriggeredAt ||
         post.uploadProgress?.startedAt ||
-        post.createdAt;
+        post.updatedAt; // Fallback to last update, NOT createdAt
       const timeInPosting = now - postingStartedAt;
 
       logger.debug(

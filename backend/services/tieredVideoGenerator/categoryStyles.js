@@ -190,20 +190,88 @@ export function getCategoryStyle(category) {
 }
 
 /**
+ * Download text content from a URL
+ * @param {string} url - URL to fetch
+ * @returns {Promise<string>} Text content
+ */
+async function downloadText(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch text: ${response.statusText}`);
+  }
+  return await response.text();
+}
+
+/**
+ * Fetch full story text for image prompt generation
+ * @param {Object} story - Story object with fullStory.textUrl
+ * @returns {Promise<string>} Full story text or empty string if not available
+ */
+async function fetchStoryTextForPrompt(story) {
+  try {
+    const textUrl = story?.fullStory?.textUrl;
+    if (!textUrl) {
+      logger.debug('No fullStory.textUrl available for image prompt');
+      return '';
+    }
+    const fullText = await downloadText(textUrl);
+    // Return first 2000 characters - enough for context without overwhelming the prompt
+    return fullText.substring(0, 2000) || '';
+  } catch (error) {
+    logger.warn('Failed to fetch story text for image prompt', { error: error.message });
+    return '';
+  }
+}
+
+/**
+ * Extract key story elements from text
+ * Looks for character names, setting details, and plot elements
+ * @param {string} text - Story text
+ * @returns {string} Key story elements for image prompt
+ */
+function extractStoryElements(text) {
+  if (!text || text.length < 50) return '';
+
+  // Take first 500 characters for context - usually contains setup, characters, setting
+  const introText = text.substring(0, 500);
+
+  // Clean up: remove chapter headers, excessive whitespace
+  const cleaned = introText
+    .replace(/chapter\s+\d+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return cleaned;
+}
+
+/**
  * Generate an AI image prompt based on story, category style, and slide context
  *
  * @param {Object} story - Story object with title, description, category, spiciness
  * @param {number} slideNumber - Current slide number (1-indexed)
  * @param {number} totalSlides - Total number of slides
- * @returns {string} Generated image prompt for AI image generation
+ * @param {string} fullStoryText - Optional full story text for richer prompts
+ * @returns {Promise<string>|string} Generated image prompt for AI image generation
  */
-export function generateImagePrompt(story, slideNumber, totalSlides) {
+export async function generateImagePrompt(story, slideNumber, totalSlides, fullStoryText = null) {
   const categoryStyle = getCategoryStyle(story?.category);
 
   // Base prompt from story
   const storyTitle = story?.title || story?.name || 'Romantic Scene';
   const storyDescription = story?.description || '';
   const spiciness = story?.spiciness || 1;
+
+  // Use provided full story text or extract from description
+  let storyContext = '';
+  if (fullStoryText && fullStoryText.length > 50) {
+    // Use full story text - extract relevant portion based on slide number
+    const chunkSize = 300;
+    const startIdx = Math.min((slideNumber - 1) * chunkSize, fullStoryText.length - chunkSize);
+    storyContext = fullStoryText.substring(startIdx, startIdx + chunkSize);
+  } else if (storyDescription && storyDescription.length > 20) {
+    // Fallback to description
+    storyContext = storyDescription;
+  }
 
   // Variety options - different for each slide to ensure uniqueness
   const cameraAngles = [
@@ -320,8 +388,11 @@ export function generateImagePrompt(story, slideNumber, totalSlides) {
     `Lighting: ${lightingStyles[lightingIndex]}.`,
     `Composition: ${compositionStyles[compositionIndex]}.`,
 
-    // Scene description from story (truncated for variety)
-    `Scene: "${storyDescription.substring((slideNumber - 1) * 50, (slideNumber - 1) * 50 + 100)}${storyDescription.length > (slideNumber - 1) * 50 + 100 ? '...' : ''}"`,
+    // Story context - ask AI to imagine a scene based on story description
+    // This uses the full story text if available, otherwise falls back to description
+    storyContext
+      ? `Imagine a romantic scene illustrating this story: "${storyContext.substring(0, 300)}${storyContext.length > 300 ? '...' : ''}"`
+      : `Story title: "${storyTitle}"`,
 
     // Style and mood
     `Style: ${categoryStyle.promptModifiers.join(', ')}.`,
@@ -349,14 +420,18 @@ export function generateImagePrompt(story, slideNumber, totalSlides) {
 
   const prompt = promptParts.join(' ');
 
-  logger.debug('Generated image prompt', {
+  // Log the FULL prompt for debugging - use info level to ensure it's always visible
+  logger.info('=== GENERATED IMAGE PROMPT ===', {
     storyId: story?._id,
+    storyTitle: story?.title || story?.name,
     slideNumber,
     totalSlides,
     category: story?.category,
     angleIndex,
     lightingIndex,
-    promptLength: prompt.length
+    promptLength: prompt.length,
+    // FULL PROMPT - not truncated
+    fullPrompt: prompt
   });
 
   return prompt;

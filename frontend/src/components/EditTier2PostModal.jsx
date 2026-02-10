@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
+import { FaTiktok, FaInstagram, FaYoutube } from 'react-icons/fa';
 
 const ModalOverlay = styled.div`
   position: fixed;
@@ -222,11 +223,64 @@ const ErrorMessage = styled.div`
   margin-bottom: 1rem;
 `;
 
+// SVG Icons for social platforms
+const TikTokIcon = () => <FaTiktok />;
+
+const InstagramIcon = () => <FaInstagram />;
+
+const YouTubeIcon = () => <FaYoutube />;
+
+// Platform selector styles
+const PlatformSelector = styled.div`
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+`;
+
+const PlatformOption = styled.label`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: ${props => props.$selected ? '#1e2a4a' : '#0f182e'};
+  border: 2px solid ${props => props.$selected ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  cursor: ${props => props.$disabled ? 'not-allowed' : 'pointer'};
+  transition: all 0.2s;
+  opacity: ${props => props.$disabled ? 0.5 : 1};
+
+  &:hover {
+    border-color: ${props => props.$disabled ? '#2d3561' : '#e94560'};
+  }
+
+  input[type="checkbox"] {
+    display: none;
+  }
+
+  svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+`;
+
+const PLATFORMS = [
+  { id: 'tiktok', name: 'TikTok', icon: <TikTokIcon /> },
+  { id: 'instagram', name: 'Instagram', icon: <InstagramIcon /> },
+  { id: 'youtube_shorts', name: 'YouTube Shorts', icon: <YouTubeIcon /> }
+];
+
 function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
   const [caption, setCaption] = useState('');
-  const [hashtags, setHashtags] = useState('');
+  const [hashtags, setHashtags] = useState({
+    tiktok: '',
+    instagram: '',
+    youtube_shorts: ''
+  });
   const [script, setScript] = useState('');
+  const [videoTitle, setVideoTitle] = useState('');
   const [scheduledAt, setScheduledAt] = useState('');
+  const [selectedPlatforms, setSelectedPlatforms] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -234,20 +288,40 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
   React.useEffect(() => {
     if (post) {
       setCaption(post.caption || '');
+      setVideoTitle(post.title || '');
+
+      // Get platforms - handle both new platforms array and legacy platform field
+      const platforms = post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0
+        ? post.platforms
+        : post.platform ? [post.platform] : ['tiktok'];
+      setSelectedPlatforms(platforms);
 
       // Handle hashtags - both array and platform-specific object formats
-      let hashtagsStr = '';
       if (post.hashtags) {
         if (Array.isArray(post.hashtags)) {
-          hashtagsStr = post.hashtags.join(', ');
+          // Legacy format - same hashtags for all platforms
+          const hashtagsStr = post.hashtags.join(', ');
+          setHashtags({
+            tiktok: hashtagsStr,
+            instagram: hashtagsStr,
+            youtube_shorts: hashtagsStr
+          });
         } else if (typeof post.hashtags === 'object') {
-          // Platform-specific structure - get hashtags for this post's platform
-          const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
-          const platformHashtags = post.hashtags[platformKey] || post.hashtags.tiktok || [];
-          hashtagsStr = platformHashtags.join(', ');
+          // Platform-specific structure - load hashtags for each platform
+          setHashtags({
+            tiktok: (post.hashtags.tiktok || []).join(', '),
+            instagram: (post.hashtags.instagram || []).join(', '),
+            youtube_shorts: (post.hashtags.youtube_shorts || []).join(', ')
+          });
         }
+      } else {
+        // Default hashtags
+        setHashtags({
+          tiktok: '#blushapp, #romance, #storytime',
+          instagram: '#blushapp, #romance, #storytime',
+          youtube_shorts: '#blushapp, #romance, #storytime'
+        });
       }
-      setHashtags(hashtagsStr);
 
       // tierParameters is a plain object from backend
       const scriptValue = post.tierParameters?.script || '';
@@ -256,6 +330,18 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
       setScheduledAt(post.scheduledAt ? new Date(post.scheduledAt).toISOString().slice(0, 16) : '');
     }
   }, [post]);
+
+  const handlePlatformToggle = (platformId) => {
+    setSelectedPlatforms(prev => {
+      if (prev.includes(platformId)) {
+        // Don't allow deselecting if it's the only platform
+        if (prev.length === 1) return prev;
+        return prev.filter(p => p !== platformId);
+      } else {
+        return [...prev, platformId];
+      }
+    });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -276,14 +362,24 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
         }
       }
 
-      const hashtagArray = hashtags
-        .split(',')
-        .map(h => h.trim())
-        .filter(h => h.length > 0);
+      // Build platform-specific hashtags object
+      const platformHashtags = {};
+      selectedPlatforms.forEach(platform => {
+        const hashtagArray = (hashtags[platform] || '')
+          .split(',')
+          .map(h => h.trim())
+          .filter(h => h.length > 0);
+
+        platformHashtags[platform] = hashtagArray.length > 0
+          ? hashtagArray
+          : ['#blushapp', '#romance', '#storytime'];
+      });
 
       const updateData = {
+        platforms: selectedPlatforms,
+        title: videoTitle,
         caption,
-        hashtags: hashtagArray,
+        hashtags: platformHashtags,
         script,
         scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined
       };
@@ -320,7 +416,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
         </ModalHeader>
 
         <InfoBox>
-          You can edit the caption, hashtags, and script for this Tier 2 post. Once the video is uploaded, these fields will be locked.
+          You can edit the caption, hashtags, platforms, and script for this Tier 2 post. Once the video is uploaded, these fields will be locked.
         </InfoBox>
 
         <AvatarInfo>
@@ -337,6 +433,48 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
         <form onSubmit={handleSubmit}>
+          {/* Video Title */}
+          <FormSection>
+            <FormLabel>Video Title</FormLabel>
+            <FormInput
+              type="text"
+              value={videoTitle}
+              onChange={(e) => setVideoTitle(e.target.value)}
+              placeholder="Enter the title for this video..."
+              disabled={loading}
+            />
+          </FormSection>
+
+          {/* Platform Selection */}
+          <FormSection>
+            <FormLabel>Platforms</FormLabel>
+            <PlatformSelector>
+              {PLATFORMS.map(platform => (
+                <PlatformOption
+                  key={platform.id}
+                  $selected={selectedPlatforms.includes(platform.id)}
+                  onClick={() => !loading && handlePlatformToggle(platform.id)}
+                  $disabled={loading || post.status === 'posted'}
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedPlatforms.includes(platform.id)}
+                    onChange={() => handlePlatformToggle(platform.id)}
+                    disabled={loading || post.status === 'posted'}
+                  />
+                  <span>{platform.icon}</span>
+                  <span>{platform.name}</span>
+                </PlatformOption>
+              ))}
+            </PlatformSelector>
+            <div style={{ fontSize: '0.8rem', color: '#a0a0a0', marginTop: '0.5rem' }}>
+              {selectedPlatforms.length === 1
+                ? 'Post will be published to one platform'
+                : `Post will be published to ${selectedPlatforms.length} platforms`
+              }
+            </div>
+          </FormSection>
+
           <FormSection>
             <FormLabel>Caption</FormLabel>
             <FormTextarea
@@ -350,13 +488,21 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
 
           <FormSection>
             <FormLabel>Hashtags (comma separated)</FormLabel>
-            <FormInput
-              type="text"
-              value={hashtags}
-              onChange={(e) => setHashtags(e.target.value)}
-              placeholder="#hashtag1, #hashtag2..."
-              disabled={loading}
-            />
+            {selectedPlatforms.map(platform => (
+              <div key={platform} style={{ marginBottom: '0.75rem' }}>
+                <FormLabel style={{ fontSize: '0.85rem', color: '#a0a0a0', marginBottom: '0.25rem' }}>
+                  {platform === 'youtube_shorts' ? 'YouTube Shorts' : platform.charAt(0).toUpperCase() + platform.slice(1)}
+                  {platform === 'tiktok' && <FormLabelRequired>*</FormLabelRequired>}
+                </FormLabel>
+                <FormInput
+                  type="text"
+                  value={hashtags[platform] || ''}
+                  onChange={(e) => setHashtags(prev => ({ ...prev, [platform]: e.target.value }))}
+                  placeholder="#hashtag1, #hashtag2..."
+                  disabled={loading}
+                />
+              </div>
+            ))}
           </FormSection>
 
           <FormSection>

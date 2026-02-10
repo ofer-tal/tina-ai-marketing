@@ -119,15 +119,20 @@ class TikTokVideoMatcherJob {
       logger.info(`Fetched ${videos.length} videos from TikTok`);
 
       // Step 2: Get all existing tiktokVideoIds from database
+      // Check both legacy platform field and new platforms array for multi-platform support
       const existingVideoIds = new Set();
       const existingPosts = await MarketingPost.find({
-        platform: 'tiktok',
-        tiktokVideoId: { $exists: true, $ne: null },
-      }).select('tiktokVideoId');
+        $or: [
+          { platform: 'tiktok', tiktokVideoId: { $exists: true, $ne: null } },
+          { platforms: 'tiktok', 'platformStatus.tiktok.mediaId': { $exists: true, $ne: null } }
+        ],
+      }).select('tiktokVideoId platformStatus');
 
       for (const post of existingPosts) {
-        if (post.tiktokVideoId) {
-          existingVideoIds.add(post.tiktokVideoId);
+        // Check both legacy field and new platformStatus
+        const videoId = post.tiktokVideoId || post.platformStatus?.tiktok?.mediaId;
+        if (videoId) {
+          existingVideoIds.add(videoId);
         }
       }
 
@@ -150,17 +155,46 @@ class TikTokVideoMatcherJob {
           const matchResult = await this._findMatchingPost(video);
 
           if (matchResult.matched) {
+            // Calculate engagement rate
+            const engagementRate = video.view_count > 0
+              ? ((video.like_count + video.comment_count + video.share_count) / video.view_count) * 100
+              : 0;
+
             // Update post with TikTok data
+            // Update both legacy fields and new platformStatus for multi-platform posts
             await MarketingPost.findByIdAndUpdate(matchResult.postId, {
+              // Legacy fields (for backward compatibility)
               tiktokVideoId: videoId,
               tiktokShareUrl: video.share_url,
-              status: 'posted',
-              postedAt: new Date(video.create_time * 1000), // Convert to milliseconds
+              // New multi-platform fields
+              'platformStatus.tiktok.status': 'posted',
+              'platformStatus.tiktok.mediaId': videoId,
+              'platformStatus.tiktok.shareUrl': video.share_url,
+              'platformStatus.tiktok.postedAt': new Date(video.create_time * 1000),
+              'platformStatus.tiktok.performanceMetrics.views': video.view_count || 0,
+              'platformStatus.tiktok.performanceMetrics.likes': video.like_count || 0,
+              'platformStatus.tiktok.performanceMetrics.comments': video.comment_count || 0,
+              'platformStatus.tiktok.performanceMetrics.shares': video.share_count || 0,
+              'platformStatus.tiktok.performanceMetrics.engagementRate': engagementRate,
+              'platformStatus.tiktok.lastFetchedAt': new Date(),
+              // Legacy overall performanceMetrics
               'performanceMetrics.views': video.view_count || 0,
               'performanceMetrics.likes': video.like_count || 0,
               'performanceMetrics.comments': video.comment_count || 0,
               'performanceMetrics.shares': video.share_count || 0,
+              'performanceMetrics.engagementRate': engagementRate,
+              postedAt: new Date(video.create_time * 1000),
+              metricsLastFetchedAt: new Date(),
             });
+
+            // Also update overall status based on all platform statuses
+            const updatedPost = await MarketingPost.findById(matchResult.postId);
+            if (updatedPost.getOverallStatus) {
+              const newStatus = updatedPost.getOverallStatus();
+              await MarketingPost.findByIdAndUpdate(matchResult.postId, {
+                status: newStatus
+              });
+            }
 
             logger.info(`Matched TikTok video to post`, {
               videoId,
@@ -234,15 +268,30 @@ class TikTokVideoMatcherJob {
 
       // Find posts within time window that need matching
       // Include: 'posting' status (triggered via Buffer/Zapier, waiting for video)
+      // AND 'posted' posts that don't have tiktokVideoId yet (might have been missed)
       // Match on either scheduledAt OR sheetTriggeredAt (for Buffer/Zapier flow)
+      // Check both legacy platform field and new platforms array for multi-platform support
       const candidates = await MarketingPost.find({
-        platform: 'tiktok',
-        status: 'posting',
+        $or: [
+          { platform: 'tiktok' },
+          { platforms: 'tiktok' }
+        ],
+        $or: [
+          { status: 'posting' },
+          { status: 'posted' }  // Also check posted posts that might be missing tiktokVideoId
+        ],
         $or: [
           { scheduledAt: { $gte: timeWindowStart, $lte: timeWindowEnd } },
           { sheetTriggeredAt: { $gte: timeWindowStart, $lte: timeWindowEnd } },
         ],
-      }).select('_id caption scheduledAt sheetTriggeredAt status');
+        // Only include posts that don't have tiktokVideoId yet (for posted status)
+        $or: [
+          { tiktokVideoId: { $exists: false } },
+          { tiktokVideoId: null },
+          { 'platformStatus.tiktok.mediaId': { $exists: false } },
+          { 'platformStatus.tiktok.mediaId': null }
+        ]
+      }).select('_id caption scheduledAt sheetTriggeredAt status platformStatus');
 
       if (candidates.length === 0) {
         logger.warn(`[TikTok Matcher] No candidate posts found in time window for video ${video.id}`);
@@ -286,7 +335,7 @@ class TikTokVideoMatcherJob {
           const postCaption = post.caption.toLowerCase();
           const videoCaptionLower = videoCaption.toLowerCase();
 
-          const captionMatches = videoCaptionLower && postCaption.includes(videoCaptionLower);
+          let captionMatches = videoCaptionLower && postCaption.includes(videoCaptionLower);
           if (!captionMatches && postCaption) {
             captionMatches = videoCaptionLower.includes(postCaption.substring(0, 50));
           }
@@ -348,20 +397,48 @@ class TikTokVideoMatcherJob {
    */
   async _updateVideoMetrics(video) {
     try {
+      // Calculate engagement rate
+      const engagementRate = video.view_count > 0
+        ? ((video.like_count + video.comment_count + video.share_count) / video.view_count) * 100
+        : 0;
+
+      // Find posts matching by either legacy or new field
+      const post = await MarketingPost.findOne({
+        $or: [
+          { tiktokVideoId: video.id },
+          { 'platformStatus.tiktok.mediaId': video.id }
+        ]
+      });
+
+      if (!post) {
+        logger.debug('No post found for video metrics update', { videoId: video.id });
+        return;
+      }
+
+      // Update metrics in both legacy and new locations
       await MarketingPost.findOneAndUpdate(
-        { tiktokVideoId: video.id },
+        { _id: post._id },
         {
+          // Legacy performanceMetrics
           'performanceMetrics.views': video.view_count || 0,
           'performanceMetrics.likes': video.like_count || 0,
           'performanceMetrics.comments': video.comment_count || 0,
           'performanceMetrics.shares': video.share_count || 0,
+          'performanceMetrics.engagementRate': engagementRate,
+          // New platform-specific metrics
+          'platformStatus.tiktok.performanceMetrics.views': video.view_count || 0,
+          'platformStatus.tiktok.performanceMetrics.likes': video.like_count || 0,
+          'platformStatus.tiktok.performanceMetrics.comments': video.comment_count || 0,
+          'platformStatus.tiktok.performanceMetrics.shares': video.share_count || 0,
+          'platformStatus.tiktok.performanceMetrics.engagementRate': engagementRate,
+          'platformStatus.tiktok.lastFetchedAt': new Date(),
           metricsLastFetchedAt: new Date(),
         }
       );
 
       // Also add to metrics history
       await MarketingPost.findOneAndUpdate(
-        { tiktokVideoId: video.id },
+        { _id: post._id },
         {
           $push: {
             metricsHistory: {

@@ -458,8 +458,8 @@ function GenerateVideoOptions({
     pan: false,
     textOverlay: true,
     vignette: true,
-    fadeIn: true,
-    fadeOut: true
+    fadeIn: false,
+    fadeOut: false
   });
 
   // Music selection state
@@ -631,8 +631,8 @@ function GenerateVideoOptions({
         pan: false,
         textOverlay: true,
         vignette: true,
-        fadeIn: true,
-        fadeOut: true
+        fadeIn: false,
+        fadeOut: false
       });
       setError(null);
       setSuccess(false);

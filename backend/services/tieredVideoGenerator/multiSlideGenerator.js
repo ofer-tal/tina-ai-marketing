@@ -12,6 +12,7 @@
 
 import fs from 'fs/promises';
 import path from 'path';
+import https from 'https';
 import { getLogger } from '../../utils/logger.js';
 import ffmpegWrapper from '../../utils/ffmpegWrapper.js';
 import FfmpegEffects from '../../utils/ffmpegEffects.js';
@@ -33,6 +34,48 @@ const STORAGE_TEMP_IMAGES = path.join(STORAGE_BASE, 'temp', 'images');
 const STORAGE_TEMP_GRADIENTS = path.join(STORAGE_BASE, 'temp', 'gradients');
 const STORAGE_TEMP = path.join(STORAGE_BASE, 'temp');
 const STORAGE_THUMBNAILS = path.join(STORAGE_BASE, 'thumbnails');
+
+/**
+ * Download text content from a URL
+ * @param {string} url - URL to fetch
+ * @returns {Promise<string>} Text content
+ */
+function downloadText(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => resolve(data));
+      res.on('error', reject);
+    }).on('error', reject);
+  });
+}
+
+/**
+ * Fetch full story text for image prompt generation
+ * @param {Object} story - Story object with fullStory.textUrl
+ * @returns {Promise<string>} Full story text or empty string if not available
+ */
+async function fetchStoryTextForImagePrompt(story) {
+  try {
+    const textUrl = story?.fullStory?.textUrl;
+    if (!textUrl) {
+      logger.debug('No fullStory.textUrl available for image prompt', { storyId: story?._id });
+      return '';
+    }
+    const fullText = await downloadText(textUrl);
+    if (!fullText || fullText.length < 100) {
+      logger.debug('Story text too short or empty', { storyId: story?._id, length: fullText?.length || 0 });
+      return '';
+    }
+    logger.info('Fetched story text for image prompts', { storyId: story?._id, textLength: fullText.length });
+    // Return first 2000 characters - enough for context without overwhelming the prompt
+    return fullText.substring(0, 2000);
+  } catch (error) {
+    logger.warn('Failed to fetch story text for image prompt', { error: error.message });
+    return '';
+  }
+}
 
 /**
  * Slide composition presets
@@ -178,32 +221,49 @@ async function generateSlideImages(preset, story) {
   }
 
   // Generate all images in parallel for speed
+  // First, fetch the full story text once to be used in all image prompts
+  const fullStoryText = await fetchStoryTextForImagePrompt(story);
+  logger.info('Fetched story text for image generation', {
+    storyId: story?._id,
+    hasFullText: !!fullStoryText,
+    textLength: fullStoryText?.length || 0
+  });
+
   const imageGenerationPromises = imageSlideIndices.map(async (i) => {
     const imagePath = path.join(
       STORAGE_TEMP_IMAGES,
       `${timestamp}_slide${i}_${story?._id || 'story'}.png`
     );
 
-    const imagePrompt = generateImagePrompt(story, i + 1, preset.slides.length);
+    // generateImagePrompt is now async - await it
+    const imagePrompt = await generateImagePrompt(story, i + 1, preset.slides.length, fullStoryText);
 
-    // Use fal.ai FLUX.2 [turbo] by default, fallback to PixelWave on error
+    // CRITICAL: Use ONLY fal.ai FLUX.2 (full version, NOT turbo/schnell)
+    // Do NOT fall back to PixelWave as it has worse anatomy
     let imageResult;
     try {
-      logger.info('Generating image with fal.ai FLUX.2', { slideIndex: i });
+      logger.info('=== GENERATING IMAGE WITH FAL.AI FLUX.2 (FULL) ===', {
+        slideIndex: i,
+        storyId: story?._id,
+        promptLength: imagePrompt?.length || 0,
+        model: 'fal-ai/flux-2'
+      });
       imageResult = await falAiImageGenerator.generateForStory(story, {
         outputPath: imagePath,
         prompt: imagePrompt
       });
+      logger.info('Image generated successfully', { slideIndex: i, path: imageResult.path });
     } catch (falError) {
-      logger.warn('fal.ai image generation failed, falling back to PixelWave', {
+      // CRITICAL: DO NOT fall back to PixelWave - it has anatomy issues
+      // Instead, fail fast so we know there's a problem
+      logger.error('=== FAL.AI IMAGE GENERATION FAILED ===', {
         slideIndex: i,
-        error: falError.message
+        error: falError.message,
+        stack: falError.stack,
+        NOT_FALLING_BACK_TO: 'PixelWave (has anatomy issues)'
       });
-      // Fallback to PixelWave
-      imageResult = await runPodImageGenerator.generateForStory(story, {
-        outputPath: imagePath,
-        prompt: imagePrompt
-      });
+      // Re-throw the error to fail the entire video generation
+      throw new Error(`Image generation failed for slide ${i + 1}: ${falError.message}`);
     }
 
     logger.info('Generated slide image', {
@@ -327,8 +387,8 @@ async function createSlideVideos(slides, options) {
 
       await applySlideEffects(gradientPath, videoPath, {
         duration: slideDuration,
-        fadeIn: true,
-        fadeOut: true,
+        fadeIn: false,
+        fadeOut: false,
         kenBurns: false, // No Ken Burns on gradient slides
         vignette: false
       });

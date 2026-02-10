@@ -1,34 +1,39 @@
-/**
- * Check for recent tier_2 posts
- */
+import 'dotenv/config.js';
+import mongoose from 'mongoose';
+import { MongoClient } from 'mongodb';
 
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+const uri = process.env.MONGODB_URI;
+const client = new MongoClient(uri);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '../../.env') });
+async function checkPostStatus() {
+  await client.connect();
+  const db = client.db('blush');
+  const collection = db.collection('marketing_posts');
 
-const dbModule = await import('../services/database.js');
-const databaseService = dbModule.default;
-await databaseService.connect();
+  const postIds = [
+    '69884d71a1eae8dba9e64d04',
+    '69884d7ba1eae8dba9e64d14',
+    '69883ae84b3b23c7bb7ebe23',
+    '69883ae84b3b23c7bb7ebe20'
+  ];
 
-const { default: MarketingPost } = await import('../models/MarketingPost.js');
+  console.log('Checking tier_2 posts status...\n');
 
-// Look for recent tier_2 posts
-const tier2Posts = await MarketingPost.find({ tier: 2 }).sort({ createdAt: -1 }).limit(5);
+  for (const id of postIds) {
+    const post = await collection.findOne({ _id: new mongoose.Types.ObjectId(id) });
+    if (post) {
+      console.log('Post:', id);
+      console.log('  Title:', post.title);
+      console.log('  Status:', post.status);
+      console.log('  platformStatus.tiktok:', JSON.stringify(post.platformStatus?.tiktok || null));
+      console.log('  platformStatus.instagram:', JSON.stringify(post.platformStatus?.instagram || null));
+      console.log('');
+    } else {
+      console.log('Post NOT found:', id, '\n');
+    }
+  }
 
-console.log('Recent tier_2 posts:', tier2Posts.length);
-for (const post of tier2Posts) {
-  console.log('---');
-  console.log('ID:', post._id.toString());
-  console.log('Story:', post.story?.title || post.storyId || 'N/A');
-  console.log('Status:', post.status);
-  console.log('Platform:', post.platform);
-  console.log('CreatedAt:', post.createdAt);
-  console.log('Caption:', post.caption?.substring(0, 80) + '...');
-  console.log('Has scheduledVideoId:', !!post.scheduledVideoId);
+  await client.close();
 }
 
-process.exit(0);
+checkPostStatus().catch(console.error);

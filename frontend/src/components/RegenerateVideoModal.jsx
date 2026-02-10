@@ -378,8 +378,8 @@ function RegenerateVideoModal({
     pan: false,
     textOverlay: true,
     vignette: true,
-    fadeIn: true,
-    fadeOut: true
+    fadeIn: false,
+    fadeOut: false
   });
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState('');
@@ -532,8 +532,8 @@ function RegenerateVideoModal({
         pan: false,
         textOverlay: true,
         vignette: true,
-        fadeIn: true,
-        fadeOut: true
+        fadeIn: false,
+        fadeOut: false
       });
       setError(null);
       setSuccess(false);

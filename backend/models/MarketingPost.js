@@ -17,15 +17,19 @@ const marketingPostSchema = new mongoose.Schema({
     trim: true
   },
 
-  // Platform and content type
+  // Platform and content type - NEW: platforms array for multi-platform support
+  platforms: [{
+    type: String,
+    enum: ['tiktok', 'instagram', 'youtube_shorts']
+  }],
+  // Deprecated: Kept for backward compatibility with old posts
   platform: {
     type: String,
-    enum: ['tiktok', 'instagram', 'youtube_shorts'],
-    required: true
+    enum: ['tiktok', 'instagram', 'youtube_shorts']
   },
   status: {
     type: String,
-    enum: ['draft', 'ready', 'approved', 'scheduled', 'posting', 'posted', 'failed', 'rejected', 'generating'],
+    enum: ['draft', 'ready', 'approved', 'scheduled', 'posting', 'posted', 'failed', 'rejected', 'generating', 'partial_posted'],
     default: 'draft',
     required: true
   },
@@ -114,25 +118,34 @@ const marketingPostSchema = new mongoose.Schema({
     type: Date
   },
 
-  // Associated story
+  // Associated story (optional for tier_2 engagement videos)
   storyId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Story',
-    required: true
+    required: function() {
+      // Story is required unless it's a tier_2 post
+      return this.contentTier !== 'tier_2';
+    }
   },
   storyName: {
     type: String,
-    required: true
+    required: function() {
+      return this.contentTier !== 'tier_2';
+    }
   },
   storyCategory: {
     type: String,
-    required: true
+    required: function() {
+      return this.contentTier !== 'tier_2';
+    }
   },
   storySpiciness: {
     type: Number,
     min: 0,
     max: 3,
-    required: true
+    required: function() {
+      return this.contentTier !== 'tier_2';
+    }
   },
 
   // Generated timestamp
@@ -252,7 +265,7 @@ const marketingPostSchema = new mongoose.Schema({
     }
   },
 
-  // Platform-specific data
+  // Platform-specific data (legacy - kept for backward compatibility)
   tiktokVideoId: {
     type: String,
     trim: true
@@ -268,6 +281,79 @@ const marketingPostSchema = new mongoose.Schema({
   instagramPermalink: {
     type: String,
     trim: true
+  },
+
+  // Per-platform status tracking for multi-platform posts
+  platformStatus: {
+    tiktok: {
+      type: {
+        status: { type: String, enum: ['pending', 'posting', 'posted', 'failed', 'skipped'], default: 'pending' },
+        postedAt: Date,
+        mediaId: String,        // tiktokVideoId
+        shareUrl: String,       // tiktokShareUrl
+        error: String,
+        retryCount: { type: Number, default: 0 },
+        lastFailedAt: Date,
+        // Per-platform performance metrics
+        performanceMetrics: {
+          views: { type: Number, default: 0 },
+          likes: { type: Number, default: 0 },
+          comments: { type: Number, default: 0 },
+          shares: { type: Number, default: 0 },
+          saved: { type: Number, default: 0 },
+          reach: { type: Number, default: 0 },
+          engagementRate: { type: Number, default: 0 }
+        },
+        lastFetchedAt: Date
+      },
+      default: null
+    },
+    instagram: {
+      type: {
+        status: { type: String, enum: ['pending', 'posting', 'posted', 'failed', 'skipped'], default: 'pending' },
+        postedAt: Date,
+        mediaId: String,        // instagramMediaId
+        permalink: String,      // instagramPermalink
+        error: String,
+        retryCount: { type: Number, default: 0 },
+        lastFailedAt: Date,
+        // Per-platform performance metrics
+        performanceMetrics: {
+          views: { type: Number, default: 0 },
+          likes: { type: Number, default: 0 },
+          comments: { type: Number, default: 0 },
+          shares: { type: Number, default: 0 },
+          saved: { type: Number, default: 0 },
+          reach: { type: Number, default: 0 },
+          engagementRate: { type: Number, default: 0 }
+        },
+        lastFetchedAt: Date
+      },
+      default: null
+    },
+    youtube_shorts: {
+      type: {
+        status: { type: String, enum: ['pending', 'posting', 'posted', 'failed', 'skipped'], default: 'pending' },
+        postedAt: Date,
+        mediaId: String,
+        shareUrl: String,
+        error: String,
+        retryCount: { type: Number, default: 0 },
+        lastFailedAt: Date,
+        // Per-platform performance metrics
+        performanceMetrics: {
+          views: { type: Number, default: 0 },
+          likes: { type: Number, default: 0 },
+          comments: { type: Number, default: 0 },
+          shares: { type: Number, default: 0 },
+          saved: { type: Number, default: 0 },
+          reach: { type: Number, default: 0 },
+          engagementRate: { type: Number, default: 0 }
+        },
+        lastFetchedAt: Date
+      },
+      default: null
+    }
   },
   // Instagram media container (for retry logic - containers persist for 24 hours)
   instagramContainerId: {
@@ -424,6 +510,11 @@ const marketingPostSchema = new mongoose.Schema({
   failedAt: {
     type: Date
   },
+  postingStartedAt: {
+    type: Date,
+    // Tracks when the post actually entered 'posting' state (not when it was created)
+    // Critical for postMonitoringService to accurately detect timeouts
+  },
 
   // Retry tracking for failed posts
   retryCount: {
@@ -472,11 +563,15 @@ const marketingPostSchema = new mongoose.Schema({
 });
 
 // Indexes for efficient queries
-marketingPostSchema.index({ platform: 1, status: 1 });
+marketingPostSchema.index({ platform: 1, status: 1 }); // Legacy index for backward compatibility
+marketingPostSchema.index({ platforms: 1, status: 1 }); // New multi-platform index
 marketingPostSchema.index({ scheduledAt: 1 });
 marketingPostSchema.index({ storyId: 1 });
 marketingPostSchema.index({ status: 1, scheduledAt: 1 });
 marketingPostSchema.index({ createdAt: -1 });
+marketingPostSchema.index({ 'platformStatus.tiktok.status': 1 });
+marketingPostSchema.index({ 'platformStatus.instagram.status': 1 });
+marketingPostSchema.index({ 'platformStatus.youtube_shorts.status': 1 });
 
 // Update the updatedAt timestamp before saving
 marketingPostSchema.pre('save', function(next) {
@@ -825,6 +920,142 @@ marketingPostSchema.statics.getUpcoming = function(days = 7) {
     }
   }).sort({ scheduledAt: 1 })
     .populate('storyId', 'title coverPath spiciness category');
+};
+
+/**
+ * Multi-Platform Helper Methods
+ *
+ * These methods support the new multi-platform posting feature where a single
+ * post can target multiple platforms simultaneously.
+ */
+
+/**
+ * Get the overall status based on platform statuses
+ * @returns {string} Overall status
+ */
+marketingPostSchema.methods.getOverallStatus = function() {
+  // If post has platformStatus data, use it to compute derived status
+  if (this.platformStatus && this.platforms && this.platforms.length > 0) {
+    const platformStatuses = this.platforms
+      .map(p => this.platformStatus[p]?.status)
+      .filter(s => s); // Remove undefined/null
+
+    if (platformStatuses.length === 0) {
+      return this.status || 'draft';
+    }
+
+    // All posted
+    if (platformStatuses.every(s => s === 'posted')) return 'posted';
+
+    // All failed
+    if (platformStatuses.every(s => s === 'failed' || s === 'skipped')) return 'failed';
+
+    // Some posted, some failed
+    if (platformStatuses.some(s => s === 'posted') &&
+        platformStatuses.some(s => s === 'failed' || s === 'skipped')) {
+      return 'partial_posted';
+    }
+
+    // Still processing or pending
+    if (platformStatuses.some(s => s === 'posting' || s === 'pending')) return 'posting';
+
+    // Default to the current status if no clear derived status
+    return this.status;
+  }
+
+  // Legacy single-platform posts - return current status
+  return this.status;
+};
+
+/**
+ * Get the list of platforms this post targets
+ * Handles both new platforms array and legacy platform field
+ * @returns {Array<string>} List of platforms
+ */
+marketingPostSchema.methods.getTargetPlatforms = function() {
+  if (this.platforms && Array.isArray(this.platforms) && this.platforms.length > 0) {
+    return this.platforms;
+  }
+  // Fallback to legacy platform field
+  if (this.platform) {
+    return [this.platform];
+  }
+  return [];
+};
+
+/**
+ * Get status for a specific platform
+ * @param {string} platform - Platform name
+ * @returns {Object|null} Platform status object
+ */
+marketingPostSchema.methods.getPlatformStatus = function(platform) {
+  return this.platformStatus?.[platform] || null;
+};
+
+/**
+ * Set status for a specific platform
+ * @param {string} platform - Platform name
+ * @param {string} status - Status value
+ * @param {Object} data - Additional data (postedAt, mediaId, error, etc.)
+ * @returns {Promise}
+ */
+marketingPostSchema.methods.setPlatformStatus = async function(platform, status, data = {}) {
+  this.platformStatus = this.platformStatus || {};
+  this.platformStatus[platform] = {
+    status,
+    ...this.platformStatus[platform],
+    ...data
+  };
+
+  if (status === 'posted' && !this.platformStatus[platform].postedAt) {
+    this.platformStatus[platform].postedAt = new Date();
+  }
+
+  if (status === 'failed') {
+    this.platformStatus[platform].retryCount = (this.platformStatus[platform]?.retryCount || 0) + 1;
+    this.platformStatus[platform].lastFailedAt = new Date();
+  }
+
+  // Track when post first enters 'posting' state for monitoring service
+  // This is critical for accurate timeout detection - we can't use createdAt
+  // because posts may be created hours/days before actually being posted
+  const oldStatus = this.status;
+  const newStatus = this.getOverallStatus();
+
+  if (newStatus === 'posting' && oldStatus !== 'posting' && !this.postingStartedAt) {
+    this.postingStartedAt = new Date();
+  }
+
+  // Update overall status based on platform statuses
+  this.status = newStatus;
+
+  return this.save();
+};
+
+/**
+ * Check if a platform is ready to be posted (not already posted or permanently failed)
+ * @param {string} platform - Platform name
+ * @returns {boolean}
+ */
+marketingPostSchema.methods.canPostToPlatform = function(platform) {
+  const platformStatus = this.platformStatus?.[platform];
+
+  // If no status yet, can post
+  if (!platformStatus) return true;
+
+  // Can't post if already posted
+  if (platformStatus.status === 'posted') return false;
+
+  // Can't post if skipped
+  if (platformStatus.status === 'skipped') return false;
+
+  // Check retry count - max 3 retries per platform
+  const MAX_RETRIES = 3;
+  if (platformStatus.status === 'failed' && platformStatus.retryCount >= MAX_RETRIES) {
+    return false;
+  }
+
+  return true;
 };
 
 const MarketingPost = mongoose.model('MarketingPost', marketingPostSchema, 'marketing_posts');

@@ -102,8 +102,11 @@ async function generateFlux2Image(
   output_format = DEFAULT_GENERATION_PARAMS.output_format,
   enable_safety_checker = DEFAULT_GENERATION_PARAMS.enable_safety_checker
 ) {
-  logger.info('Generating FLUX.2 (full) image', {
-    prompt: prompt.substring(0, 100),
+  // Log the FULL prompt for debugging
+  logger.info('=== GENERATING FLUX.2 IMAGE ===', {
+    model: 'fal-ai/flux-2 (FULL VERSION, NOT TURBO)',
+    promptLength: prompt.length,
+    fullPrompt: prompt,  // FULL PROMPT - not truncated
     guidance_scale,
     width,
     height,
@@ -116,7 +119,8 @@ async function generateFlux2Image(
   try {
     const fal = await getClient();
 
-    // Call fal.ai FLUX.2 API (full version, not turbo)
+    // Call fal.ai FLUX.2 API (full version, NOT turbo, NOT schnell)
+    // Using ONLY fal-ai/flux-2 for best quality and anatomy
     const result = await fal.subscribe('fal-ai/flux-2', {
       input: {
         prompt,

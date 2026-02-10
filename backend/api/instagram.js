@@ -249,6 +249,10 @@ router.post('/post/:postId', async (req, res) => {
     }
 
     // Update post status to posting
+    // CRITICAL: Set postingStartedAt for accurate timeout detection by postMonitoringService
+    if (!post.postingStartedAt) {
+      post.postingStartedAt = new Date();
+    }
     post.status = 'posting';
     await post.save();
 
