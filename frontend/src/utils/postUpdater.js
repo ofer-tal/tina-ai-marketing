@@ -43,6 +43,32 @@ export function mergeUpdatedPost(posts, updatedPost) {
   newPosts[index] = {
     ...existingPost,
     ...updatedPost,
+    // Deep merge platformStatus to preserve per-platform metrics
+    ...(updatedPost.platformStatus && {
+      platformStatus: {
+        ...existingPost.platformStatus,
+        ...updatedPost.platformStatus,
+        // Deep merge each platform's data
+        ...Object.keys(updatedPost.platformStatus).reduce((acc, platform) => {
+          if (existingPost.platformStatus?.[platform]) {
+            acc[platform] = {
+              ...existingPost.platformStatus[platform],
+              ...updatedPost.platformStatus[platform],
+              // Deep merge performanceMetrics within each platform
+              ...(updatedPost.platformStatus[platform].performanceMetrics && {
+                performanceMetrics: {
+                  ...existingPost.platformStatus[platform].performanceMetrics,
+                  ...updatedPost.platformStatus[platform].performanceMetrics
+                }
+              })
+            };
+          } else {
+            acc[platform] = updatedPost.platformStatus[platform];
+          }
+          return acc;
+        }, {})
+      }
+    }),
     // Preserve nested objects that weren't updated
     videoGenerationProgress: updatedPost.videoGenerationProgress || existingPost.videoGenerationProgress,
     uploadProgress: updatedPost.uploadProgress || existingPost.uploadProgress
@@ -183,6 +209,7 @@ export function mergeProgressUpdate(posts, postId, progressData) {
 
 /**
  * Merge metrics update into posts array
+ * Handles both legacy performanceMetrics and new platformStatus structure
  *
  * @param {Array<Object>} posts - Current posts array
  * @param {string} postId - ID of post to update
@@ -204,19 +231,30 @@ export function mergeMetricsUpdate(posts, postId, metrics) {
 
   // Create new array with updated metrics
   const newPosts = [...posts];
-  newPosts[index] = {
+  const updatedPost = {
     ...existingPost,
-    performance: {
-      ...existingPost.performance,
-      ...metrics
-    },
-    // Also update individual metric fields for compatibility
-    views: metrics.views ?? existingPost.views,
-    likes: metrics.likes ?? existingPost.likes,
-    shares: metrics.shares ?? existingPost.shares,
-    comments: metrics.comments ?? existingPost.comments
+    // Update platformStatus if provided (multi-platform support)
+    ...(metrics.platformStatus && {
+      platformStatus: {
+        ...existingPost.platformStatus,
+        ...metrics.platformStatus
+      }
+    }),
+    // Update performanceMetrics if provided (legacy and aggregate)
+    ...(metrics.performanceMetrics && {
+      performanceMetrics: {
+        ...existingPost.performanceMetrics,
+        ...metrics.performanceMetrics
+      }
+    }),
+    // Legacy individual metric fields for compatibility
+    ...(metrics.views !== undefined && { views: metrics.views }),
+    ...(metrics.likes !== undefined && { likes: metrics.likes }),
+    ...(metrics.shares !== undefined && { shares: metrics.shares }),
+    ...(metrics.comments !== undefined && { comments: metrics.comments })
   };
 
+  newPosts[index] = updatedPost;
   return newPosts;
 }
 
@@ -280,6 +318,49 @@ function isPostChanged(existing, updated) {
     if (!existingProgress ||
         existingProgress.status !== updatedProgress.status ||
         existingProgress.percent !== updatedProgress.percent) {
+      return true;
+    }
+  }
+
+  // Check platformStatus changes (multi-platform metrics)
+  if (updated.platformStatus) {
+    const existingStatus = existing.platformStatus || {};
+    const updatedStatus = updated.platformStatus;
+
+    // Check if any platform's status or metrics changed
+    for (const platform of Object.keys(updatedStatus)) {
+      const existingPlatform = existingStatus[platform] || {};
+      const updatedPlatform = updatedStatus[platform];
+
+      // Check status change
+      if (existingPlatform.status !== updatedPlatform.status) {
+        return true;
+      }
+
+      // Check performanceMetrics change
+      if (updatedPlatform.performanceMetrics) {
+        const existingMetrics = existingPlatform.performanceMetrics || {};
+        const updatedMetrics = updatedPlatform.performanceMetrics;
+
+        if (existingMetrics.views !== updatedMetrics.views ||
+            existingMetrics.likes !== updatedMetrics.likes ||
+            existingMetrics.shares !== updatedMetrics.shares ||
+            existingMetrics.comments !== updatedMetrics.comments) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // Check performanceMetrics changes (legacy aggregate metrics)
+  if (updated.performanceMetrics) {
+    const existingMetrics = existing.performanceMetrics || {};
+    const updatedMetrics = updated.performanceMetrics;
+
+    if (existingMetrics.views !== updatedMetrics.views ||
+        existingMetrics.likes !== updatedMetrics.likes ||
+        existingMetrics.shares !== updatedMetrics.shares ||
+        existingMetrics.comments !== updatedMetrics.comments) {
       return true;
     }
   }

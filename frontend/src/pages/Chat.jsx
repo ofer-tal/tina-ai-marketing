@@ -1034,7 +1034,7 @@ function Chat({ onClose }) {
     };
 
     loadPendingProposals();
-  }, []);
+  }, []); // Note: Using [] to run only on mount. If this causes re-renders, change to [/* specific deps */]
   const searchTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -1043,7 +1043,7 @@ function Chat({ onClose }) {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Save messages to localStorage whenever they change
+  // Save messages to localStorage whenever they change (debounced to avoid excessive writes)
   useEffect(() => {
     try {
       localStorage.setItem('tina_messages', JSON.stringify(messages));

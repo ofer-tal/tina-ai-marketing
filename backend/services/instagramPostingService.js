@@ -16,18 +16,18 @@
  * @see backend/services/oauthManager.js
  */
 
-import BaseApiClient from './baseApiClient.js';
-import { getLogger } from '../utils/logger.js';
-import rateLimiterService from './rateLimiter.js';
-import oauthManager from './oauthManager.js';
+import BaseApiClient from "./baseApiClient.js";
+import { getLogger } from "../utils/logger.js";
+import rateLimiterService from "./rateLimiter.js";
+import oauthManager from "./oauthManager.js";
 
-const logger = getLogger('services', 'instagram-posting');
+const logger = getLogger("services", "instagram-posting");
 
 class InstagramPostingService extends BaseApiClient {
   constructor(config = {}) {
     super({
-      name: 'InstagramPosting',
-      baseURL: 'https://graph.facebook.com/v18.0',
+      name: "InstagramPosting",
+      baseURL: "https://graph.facebook.com/v18.0",
       timeout: 60000,
       ...config,
     });
@@ -36,7 +36,7 @@ class InstagramPostingService extends BaseApiClient {
     this.appId = process.env.INSTAGRAM_APP_ID;
     this.appSecret = process.env.INSTAGRAM_APP_SECRET;
     this.redirectUri = process.env.INSTAGRAM_REDIRECT_URI;
-    this.enabled = process.env.ENABLE_INSTAGRAM_POSTING === 'true';
+    this.enabled = process.env.ENABLE_INSTAGRAM_POSTING === "true";
 
     // Track Instagram account info
     this.instagramBusinessAccountId = null;
@@ -47,33 +47,35 @@ class InstagramPostingService extends BaseApiClient {
     // Instagram Graph API endpoints
     this.endpoints = {
       oauth: {
-        authorize: 'https://www.facebook.com/v18.0/dialog/oauth',
-        token: 'https://graph.facebook.com/v18.0/oauth/access_token',
-        refresh: 'https://graph.facebook.com/v18.0/oauth/access_token',
+        authorize: "https://www.facebook.com/v18.0/dialog/oauth",
+        token: "https://graph.facebook.com/v18.0/oauth/access_token",
+        refresh: "https://graph.facebook.com/v18.0/oauth/access_token",
       },
       media: {
-        create: '/{instagram_user_id}/media',
-        status: '/{container_id}?fields=status_code',
-        publish: '/{instagram_user_id}/media_publish',
+        create: "/{instagram_user_id}/media",
+        status: "/{container_id}?fields=status_code",
+        publish: "/{instagram_user_id}/media_publish",
       },
       user: {
-        info: '/{instagram_user_id}?fields=username,account_type,media_count',
-        accounts: '/me/accounts?fields=instagram_business_account{id,username,name,profile_pic_url}',
+        info: "/{instagram_user_id}?fields=username,account_type,media_count",
+        accounts:
+          "/me/accounts?fields=instagram_business_account{id,username,name,profile_pic_url}",
       },
       discovery: {
-        businessAccount: '/me/accounts?fields=id,name,category,instagram_business_account{id,username,name,profile_pic_url}',
+        businessAccount:
+          "/me/accounts?fields=id,name,category,instagram_business_account{id,username,name,profile_pic_url}",
       },
     };
 
     // OAuth scopes for Instagram Reels
     this.scopes = [
-      'instagram_basic',
-      'instagram_content_publish',
-      'pages_read_engagement',
-      'pages_show_list',
+      "instagram_basic",
+      "instagram_content_publish",
+      "pages_read_engagement",
+      "pages_show_list",
     ];
 
-    logger.info('Instagram Posting Service initialized', {
+    logger.info("Instagram Posting Service initialized", {
       enabled: this.enabled,
       appIdConfigured: !!this.appId,
       appSecretConfigured: !!this.appSecret,
@@ -93,20 +95,22 @@ class InstagramPostingService extends BaseApiClient {
 
     try {
       // Try to load from token metadata
-      const { default: AuthToken } = await import('../models/AuthToken.js');
-      const token = await AuthToken.getActiveToken('instagram');
+      const { default: AuthToken } = await import("../models/AuthToken.js");
+      const token = await AuthToken.getActiveToken("instagram");
 
       if (token && token.metadata?.instagramUserId) {
         this.instagramUserId = token.metadata.instagramUserId;
         this.instagramBusinessAccountId = token.metadata.instagramUserId;
-        logger.info('Instagram User ID loaded from token metadata', {
+        logger.info("Instagram User ID loaded from token metadata", {
           instagramUserId: this.instagramUserId,
         });
         return { success: true, instagramUserId: this.instagramUserId };
       }
 
       // Not in metadata, try to discover
-      logger.info('Instagram User ID not in token metadata, attempting discovery...');
+      logger.info(
+        "Instagram User ID not in token metadata, attempting discovery...",
+      );
       const discoveryResult = await this.discoverBusinessAccount();
 
       if (discoveryResult.success && discoveryResult.businessAccount) {
@@ -114,7 +118,8 @@ class InstagramPostingService extends BaseApiClient {
         if (token) {
           token.metadata = token.metadata || {};
           token.metadata.instagramUserId = discoveryResult.businessAccount.id;
-          token.metadata.instagramUsername = discoveryResult.businessAccount.username;
+          token.metadata.instagramUsername =
+            discoveryResult.businessAccount.username;
           token.metadata.pageId = discoveryResult.pageId;
           await token.save();
         }
@@ -123,11 +128,13 @@ class InstagramPostingService extends BaseApiClient {
 
       return {
         success: false,
-        error: discoveryResult.error || 'Instagram User ID not set',
-        code: discoveryResult.code || 'NO_INSTAGRAM_USER_ID',
+        error: discoveryResult.error || "Instagram User ID not set",
+        code: discoveryResult.code || "NO_INSTAGRAM_USER_ID",
       };
     } catch (error) {
-      logger.error('Failed to ensure Instagram User ID', { error: error.message });
+      logger.error("Failed to ensure Instagram User ID", {
+        error: error.message,
+      });
       return {
         success: false,
         error: error.message,
@@ -147,15 +154,15 @@ class InstagramPostingService extends BaseApiClient {
 
     try {
       // Get token from database
-      const { default: AuthToken } = await import('../models/AuthToken.js');
-      const tokenModel = await AuthToken.getActiveToken('instagram');
-      const token = await oauthManager.getToken('instagram');
+      const { default: AuthToken } = await import("../models/AuthToken.js");
+      const tokenModel = await AuthToken.getActiveToken("instagram");
+      const token = await oauthManager.getToken("instagram");
 
       if (!token || !token.accessToken || !tokenModel) {
         return {
           success: false,
-          error: 'Not authenticated - no access token',
-          code: 'NOT_AUTHENTICATED',
+          error: "Not authenticated - no access token",
+          code: "NOT_AUTHENTICATED",
         };
       }
 
@@ -165,24 +172,28 @@ class InstagramPostingService extends BaseApiClient {
       // Priority 1: Use Page ID from token metadata
       if (tokenModel.metadata?.pageId) {
         pageId = tokenModel.metadata.pageId;
-        logger.info('Using Page ID from token metadata', { pageId });
+        logger.info("Using Page ID from token metadata", { pageId });
       }
 
       // Priority 2: Try /me/accounts
       if (!pageId) {
-        logger.info('Fetching Facebook Pages from /me/accounts...');
+        logger.info("Fetching Facebook Pages from /me/accounts...");
         const pagesUrl = `${this.baseURL}/me/accounts?fields=id,name,access_token`;
         const pagesResp = await fetch(pagesUrl, {
-          headers: { 'Authorization': `Bearer ${token.accessToken}` }
+          headers: { Authorization: `Bearer ${token.accessToken}` },
         });
 
         if (pagesResp.ok) {
           const pagesData = await pagesResp.json();
           if (pagesData.data && pagesData.data.length > 0) {
-            const page = pagesData.data.find(p => p.access_token) || pagesData.data[0];
+            const page =
+              pagesData.data.find((p) => p.access_token) || pagesData.data[0];
             pageId = page.id;
             pageAccessToken = page.access_token;
-            logger.info('Found Page from /me/accounts', { pageId, hasToken: !!pageAccessToken });
+            logger.info("Found Page from /me/accounts", {
+              pageId,
+              hasToken: !!pageAccessToken,
+            });
           }
         }
       }
@@ -196,7 +207,7 @@ class InstagramPostingService extends BaseApiClient {
       if (!pageAccessToken && pageId) {
         const pageUrl = `${this.baseURL}/${pageId}?fields=id,name,access_token,instagram_business_account`;
         const pageResp = await fetch(pageUrl, {
-          headers: { 'Authorization': `Bearer ${token.accessToken}` }
+          headers: { Authorization: `Bearer ${token.accessToken}` },
         });
 
         if (!pageResp.ok) {
@@ -204,7 +215,7 @@ class InstagramPostingService extends BaseApiClient {
           return {
             success: false,
             error: `Failed to get Page access token: ${errorData.error?.message || pageResp.status}`,
-            code: 'PAGE_ACCESS_FAILED',
+            code: "PAGE_ACCESS_FAILED",
           };
         }
 
@@ -215,18 +226,24 @@ class InstagramPostingService extends BaseApiClient {
         tokenModel.metadata = tokenModel.metadata || {};
         tokenModel.metadata.pageId = pageId;
         if (pageData.instagram_business_account?.id) {
-          tokenModel.metadata.instagramUserId = pageData.instagram_business_account.id;
+          tokenModel.metadata.instagramUserId =
+            pageData.instagram_business_account.id;
         }
         await tokenModel.save();
 
-        logger.info('Got Page access token', { pageId, pageName: pageData.name, hasToken: true });
+        logger.info("Got Page access token", {
+          pageId,
+          pageName: pageData.name,
+          hasToken: true,
+        });
       }
 
       if (!pageAccessToken) {
         return {
           success: false,
-          error: 'Could not get Page Access Token. Please ensure your Facebook Page is properly connected.',
-          code: 'NO_PAGE_TOKEN',
+          error:
+            "Could not get Page Access Token. Please ensure your Facebook Page is properly connected.",
+          code: "NO_PAGE_TOKEN",
         };
       }
 
@@ -235,9 +252,10 @@ class InstagramPostingService extends BaseApiClient {
       this.pageId = pageId;
 
       return { success: true, pageAccessToken, pageId };
-
     } catch (error) {
-      logger.error('Failed to ensure Page Access Token', { error: error.message });
+      logger.error("Failed to ensure Page Access Token", {
+        error: error.message,
+      });
       return {
         success: false,
         error: error.message,
@@ -250,21 +268,21 @@ class InstagramPostingService extends BaseApiClient {
    */
   async testConnection() {
     try {
-      logger.info('Testing Instagram Graph API connection...');
+      logger.info("Testing Instagram Graph API connection...");
 
       if (!this.enabled) {
         return {
           success: false,
-          error: 'Instagram posting is disabled in configuration',
-          code: 'DISABLED',
+          error: "Instagram posting is disabled in configuration",
+          code: "DISABLED",
         };
       }
 
       if (!this.appId || !this.appSecret) {
         return {
           success: false,
-          error: 'Instagram Graph API credentials not configured',
-          code: 'MISSING_CREDENTIALS',
+          error: "Instagram Graph API credentials not configured",
+          code: "MISSING_CREDENTIALS",
           details: {
             appIdConfigured: !!this.appId,
             appSecretConfigured: !!this.appSecret,
@@ -275,14 +293,14 @@ class InstagramPostingService extends BaseApiClient {
       if (!this.redirectUri) {
         return {
           success: false,
-          error: 'Instagram redirect URI not configured',
-          code: 'MISSING_REDIRECT_URI',
+          error: "Instagram redirect URI not configured",
+          code: "MISSING_REDIRECT_URI",
         };
       }
 
-      const isAuthenticated = await oauthManager.isAuthenticated('instagram');
+      const isAuthenticated = await oauthManager.isAuthenticated("instagram");
 
-      logger.info('Instagram Graph API connection test successful', {
+      logger.info("Instagram Graph API connection test successful", {
         authenticated: isAuthenticated,
         hasBusinessAccount: !!this.instagramBusinessAccountId,
       });
@@ -291,11 +309,10 @@ class InstagramPostingService extends BaseApiClient {
         success: true,
         authenticated: isAuthenticated,
         hasCredentials: true,
-        message: 'Instagram Graph API credentials configured successfully',
+        message: "Instagram Graph API credentials configured successfully",
       };
-
     } catch (error) {
-      logger.error('Instagram Graph API connection test failed', {
+      logger.error("Instagram Graph API connection test failed", {
         error: error.message,
         stack: error.stack,
       });
@@ -303,7 +320,7 @@ class InstagramPostingService extends BaseApiClient {
       return {
         success: false,
         error: error.message,
-        code: 'CONNECTION_ERROR',
+        code: "CONNECTION_ERROR",
       };
     }
   }
@@ -313,8 +330,8 @@ class InstagramPostingService extends BaseApiClient {
    */
   async checkTokenStatus() {
     try {
-      const isAuthenticated = await oauthManager.isAuthenticated('instagram');
-      const token = await oauthManager.getToken('instagram');
+      const isAuthenticated = await oauthManager.isAuthenticated("instagram");
+      const token = await oauthManager.getToken("instagram");
 
       return {
         authenticated: isAuthenticated,
@@ -323,7 +340,7 @@ class InstagramPostingService extends BaseApiClient {
         canRefresh: !!token?.refreshToken,
       };
     } catch (error) {
-      logger.error('Token status check failed', {
+      logger.error("Token status check failed", {
         error: error.message,
       });
 
@@ -340,7 +357,8 @@ class InstagramPostingService extends BaseApiClient {
    * @deprecated Use oauthManager.getAuthorizationUrl('instagram', scopes) directly
    */
   getAuthorizationUrl() {
-    return oauthManager.getAuthorizationUrl('instagram', this.scopes)
+    return oauthManager
+      .getAuthorizationUrl("instagram", this.scopes)
       .then(({ authUrl }) => authUrl);
   }
 
@@ -349,10 +367,13 @@ class InstagramPostingService extends BaseApiClient {
    * @deprecated Use oauthManager.handleCallback('instagram', callbackUrl, state) directly
    */
   async exchangeCodeForToken(code) {
-    logger.warn('exchangeCodeForToken is deprecated, use oauthManager.handleCallback instead');
+    logger.warn(
+      "exchangeCodeForToken is deprecated, use oauthManager.handleCallback instead",
+    );
     return {
       success: false,
-      error: 'This method is deprecated. Use the unified OAuth callback handler.',
+      error:
+        "This method is deprecated. Use the unified OAuth callback handler.",
     };
   }
 
@@ -361,10 +382,10 @@ class InstagramPostingService extends BaseApiClient {
    * @deprecated Handled automatically by OAuth2Fetch
    */
   async refreshAccessToken() {
-    logger.warn('refreshAccessToken is deprecated, token refresh is automatic');
+    logger.warn("refreshAccessToken is deprecated, token refresh is automatic");
     return {
       success: false,
-      error: 'Token refresh is now handled automatically by OAuth2Fetch',
+      error: "Token refresh is now handled automatically by OAuth2Fetch",
     };
   }
 
@@ -373,31 +394,31 @@ class InstagramPostingService extends BaseApiClient {
    */
   async verifyPermissions() {
     try {
-      logger.info('Verifying Instagram Graph API permissions...');
+      logger.info("Verifying Instagram Graph API permissions...");
 
-      const token = await oauthManager.getToken('instagram');
+      const token = await oauthManager.getToken("instagram");
       if (!token || !token.accessToken) {
         return {
           success: false,
-          error: 'Not authenticated - no access token',
-          code: 'NOT_AUTHENTICATED',
+          error: "Not authenticated - no access token",
+          code: "NOT_AUTHENTICATED",
         };
       }
 
       // Required permissions for Instagram Reels publishing
       const requiredPermissions = [
-        'instagram_basic',
-        'instagram_content_publish',
-        'pages_read_engagement',
-        'pages_show_list',
+        "instagram_basic",
+        "instagram_content_publish",
+        "pages_read_engagement",
+        "pages_show_list",
       ];
 
       // Debug token info to check permissions
       const debugUrl = `${this.baseURL}/debug_token?input_token=${token.accessToken}`;
       const response = await rateLimiterService.fetch(debugUrl, {
-        method: 'GET',
+        method: "GET",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
 
@@ -412,23 +433,23 @@ class InstagramPostingService extends BaseApiClient {
       }
 
       const grantedScopes = debugData.data?.granted_scopes || [];
-      const grantedScopesArray = grantedScopes.split(',');
+      const grantedScopesArray = grantedScopes.split(",");
 
       // Check which permissions are granted
-      const permissionStatus = requiredPermissions.map(perm => ({
+      const permissionStatus = requiredPermissions.map((perm) => ({
         permission: perm,
         granted: grantedScopesArray.includes(perm),
       }));
 
       const missingPermissions = permissionStatus
-        .filter(p => !p.granted)
-        .map(p => p.permission);
+        .filter((p) => !p.granted)
+        .map((p) => p.permission);
 
       const hasAllPermissions = missingPermissions.length === 0;
 
-      logger.info('Instagram Graph API permissions verified', {
+      logger.info("Instagram Graph API permissions verified", {
         hasAllPermissions,
-        grantedCount: permissionStatus.filter(p => p.granted).length,
+        grantedCount: permissionStatus.filter((p) => p.granted).length,
         requiredCount: requiredPermissions.length,
         missingPermissions,
       });
@@ -440,12 +461,11 @@ class InstagramPostingService extends BaseApiClient {
         missingPermissions,
         grantedScopes: grantedScopesArray,
         message: hasAllPermissions
-          ? 'All required permissions granted'
-          : 'Some permissions are missing',
+          ? "All required permissions granted"
+          : "Some permissions are missing",
       };
-
     } catch (error) {
-      logger.error('Instagram Graph API permissions verification failed', {
+      logger.error("Instagram Graph API permissions verification failed", {
         error: error.message,
         stack: error.stack,
       });
@@ -453,7 +473,7 @@ class InstagramPostingService extends BaseApiClient {
       return {
         success: false,
         error: error.message,
-        code: 'PERMISSIONS_CHECK_ERROR',
+        code: "PERMISSIONS_CHECK_ERROR",
       };
     }
   }
@@ -466,20 +486,22 @@ class InstagramPostingService extends BaseApiClient {
       if (!this.instagramUserId) {
         return {
           success: false,
-          error: 'Instagram user ID not set',
+          error: "Instagram user ID not set",
         };
       }
 
-      const endpoint = this.endpoints.user.info.replace('{instagram_user_id}', this.instagramUserId);
+      const endpoint = this.endpoints.user.info.replace(
+        "{instagram_user_id}",
+        this.instagramUserId,
+      );
       const response = await this.request(endpoint);
 
       return {
         success: true,
         data: response,
       };
-
     } catch (error) {
-      logger.error('Failed to get Instagram user info', {
+      logger.error("Failed to get Instagram user info", {
         error: error.message,
       });
 
@@ -497,18 +519,18 @@ class InstagramPostingService extends BaseApiClient {
    */
   async discoverBusinessAccount() {
     try {
-      logger.info('Discovering Instagram business account...');
+      logger.info("Discovering Instagram business account...");
 
       // Get both the Mongoose model and the plain token object
-      const { default: AuthToken } = await import('../models/AuthToken.js');
-      const tokenModel = await AuthToken.getActiveToken('instagram');
-      const token = await oauthManager.getToken('instagram');
+      const { default: AuthToken } = await import("../models/AuthToken.js");
+      const tokenModel = await AuthToken.getActiveToken("instagram");
+      const token = await oauthManager.getToken("instagram");
 
       if (!token || !token.accessToken || !tokenModel) {
         return {
           success: false,
-          error: 'Not authenticated - no access token',
-          code: 'NOT_AUTHENTICATED',
+          error: "Not authenticated - no access token",
+          code: "NOT_AUTHENTICATED",
         };
       }
 
@@ -519,25 +541,26 @@ class InstagramPostingService extends BaseApiClient {
       // Priority 1: Use Page ID from token metadata (stored during previous discovery)
       if (tokenModel.metadata?.pageId) {
         pageId = tokenModel.metadata.pageId;
-        logger.info('Using Page ID from token metadata', { pageId });
+        logger.info("Using Page ID from token metadata", { pageId });
       }
 
       // Priority 2: Try /me/accounts
       if (!pageId) {
-        logger.info('Fetching Facebook Pages from /me/accounts...');
+        logger.info("Fetching Facebook Pages from /me/accounts...");
         const pagesUrl = `${this.baseURL}/me/accounts?fields=id,name,access_token`;
         const pagesResp = await fetch(pagesUrl, {
-          headers: { 'Authorization': `Bearer ${token.accessToken}` }
+          headers: { Authorization: `Bearer ${token.accessToken}` },
         });
 
         if (pagesResp.ok) {
           const pagesData = await pagesResp.json();
           if (pagesData.data && pagesData.data.length > 0) {
-            const page = pagesData.data.find(p => p.access_token) || pagesData.data[0];
+            const page =
+              pagesData.data.find((p) => p.access_token) || pagesData.data[0];
             pageId = page.id;
             pageAccessToken = page.access_token;
             pageName = page.name;
-            logger.info('Found Page from /me/accounts', { pageId, pageName });
+            logger.info("Found Page from /me/accounts", { pageId, pageName });
           }
         }
       }
@@ -545,8 +568,8 @@ class InstagramPostingService extends BaseApiClient {
       // Priority 3: Use well-known Page ID for this user (temporary fallback)
       if (!pageId) {
         // Check if we're in development mode with known Page ID
-        const knownPageId = '1002795712911665'; // Your Facebook Page ID
-        logger.info('Using known Page ID as fallback', { pageId: knownPageId });
+        const knownPageId = "1002795712911665"; // Your Facebook Page ID
+        logger.info("Using known Page ID as fallback", { pageId: knownPageId });
         pageId = knownPageId;
       }
 
@@ -554,7 +577,7 @@ class InstagramPostingService extends BaseApiClient {
       if (!pageAccessToken && pageId) {
         const pageUrl = `${this.baseURL}/${pageId}?fields=id,name,access_token,instagram_business_account`;
         const pageResp = await fetch(pageUrl, {
-          headers: { 'Authorization': `Bearer ${token.accessToken}` }
+          headers: { Authorization: `Bearer ${token.accessToken}` },
         });
 
         if (pageResp.ok) {
@@ -568,61 +591,69 @@ class InstagramPostingService extends BaseApiClient {
 
           // Also store Instagram Business Account ID if available
           if (pageData.instagram_business_account?.id) {
-            tokenModel.metadata.instagramUserId = pageData.instagram_business_account.id;
-            logger.info('Got Instagram Business Account from Page', {
-              igUserId: pageData.instagram_business_account.id
+            tokenModel.metadata.instagramUserId =
+              pageData.instagram_business_account.id;
+            logger.info("Got Instagram Business Account from Page", {
+              igUserId: pageData.instagram_business_account.id,
             });
           }
 
           await tokenModel.save();
 
-          logger.info('Got Page access token', { pageId, pageName, hasToken: true });
+          logger.info("Got Page access token", {
+            pageId,
+            pageName,
+            hasToken: true,
+          });
         }
       }
 
       if (!pageAccessToken) {
         return {
           success: false,
-          error: 'Could not get Page access token',
-          code: 'NO_PAGE_TOKEN',
+          error: "Could not get Page access token",
+          code: "NO_PAGE_TOKEN",
         };
       }
 
       // Step 2: Use Page access token to get Instagram accounts
-      logger.info('Fetching Instagram accounts for Page...');
+      logger.info("Fetching Instagram accounts for Page...");
       const igAccountsUrl = `${this.baseURL}/${pageId}/instagram_accounts`;
       const igAccountsResp = await fetch(igAccountsUrl, {
-        headers: { 'Authorization': `Bearer ${pageAccessToken}` }
+        headers: { Authorization: `Bearer ${pageAccessToken}` },
       });
 
       if (!igAccountsResp.ok) {
         const errorData = await igAccountsResp.json();
-        logger.error('Failed to fetch Instagram accounts', {
+        logger.error("Failed to fetch Instagram accounts", {
           status: igAccountsResp.status,
           error: errorData,
         });
         return {
           success: false,
           error: `Failed to fetch Instagram accounts: ${errorData.error?.message || igAccountsResp.status}`,
-          code: 'INSTAGRAM_FETCH_FAILED',
+          code: "INSTAGRAM_FETCH_FAILED",
         };
       }
 
       const igAccountsData = await igAccountsResp.json();
 
       if (!igAccountsData.data || igAccountsData.data.length === 0) {
-        logger.warn('No Instagram accounts found for this Page', { pageId, pageName });
+        logger.warn("No Instagram accounts found for this Page", {
+          pageId,
+          pageName,
+        });
         return {
           success: false,
           error: `No Instagram Business Account connected to Page "${pageName || pageId}". Please connect your Instagram Professional account in Meta Business Suite.`,
-          code: 'NO_INSTAGRAM_ACCOUNT',
+          code: "NO_INSTAGRAM_ACCOUNT",
           details: {
             pageId,
             pageName,
             instructions: [
-              '1. Go to business.facebook.com',
+              "1. Go to business.facebook.com",
               `2. Select your Page: "${pageName || pageId}"`,
-              '3. Go to Settings > Business assets > Instagram accounts',
+              "3. Go to Settings > Business assets > Instagram accounts",
               '4. Click "Add an account" and connect your Instagram Professional account',
             ],
           },
@@ -631,21 +662,23 @@ class InstagramPostingService extends BaseApiClient {
 
       // Get the first Instagram account ID
       const igAccountId = igAccountsData.data[0].id;
-      logger.info('Found Instagram account', { igAccountId });
+      logger.info("Found Instagram account", { igAccountId });
 
       // Step 3: Try to get more details via business_discovery
       let businessAccount = { id: igAccountId };
       try {
         const businessDiscUrl = `${this.baseURL}/${pageId}?fields=business_discovery.username(blush.spicy){id,username,profile_picture_url}`;
         const businessDiscResp = await fetch(businessDiscUrl, {
-          headers: { 'Authorization': `Bearer ${pageAccessToken}` }
+          headers: { Authorization: `Bearer ${pageAccessToken}` },
         });
 
         if (businessDiscResp.ok) {
           const businessDiscData = await businessDiscResp.json();
           if (businessDiscData.business_discovery) {
             businessAccount = businessDiscData.business_discovery;
-            logger.info('Got business_discovery details', { username: businessAccount.username });
+            logger.info("Got business_discovery details", {
+              username: businessAccount.username,
+            });
 
             // Store in metadata for next time using Mongoose model
             tokenModel.metadata = tokenModel.metadata || {};
@@ -655,13 +688,15 @@ class InstagramPostingService extends BaseApiClient {
           }
         }
       } catch (e) {
-        logger.debug('business_discovery failed, using basic ID', { error: e.message });
+        logger.debug("business_discovery failed, using basic ID", {
+          error: e.message,
+        });
       }
 
       this.instagramBusinessAccountId = businessAccount.id;
       this.instagramUserId = businessAccount.id;
 
-      logger.info('Instagram business account discovered', {
+      logger.info("Instagram business account discovered", {
         instagramUserId: this.instagramUserId,
         username: businessAccount.username,
         pageId,
@@ -672,11 +707,10 @@ class InstagramPostingService extends BaseApiClient {
         success: true,
         businessAccount,
         pageId,
-        message: 'Instagram business account connected successfully',
+        message: "Instagram business account connected successfully",
       };
-
     } catch (error) {
-      logger.error('Failed to discover Instagram business account', {
+      logger.error("Failed to discover Instagram business account", {
         error: error.message,
         stack: error.stack,
       });
@@ -684,7 +718,7 @@ class InstagramPostingService extends BaseApiClient {
       return {
         success: false,
         error: error.message,
-        code: 'DISCOVERY_ERROR',
+        code: "DISCOVERY_ERROR",
       };
     }
   }
@@ -695,14 +729,14 @@ class InstagramPostingService extends BaseApiClient {
    */
   async createMediaContainer(videoUrl, caption, hashtags = []) {
     try {
-      logger.info('Creating Instagram media container...', {
+      logger.info("Creating Instagram media container...", {
         videoUrl,
         captionLength: caption?.length,
         hashtagCount: hashtags?.length,
       });
 
       if (!this.instagramUserId) {
-        throw new Error('Instagram user ID not set');
+        throw new Error("Instagram user ID not set");
       }
 
       // Get Page Access Token (required for Instagram API with Facebook Login)
@@ -711,27 +745,32 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(pageTokenResult.error);
       }
 
-      const endpoint = this.endpoints.media.create.replace('{instagram_user_id}', this.instagramUserId);
+      const endpoint = this.endpoints.media.create.replace(
+        "{instagram_user_id}",
+        this.instagramUserId,
+      );
 
       // Combine caption and hashtags
-      const fullCaption = hashtags.length > 0
-        ? `${caption}\n\n${hashtags.join(' ')}`
-        : caption;
+      const fullCaption =
+        hashtags.length > 0 ? `${caption}\n\n${hashtags.join(" ")}` : caption;
 
       const params = new URLSearchParams({
         video_url: videoUrl,
         caption: fullCaption,
-        media_type: 'REELS',
+        media_type: "REELS",
       });
 
       // Use Page Access Token for container creation
-      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}?${params}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.pageAccessToken}`,
+      const response = await rateLimiterService.fetch(
+        `${this.baseURL}${endpoint}?${params}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.pageAccessToken}`,
+          },
         },
-      });
+      );
 
       if (!response.ok) {
         // Try to get detailed error from response body
@@ -749,12 +788,12 @@ class InstagramPostingService extends BaseApiClient {
               errorDetails += ` | Code: ${errorData.error.code}`;
             }
           }
-          logger.error('Instagram API error response', {
+          logger.error("Instagram API error response", {
             status: response.status,
             errorData,
           });
         } catch (parseError) {
-          logger.error('Could not parse Instagram error response', {
+          logger.error("Could not parse Instagram error response", {
             status: response.status,
             parseError: parseError.message,
           });
@@ -768,7 +807,7 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(data.error.message);
       }
 
-      logger.info('Instagram media container created successfully', {
+      logger.info("Instagram media container created successfully", {
         containerId: data.id,
       });
 
@@ -776,9 +815,8 @@ class InstagramPostingService extends BaseApiClient {
         success: true,
         containerId: data.id,
       };
-
     } catch (error) {
-      logger.error('Failed to create Instagram media container', {
+      logger.error("Failed to create Instagram media container", {
         error: error.message,
         stack: error.stack,
       });
@@ -796,7 +834,7 @@ class InstagramPostingService extends BaseApiClient {
    */
   async checkContainerStatus(containerId) {
     try {
-      logger.info('Checking Instagram media container status...', {
+      logger.info("Checking Instagram media container status...", {
         containerId,
       });
 
@@ -806,16 +844,22 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(pageTokenResult.error);
       }
 
-      const endpoint = this.endpoints.media.status.replace('{container_id}', containerId);
+      const endpoint = this.endpoints.media.status.replace(
+        "{container_id}",
+        containerId,
+      );
 
       // Use Page Access Token for status check
-      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.pageAccessToken}`,
+      const response = await rateLimiterService.fetch(
+        `${this.baseURL}${endpoint}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.pageAccessToken}`,
+          },
         },
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Container status check failed: ${response.status}`);
@@ -828,9 +872,9 @@ class InstagramPostingService extends BaseApiClient {
       }
 
       const statusCode = data.status_code;
-      const isFinished = statusCode === 'FINISHED';
+      const isFinished = statusCode === "FINISHED";
 
-      logger.info('Instagram media container status checked', {
+      logger.info("Instagram media container status checked", {
         containerId,
         statusCode,
         isFinished,
@@ -841,9 +885,8 @@ class InstagramPostingService extends BaseApiClient {
         statusCode,
         isFinished,
       };
-
     } catch (error) {
-      logger.error('Failed to check container status', {
+      logger.error("Failed to check container status", {
         error: error.message,
       });
 
@@ -860,12 +903,12 @@ class InstagramPostingService extends BaseApiClient {
    */
   async publishMediaContainer(containerId) {
     try {
-      logger.info('Publishing Instagram media container...', {
+      logger.info("Publishing Instagram media container...", {
         containerId,
       });
 
       if (!this.instagramUserId) {
-        throw new Error('Instagram user ID not set');
+        throw new Error("Instagram user ID not set");
       }
 
       // Ensure we have Page Access Token
@@ -874,20 +917,26 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(pageTokenResult.error);
       }
 
-      const endpoint = this.endpoints.media.publish.replace('{instagram_user_id}', this.instagramUserId);
+      const endpoint = this.endpoints.media.publish.replace(
+        "{instagram_user_id}",
+        this.instagramUserId,
+      );
 
       const params = new URLSearchParams({
         creation_id: containerId,
       });
 
       // Use Page Access Token for publishing
-      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}?${params}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.pageAccessToken}`,
+      const response = await rateLimiterService.fetch(
+        `${this.baseURL}${endpoint}?${params}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.pageAccessToken}`,
+          },
         },
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Media publish failed: ${response.status}`);
@@ -899,7 +948,7 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(data.error.message);
       }
 
-      logger.info('Instagram media published successfully', {
+      logger.info("Instagram media published successfully", {
         mediaId: data.id,
       });
 
@@ -907,9 +956,8 @@ class InstagramPostingService extends BaseApiClient {
         success: true,
         mediaId: data.id,
       };
-
     } catch (error) {
-      logger.error('Failed to publish Instagram media', {
+      logger.error("Failed to publish Instagram media", {
         error: error.message,
         stack: error.stack,
       });
@@ -930,9 +978,16 @@ class InstagramPostingService extends BaseApiClient {
    * @param {string} s3Url - Public S3 URL for the video (required for Instagram API)
    * @param {Object} post - MarketingPost document (for saving container state)
    */
-  async postVideo(videoPath, caption, hashtags = [], onProgress, s3Url = null, post = null) {
+  async postVideo(
+    videoPath,
+    caption,
+    hashtags = [],
+    onProgress,
+    s3Url = null,
+    post = null,
+  ) {
     try {
-      logger.info('Starting Instagram Reels posting workflow...', {
+      logger.info("Starting Instagram Reels posting workflow...", {
         videoPath,
         captionLength: caption?.length,
         hashtagCount: hashtags?.length,
@@ -950,8 +1005,10 @@ class InstagramPostingService extends BaseApiClient {
       // Instagram API requires a publicly accessible video URL
       const videoUrl = s3Url || videoPath;
 
-      if (!videoUrl.startsWith('http://') && !videoUrl.startsWith('https://')) {
-        throw new Error('Instagram API requires a public URL for video. Please provide S3 URL.');
+      if (!videoUrl.startsWith("http://") && !videoUrl.startsWith("https://")) {
+        throw new Error(
+          "Instagram API requires a public URL for video. Please provide S3 URL.",
+        );
       }
 
       let containerId;
@@ -959,7 +1016,7 @@ class InstagramPostingService extends BaseApiClient {
       // STEP 1: Check for existing container (retry scenario)
       if (post?.instagramContainerId) {
         containerId = post.instagramContainerId;
-        logger.info('Found existing Instagram container, checking status...', {
+        logger.info("Found existing Instagram container, checking status...", {
           containerId,
           previousStatus: post.instagramContainerStatus,
         });
@@ -969,52 +1026,81 @@ class InstagramPostingService extends BaseApiClient {
 
         if (!statusResult.success) {
           // Container check failed - might be expired or invalid
-          logger.warn('Existing container check failed, creating new container', {
-            containerId,
-            error: statusResult.error,
-          });
+          logger.warn(
+            "Existing container check failed, creating new container",
+            {
+              containerId,
+              error: statusResult.error,
+            },
+          );
           containerId = null;
-        } else if (statusResult.statusCode === 'ERROR' || statusResult.statusCode === 'EXPIRED') {
-          logger.warn('Existing container is in error or expired state, creating new container', {
-            containerId,
-            statusCode: statusResult.statusCode,
-          });
+        } else if (
+          statusResult.statusCode === "ERROR" ||
+          statusResult.statusCode === "EXPIRED"
+        ) {
+          logger.warn(
+            "Existing container is in error or expired state, creating new container",
+            {
+              containerId,
+              statusCode: statusResult.statusCode,
+            },
+          );
           containerId = null;
         } else if (statusResult.isFinished) {
           // Container is already finished, skip to publishing
-          logger.info('Existing container already finished, proceeding to publish', {
+          logger.info(
+            "Existing container already finished, proceeding to publish",
+            {
+              containerId,
+            },
+          );
+          onProgress?.({
+            stage: "container_already_finished",
+            progress: 80,
             containerId,
           });
-          onProgress?.({ stage: 'container_already_finished', progress: 80, containerId });
         } else {
           // Container is still in progress, continue waiting
-          logger.info('Existing container still processing, will continue waiting', {
+          logger.info(
+            "Existing container still processing, will continue waiting",
+            {
+              containerId,
+              statusCode: statusResult.statusCode,
+            },
+          );
+          onProgress?.({
+            stage: "resuming_container_processing",
+            progress: 50,
             containerId,
-            statusCode: statusResult.statusCode,
           });
-          onProgress?.({ stage: 'resuming_container_processing', progress: 50, containerId });
         }
       }
 
       // STEP 2: Create new container if needed
       if (!containerId) {
-        onProgress?.({ stage: 'creating_container', progress: 10 });
+        onProgress?.({ stage: "creating_container", progress: 10 });
 
-        const containerResult = await this.createMediaContainer(videoUrl, caption, hashtags);
+        const containerResult = await this.createMediaContainer(
+          videoUrl,
+          caption,
+          hashtags,
+        );
 
         if (!containerResult.success) {
-          throw new Error(`Failed to create media container: ${containerResult.error}`);
+          throw new Error(
+            `Failed to create media container: ${containerResult.error}`,
+          );
         }
 
         containerId = containerResult.containerId;
-        onProgress?.({ stage: 'container_created', progress: 30, containerId });
+        onProgress?.({ stage: "container_created", progress: 30, containerId });
 
         // Save container ID immediately to post for retry capability
         if (post) {
           post.instagramContainerId = containerId;
-          post.instagramContainerStatus = 'IN_PROGRESS';
+          post.instagramContainerStatus = "IN_PROGRESS";
           await post.save();
-          logger.info('Saved container ID to post for retry capability', {
+          logger.info("Saved container ID to post for retry capability", {
             postId: post._id,
             containerId,
           });
@@ -1022,7 +1108,7 @@ class InstagramPostingService extends BaseApiClient {
       }
 
       // STEP 3: Wait for container to be processed (if not already finished)
-      onProgress?.({ stage: 'processing_video', progress: 50 });
+      onProgress?.({ stage: "processing_video", progress: 50 });
 
       let attempts = 0;
       const maxAttempts = 20;
@@ -1032,16 +1118,18 @@ class InstagramPostingService extends BaseApiClient {
       const initialStatusResult = await this.checkContainerStatus(containerId);
       if (initialStatusResult.success && initialStatusResult.isFinished) {
         isFinished = true;
-        logger.info('Container already finished, skipping wait loop');
+        logger.info("Container already finished, skipping wait loop");
       }
 
       while (!isFinished && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 3000));
+        await new Promise((resolve) => setTimeout(resolve, 3000));
 
         const statusResult = await this.checkContainerStatus(containerId);
 
         if (!statusResult.success) {
-          throw new Error(`Failed to check container status: ${statusResult.error}`);
+          throw new Error(
+            `Failed to check container status: ${statusResult.error}`,
+          );
         }
 
         isFinished = statusResult.isFinished;
@@ -1054,7 +1142,7 @@ class InstagramPostingService extends BaseApiClient {
         }
 
         onProgress?.({
-          stage: 'processing_video',
+          stage: "processing_video",
           progress: 50 + (attempts / maxAttempts) * 30,
           attempts,
           statusCode: statusResult.statusCode,
@@ -1062,17 +1150,17 @@ class InstagramPostingService extends BaseApiClient {
       }
 
       if (!isFinished) {
-        throw new Error('Video processing timed out');
+        throw new Error("Video processing timed out");
       }
 
       // Update status to finished
       if (post) {
-        post.instagramContainerStatus = 'FINISHED';
+        post.instagramContainerStatus = "FINISHED";
         await post.save();
       }
 
       // STEP 4: Publish the media
-      onProgress?.({ stage: 'publishing', progress: 90 });
+      onProgress?.({ stage: "publishing", progress: 90 });
 
       const publishResult = await this.publishMediaContainer(containerId);
 
@@ -1080,43 +1168,64 @@ class InstagramPostingService extends BaseApiClient {
         throw new Error(`Failed to publish media: ${publishResult.error}`);
       }
 
-      const mediaId = publishResult.mediaId;
+      const publishId = publishResult.mediaId;
 
-      // STEP 5: Fetch permalink from Instagram
+      // STEP 5: Fetch permalink from Instagram and get CORRECT media ID for insights
+      // The publish response ID doesn't work with insights - need to query /me/media for actual ID
       let permalink = null;
+      let insightsMediaId = publishId; // fallback to publish ID
       try {
-        permalink = await this.getMediaPermalink(mediaId);
-        logger.info('Fetched Instagram media permalink', { permalink });
+        permalink = await this.getMediaPermalink(publishId);
+        logger.info("Fetched Instagram media permalink", { permalink });
+
+        // CRITICAL: Query /me/media to get the ACTUAL media ID that works with insights
+        // The publish response ID is different from the media ID needed for insights endpoint
+        const correctMediaId = await this.getMediaIdForInsights(
+          publishId,
+          permalink,
+        );
+        if (correctMediaId) {
+          insightsMediaId = correctMediaId;
+          logger.info("Retrieved correct media ID for insights", {
+            publishId,
+            insightsMediaId: correctMediaId,
+          });
+        }
       } catch (permalinkError) {
-        logger.warn('Failed to fetch permalink (non-critical)', {
+        logger.warn("Failed to fetch permalink (non-critical)", {
           error: permalinkError.message,
         });
       }
 
-      onProgress?.({ stage: 'completed', progress: 100, mediaId, permalink });
+      onProgress({
+        stage: "completed",
+        progress: 100,
+        mediaId: insightsMediaId,
+        permalink,
+      });
 
-      logger.info('Instagram Reels posted successfully', {
-        mediaId,
+      logger.info("Instagram Reels posted successfully", {
+        publishId,
+        insightsMediaId,
         permalink,
       });
 
       return {
         success: true,
-        mediaId,
+        mediaId: insightsMediaId, // Return the ID that works with insights!
         permalink,
         containerId,
-        message: 'Instagram Reel posted successfully',
+        message: "Instagram Reel posted successfully",
       };
-
     } catch (error) {
-      logger.error('Failed to post Instagram Reel', {
+      logger.error("Failed to post Instagram Reel", {
         error: error.message,
         stack: error.stack,
       });
 
       // Update container status to error on post
       if (post && post.instagramContainerId) {
-        post.instagramContainerStatus = 'ERROR';
+        post.instagramContainerStatus = "ERROR";
         await post.save();
       }
 
@@ -1135,7 +1244,7 @@ class InstagramPostingService extends BaseApiClient {
   async getMediaPermalink(mediaId) {
     try {
       if (!this.instagramUserId) {
-        throw new Error('Instagram user ID not set');
+        throw new Error("Instagram user ID not set");
       }
 
       // Ensure we have Page Access Token
@@ -1148,13 +1257,16 @@ class InstagramPostingService extends BaseApiClient {
       const endpoint = `/${mediaId}?fields=permalink`;
 
       // Use Page Access Token for permalink fetch
-      const response = await rateLimiterService.fetch(`${this.baseURL}${endpoint}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.pageAccessToken}`,
+      const response = await rateLimiterService.fetch(
+        `${this.baseURL}${endpoint}`,
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${this.pageAccessToken}`,
+          },
         },
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Failed to fetch media permalink: ${response.status}`);
@@ -1167,11 +1279,128 @@ class InstagramPostingService extends BaseApiClient {
       }
 
       return data.permalink || null;
-
     } catch (error) {
-      logger.error('Failed to fetch Instagram media permalink', {
+      logger.error("Failed to fetch Instagram media permalink", {
         error: error.message,
         mediaId,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Get the correct media ID for insights API
+   * After publishing, the returned ID doesn't work with insights.
+   * We need to query /me/media to find the media object and get its actual ID.
+   *
+   * @param {string} publishId - The ID returned from publishMediaContainer
+   * @param {string} permalink - The permalink URL (contains short code as fallback)
+   * @returns {Promise<string|null>} The media ID that works with insights endpoint
+   */
+  async getMediaIdForInsights(publishId, permalink) {
+    try {
+      // Ensure we have Page Access Token
+      const pageTokenResult = await this.ensurePageAccessToken();
+      if (!pageTokenResult.success) {
+        throw new Error(pageTokenResult.error);
+      }
+
+      // Extract short code from permalink for fallback matching
+      // e.g., https://www.instagram.com/reel/DUlp2l1ASyG/ -> DUlp2l1ASyG
+      const permalinkMatch = permalink?.match(
+        /instagram\.com\/reel\/([A-Za-z0-9_-]+)/,
+      );
+      const shortCode = permalinkMatch ? permalinkMatch[1] : null;
+
+      // Approach 1: Query /me/media and find by timestamp
+      // Recently posted media should appear first
+      const mediaEndpoint = `/${this.instagramUserId}/media`;
+      const mediaUrl = `${this.baseURL}${mediaEndpoint}?fields=id,permalink,timestamp,media_type&limit=25`;
+
+      logger.info("Querying /me/media to find correct media ID for insights", {
+        publishId,
+        shortCode,
+      });
+
+      const response = await rateLimiterService.fetch(mediaUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.pageAccessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to query user media: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      const mediaItems = data.data || [];
+
+      // Find matching media - try multiple approaches
+      let matchedMedia = null;
+
+      // Approach 1: Match by short code from permalink
+      if (shortCode) {
+        matchedMedia = mediaItems.find((item) => {
+          const itemPermalink = item.permalink || "";
+          return (
+            itemPermalink.includes(shortCode) || itemPermalink === permalink
+          );
+        });
+        logger.debug("Trying to match by permalink short code", {
+          shortCode,
+          found: !!matchedMedia,
+        });
+      }
+
+      // Approach 2: Match by publish ID (ig_id field sometimes matches publish ID)
+      if (!matchedMedia) {
+        // The media object's 'id' field is what we need for insights
+        // But sometimes publish returns a different ID format
+        // Just take the most recent REEL
+        const recentReels = mediaItems.filter(
+          (item) =>
+            item.media_type === "CAROUSEL" ||
+            item.media_type === "REEL" ||
+            !item.media_type,
+        );
+
+        if (recentReels.length > 0) {
+          // Take the most recent one (likely what we just posted)
+          matchedMedia = recentReels[0];
+          logger.debug("Using most recent reel as fallback", {
+            id: matchedMedia.id,
+            permalink: matchedMedia.permalink,
+          });
+        }
+      }
+
+      if (matchedMedia) {
+        logger.info("Found matching media for insights", {
+          publishId,
+          insightsMediaId: matchedMedia.id,
+          permalink: matchedMedia.permalink,
+        });
+        return matchedMedia.id; // This is the ID that works with /insights endpoint
+      }
+
+      logger.warn("Could not find matching media for insights", {
+        publishId,
+        shortCode,
+        totalMediaItems: mediaItems.length,
+      });
+
+      return publishId; // Fallback to original publish ID
+    } catch (error) {
+      logger.error("Failed to get media ID for insights", {
+        error: error.message,
+        publishId,
       });
       return null;
     }
@@ -1182,9 +1411,9 @@ class InstagramPostingService extends BaseApiClient {
    * Overrides the base method to inject OAuth token
    */
   async request(endpoint, options = {}) {
-    const token = await oauthManager.getToken('instagram');
+    const token = await oauthManager.getToken("instagram");
     if (!token || !token.accessToken) {
-      throw new Error('Not authenticated - no access token');
+      throw new Error("Not authenticated - no access token");
     }
 
     const url = `${this.baseURL}${endpoint}`;
@@ -1192,7 +1421,7 @@ class InstagramPostingService extends BaseApiClient {
       ...options,
       headers: {
         ...options.headers,
-        'Authorization': `Bearer ${token.accessToken}`,
+        Authorization: `Bearer ${token.accessToken}`,
       },
     });
 
@@ -1209,12 +1438,12 @@ class InstagramPostingService extends BaseApiClient {
    * Health check for the service
    */
   async healthCheck() {
-    const isAuthenticated = await oauthManager.isAuthenticated('instagram');
+    const isAuthenticated = await oauthManager.isAuthenticated("instagram");
 
     return {
       success: true,
-      service: 'instagram-posting',
-      status: 'ok',
+      service: "instagram-posting",
+      status: "ok",
       enabled: this.enabled,
       timestamp: new Date().toISOString(),
       capabilities: {
@@ -1224,12 +1453,12 @@ class InstagramPostingService extends BaseApiClient {
         supportsReels: true,
         maxDuration: 90,
         features: [
-          'oauth_authentication',
-          'reels_upload',
-          'caption_and_hashtags',
-          'status_tracking',
-          'container_creation',
-          'media_publishing',
+          "oauth_authentication",
+          "reels_upload",
+          "caption_and_hashtags",
+          "status_tracking",
+          "container_creation",
+          "media_publishing",
         ],
       },
     };

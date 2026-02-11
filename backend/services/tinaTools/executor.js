@@ -51,12 +51,17 @@ function buildIdQuery(id, customIdField) {
  * For multi-platform posts, aggregates metrics from all platforms
  * For single-platform posts, uses performanceMetrics or platformStatus
  *
+ * Priority:
+ * 1. If has platforms array AND platformStatus -> aggregate from platformStatus[platform]
+ * 2. If has platformStatus with single platform data -> use platformStatus[platform]
+ * 3. Otherwise use legacy performanceMetrics field
+ *
  * @param {object} post - MarketingPost document
  * @returns {object} Aggregated metrics { views, likes, comments, shares, engagementRate }
  */
 function getAggregatedMetrics(post) {
-  // For multi-platform posts, sum up metrics from all platforms
-  if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0 && post.platformStatus) {
+  // Case 1: Multi-platform posts (platforms array has 2+ platforms)
+  if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 1 && post.platformStatus) {
     let totalViews = 0;
     let totalLikes = 0;
     let totalComments = 0;
@@ -85,7 +90,30 @@ function getAggregatedMetrics(post) {
     };
   }
 
-  // For single-platform posts, use legacy performanceMetrics
+  // Case 2: Single-platform posts using new structure (platforms array with 1 element, OR platformStatus exists)
+  // Check if post has per-platform metrics in platformStatus
+  if (post.platformStatus) {
+    // Try to get metrics from platformStatus for the relevant platform
+    let platformToCheck = post.platform;
+
+    // If no platform field, try to derive from platforms array
+    if (!platformToCheck && post.platforms && Array.isArray(post.platforms) && post.platforms.length === 1) {
+      platformToCheck = post.platforms[0];
+    }
+
+    if (platformToCheck && post.platformStatus[platformToCheck]?.performanceMetrics) {
+      const metrics = post.platformStatus[platformToCheck].performanceMetrics;
+      return {
+        views: metrics.views || 0,
+        likes: metrics.likes || 0,
+        comments: metrics.comments || 0,
+        shares: metrics.shares || 0,
+        engagementRate: metrics.engagementRate || 0
+      };
+    }
+  }
+
+  // Case 3: Legacy single-platform posts - use performanceMetrics field
   return {
     views: post.performanceMetrics?.views || 0,
     likes: post.performanceMetrics?.likes || 0,

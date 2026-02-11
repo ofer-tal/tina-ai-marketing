@@ -2718,6 +2718,18 @@ function ContentLibrary() {
     lastSseUpdateRef.current = Date.now();
   }, []);
 
+  const handleSsePostMetricsUpdated = useCallback((data) => {
+    console.log('[SSE] Post metrics updated:', data.postId, data);
+    if (data.post) {
+      // Full post update with metrics - use standard merge
+      setPosts(prevPosts => mergeUpdatedPost(prevPosts, data.post));
+    } else if (data.postId && data.metrics) {
+      // Metrics only update - use dedicated metrics merge
+      setPosts(prevPosts => mergeMetricsUpdate(prevPosts, data.postId, data.metrics));
+    }
+    lastSseUpdateRef.current = Date.now();
+  }, []);
+
   // Handle SSE connection state
   const handleSseError = useCallback((error) => {
     console.warn('[SSE] Connection error:', error);
@@ -2742,6 +2754,7 @@ function ContentLibrary() {
     onPostDeleted: handleSsePostDeleted,
     onPostStatusChanged: handleSsePostStatusChanged,
     onPostProgress: handleSsePostProgress,
+    onPostMetricsUpdated: handleSsePostMetricsUpdated,
     onConnected: handleSseConnected,
     onResumed: handleSseResumed,
     onError: handleSseError
@@ -3213,7 +3226,8 @@ function ContentLibrary() {
   // Handle post created
   const handlePostCreated = (result) => {
     if (result.success) {
-      triggerRefresh(); // Refresh posts list
+      // SSE will handle the post update - no full refresh needed
+      // The backend sends post.created event which triggers handleSsePostCreated
     }
     setCreatePostModal(false);
   };
@@ -3227,7 +3241,8 @@ function ContentLibrary() {
   // Handle video generated
   const handleVideoGenerated = (result) => {
     if (result.success) {
-      triggerRefresh(); // Refresh posts list
+      // SSE will handle the post update - no full refresh needed
+      // The backend sends post.updated event which triggers handleSsePostUpdated
     }
     setGenerateVideoModal(false);
     setSelectedPostForVideo(null);
@@ -3252,8 +3267,7 @@ function ContentLibrary() {
           status: 'ready'
         }));
       }
-      // Also refresh posts list to ensure everything is synced
-      triggerRefresh();
+      // SSE will handle the post update - no full refresh needed
     }
     setRegenerateVideoModal(false);
     setSelectedPostForVideo(null);
@@ -4648,18 +4662,21 @@ function ContentLibrary() {
                       {(() => {
                         const platforms = getPostPlatforms(post);
                         const isMultiPlatform = platforms.length > 1;
-                        const hasPlatformMetrics = post.platformStatus &&
-                          Object.values(post.platformStatus).some(p => p?.performanceMetrics && (p.performanceMetrics.views > 0 || p.performanceMetrics.likes > 0));
-                        const hasAggregateMetrics = post.performanceMetrics && (post.performanceMetrics.views > 0 || post.performanceMetrics.likes > 0);
+                        // Also check if post has per-platform metrics in platformStatus
+                        const hasPerPlatformMetrics = post.platformStatus &&
+                          Object.keys(post.platformStatus).some(key => platforms.includes(key));
 
-                        if (isMultiPlatform && hasPlatformMetrics) {
-                          // Show per-platform stats for multi-platform posts
+                        if ((isMultiPlatform || hasPerPlatformMetrics) && post.platformStatus) {
+                          // Always show per-platform stats for multi-platform posts, even if some platforms have 0 views
                           return (
                             <PerPlatformStats>
                               {platforms.map(platform => {
                                 const platformData = post.platformStatus?.[platform];
                                 const metrics = platformData?.performanceMetrics;
-                                if (!metrics || (metrics.views === 0 && metrics.likes === 0)) return null;
+                                const isPosted = platformData?.status === 'posted';
+
+                                // Only show platforms that have been posted or have metrics
+                                if (!isPosted && !metrics) return null;
 
                                 const platformName = platform === 'youtube_shorts' ? 'YouTube' :
                                   platform.charAt(0).toUpperCase() + platform.slice(1);
@@ -4673,13 +4690,21 @@ function ContentLibrary() {
                                       {platformName}
                                     </PlatformStatsLabel>
                                     <PlatformMetrics>
-                                      <span>👁️ <span className="stat-value">{formatNumber(metrics.views)}</span></span>
-                                      <span>❤️ <span className="stat-value">{formatNumber(metrics.likes)}</span></span>
-                                      {metrics.comments > 0 && (
-                                        <span>💬 <span className="stat-value">{formatNumber(metrics.comments)}</span></span>
-                                      )}
-                                      {metrics.shares > 0 && (
-                                        <span>🔗 <span className="stat-value">{formatNumber(metrics.shares)}</span></span>
+                                      {metrics ? (
+                                        <>
+                                          <span>👁️ <span className="stat-value">{formatNumber(metrics.views || 0)}</span></span>
+                                          <span>❤️ <span className="stat-value">{formatNumber(metrics.likes || 0)}</span></span>
+                                          {(metrics.comments || 0) > 0 && (
+                                            <span>💬 <span className="stat-value">{formatNumber(metrics.comments)}</span></span>
+                                          )}
+                                          {(metrics.shares || 0) > 0 && (
+                                            <span>🔗 <span className="stat-value">{formatNumber(metrics.shares)}</span></span>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span style={{ color: '#a0a0a0', fontSize: '0.85rem' }}>
+                                          {isPosted ? 'Fetching...' : 'Pending'}
+                                        </span>
                                       )}
                                     </PlatformMetrics>
                                   </PlatformStatsRow>
@@ -4687,7 +4712,12 @@ function ContentLibrary() {
                               })}
                             </PerPlatformStats>
                           );
-                        } else if (hasAggregateMetrics) {
+                        }
+
+                        // Single platform or legacy posts - show aggregate metrics
+                        const hasAggregateMetrics = post.performanceMetrics && (post.performanceMetrics.views > 0 || post.performanceMetrics.likes > 0);
+
+                        if (hasAggregateMetrics) {
                           // Show aggregate stats for single-platform or legacy posts
                           return (
                             <StatsRow>
@@ -5414,7 +5444,7 @@ function ContentLibrary() {
         isOpen={createPostModal}
         onClose={() => {
           setCreatePostModal(false);
-          triggerRefresh();
+          // No refresh needed - SSE will handle updates if post was created
         }}
         onSave={handlePostCreated}
         stories={stories}
@@ -5425,7 +5455,7 @@ function ContentLibrary() {
         onClose={() => {
           setGenerateVideoModal(false);
           setSelectedPostForVideo(null);
-          triggerRefresh();
+          // No refresh needed - SSE will handle updates if video was generated
         }}
         onGenerate={handleVideoGenerated}
         post={selectedPostForVideo}
@@ -5436,7 +5466,7 @@ function ContentLibrary() {
         onClose={() => {
           setRegenerateVideoModal(false);
           setSelectedPostForVideo(null);
-          triggerRefresh();
+          // No refresh needed - SSE will handle updates if video was regenerated
         }}
         onRegenerate={handleVideoRegenerated}
         post={selectedPostForVideo}
@@ -5449,13 +5479,13 @@ function ContentLibrary() {
           onClose={() => {
             setTier2UploadModal(false);
             setSelectedPostForTier2Upload(null);
-            triggerRefresh();
+            // No refresh needed - SSE will handle updates
           }}
           post={selectedPostForTier2Upload}
           onUploadComplete={() => {
             setTier2UploadModal(false);
             setSelectedPostForTier2Upload(null);
-            triggerRefresh();
+            // No refresh needed - SSE will handle updates
           }}
         />
       )}
@@ -5467,13 +5497,13 @@ function ContentLibrary() {
           onClose={() => {
             setEditTier2Modal(false);
             setSelectedPostForTier2Edit(null);
-            triggerRefresh();
+            // No refresh needed - SSE will handle updates
           }}
           post={selectedPostForTier2Edit}
           onSave={() => {
             setEditTier2Modal(false);
             setSelectedPostForTier2Edit(null);
-            triggerRefresh();
+            // No refresh needed - SSE will handle updates
           }}
         />
       )}

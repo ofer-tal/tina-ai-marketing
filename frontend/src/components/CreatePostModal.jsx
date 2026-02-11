@@ -846,7 +846,7 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   const fetchStories = async (searchTerm = '') => {
     setIsFetchingStories(true);
     try {
-      const url = new URL('/api/content/stories/list');
+      const url = new URL('/api/content/stories/list', window.location.origin);
       if (searchTerm) {
         url.searchParams.append('search', searchTerm);
       }

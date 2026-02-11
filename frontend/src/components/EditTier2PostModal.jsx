@@ -270,6 +270,19 @@ const PLATFORMS = [
   { id: 'youtube_shorts', name: 'YouTube Shorts', icon: <YouTubeIcon /> }
 ];
 
+/**
+ * Format a Date object for datetime-local input (local time, not UTC)
+ * datetime-local requires format: YYYY-MM-DDTHH:mm
+ */
+function formatLocalDateTime(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
 function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
   const [caption, setCaption] = useState('');
   const [hashtags, setHashtags] = useState({
@@ -327,7 +340,8 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
       const scriptValue = post.tierParameters?.script || '';
       setScript(scriptValue);
 
-      setScheduledAt(post.scheduledAt ? new Date(post.scheduledAt).toISOString().slice(0, 16) : '');
+      // Format date for datetime-local input (requires local time format: YYYY-MM-DDTHH:mm)
+      setScheduledAt(post.scheduledAt ? formatLocalDateTime(new Date(post.scheduledAt)) : '');
     }
   }, [post]);
 

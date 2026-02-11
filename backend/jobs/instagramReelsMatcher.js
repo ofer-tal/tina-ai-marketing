@@ -96,9 +96,12 @@ class InstagramReelsMatcherJob {
       };
 
       // Step 1: Find all posts with instagramMediaId
+      // Include both legacy platform='instagram' AND multi-platform posts with platforms array
       const postsWithInstagramId = await MarketingPost.find({
-        platform: 'instagram',
-        instagramMediaId: { $exists: true, $ne: null },
+        $or: [
+          { platform: 'instagram', instagramMediaId: { $exists: true, $ne: null } },
+          { platforms: 'instagram', instagramMediaId: { $exists: true, $ne: null } }
+        ]
       });
 
       logger.info(`Found ${postsWithInstagramId.length} Instagram posts with media IDs`);
@@ -154,13 +157,16 @@ class InstagramReelsMatcherJob {
    */
   async _updatePostMetrics(post) {
     try {
-      if (!post.instagramMediaId) {
+      // Get mediaId from either location (legacy or new multi-platform structure)
+      const mediaId = post.platformStatus?.instagram?.mediaId || post.instagramMediaId;
+
+      if (!mediaId) {
         logger.warn(`Post ${post._id} has no instagramMediaId`);
         return;
       }
 
       // Fetch insights from Instagram Graph API
-      const insights = await this._fetchMediaInsights(post.instagramMediaId);
+      const insights = await this._fetchMediaInsights(mediaId);
 
       if (!insights) {
         logger.debug(`No insights available for media ${post.instagramMediaId}`);
@@ -170,18 +176,36 @@ class InstagramReelsMatcherJob {
       // Extract metrics from insights
       const metrics = this._extractMetrics(insights);
 
-      // Update post with current metrics
-      post.performanceMetrics = {
-        views: metrics.views || post.performanceMetrics?.views || 0,
-        likes: metrics.likes || post.performanceMetrics?.likes || 0,
-        comments: metrics.comments || post.performanceMetrics?.comments || 0,
-        shares: metrics.shares || post.performanceMetrics?.shares || 0,
-        saved: metrics.saved || post.performanceMetrics?.saved || 0,
-        reach: metrics.reach || post.performanceMetrics?.reach || 0,
-        engagementRate: this._calculateEngagementRate(metrics),
-      };
+      // Determine if this is a multi-platform post
+      const isMultiPlatform = post.platforms && Array.isArray(post.platforms) && post.platforms.includes('instagram');
 
-      post.metricsLastFetchedAt = new Date();
+      if (isMultiPlatform) {
+        // Multi-platform post - store in platformStatus.instagram
+        post.platformStatus = post.platformStatus || {};
+        post.platformStatus.instagram = post.platformStatus.instagram || {};
+        post.platformStatus.instagram.performanceMetrics = {
+          views: metrics.views || post.platformStatus.instagram.performanceMetrics?.views || 0,
+          likes: metrics.likes || post.platformStatus.instagram.performanceMetrics?.likes || 0,
+          comments: metrics.comments || post.platformStatus.instagram.performanceMetrics?.comments || 0,
+          shares: metrics.shares || post.platformStatus.instagram.performanceMetrics?.shares || 0,
+          saved: metrics.saved || post.platformStatus.instagram.performanceMetrics?.saved || 0,
+          reach: metrics.reach || post.platformStatus.instagram.performanceMetrics?.reach || 0,
+          engagementRate: this._calculateEngagementRate(metrics),
+        };
+        post.platformStatus.instagram.lastFetchedAt = new Date();
+      } else {
+        // Legacy single-platform post - store in performanceMetrics
+        post.performanceMetrics = {
+          views: metrics.views || post.performanceMetrics?.views || 0,
+          likes: metrics.likes || post.performanceMetrics?.likes || 0,
+          comments: metrics.comments || post.performanceMetrics?.comments || 0,
+          shares: metrics.shares || post.performanceMetrics?.shares || 0,
+          saved: metrics.saved || post.performanceMetrics?.saved || 0,
+          reach: metrics.reach || post.performanceMetrics?.reach || 0,
+          engagementRate: this._calculateEngagementRate(metrics),
+        };
+        post.metricsLastFetchedAt = new Date();
+      }
 
       // Add to metrics history
       post.metricsHistory = post.metricsHistory || [];
@@ -193,7 +217,9 @@ class InstagramReelsMatcherJob {
         shares: metrics.shares || 0,
         saved: metrics.saved || 0,
         reach: metrics.reach || 0,
-        engagementRate: post.performanceMetrics.engagementRate,
+        engagementRate: isMultiPlatform
+          ? post.platformStatus.instagram.performanceMetrics.engagementRate
+          : post.performanceMetrics.engagementRate,
       });
 
       // Keep only last 90 days of history
@@ -202,17 +228,22 @@ class InstagramReelsMatcherJob {
 
       await post.save();
 
+      const currentViews = isMultiPlatform
+        ? post.platformStatus.instagram.performanceMetrics.views
+        : post.performanceMetrics.views;
+
       logger.debug(`Updated metrics for Instagram post ${post._id}`, {
-        instagramMediaId: post.instagramMediaId,
-        views: post.performanceMetrics.views,
-        likes: post.performanceMetrics.likes,
-        comments: post.performanceMetrics.comments,
+        instagramMediaId: mediaId,
+        isMultiPlatform,
+        views: currentViews,
+        likes: isMultiPlatform ? post.platformStatus.instagram.performanceMetrics.likes : post.performanceMetrics.likes,
+        comments: isMultiPlatform ? post.platformStatus.instagram.performanceMetrics.comments : post.performanceMetrics.comments,
       });
 
     } catch (error) {
-      logger.error(`Failed to update metrics for Instagram post ${post._id}`, {
+      logger.warn(`Failed to update metrics for Instagram post ${post._id}`, {
         error: error.message,
-        instagramMediaId: post.instagramMediaId,
+        mediaId,
       });
       throw error;
     }
