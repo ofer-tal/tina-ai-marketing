@@ -181,7 +181,9 @@ class ContentMetricsSyncJob {
               : 0;
 
             // Update both legacy performanceMetrics and new platformStatus.tiktok.performanceMetrics
-            await MarketingPost.findByIdAndUpdate(post._id, {
+            logger.info(`Before TikTok update - post ${post._id} platformStatus.tiktok:`, post.platformStatus?.tiktok);
+
+            const tiktokUpdateResult = await MarketingPost.findByIdAndUpdate(post._id, {
               'performanceMetrics.views': video.view_count || 0,
               'performanceMetrics.likes': video.like_count || 0,
               'performanceMetrics.comments': video.comment_count || 0,
@@ -277,11 +279,49 @@ class ContentMetricsSyncJob {
           if (metricsResult.success) {
             const instaMetrics = metricsResult.results?.instagram;
             if (instaMetrics) {
-              logger.info(`Updated Instagram metrics for post ${post._id}`, {
+              // Calculate engagement rate
+              const engagementRate = instaMetrics.views > 0
+                ? ((instaMetrics.likes + instaMetrics.comments + instaMetrics.shares) / instaMetrics.views) * 100
+                : 0;
+
+              logger.info(`Updating Instagram metrics for post ${post._id}`, {
                 views: instaMetrics.views,
                 likes: instaMetrics.likes,
-                engagementRate: instaMetrics.engagementRate
+                comments: instaMetrics.comments,
+                shares: instaMetrics.shares,
+                engagementRate: engagementRate
               });
+
+              // CRITICAL FIX: Actually update the database with Instagram metrics
+              // Same pattern as TikTok - update both legacy and new platformStatus fields
+              logger.info(`Before update - post ${post._id} current platformStatus:`, post.platformStatus);
+
+              const updateResult = await MarketingPost.findByIdAndUpdate(post._id, {
+                'performanceMetrics.views': instaMetrics.views || 0,
+                'performanceMetrics.likes': instaMetrics.likes || 0,
+                'performanceMetrics.comments': instaMetrics.comments || 0,
+                'performanceMetrics.shares': instaMetrics.shares || 0,
+                'performanceMetrics.engagementRate': engagementRate,
+                'performanceMetrics.saved': instaMetrics.saved || 0,
+                'performanceMetrics.reach': instaMetrics.reach || 0,
+                // Also update per-platform metrics for multi-platform posts
+                'platformStatus.instagram.performanceMetrics.views': instaMetrics.views || 0,
+                'platformStatus.instagram.performanceMetrics.likes': instaMetrics.likes || 0,
+                'platformStatus.instagram.performanceMetrics.comments': instaMetrics.comments || 0,
+                'platformStatus.instagram.performanceMetrics.shares': instaMetrics.shares || 0,
+                'platformStatus.instagram.performanceMetrics.engagementRate': engagementRate,
+                'platformStatus.instagram.performanceMetrics.saved': instaMetrics.saved || 0,
+                'platformStatus.instagram.performanceMetrics.reach': instaMetrics.reach || 0,
+                'platformStatus.instagram.lastFetchedAt': new Date(),
+                'metricsLastFetchedAt': new Date(),
+              });
+
+              logger.info(`After update - post ${post._id} platformStatus.instagram:`, {
+                performanceMetrics: updateResult.platformStatus?.instagram?.performanceMetrics,
+                views: updateResult.performanceMetrics?.views,
+                lastFetchedAt: updateResult.platformStatus?.instagram?.lastFetchedAt
+              });
+
               result.updated++;
             } else {
               logger.debug(`No Instagram metrics returned for post ${post._id}`);
