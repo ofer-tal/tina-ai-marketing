@@ -423,6 +423,39 @@ export async function executeTool(proposal) {
         result = await getCurrentReflection(toolParameters);
         break;
 
+      // BookTok Trend Analysis Tools
+      case 'get_booktok_trends':
+        result = await getBookTokTrends(toolParameters);
+        break;
+
+      case 'find_book_references':
+        result = await findBookReferences(toolParameters);
+        break;
+
+      case 'generate_hooks':
+        result = await generateHooks(toolParameters);
+        break;
+
+      case 'optimize_hashtags':
+        result = await optimizeHashtags(toolParameters);
+        break;
+
+      case 'score_content':
+        result = await scoreContent(toolParameters);
+        break;
+
+      case 'get_topic_recommendations':
+        result = await getTopicRecommendations(toolParameters);
+        break;
+
+      case 'query_book_database':
+        result = await queryBookDatabase(toolParameters);
+        break;
+
+      case 'get_trend_alerts':
+        result = await getTrendAlerts(toolParameters);
+        break;
+
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }
@@ -3906,6 +3939,468 @@ async function getCurrentReflection() {
       nextWeekPriorities: reflection.nextWeekPriorities
     }
   };
+}
+
+/**
+ * ============================================
+ * BookTok Trend Analysis Tool Executors
+ * ============================================
+ */
+
+/**
+ * Get BookTok trends
+ */
+async function getBookTokTrends(params = {}) {
+  const { platform = 'all', timeWindow = '24h', category = 'all', limit = 20 } = params;
+
+  try {
+    const MarketingBookTrendMetrics = (await import('../../models/MarketingBookTrendMetrics.js')).default;
+    const MarketingBook = (await import('../../models/MarketingBook.js')).default;
+
+    const cutoffDate = getDateFromWindow(timeWindow);
+
+    let matchQuery = { timestamp: { $gte: cutoffDate } };
+    if (platform !== 'all') {
+      matchQuery.platform = platform;
+    }
+
+    let entityTypeFilter = [];
+    if (category === 'books') entityTypeFilter = ['book'];
+    else if (category === 'topics') entityTypeFilter = ['topic'];
+    else if (category === 'tropes') entityTypeFilter = ['trope'];
+    else if (category === 'hooks') entityTypeFilter = ['hook'];
+    else if (category === 'hashtags') entityTypeFilter = ['hashtag'];
+
+    if (entityTypeFilter.length > 0) {
+      matchQuery.entityType = { $in: entityTypeFilter };
+    }
+
+    const trends = await MarketingBookTrendMetrics
+      .find(matchQuery)
+      .sort({ trendVelocity: -1, mentionCount: -1 })
+      .limit(limit)
+      .lean();
+
+    // Get book details for book trends
+    const enrichedTrends = await Promise.all(trends.map(async (trend) => {
+      if (trend.entityType === 'book') {
+        const book = await MarketingBook.findOne({ title: trend.entityName }).lean();
+        return {
+          ...trend,
+          bookDetails: book ? {
+            title: book.title,
+            author: book.author,
+            coverImageUrl: book.coverImageUrl,
+            spiceLevel: book.spiceLevel,
+            tropes: book.tropes
+          } : null
+        };
+      }
+      return trend;
+    }));
+
+    return {
+      message: `Found ${enrichedTrends.length} ${category} trends for ${platform}`,
+      platform,
+      timeWindow,
+      category,
+      trends: enrichedTrends.map(t => ({
+        entityType: t.entityType,
+        name: t.entityName,
+        mentionCount: t.mentionCount,
+        trendVelocity: t.trendVelocity,
+        trendDirection: t.trendDirection,
+        avgEngagementRate: t.avgEngagementRate,
+        bookDetails: t.bookDetails
+      }))
+    };
+  } catch (error) {
+    logger.error('Error in get_booktok_trends', { error: error.message });
+    return { message: 'Error fetching trends', error: error.message };
+  }
+}
+
+/**
+ * Find book references for a topic
+ */
+async function findBookReferences(params = {}) {
+  const { topic, spiceLevel, limit = 10 } = params;
+
+  try {
+    const MarketingBook = (await import('../../models/MarketingBook.js')).default;
+
+    const query = { active: true };
+    if (spiceLevel !== undefined && spiceLevel !== null) {
+      query.spiceLevel = spiceLevel;
+    }
+
+    // Search in tropes, themes, and title/author
+    const topicLower = topic.toLowerCase();
+    const books = await MarketingBook.find({
+      ...query,
+      $or: [
+        { tropes: { $regex: topicLower, $options: 'i' } },
+        { themes: { $regex: topicLower, $options: 'i' } },
+        { title: { $regex: topicLower, $options: 'i' } },
+        { genre: { $regex: topicLower, $options: 'i' } }
+      ]
+    })
+      .sort({ currentTrendScore: -1 })
+      .limit(limit)
+      .lean();
+
+    return {
+      message: `Found ${books.length} books for topic: "${topic}"`,
+      topic,
+      books: books.map(b => ({
+        title: b.title,
+        author: b.author,
+        currentTrendScore: b.currentTrendScore,
+        popularityScore: b.popularityScore,
+        spiceLevel: b.spiceLevel,
+        tropes: b.tropes,
+        coverImageUrl: b.coverImageUrl,
+        communitySentiment: b.communitySentiment?.overall || 'neutral'
+      }))
+    };
+  } catch (error) {
+    logger.error('Error in find_book_references', { error: error.message });
+    return { message: 'Error finding book references', error: error.message };
+  }
+}
+
+/**
+ * Generate hooks for a topic
+ */
+async function generateHooks(params = {}) {
+  const { topic, platform = 'tiktok', category = 'all', limit = 5 } = params;
+
+  try {
+    const MarketingHookPattern = (await import('../../models/MarketingHookPattern.js')).default;
+
+    const matchQuery = { active: true };
+    if (category !== 'all') {
+      matchQuery.category = category;
+    }
+    if (platform !== 'all') {
+      matchQuery['worksBestFor.platforms'] = platform;
+    }
+
+    const hooks = await MarketingHookPattern
+      .find(matchQuery)
+      .sort({ avgEngagementRate: -1 })
+      .limit(limit)
+      .lean();
+
+    // If no hooks found, generate some from topic
+    if (hooks.length === 0) {
+      return {
+        message: `Generating ${limit} hooks for topic: "${topic}"`,
+        hooks: generateDefaultHooks(topic, platform, limit)
+      };
+    }
+
+    return {
+      message: `Found ${hooks.length} hooks for topic: "${topic}"`,
+      hooks: hooks.map(h => ({
+        template: h.hookTemplate,
+        category: h.category,
+        avgEngagementRate: h.avgEngagementRate,
+        worksBestFor: h.worksBestFor
+      }))
+    };
+  } catch (error) {
+    logger.error('Error in generate_hooks', { error: error.message });
+    return { message: 'Error generating hooks', error: error.message };
+  }
+}
+
+/**
+ * Generate default hooks
+ */
+function generateDefaultHooks(topic, platform, limit) {
+  const topicCapitalized = topic.charAt(0).toUpperCase() + topic.slice(1);
+
+  return [
+    {
+      template: `What's the last ${topic} book you couldn't put down?`,
+      category: 'question',
+      avgEngagementRate: 7,
+      worksBestFor: { platforms: [platform], topics: [topic] }
+    },
+    {
+      template: `I have a confession about ${topic}...`,
+      category: 'confession',
+      avgEngagementRate: 6.5,
+      worksBestFor: { platforms: [platform], topics: [topic] }
+    },
+    {
+      template: `Unpopular opinion: ${topicCapitalized} is overrated`,
+      category: 'hot_take',
+      avgEngagementRate: 8,
+      worksBestFor: { platforms: [platform], topics: [topic] }
+    },
+    {
+      template: `You need to read this ${topic} book ASAP`,
+      category: 'recommendation',
+      avgEngagementRate: 6,
+      worksBestFor: { platforms: [platform], topics: [topic] }
+    },
+    {
+      template: `POV: You just finished a ${topic} book and your emotions are all over the place`,
+      category: 'relatable',
+      avgEngagementRate: 7.5,
+      worksBestFor: { platforms: [platform], topics: [topic] }
+    }
+  ].slice(0, limit);
+}
+
+/**
+ * Optimize hashtags for content
+ */
+async function optimizeHashtags(params = {}) {
+  const { platform = 'tiktok', topic, book, count = 8 } = params;
+
+  try {
+    const MarketingHashtagPerformance = (await import('../../models/MarketingHashtagPerformance.js')).default;
+
+    const matchQuery = {
+      platform,
+      active: true,
+      'overuseRisk.level': { $in: ['low', 'medium'] }
+    };
+
+    // Filter by topic if provided
+    if (topic) {
+      matchQuery.$or = [
+        { hashtag: { $regex: topic.replace(/\s+/g, ''), $options: 'i' } },
+        { category: { $regex: topic, $options: 'i' } }
+      ];
+    }
+
+    const hashtags = await MarketingHashtagPerformance
+      .find(matchQuery)
+      .sort({ engagementRate: -1, 'overuseRisk.saturationScore': 1 })
+      .limit(count * 2)
+      .lean();
+
+    // Categorize hashtags
+    const primary = hashtags.filter(h => h.engagementRate >= 8).slice(0, 3);
+    const secondary = hashtags.filter(h => h.engagementRate >= 5 && h.engagementRate < 8).slice(0, 3);
+    const niche = hashtags.filter(h => h.engagementRate < 5).slice(0, 2);
+
+    const selected = [...primary, ...secondary, ...niche].slice(0, count);
+
+    return {
+      message: `Optimized ${selected.length} hashtags for ${platform}`,
+      hashtags: selected.map(h => ({
+        tag: h.hashtag,
+        engagementRate: h.engagementRate,
+        riskLevel: h.overuseRisk?.level || 'unknown'
+      })),
+      primary: primary.map(h => h.hashtag),
+      secondary: secondary.map(h => h.hashtag),
+      warnings: hashtags
+        .filter(h => h.overuseRisk?.level === 'high')
+        .map(h => `#${h.hashtag} is highly saturated`)
+    };
+  } catch (error) {
+    logger.error('Error in optimize_hashtags', { error: error.message });
+    return { message: 'Error optimizing hashtags', error: error.message };
+  }
+}
+
+/**
+ * Score content draft
+ */
+async function scoreContent(params = {}) {
+  const { hook, bookReference, hashtags, caption, plannedTime, platform = 'tiktok', topic } = params;
+
+  try {
+    const contentScorerService = (await import('../bookTok/contentScorerService.js')).default;
+
+    const result = await contentScorerService.scoreContent({
+      hook,
+      bookReference,
+      hashtags,
+      caption,
+      plannedTime: plannedTime ? new Date(plannedTime) : null,
+      platform,
+      topic
+    });
+
+    return {
+      message: `Content scored: ${result.overallScore}/100`,
+      overallScore: result.overallScore,
+      scoreBreakdown: result.scoreBreakdown,
+      strengths: result.strengths,
+      weaknesses: result.weaknesses,
+      suggestions: result.suggestions,
+      prediction: result.prediction
+    };
+  } catch (error) {
+    logger.error('Error in score_content', { error: error.message });
+    return { message: 'Error scoring content', error: error.message };
+  }
+}
+
+/**
+ * Get topic recommendations
+ */
+async function getTopicRecommendations(params = {}) {
+  const { date, limit = 15, minPriorityScore = 40 } = params;
+
+  try {
+    const topicRecommenderService = (await import('../bookTok/topicRecommenderService.js')).default;
+
+    const targetDate = date ? new Date(date) : new Date();
+    const recommendations = await topicRecommenderService.getTopicRecommendations({
+      date: targetDate,
+      limit,
+      minPriorityScore
+    });
+
+    return {
+      message: `Found ${recommendations.length} topic recommendations`,
+      recommendations: recommendations.map(r => ({
+        topic: r.topic,
+        priorityScore: r.priorityScore,
+        trendScore: r.trendScore,
+        competitionLevel: r.competitionLevel,
+        engagementPotential: r.engagementPotential,
+        suggestedBooks: r.suggestedBooks,
+        suggestedHooks: r.suggestedHooks?.slice(0, 3).map(h => h.template) || [],
+        reasoning: r.reasoning?.why || r.reasoning
+      }))
+    };
+  } catch (error) {
+    logger.error('Error in get_topic_recommendations', { error: error.message });
+    return { message: 'Error getting topic recommendations', error: error.message };
+  }
+}
+
+/**
+ * Query book database
+ */
+async function queryBookDatabase(params = {}) {
+  const { query, filters = {}, limit = 20 } = params;
+
+  try {
+    const MarketingBook = (await import('../../models/MarketingBook.js')).default;
+
+    const searchQuery = { active: true };
+
+    if (query) {
+      searchQuery.$or = [
+        { title: { $regex: query, $options: 'i' } },
+        { author: { $regex: query, $options: 'i' } },
+        { tropes: { $regex: query, $options: 'i' } }
+      ];
+    }
+
+    if (filters.trope) {
+      searchQuery.tropes = filters.trope;
+    }
+    if (filters.spiceLevel !== undefined && filters.spiceLevel !== null) {
+      searchQuery.spiceLevel = filters.spiceLevel;
+    }
+    if (filters.minTrendScore) {
+      searchQuery.currentTrendScore = { $gte: filters.minTrendScore };
+    }
+    if (filters.genre) {
+      searchQuery.genre = { $regex: filters.genre, $options: 'i' };
+    }
+
+    const books = await MarketingBook
+      .find(searchQuery)
+      .sort({ currentTrendScore: -1 })
+      .limit(limit)
+      .lean();
+
+    return {
+      message: `Found ${books.length} books matching query: "${query || 'all'}"`,
+      books: books.map(b => ({
+        title: b.title,
+        author: b.author,
+        currentTrendScore: b.currentTrendScore,
+        popularityScore: b.popularityScore,
+        spiceLevel: b.spiceLevel,
+        tropes: b.tropes,
+        coverImageUrl: b.coverImageUrl,
+        communitySentiment: b.communitySentiment?.overall || 'neutral'
+      }))
+    };
+  } catch (error) {
+    logger.error('Error in query_book_database', { error: error.message });
+    return { message: 'Error querying book database', error: error.message };
+  }
+}
+
+/**
+ * Get trend alerts
+ */
+async function getTrendAlerts(params = {}) {
+  const { alertType, acknowledged = false, severity, limit = 20 } = params;
+
+  try {
+    const MarketingTrendAlert = (await import('../../models/MarketingTrendAlert.js')).default;
+
+    const query = {
+      acknowledged,
+      $or: [
+        { validUntil: { $exists: false } },
+        { validUntil: { $gte: new Date() } }
+      ]
+    };
+
+    if (alertType) query.alertType = alertType;
+    if (severity) query.severity = severity;
+
+    const alerts = await MarketingTrendAlert
+      .find(query)
+      .sort({ createdAt: -1, priority: -1 })
+      .limit(limit)
+      .lean();
+
+    return {
+      message: `Found ${alerts.length} active alerts`,
+      alerts: alerts.map(a => ({
+        id: a._id,
+        type: a.alertType,
+        title: a.title,
+        description: a.description,
+        severity: a.severity,
+        entityType: a.entityType,
+        entityName: a.entityName,
+        createdAt: a.createdAt
+      }))
+    };
+  } catch (error) {
+    logger.error('Error in get_trend_alerts', { error: error.message });
+    return { message: 'Error fetching trend alerts', error: error.message };
+  }
+}
+
+/**
+ * Helper: Convert time window string to Date
+ */
+function getDateFromWindow(timeWindow) {
+  const now = new Date();
+  const value = parseInt(timeWindow);
+  const unit = timeWindow.replace(/[0-9]/g, '');
+
+  switch (unit) {
+    case 'h':
+      now.setHours(now.getHours() - value);
+      break;
+    case 'd':
+      now.setDate(now.getDate() - value);
+      break;
+    default:
+      now.setHours(now.getHours() - 24);
+  }
+
+  return now;
 }
 
 /**

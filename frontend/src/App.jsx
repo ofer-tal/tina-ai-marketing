@@ -48,6 +48,7 @@ import Thoughts from './pages/Thoughts';
 import Plans from './pages/Plans';
 import Reflections from './pages/Reflections';
 import Todos from './pages/Todos';
+import BookTokTrends from './pages/BookTokTrends';
 import TodoSidebar from './components/TodoSidebar';
 import { ToastContainer } from './components/Toast';
 import ToastTest from './components/ToastTest';
@@ -899,6 +900,15 @@ function Sidebar({ collapsed, onToggle, mobileOpen, onMobileToggle, chatOpen, on
         <NavSection style={{ marginTop: 'auto' }}>
           <NavSectionContent $open={!collapsed}>
             <SidebarNavLink
+              to="/booktok-trends"
+              $collapsed={collapsed}
+              className={isActive('/booktok-trends') ? 'active' : ''}
+              onClick={handleNavClick}
+            >
+              <span className="icon">📚</span>
+              <span className="label">BookTok Trends</span>
+            </SidebarNavLink>
+            <SidebarNavLink
               to="/todos"
               $collapsed={collapsed}
               className={isActive('/todos') ? 'active' : ''}
@@ -1151,6 +1161,7 @@ function App() {
                 <Route path="/tina/reflections" element={<PageWithBreadcrumbs><Reflections /></PageWithBreadcrumbs>} />
                 <Route path="/tina/reflections/:id" element={<PageWithBreadcrumbs><Reflections /></PageWithBreadcrumbs>} />
                 <Route path="/todos" element={<PageWithBreadcrumbs><Todos /></PageWithBreadcrumbs>} />
+                <Route path="/booktok-trends" element={<PageWithBreadcrumbs><BookTokTrends /></PageWithBreadcrumbs>} />
                 <Route path="/settings" element={<PageWithBreadcrumbs><Settings /></PageWithBreadcrumbs>} />
                 <Route path="/service-health" element={<PageWithBreadcrumbs><ServiceHealth /></PageWithBreadcrumbs>} />
                 <Route path="/test/toasts" element={<PageWithBreadcrumbs><ToastTest /></PageWithBreadcrumbs>} />

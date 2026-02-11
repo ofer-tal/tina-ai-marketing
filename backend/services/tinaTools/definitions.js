@@ -2220,6 +2220,333 @@ Creates draft posts that can be edited, generated, and approved later.`,
       properties: {}
     },
     exampleUsage: {}
+  },
+  /**
+   * BookTok Trend Analysis Tools - Read Only
+   * These tools provide access to BookTok/Bookstagram trend data and content optimization.
+   */
+  {
+    name: 'get_booktok_trends',
+    description: 'Get current BookTok trends including trending books, topics, tropes, hooks, and hashtags. Use this to understand what content is resonating in the romance book community.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          description: 'Platform to get trends for',
+          enum: ['tiktok', 'instagram', 'youtube_shorts', 'all'],
+          default: 'all'
+        },
+        timeWindow: {
+          type: 'string',
+          description: 'Time window for trend data',
+          enum: ['1h', '6h', '24h', '7d', '30d'],
+          default: '24h'
+        },
+        category: {
+          type: 'string',
+          description: 'Specific category to filter by',
+          enum: ['books', 'topics', 'tropes', 'hooks', 'hashtags', 'all'],
+          default: 'all'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of trends to return',
+          minimum: 5,
+          maximum: 50,
+          default: 20
+        }
+      }
+    },
+    exampleUsage: {
+      platform: 'tiktok',
+      timeWindow: '24h',
+      category: 'books',
+      limit: 10
+    }
+  },
+  {
+    name: 'find_book_references',
+    description: 'Find book references for a topic or emotion with trend data and community sentiment. Returns books that match the given theme with their current popularity and trend scores.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'Topic or emotion to search for books (e.g., "enemies to lovers", "heartbreak", "second chance")'
+        },
+        spiceLevel: {
+          type: 'number',
+          description: 'Filter by spice level (0-5)',
+          minimum: 0,
+          maximum: 5,
+          default: null
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of books to return',
+          minimum: 3,
+          maximum: 20,
+          default: 10
+        }
+      },
+      required: ['topic']
+    },
+    exampleUsage: {
+      topic: 'enemies to lovers',
+      spiceLevel: 3,
+      limit: 10
+    }
+  },
+  {
+    name: 'generate_hooks',
+    description: 'Generate hook options for a topic with performance predictions. Returns hook templates categorized by type (question, confession, challenge, etc.) with historical engagement data.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        topic: {
+          type: 'string',
+          description: 'Topic to generate hooks for'
+        },
+        platform: {
+          type: 'string',
+          description: 'Platform the hook is for',
+          enum: ['tiktok', 'instagram', 'youtube_shorts'],
+          default: 'tiktok'
+        },
+        category: {
+          type: 'string',
+          description: 'Hook category to focus on',
+          enum: ['question', 'confession', 'opinion', 'challenge', 'recommendation', 'hot_take', 'all'],
+          default: 'all'
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of hooks to generate',
+          minimum: 3,
+          maximum: 10,
+          default: 5
+        }
+      },
+      required: ['topic']
+    },
+    exampleUsage: {
+      topic: 'enemies to lovers',
+      platform: 'tiktok',
+      category: 'question',
+      limit: 5
+    }
+  },
+  {
+    name: 'optimize_hashtags',
+    description: 'Get optimized hashtags for content with performance predictions and saturation warnings. Returns primary, secondary, and niche hashtags tailored to the topic and platform.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        platform: {
+          type: 'string',
+          description: 'Platform to optimize hashtags for',
+          enum: ['tiktok', 'instagram', 'youtube_shorts'],
+          default: 'tiktok'
+        },
+        topic: {
+          type: 'string',
+          description: 'Content topic to optimize hashtags for'
+        },
+        book: {
+          type: 'string',
+          description: 'Specific book title to focus on'
+        },
+        count: {
+          type: 'number',
+          description: 'Number of hashtags to return',
+          minimum: 3,
+          maximum: 15,
+          default: 8
+        }
+      },
+      required: []
+    },
+    exampleUsage: {
+      platform: 'tiktok',
+      topic: 'fantasy romance',
+      count: 8
+    }
+  },
+  {
+    name: 'score_content',
+    description: 'Score content draft and predict performance with improvement suggestions. Analyzes hook quality, book reference, hashtag combination, timing, and more to provide a 0-100 score with actionable feedback.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        hook: {
+          type: 'string',
+          description: 'Opening hook or first line of content'
+        },
+        bookReference: {
+          type: 'string',
+          description: 'Book being referenced or mentioned'
+        },
+        hashtags: {
+          type: 'array',
+          description: 'Hashtags planned (without # symbol)',
+          items: { type: 'string' }
+        },
+        caption: {
+          type: 'string',
+          description: 'Full caption text'
+        },
+        plannedTime: {
+          type: 'string',
+          description: 'Planned posting time (ISO format)'
+        },
+        platform: {
+          type: 'string',
+          description: 'Platform content is for',
+          enum: ['tiktok', 'instagram', 'youtube_shorts'],
+          default: 'tiktok'
+        },
+        topic: {
+          type: 'string',
+          description: 'Content topic'
+        }
+      },
+      required: []
+    },
+    exampleUsage: {
+      hook: 'What\'s the last book that made you stay up until 3am?',
+      bookReference: 'Fourth Wing',
+      hashtags: ['booktok', 'romancebooks', 'enemiestolovers', 'fantasyromance'],
+      caption: 'I literally could not put this down...',
+      platform: 'tiktok'
+    }
+  },
+  {
+    name: 'get_topic_recommendations',
+    description: 'Get prioritized topic recommendations for content creation with trend analysis. Returns topics ranked by priority score considering trends, competition, and engagement potential.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        date: {
+          type: 'string',
+          description: 'Date to get recommendations for (ISO format, defaults to today)',
+          default: null
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of recommendations',
+          minimum: 5,
+          maximum: 30,
+          default: 15
+        },
+        minPriorityScore: {
+          type: 'number',
+          description: 'Minimum priority score to include (0-100)',
+          minimum: 0,
+          maximum: 100,
+          default: 40
+        }
+      }
+    },
+    exampleUsage: {
+      limit: 10,
+      minPriorityScore: 60
+    }
+  },
+  {
+    name: 'query_book_database',
+    description: 'Query the book database by title, author, trope, or spice level. Returns books with their trend scores, community sentiment, and performance data.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query for title or author'
+        },
+        filters: {
+          type: 'object',
+          description: 'Additional filters',
+          properties: {
+            trope: {
+              type: 'string',
+              description: 'Filter by trope'
+            },
+            spiceLevel: {
+              type: 'number',
+              description: 'Filter by spice level (0-5)',
+              minimum: 0,
+              maximum: 5
+            },
+            minTrendScore: {
+              type: 'number',
+              description: 'Minimum trend score'
+            },
+            genre: {
+              type: 'string',
+              description: 'Filter by genre'
+            }
+          }
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum results to return',
+          minimum: 5,
+          maximum: 50,
+          default: 20
+        }
+      }
+    },
+    exampleUsage: {
+      query: 'Rebecca Yarros',
+      filters: { spiceLevel: 4 },
+      limit: 10
+    }
+  },
+  {
+    name: 'get_trend_alerts',
+    description: 'Get active trend alerts and acknowledgments. Returns alerts about viral content, emerging trends, book spikes, hashtag opportunities, and competition increases.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        alertType: {
+          type: 'string',
+          description: 'Filter by alert type',
+          enum: ['viral', 'emerging', 'declining', 'opportunity', 'book_spike', 'hashtag_combo', 'competition_increase'],
+          default: null
+        },
+        acknowledged: {
+          type: 'boolean',
+          description: 'Filter by acknowledgment status',
+          default: false
+        },
+        severity: {
+          type: 'string',
+          description: 'Filter by severity',
+          enum: ['low', 'medium', 'high', 'urgent'],
+          default: null
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum alerts to return',
+          minimum: 5,
+          maximum: 50,
+          default: 20
+        }
+      }
+    },
+    exampleUsage: {
+      alertType: 'emerging',
+      acknowledged: false,
+      limit: 10
+    }
   }
 ];
 
@@ -2371,6 +2698,16 @@ export const TOOL_NAMES = {
 
   // Plan Tools - Approval Required
   CREATE_PLAN: 'create_plan',
+
+  // BookTok Trend Analysis Tools - Read Only
+  GET_BOOKTOK_TRENDS: 'get_booktok_trends',
+  FIND_BOOK_REFERENCES: 'find_book_references',
+  GENERATE_HOOKS: 'generate_hooks',
+  OPTIMIZE_HASHTAGS: 'optimize_hashtags',
+  SCORE_CONTENT: 'score_content',
+  GET_TOPIC_RECOMMENDATIONS: 'get_topic_recommendations',
+  QUERY_BOOK_DATABASE: 'query_book_database',
+  GET_TREND_ALERTS: 'get_trend_alerts',
 
   // Plan Tools - Read Only
   GET_CURRENT_PLAN: 'get_current_plan',

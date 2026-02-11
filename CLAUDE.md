@@ -415,7 +415,25 @@ export { helperFunction };
 
 ## Guardrails
 
+### Database Access
 - CRITICAL: The mongodb database you have access to holds besides the data tables for this marketing app, the PRODUCTION DATA for the blush app backend. ALL collections that you create and are allowed to make changes/write to have the prefix "marketing\_". If a collection is named "marketing\_\*" you may write/update/modify it. ALL OTHER COLLECTIONS IN THE DATABASE ARE FOR READ-ONLY ACCESS. if you create new schema for use in the marketing tool, always give it a name with the prefix "marketing\_". this rule has ONE EXCEPTION: you are allowed to write/modify data in the "analytics_metrics_timeseries" even though it does not have the "marketing\_" prefix.
+
+### Server Management - CRITICAL
+- **NEVER start the backend or frontend server yourself** unless explicitly asked by the user
+- The backend runs via **nodemon** on **port 3001**, as an **HTTPS server** (not HTTP) with a self-signed certificate
+- If you need to make API requests using curl, use `https://localhost:3001` with the `-k` flag to bypass self-signed certificate warnings
+- If at any time the backend server is not running, **do not spawn it yourself** - let the user know and they will restart it if needed
+- Backend server logs are in `logs/backend.log` and are logrotated via winston (see `npm run dev:backend` command for details)
+
+### Testing API Endpoints
+When you need to test backend endpoints:
+```bash
+# Correct curl command for this project's HTTPS server with self-signed cert
+curl -X POST "https://localhost:3001/api/endpoint" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"value"}' \
+  -k
+```
 
 ## Summary
 

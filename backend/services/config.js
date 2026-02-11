@@ -1117,6 +1117,72 @@ const configSchema = {
     errorMessage: 'Must be either true or false'
   },
 
+  // BookTok Data Collection Settings
+  GOPHER_API_KEY: {
+    required: false,
+    description: 'Gopher AI API Key for TikTok data (https://gopher-ai.com)',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  GOPHER_DATA_SCHEDULE: {
+    required: false,
+    default: '0 2 * * *',
+    description: 'Cron schedule for Gopher TikTok data collection (default: 2 AM UTC daily)',
+    validate: (value) => {
+      if (!value) return true;
+      const cronRegex = /^(\*|\d+|\d+-\d+|\*\/\d+|\d+-\d+\/\d+)(\s+(\*|\d+|\d+-\d+|\*\/\d+|\d+-\d+\/\d+)){4}$/;
+      return cronRegex.test(value);
+    },
+    errorMessage: 'Must be a valid cron expression'
+  },
+
+  GOOGLE_BOOKS_API_KEY: {
+    required: false,
+    description: 'Google Books API Key (optional - 1,000 requests/day free without key)',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  GOOGLE_BOOKS_SCHEDULE: {
+    required: false,
+    default: '0 3 * * *',
+    description: 'Cron schedule for Google Books data collection (default: 3 AM UTC daily)',
+    validate: (value) => {
+      if (!value) return true;
+      const cronRegex = /^(\*|\d+|\d+-\d+|\*\/\d+|\d+-\d+\/\d+)(\s+(\*|\d+|\d+-\d+|\*\/\d+|\d+-\d+\/\d+)){4}$/;
+      return cronRegex.test(value);
+    },
+    errorMessage: 'Must be a valid cron expression'
+  },
+
+  NYTIMES_API_KEY: {
+    required: false,
+    description: 'NYTimes Books API Key (free tier available)',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  NYTIMES_SCHEDULE: {
+    required: false,
+    default: '0 4 * * 1',
+    description: 'Cron schedule for NYTimes bestseller data collection (default: 4 AM UTC Mondays)',
+    validate: (value) => {
+      if (!value) return true;
+      const cronRegex = /^(\*|\d+|\d+-\d+|\*\/\d+|\d+-\d+\/\d+)(\s+(\*|\d+|\d+-\d+|\*\/\d+|\d+-\d+\/\d+)){4}$/;
+      return cronRegex.test(value);
+    },
+    errorMessage: 'Must be a valid cron expression'
+  },
+
+  GOPHER_REPLAY_MODE: {
+    required: false,
+    default: 'false',
+    description: 'Enable Gopher API replay mode for troubleshooting (uses logged responses instead of real API calls)',
+    validate: (value) => ['true', 'false', '1', '0'].includes(value),
+    errorMessage: 'Must be either true or false'
+  },
+
   // Tina Monitoring Settings
   TINA_MONITORING_ENABLED: {
     required: false,
