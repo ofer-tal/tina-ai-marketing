@@ -12,7 +12,7 @@
 import schedulerService from '../services/scheduler.js';
 import MarketingPost from '../models/MarketingPost.js';
 import tiktokPostingService from '../services/tiktokPostingService.js';
-import performanceMetricsService from '../services/performanceMetricsService.js';
+import performanceMetricsService from '../api/metrics.js';
 import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger('content-metrics-sync', 'scheduler');
