@@ -61,7 +61,6 @@ import briefingRouter from "./api/briefing.js";
 import dataCleanupRouter from "./api/dataCleanup.js";
 import apiHealthRouter from "./api/apiHealth.js";
 import shutdownCoordinator from "./utils/gracefulShutdown.js";
-import postRetryRouter from "./api/postRetry.js";
 import postMonitoringRouter from "./api/postMonitoring.js";
 import storyRefreshRouter from "./api/storyRefresh.js";
 import revenueSyncRouter from "./api/revenueSync.js";
@@ -120,7 +119,6 @@ import dailyBriefingJob from "./jobs/dailyBriefing.js";
 import campaignReviewScheduler from "./jobs/campaignReviewScheduler.js";
 import dataCleanupJob from "./jobs/dataCleanup.js";
 import apiHealthMonitorJob from "./jobs/apiHealthMonitor.js";
-import postRetryJob from "./jobs/postRetryJob.js";
 import postMonitoringService from "./services/postMonitoringService.js";
 import storyRefreshJob from "./jobs/storyRefreshJob.js";
 import revenueSyncJob from "./jobs/revenueSyncJob.js";
@@ -344,7 +342,6 @@ app.use("/api/cache", cacheRouter);
 app.use("/api/briefing", briefingRouter);
 app.use("/api/data-cleanup", dataCleanupRouter);
 app.use("/api/api-health", apiHealthRouter);
-app.use("/api/post-retry", postRetryRouter);
 app.use("/api/post-monitoring", postMonitoringRouter);
 app.use("/api/story-refresh", storyRefreshRouter);
 app.use("/api/revenue-sync", revenueSyncRouter);
@@ -542,10 +539,6 @@ async function startServer() {
     // Start the API health monitor
     apiHealthMonitorJob.start();
     console.log("API health monitor started");
-
-    // Start the post retry job
-    postRetryJob.start();
-    console.log("Post retry job started");
 
     // Start the post monitoring service
     postMonitoringService.start();
@@ -781,7 +774,6 @@ const gracefulShutdown = async (signal) => {
     campaignReviewScheduler.stop();
     dataCleanupJob.stop();
     apiHealthMonitorJob.stop();
-    postRetryJob.stop();
     storyRefreshJob.stop();
     revenueSyncJob.stop();
     keywordRankingCheckJob.stop();

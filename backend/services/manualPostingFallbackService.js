@@ -35,7 +35,7 @@ class ManualPostingFallbackService {
         title: post.title,
       });
 
-      // Step 2: Detect failure - Already detected by postRetryJob
+      // Step 2: Detect failure - Detected by postingScheduler recoverStuckPosts() when platform retry count exceeded
       // Step 3: Create manual posting todo
       const todoResult = await this.createManualPostingTodo(post);
 
