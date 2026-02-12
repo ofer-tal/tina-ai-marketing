@@ -69,12 +69,261 @@ class PostingSchedulerJob {
   }
 
   /**
+   * Recover posts that are stuck in 'posting' state
+   *
+   * Two recovery scenarios:
+   * 1. Posts that wrote to Google Sheets but are stuck (timeout-based)
+   *    - sheetTriggeredAt exists
+   *    - NOW - sheetTriggeredAt > POSTING_TIMEOUT_HOURS
+   *    - Recovery: Google Sheets write succeeded, but video never appeared on TikTok
+   *
+   * 2. Posts that never wrote to Google Sheets (immediate recovery, no timeout)
+   *    - sheetTriggeredAt does NOT exist
+   *    - publishingStatus is NOT 'triggered_zapier'
+   *    - Recovery: Google Sheets write FAILED, safe to retry immediately
+   */
+  async recoverStuckPosts() {
+    try {
+      const timeoutHours = parseInt(process.env.POSTING_TIMEOUT_HOURS || '2', 10);
+      const timeoutMs = timeoutHours * 60 * 60 * 1000;
+
+      logger.info(`[RECOVERY] Starting stuck post recovery check`, {
+        timeoutHours,
+        timeoutMs: `${timeoutMs}ms (${Math.round(timeoutMs/60000)} minutes)`
+      });
+
+      // Find ALL posts in 'posting' or 'partial_posted' state (regardless of how long they've been stuck)
+      // We'll check timeout condition separately for each post
+      // CRITICAL: Include 'partial_posted' to recover multi-platform posts where some platforms
+      // succeeded but others failed (e.g., Instagram posted, TikTok failed during Google Sheets write)
+      const postingPosts = await MarketingPost.find({
+        status: { $in: ['posting', 'partial_posted'] },
+        postingStartedAt: { $exists: true }
+      });
+
+      if (postingPosts.length === 0) {
+        logger.info(`[RECOVERY] No posts in 'posting' or 'partial_posted' state found`);
+        return;
+      }
+
+      logger.info(`[RECOVERY] Found ${postingPosts.length} posts in 'posting'/'partial_posted' state to check`, {
+        postIds: postingPosts.map(p => p._id.toString())
+      });
+
+      for (const post of postingPosts) {
+        const stuckDuration = Date.now() - post.postingStartedAt.getTime();
+
+        logger.debug(`[RECOVERY] Checking post ${post._id}`, {
+          title: post.title,
+          status: post.status,
+          platforms: post.platforms || [post.platform],
+          platformStatuses: post.platformStatus,
+          stuckDuration: `${Math.round(stuckDuration/60000)} minutes`,
+          sheetTriggeredAt: post.sheetTriggeredAt,
+          publishingStatus: post.publishingStatus,
+          postingStartedAt: post.postingStartedAt
+        });
+
+        // Check each platform
+        for (const platform of ['tiktok', 'instagram', 'youtube_shorts']) {
+          const platformStatus = post.platformStatus?.[platform];
+
+          // Skip if platform doesn't exist or is already posted/failed
+          if (!platformStatus || platformStatus.status === 'posted' || platformStatus.status === 'failed') {
+            continue;
+          }
+
+          // CRITICAL SAFETY CHECKS for TikTok
+          if (platform === 'tiktok') {
+            logger.debug(`[RECOVERY] Checking TikTok platform for post ${post._id}`, {
+              platformStatus: platformStatus?.status,
+              sheetTriggeredAt: post.sheetTriggeredAt,
+              publishingStatus: post.publishingStatus
+            });
+
+            // If sheetTriggeredAt exists, check timeout condition
+            // Google Sheets write succeeded → posting in progress via Zapier
+            if (post.sheetTriggeredAt) {
+              const timeSinceSheetTrigger = Date.now() - new Date(post.sheetTriggeredAt).getTime();
+
+              logger.debug(`[RECOVERY] Post ${post._id} has sheetTriggeredAt, checking timeout`, {
+                timeSinceSheetTrigger: Math.round(timeSinceSheetTrigger / 60000) + ' minutes',
+                timeoutMs: `${timeoutMs}ms (${Math.round(timeoutMs/60000)} minutes)`,
+                exceedsTimeout: timeSinceSheetTrigger > timeoutMs
+              });
+
+              // Only recover if exceeded timeout (has enough time to post via Zapier)
+              if (timeSinceSheetTrigger > timeoutMs) {
+                await post.setPlatformStatus(platform, 'failed', {
+                  error: `Post timed out - Google Sheets wrote successfully but video never appeared on TikTok (${Math.round(timeSinceSheetTrigger/60000)} minutes)`,
+                  lastFailedAt: new Date()
+                });
+                logger.warn(`[RECOVERY] Recovered stuck TikTok post ${post._id} - sheet write succeeded but video never appeared`, {
+                  title: post.title,
+                  sheetTriggeredAt: post.sheetTriggeredAt,
+                  timeSinceSheetTrigger: Math.round(timeSinceSheetTrigger / 60000) + ' minutes'
+                });
+              } else {
+                logger.debug(`[RECOVERY] Skipping recovery for ${post._id} - TikTok posting in progress via Zapier`, {
+                  sheetTriggeredAt: post.sheetTriggeredAt,
+                  timeSinceSheetTrigger: Math.round(timeSinceSheetTrigger / 60000) + ' minutes',
+                  timeoutRemaining: Math.round((timeoutMs - timeSinceSheetTrigger) / 60000) + ' minutes'
+                });
+              }
+              continue;
+            }
+
+            // If publishingStatus is 'triggered_zapier', same as above
+            if (post.publishingStatus === 'triggered_zapier') {
+              logger.debug(`[RECOVERY] Post ${post._id} has publishingStatus=triggered_zapier, checking timeout`, {
+                stuckDuration: Math.round(stuckDuration / 60000) + ' minutes',
+                timeoutMs: `${timeoutMs}ms (${Math.round(timeoutMs/60000)} minutes)`,
+                exceedsTimeout: stuckDuration > timeoutMs
+              });
+
+              // Use postingStartedAt as fallback for timing
+              if (stuckDuration > timeoutMs) {
+                await post.setPlatformStatus(platform, 'failed', {
+                  error: `Post timed out - Publishing triggered but video never appeared on TikTok (${Math.round(stuckDuration/60000)} minutes)`,
+                  lastFailedAt: new Date()
+                });
+                logger.warn(`[RECOVERY] Recovered stuck TikTok post ${post._id} - publishing triggered but video never appeared`, {
+                  title: post.title,
+                  publishingStatus: post.publishingStatus,
+                  stuckDuration: Math.round(stuckDuration / 60000) + ' minutes'
+                });
+              } else {
+                logger.debug(`[RECOVERY] Skipping recovery for ${post._id} - publishing triggered, within timeout`, {
+                  publishingStatus: post.publishingStatus,
+                  stuckDuration: Math.round(stuckDuration / 60000) + ' minutes',
+                  timeoutRemaining: Math.round((timeoutMs - stuckDuration) / 60000) + ' minutes'
+                });
+              }
+              continue;
+            }
+
+            // SCENARIO 2: Google Sheets write NEVER happened → immediate recovery (no timeout)
+            // Only recover if platform status is 'pending' (not 'posting')
+            if (platformStatus.status === 'pending') {
+              logger.debug(`[RECOVERY] Post ${post._id} has no sheetTriggeredAt and platformStatus=pending, immediate recovery`, {
+                stuckDuration: Math.round(stuckDuration / 60000) + ' minutes'
+              });
+
+              await post.setPlatformStatus(platform, 'failed', {
+                error: `Google Sheets write never completed - safe to retry immediately (${Math.round(stuckDuration/60000)} minutes since posting started)`,
+                lastFailedAt: new Date()
+              });
+              logger.warn(`[RECOVERY] Recovered stuck TikTok post ${post._id} - Google Sheets write never happened, marking for immediate retry`, {
+                title: post.title,
+                stuckDuration: Math.round(stuckDuration / 60000) + ' minutes'
+              });
+            } else if (platformStatus.status === 'posting') {
+              logger.debug(`[RECOVERY] Skipping post ${post._id} - platformStatus is 'posting', likely posting in progress`, {
+                platformStatus: platformStatus.status,
+                sheetTriggeredAt: post.sheetTriggeredAt,
+                publishingStatus: post.publishingStatus
+              });
+            } else {
+              logger.debug(`[RECOVERY] Skipping post ${post._id} - platformStatus is '${platformStatus.status}', not recovering`, {
+                platformStatus: platformStatus.status,
+                sheetTriggeredAt: post.sheetTriggeredAt,
+                publishingStatus: post.publishingStatus
+              });
+            }
+          } else {
+            // For Instagram/YouTube (if they have similar async posting)
+            logger.debug(`[RECOVERY] Checking ${platform} platform for post ${post._id}`, {
+              platformStatus: platformStatus?.status
+            });
+
+            if (platformStatus.status === 'pending') {
+              await post.setPlatformStatus(platform, 'failed', {
+                error: `Post timed out during posting (${Math.round(stuckDuration/60000)} minutes)`,
+                lastFailedAt: new Date()
+              });
+              logger.warn(`[RECOVERY] Recovered stuck ${platform} post ${post._id} - marked as failed for retry`, {
+                title: post.title,
+                stuckDuration: Math.round(stuckDuration / 60000) + ' minutes'
+              });
+            } else {
+              logger.debug(`[RECOVERY] Skipping ${platform} for post ${post._id} - status is '${platformStatus?.status}'`, {
+                platformStatus: platformStatus?.status
+              });
+            }
+          }
+        }
+
+        // Recovery summary
+        logger.info(`[RECOVERY] Recovery check complete for post ${post._id}`, {
+          title: post.title,
+          platformsChecked: post.platforms || [post.platform],
+          finalStatus: post.status,
+          finalOverallStatus: post.getOverallStatus()
+        });
+
+        const overallStatus = post.getOverallStatus();
+        const oldStatus = post.status;
+
+        // CRITICAL: For multi-platform posts, keep as 'approved' so scheduler can retry failed platforms
+        // Only set to 'partial_posted' if ALL platforms are posted/failed/skipped
+        // Otherwise, keep as 'approved' so next posting cycle can retry the failed platforms
+        if (overallStatus === 'partial_posted') {
+          // Check if there are any platforms still pending/failed
+          const platforms = post.platforms || [post.platform];
+          const hasPendingOrFailed = platforms.some(p => {
+            const status = post.platformStatus?.[p]?.status;
+            return status === 'pending' || status === 'failed';
+          });
+
+          if (hasPendingOrFailed) {
+            // Keep as 'approved' so scheduler can retry
+            logger.debug(`Keeping post ${post._id} as 'approved' for retry (has pending/failed platforms)`, {
+              platforms,
+              platformStatuses: platforms.map(p => post.platformStatus?.[p]?.status),
+              wouldBeStatus: overallStatus,
+              keepingAs: 'approved'
+            });
+            post.status = 'approved';
+          } else {
+            // All platforms done, set to partial_posted
+            logger.info(`All platforms complete for post ${post._id}, setting to partial_posted`, {
+              platforms,
+              platformStatuses: platforms.map(p => post.platformStatus?.[p]?.status)
+            });
+            post.status = overallStatus;
+          }
+        } else {
+          post.status = overallStatus;
+        }
+
+        await post.save();
+      }
+
+      logger.info(`[RECOVERY] ===== Recovery Summary =====`, {
+        postsChecked: postingPosts.length,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      logger.error('Error in recoverStuckPosts', {
+        error: error.message,
+        stack: error.stack
+      });
+    }
+  }
+
+  /**
    * Execute the posting job
    * Finds all scheduled content that should be posted now
    */
   async execute() {
+    logger.info(`[POSTING-SCHEDULER] ===== execute() called =====`, {
+      timestamp: new Date().toISOString(),
+      isRunning: this.isRunning
+    });
+
     if (this.isRunning) {
-      logger.warn('Posting scheduler already running, skipping');
+      logger.warn('[POSTING-SCHEDULER] Posting scheduler already running, skipping');
       return;
     }
 
@@ -82,6 +331,13 @@ class PostingSchedulerJob {
     const startTime = Date.now();
 
     try {
+      logger.info('[POSTING-SCHEDULER] Starting posting scheduler cycle');
+
+      // STEP 1: Recover any stuck posts BEFORE finding new posts to post
+      logger.info('[POSTING-SCHEDULER] STEP 1: Running recoverStuckPosts()');
+      await this.recoverStuckPosts();
+
+      // STEP 2: Check for new scheduled content to post
       logger.info('Checking for scheduled content to post');
 
       // Find all approved posts that have reached their scheduled time
