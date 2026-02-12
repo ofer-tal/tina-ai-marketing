@@ -119,6 +119,34 @@ const VoiceSelector = styled.div`
   gap: 0.75rem;
 `;
 
+const MusicSelector = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 0.75rem;
+`;
+
+const MusicOption = styled.label`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem;
+  background: ${props => props.$selected ? '#1e2a4a' : '#0f182e'};
+  border: 2px solid ${props => props.$selected ? '#e94560' : '#2d3561'};
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+
+  &:hover {
+    border-color: #e94560;
+  }
+
+  input[type="radio"] {
+    display: none;
+  }
+`;
+
 const VoiceOption = styled.label`
   display: flex;
   flex-direction: column;
@@ -383,6 +411,9 @@ function RegenerateVideoModal({
   });
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState('');
+  const [selectedMusicId, setSelectedMusicId] = useState('');  // Store just the ID string
+  const [allMusic, setAllMusic] = useState([]);
+  const [isFetchingMusic, setIsFetchingMusic] = useState(false);
 
   // Clear polling interval on unmount
   useEffect(() => {
@@ -406,6 +437,40 @@ function RegenerateVideoModal({
       }
     }
   }, [post]);
+
+  // Fetch music when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchMusic();
+    }
+  }, [isOpen]);
+
+  // Initialize selected music after music list is loaded
+  useEffect(() => {
+    if (post?.generationMetadata?.musicId) {
+      setSelectedMusicId(post.generationMetadata.musicId);
+    } else {
+      setSelectedMusicId('');
+    }
+  }, [post?.generationMetadata?.musicId]);
+
+  const fetchMusic = async () => {
+    setIsFetchingMusic(true);
+    try {
+      const response = await fetch('/api/music/list');
+      if (response.ok) {
+        const data = await response.json();
+        const tracks = data.data.tracks || [];
+        console.log('Music tracks:', tracks);
+        setAllMusic(tracks);
+      }
+    } catch (err) {
+      console.error('Error fetching music:', err);
+      setAllMusic([]);
+    } finally {
+      setIsFetchingMusic(false);
+    }
+  };
 
   const handleEffectToggle = (effectId) => {
     setEffects(prev => ({
@@ -472,6 +537,7 @@ function RegenerateVideoModal({
       hook: hook !== post?.hook ? hook : undefined,
       caption: caption !== post?.caption ? caption : undefined,
       cta: cta !== post?.cta ? cta : undefined,
+      musicId: selectedMusicId || null,  // Pass music preference to backend
       effects,
       force: forceRegenerate  // Pass force flag
     };
@@ -535,6 +601,7 @@ function RegenerateVideoModal({
         fadeIn: false,
         fadeOut: false
       });
+      setSelectedMusicId('');
       setError(null);
       setSuccess(false);
       setProgress(0);
@@ -546,6 +613,9 @@ function RegenerateVideoModal({
   if (!isOpen) return null;
 
   const regenerationCount = post?.regenerationCount || 0;
+
+  // Debug log
+  console.log('selectedMusicId:', selectedMusicId, 'allMusic:', allMusic.map(t => ({ id: t.id, name: t.name })));
 
   return (
     <ModalOverlay onClick={(e) => e.target === e.currentTarget && !loading && handleClose()}>
@@ -683,6 +753,57 @@ function RegenerateVideoModal({
               </EffectOption>
             ))}
           </EffectsGrid>
+        </FormSection>
+
+        {/* Music Selection */}
+        <FormSection>
+          <FormLabel>Background Music (Optional)</FormLabel>
+          {isFetchingMusic ? (
+            <div style={{ textAlign: 'center', padding: '1rem' }}>Loading music...</div>
+          ) : (
+            <>
+              <MusicSelector>
+                <MusicOption
+                  key="no-music"
+                  $selected={!selectedMusicId}
+                  onClick={() => !loading && setSelectedMusicId('')}
+                >
+                  <input
+                    type="radio"
+                    name="regenMusic"
+                    checked={!selectedMusicId}
+                    onChange={() => setSelectedMusicId('')}
+                    disabled={loading}
+                  />
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px' }}>🔇</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600 }}>No Music</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>Narration only</div>
+                  </div>
+                </MusicOption>
+                {allMusic.map(track => (
+                  <MusicOption
+                    key={track.id}
+                    $selected={selectedMusicId === track.id}
+                    onClick={() => !loading && setSelectedMusicId(track.id)}
+                  >
+                    <input
+                      type="radio"
+                      name="regenMusic"
+                      checked={selectedMusicId === track.id}
+                      onChange={() => setSelectedMusicId(track.id)}
+                      disabled={loading}
+                    />
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: '24px' }}>🎵</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>{track.style}</div>
+                      <div style={{ fontSize: '11px', color: '#666' }}>{track.name}</div>
+                    </div>
+                  </MusicOption>
+                ))}
+              </MusicSelector>
+              </>
+          )}
         </FormSection>
 
         {/* Action Buttons */}

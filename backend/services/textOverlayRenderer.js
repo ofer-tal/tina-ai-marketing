@@ -158,15 +158,17 @@ function createTextHTML(options) {
           padding: ${paddingTop} ${paddingRight} ${paddingBottom} ${paddingLeft};
         }
         .text {
-          font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Arial', sans-serif;
+          font-family: 'Roboto', 'Noto Sans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif;
           font-size: ${fontSize}px;
           color: ${textColor};
           text-align: ${textAlign};
           line-height: ${TEXT_CONFIG.lineHeight};
+          word-spacing: normal;
+          letter-spacing: normal;
           text-shadow: ${textShadow};
-          word-wrap: break-word;
-          overflow-wrap: break-word;
-          max-width: 100%;
+          white-space: normal;
+          word-break: normal;
+          hyphens: none;
         }
       </style>
     </head>
@@ -275,28 +277,13 @@ export async function renderTextOverlay(options) {
 
 /**
  * Get image dimensions
- * For now, we assume standard 9:16 format since we generate the images
- * In production, could add Sharp if native compilation is available
+ * All images we generate are 1080x1920 (portrait mode for short-form video)
+ * No external dependencies needed
  */
-async function getImageDimensions(imagePath) {
-  // Try to get actual dimensions if Sharp is available
-  try {
-    const sharpModule = await import('sharp').catch(() => null);
-    if (sharpModule) {
-      const { default: sharpDefault } = sharpModule;
-      const metadata = await sharpDefault(imagePath).metadata();
-      logger.debug('Got image dimensions from Sharp', {
-        path: imagePath,
-        width: metadata.width,
-        height: metadata.height
-      });
-      return { imageWidth: metadata.width, imageHeight: metadata.height };
-    }
-  } catch (error) {
-    logger.debug('Sharp not available, using default dimensions', { error: error.message });
-  }
-
-  // Fallback to standard 9:16 format
+function getImageDimensions(imagePath) {
+  // All generated images are standard 1080x1920 (9:16 portrait)
+  // This matches the output video dimensions for short-form content
+  logger.debug('Using standard image dimensions', { path: imagePath });
   return { imageWidth: 1080, imageHeight: 1920 };
 }
 
@@ -412,15 +399,17 @@ export async function createGradientSlide(options) {
             padding: 60px;
           }
           .text {
-            font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', 'Arial', sans-serif;
+            font-family: 'Roboto', 'Noto Sans', 'Liberation Sans', 'DejaVu Sans', Arial, sans-serif;
             font-size: 64px;
             color: ${foregroundColor};
             text-align: center;
             line-height: 1.3;
+            word-spacing: normal;
+            letter-spacing: normal;
             text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-            max-width: 90%;
+            white-space: normal;
+            word-break: normal;
+            hyphens: none;
           }
         </style>
       </head>

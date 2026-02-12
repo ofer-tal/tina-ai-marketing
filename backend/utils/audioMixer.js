@@ -116,7 +116,7 @@ class AudioMixer {
         '-c:a', 'pcm_s16le', // Use PCM for better quality
         '-ar', '48000', // 48kHz is more standard for video
         '-ac', '2', // Stereo
-        '-t', narrationDuration.toString(), // Trim to narration duration
+        // NOTE: No -t flag here - amix=duration=first handles it correctly
         finalOutputPath
       ];
 
@@ -165,8 +165,9 @@ class AudioMixer {
     let filter = '';
 
     // Normalize narration if requested
+    // Use dynaudnorm instead of loudnorm - it's single-pass and doesn't change duration
     if (normalize) {
-      filter += '[0:a]aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo,loudnorm=I=-16:TP=-1.5:LRA=11[a0];';
+      filter += '[0:a]aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo,volume=' + narrationVolume + ',dynaudnorm=f=150:g=15[a0];';
     } else {
       filter += '[0:a]aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo,volume=' + narrationVolume + '[a0];';
     }
@@ -186,9 +187,10 @@ class AudioMixer {
 
     filter += `${musicFilter}[a1];`;
 
-    // Mix both audio tracks, then resample to ensure correct output sample rate
-    // CRITICAL: amix can output unexpected sample rates, so aformat MUST come after amix
-    filter += '[a0][a1]amix=inputs=2:duration=first:dropout_transition=2,aresample=48000,aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo';
+    // Mix both audio tracks, ensure exact duration, then resample
+    // CRITICAL: Use atrim to force exact duration after mixing
+    // This prevents any duration drift from filters
+    filter += '[a0][a1]amix=inputs=2:duration=first:dropout_transition=2,atrim=0:' + narrationDuration + ',aresample=48000,aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo';
 
     return filter;
   }
