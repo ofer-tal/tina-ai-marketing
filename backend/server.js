@@ -142,6 +142,7 @@ import instagramReelsMatcherJob from "./jobs/instagramReelsMatcher.js";
 import tokenCleanupJob from "./jobs/tokenCleanup.js";
 import googleSheetsService from "./services/googleSheetsService.js";
 import s3VideoUploader from "./services/s3VideoUploader.js";
+import oauthManager from "./services/oauthManager.js";
 import tinaGoalProgressJob from "./jobs/tinaGoalProgressJob.js";
 import tinaMonitoringJob from "./jobs/tinaMonitoringJob.js";
 import { analyzeCompletedExperiments } from "./jobs/tinaExperimentAnalysisJob.js";
