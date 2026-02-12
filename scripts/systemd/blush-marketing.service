@@ -1,0 +1,36 @@
+[Unit]
+Description=Blush Marketing Application (PM2)
+Documentation=https://github.com/anthropics/blush-marketing
+After=network.target mongod.service
+
+[Service]
+Type=forking
+User=ofer
+WorkingDirectory=/home/ofer/blush-marketing
+
+# Use bash to run wrapper script that handles nvm properly
+ExecStart=/bin/bash /home/ofer/blush-marketing/scripts/systemd/pm2-resurrect.sh
+ExecReload=/bin/bash /home/ofer/blush-marketing/scripts/systemd/pm2-resurrect.sh
+ExecStop=/bin/bash -c "pm2 stop all"
+PIDFile=/home/ofer/blush-marketing/.pm2/pm2.pid
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+
+# Logging
+StandardOutput=append:/home/ofer/blush-marketing/logs/pm2-systemd.log
+StandardError=append:/home/ofer/blush-marketing/logs/pm2-systemd-error.log
+
+# Security settings - allow PM2 to write its state
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/ofer/blush-marketing /home/ofer/blush-marketing/logs /home/ofer/blush-marketing/storage /home/ofer/.pm2 /home/ofer/.nvm
+
+# Timeout settings
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

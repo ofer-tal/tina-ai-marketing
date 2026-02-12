@@ -22,7 +22,20 @@
     "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\"",
     "db:seed": "node backend/scripts/seed.js",
-    "db:migrate": "node backend/scripts/migrate.js"
+    "db:migrate": "node backend/scripts/migrate.js",
+    "pm2:start": "./scripts/pm2/start.sh",
+    "pm2:start:dev": "./scripts/pm2/start.sh dev",
+    "pm2:start:dev-watch": "./scripts/pm2/start.sh dev-watch",
+    "pm2:start:prod": "./scripts/pm2/start.sh prod",
+    "pm2:stop": "./scripts/pm2/stop.sh",
+    "pm2:restart": "./scripts/pm2/restart.sh",
+    "pm2:reload": "./scripts/pm2/dev-reload.sh",
+    "pm2:logs": "./scripts/pm2/logs.sh all",
+    "pm2:logs:err": "./scripts/pm2/logs.sh error",
+    "pm2:logs:out": "./scripts/pm2/logs.sh out",
+    "pm2:logs:follow": "./scripts/pm2/logs.sh follow",
+    "pm2:status": "./scripts/pm2/status.sh",
+    "pm2:monitor": "pm2 monit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",

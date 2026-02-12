@@ -60,6 +60,7 @@ import cacheRouter from "./api/cache.js";
 import briefingRouter from "./api/briefing.js";
 import dataCleanupRouter from "./api/dataCleanup.js";
 import apiHealthRouter from "./api/apiHealth.js";
+import shutdownCoordinator from "./utils/gracefulShutdown.js";
 import postRetryRouter from "./api/postRetry.js";
 import postMonitoringRouter from "./api/postMonitoring.js";
 import storyRefreshRouter from "./api/storyRefresh.js";
@@ -721,12 +722,30 @@ async function startServer() {
 const gracefulShutdown = async (signal) => {
   console.log(`\n${signal} received. Starting graceful shutdown...`);
 
-  const shutdownTimeout = 30000; // 30 seconds max
+  const shutdownTimeout = 60000; // 60 seconds max (extended from 30s for long-running jobs)
   const startTime = Date.now();
 
+  // Check for active jobs before proceeding
+  const canRestartCheck = shutdownCoordinator.canRestart();
+  if (!canRestartCheck.canRestart) {
+    console.log(`\n⚠️  Shutdown blocked: ${canRestartCheck.reason}`);
+    if (canRestartCheck.activeJobs > 0) {
+      console.log("Active jobs:");
+      canRestartCheck.jobList.forEach((jobName) => {
+        console.log(`  - ${jobName}`);
+      });
+    }
+    // In PM2 mode, we can't cancel the signal, but we log the warning
+    console.log("Proceeding with shutdown anyway - jobs may be interrupted...\n");
+  }
+
   try {
+    // Enter drain mode (coordinator will handle job tracking)
+    shutdownCoordinator.enterDrainMode();
+    console.log('  [0/7] Entering drain mode - no new jobs will be scheduled');
+
     // Step 1: Stop accepting new requests
-    console.log('  [1/5] Stopping new requests...');
+    console.log('  [1/7] Stopping new requests...');
     if (server) {
       await new Promise((resolve) => {
         server.close(() => {
@@ -791,7 +810,7 @@ const gracefulShutdown = async (signal) => {
 
     // Step 6: Exit
     const duration = Date.now() - startTime;
-    console.log(`  [6/6] Shutdown complete in ${duration}ms`);
+    console.log(`  [7/7] Shutdown complete in ${duration}ms`);
     console.log('Goodbye! 👋');
 
     process.exit(0);
