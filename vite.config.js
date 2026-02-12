@@ -9,6 +9,7 @@ export default defineConfig({
     port: 5173,
     host: true,
     strictPort: false, // Allow trying other ports if 5173 is taken
+    allowedHosts: ['bart.shmoop.org', 'localhost', '.shmoop.org'],
     watch: {
       usePolling: true, // Better file watching in WSL
       // Don't reload when .env changes (we handle it manually)
@@ -16,12 +17,12 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'https://localhost:3001',
+        target: 'https://bart.shmoop.org:3001',
         changeOrigin: true,
         secure: false // Ignore self-signed certificate errors
       },
       '/storage': {
-        target: 'https://localhost:3001',
+        target: 'https://bart.shmoop.org:3001',
         changeOrigin: true,
         secure: false // Ignore self-signed certificate errors
       }

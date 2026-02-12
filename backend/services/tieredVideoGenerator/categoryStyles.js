@@ -254,24 +254,17 @@ function extractStoryElements(text) {
  * @returns {Promise<string>|string} Generated image prompt for AI image generation
  */
 export async function generateImagePrompt(story, slideNumber, totalSlides, fullStoryText = null) {
-  const categoryStyle = getCategoryStyle(story?.category);
+  // Use GLM to generate PG-13, content-safe prompts
+  // Import GLM prompt generator
+  const generateGLMPrompt = (await import('./generateGLMPrompt.js')).default;
+  return await generateGLMPrompt(story, slideNumber, totalSlides, fullStoryText);
+}
 
-  // Base prompt from story
-  const storyTitle = story?.title || story?.name || 'Romantic Scene';
-  const storyDescription = story?.description || '';
-  const spiciness = story?.spiciness || 1;
-
-  // Use provided full story text or extract from description
-  let storyContext = '';
-  if (fullStoryText && fullStoryText.length > 50) {
-    // Use full story text - extract relevant portion based on slide number
-    const chunkSize = 300;
-    const startIdx = Math.min((slideNumber - 1) * chunkSize, fullStoryText.length - chunkSize);
-    storyContext = fullStoryText.substring(startIdx, startIdx + chunkSize);
-  } else if (storyDescription && storyDescription.length > 20) {
-    // Fallback to description
-    storyContext = storyDescription;
-  }
+/* =========================================================================
+ * OLD MANUAL PROMPT GENERATION (PRESERVED FOR REFERENCE)
+ * ========================================================================
+ */
+export async function generateManualImagePrompt(story, slideNumber, totalSlides, fullStoryText = null) {
 
   // Variety options - different for each slide to ensure uniqueness
   const cameraAngles = [

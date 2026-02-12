@@ -571,7 +571,7 @@ async function concatenateSlidesWithAudio(slideVideos, audioPath, outputPath) {
     '-preset', 'medium',
     '-crf', '23',
     '-pix_fmt', 'yuv420p',
-    '-c:a', 'libmp3lame',
+    '-c:a', 'aac',  // Use AAC for MP4 (not MP3/libmp3lame)
     '-b:a', '192k',
     '-ar', '48000',
     '-t', totalDuration.toFixed(2), // Explicitly set output duration to match video length
@@ -720,7 +720,20 @@ export async function generateMultiSlideVideo(options) {
       logger.info('Step 3: Getting background music from library...', { musicId });
       try {
         const Music = (await import('../../models/Music.js')).default;
-        const musicTrack = await Music.findById(musicId);
+
+        // Check if musicId is a valid ObjectId or a style name
+        let musicTrack;
+        const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(musicId);
+
+        if (isValidObjectId) {
+          // musicId is an ObjectId - fetch specific track
+          musicTrack = await Music.findById(musicId);
+          logger.info('Music lookup by ObjectId', { musicId, found: !!musicTrack });
+        } else {
+          // musicId is a style name (e.g., "melancholic") - find by style
+          musicTrack = await Music.findOne({ style: musicId, status: 'available' });
+          logger.info('Music lookup by style', { style: musicId, found: !!musicTrack });
+        }
 
         logger.info('Music track fetched from DB', {
           musicId,

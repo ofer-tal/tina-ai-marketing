@@ -293,7 +293,7 @@ class FfmpegWrapper {
         stderr += chunk;
         // Log FFmpeg progress in real-time (helps debug long-running operations)
         if (chunk.includes('frame=') || chunk.includes('time=')) {
-          logger.debug('FFmpeg progress', { output: chunk.trim().substring(0, 100) });
+          logger.info('FFmpeg progress', { output: chunk.trim().substring(0, 100) });
         }
       });
 

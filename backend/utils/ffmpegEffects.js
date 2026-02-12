@@ -123,8 +123,8 @@ class FfmpegEffects {
     } = options;
 
     // Escape the text for FFmpeg
-    const escapedText = text.replace(/'/g, "\\'")
-      .replace(/:/g, '\\:')
+    // Only escape single quotes and square brackets - colons don't need escaping
+    const escapedText = text.replace(/'/g, "'\\''")
       .replace(/\[/g, '\\[')
       .replace(/\]/g, '\\]');
 
