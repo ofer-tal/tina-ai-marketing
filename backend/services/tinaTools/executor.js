@@ -232,6 +232,10 @@ export async function executeTool(proposal) {
         result = await postManagementTools.schedulePosts(toolParameters);
         break;
 
+      case 'delete_posts':
+        result = await deletePosts(toolParameters);
+        break;
+
       // Read-only tools
       case 'get_campaign_performance':
         result = await getCampaignPerformance(toolParameters);
@@ -255,6 +259,10 @@ export async function executeTool(proposal) {
 
       case 'get_pending_posts':
         result = await getPendingPosts(toolParameters);
+        break;
+
+      case 'search_posts':
+        result = await postManagementTools.searchPosts(toolParameters);
         break;
 
       case 'get_posting_schedule':
@@ -321,6 +329,10 @@ export async function executeTool(proposal) {
         break;
 
       // Strategy memory tools - read only
+      case 'get_conversation_history':
+        result = await postManagementTools.getConversationHistory(toolParameters);
+        break;
+        
       case 'get_strategies':
         result = await getStrategies(toolParameters);
         break;
@@ -3765,7 +3777,27 @@ async function suggestLearning({ pattern, category }) {
  * Create a new plan
  */
 async function createPlan({ horizon, periodStart, periodEnd, focusAreas = [], scheduledActions = [], relatedGoalIds = [] }) {
-  const MarketingPlan = (await import('../../models/MarketingPlan.js')).default;
+  const MarketingPlan = await import('../../models/MarketingPlan.js');
+
+  // Validate and parse dates - ensure they are in the future
+  const now = new Date();
+  const startDate = new Date(periodStart);
+  const endDate = new Date(periodEnd);
+
+  // Check if dates are valid
+  if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    throw new Error(`Invalid date format. Use ISO 8601 format (e.g., 2025-02-14T00:00:00)`);
+  }
+
+  // Check if dates are in the future
+  if (startDate < now || endDate < now) {
+    throw new Error(`Plan dates must be in the future. Current date: ${now.toISOString()}, Start: ${periodStart}, End: ${periodEnd}`);
+  }
+
+  // Check if end date is after start date
+  if (endDate <= startDate) {
+    throw new Error(`Period end date must be after start date. Start: ${periodStart}, End: ${periodEnd}`);
+  }
 
   const plan = new MarketingPlan({
     horizon,
@@ -3794,17 +3826,28 @@ async function createPlan({ horizon, periodStart, periodEnd, focusAreas = [], sc
 
   logger.info('Plan created via tool', { planId: plan.planId, horizon });
 
+  // Convert Mongoose subdocuments to plain objects for response
+  const plainPlan = {
+    id: plan._id,
+    planId: plan.planId,
+    horizon: plan.horizon,
+    period: plan.period,
+    focusAreas: Array.isArray(plan.focusAreas)
+      ? plan.focusAreas.map(fa => ({
+            name: fa.name || '',
+            description: fa.description || '',
+            priority: fa.priority || 5,
+            relatedGoalId: fa.relatedGoalId || '',
+            allocatedPercentage: fa.allocatedPercentage || 0
+          }))
+      : [],
+    scheduledActions: plan.scheduledActions,
+    status: plan.status
+  };
+
   return {
     message: `Created ${horizon} plan from ${new Date(periodStart).toLocaleDateString()} to ${new Date(periodEnd).toLocaleDateString()}`,
-    plan: {
-      id: plan._id,
-      planId: plan.planId,
-      horizon: plan.horizon,
-      period: plan.period,
-      focusAreas: plan.focusAreas,
-      scheduledActions: plan.scheduledActions,
-      status: plan.status
-    }
+    plan: plainPlan
   };
 }
 
@@ -3812,7 +3855,7 @@ async function createPlan({ horizon, periodStart, periodEnd, focusAreas = [], sc
  * Get current plan by horizon
  */
 async function getCurrentPlan({ horizon }) {
-  const MarketingPlan = (await import('../../models/MarketingPlan.js')).default;
+  const MarketingPlan = await import('../../models/MarketingPlan.js');
 
   if (horizon === 'all') {
     const plans = await MarketingPlan.getAllCurrent();
@@ -3838,6 +3881,17 @@ async function getCurrentPlan({ horizon }) {
     };
   }
 
+  // Convert Mongoose subdocuments to plain objects
+  const plainFocusAreas = Array.isArray(plan.focusAreas)
+    ? plan.focusAreas.map(fa => ({
+          name: fa.name || '',
+          description: fa.description || '',
+          priority: fa.priority || 5,
+          relatedGoalId: fa.relatedGoalId || '',
+          allocatedPercentage: fa.allocatedPercentage || 0
+        }))
+    : [];
+
   return {
     message: `Found current ${horizon} plan`,
     plan: {
@@ -3846,7 +3900,7 @@ async function getCurrentPlan({ horizon }) {
       horizon: plan.horizon,
       period: plan.period,
       status: plan.status,
-      focusAreas: plan.focusAreas,
+      focusAreas: plainFocusAreas,
       scheduledActions: plan.scheduledActions,
       progress: plan.progress
     }
@@ -3857,7 +3911,7 @@ async function getCurrentPlan({ horizon }) {
  * Get plans with filters
  */
 async function getPlans({ horizon = 'all', status = 'all', limit = 50 }) {
-  const MarketingPlan = (await import('../../models/MarketingPlan.js')).default;
+  const MarketingPlan = await import('../../models/MarketingPlan.js');
 
   const query = {};
 
@@ -3874,17 +3928,28 @@ async function getPlans({ horizon = 'all', status = 'all', limit = 50 }) {
     .limit(parseInt(limit))
     .lean();
 
+  // Convert Mongoose subdocuments to plain objects
+  const plainPlans = plans.map(p => ({
+    id: p._id,
+    planId: p.planId,
+    horizon: p.horizon,
+    period: p.period,
+    status: p.status,
+    focusAreas: Array.isArray(p.focusAreas)
+      ? p.focusAreas.map(fa => ({
+            name: fa.name || '',
+            description: fa.description || '',
+            priority: fa.priority || 5,
+            relatedGoalId: fa.relatedGoalId || '',
+            allocatedPercentage: fa.allocatedPercentage || 0
+          }))
+      : [],
+    progress: p.progress
+  }));
+
   return {
     message: `Found ${plans.length} plan${plans.length !== 1 ? 's' : ''}`,
-    plans: plans.map(p => ({
-      id: p._id,
-      planId: p.planId,
-      horizon: p.horizon,
-      period: p.period,
-      status: p.status,
-      focusAreas: p.focusAreas,
-      progress: p.progress
-    }))
+    plans: plainPlans
   };
 }
 

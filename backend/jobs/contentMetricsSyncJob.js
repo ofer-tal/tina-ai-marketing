@@ -181,7 +181,7 @@ class ContentMetricsSyncJob {
               : 0;
 
             // Update both legacy performanceMetrics and new platformStatus.tiktok.performanceMetrics
-            logger.info(`Before TikTok update - post ${post._id} platformStatus.tiktok:`, post.platformStatus?.tiktok);
+            // logger.info(`Before TikTok update - post ${post._id} platformStatus.tiktok:`, post.platformStatus?.tiktok);
 
             const tiktokUpdateResult = await MarketingPost.findByIdAndUpdate(post._id, {
               'performanceMetrics.views': video.view_count || 0,

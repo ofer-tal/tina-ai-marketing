@@ -992,7 +992,27 @@ function Chat({ onClose }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [currentConversationId, setCurrentConversationId] = useState(() => {
+    try {
+      const saved = localStorage.getItem('tina_conversation_id');
+      return saved || null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Save conversationId to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (currentConversationId) {
+        localStorage.setItem('tina_conversation_id', currentConversationId);
+      } else {
+        localStorage.removeItem('tina_conversation_id');
+      }
+    } catch (error) {
+      console.warn('Failed to save conversationId to localStorage:', error);
+    }
+  }, [currentConversationId]);
   const [copiedMessageId, setCopiedMessageId] = useState(null);
 
   // Load pending proposals from backend on mount
@@ -1301,6 +1321,7 @@ What would you like to focus on today?`;
       setMessages([]);
       setCurrentConversationId(null); // Reset conversation ID
       localStorage.removeItem('tina_messages'); // Clear localStorage
+      localStorage.removeItem('tina_conversation_id'); // Clear conversation ID
     } catch (error) {
       console.error('Error clearing history:', error);
     }

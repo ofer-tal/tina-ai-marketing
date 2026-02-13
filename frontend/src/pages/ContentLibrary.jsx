@@ -829,6 +829,26 @@ const ModalHashtags = styled.div`
   margin-top: 0.5rem;
 `;
 
+const HashtagPlatformsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+`;
+
+const HashtagPlatformSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+`;
+
+const PlatformLabel = styled.div`
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  font-weight: 500;
+  text-transform: capitalize;
+`;
+
 const Hashtag = styled.span`
   padding: 0.25rem 0.75rem;
   background: #2d3561;
@@ -2123,83 +2143,6 @@ const EditCaptionTextarea = styled.textarea`
   }
 `;
 
-const HashtagInputContainer = styled.div`
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-`;
-
-const HashtagInput = styled.input`
-  flex: 1;
-  padding: 0.5rem 0.75rem;
-  background: #1a1a2e;
-  border: 1px solid #2d3561;
-  border-radius: 6px;
-  color: #eaeaea;
-  font-size: 0.9rem;
-  transition: border-color 0.2s;
-
-  &:focus {
-    outline: none;
-    border-color: #7b2cbf;
-  }
-
-  &::placeholder {
-    color: #6c757d;
-  }
-`;
-
-const AddHashtagButton = styled.button`
-  padding: 0.5rem 1rem;
-  background: #7b2cbf;
-  border: none;
-  border-radius: 6px;
-  color: white;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-
-  &:hover {
-    background: #9d4edd;
-  }
-
-  &:disabled {
-    background: #2d3561;
-    cursor: not-allowed;
-    opacity: 0.5;
-  }
-`;
-
-const EditableHashtag = styled.span`
-  padding: 0.25rem 0.75rem;
-  background: #2d3561;
-  border-radius: 16px;
-  color: #e94560;
-  font-size: 0.85rem;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const RemoveHashtagButton = styled.button`
-  background: none;
-  border: none;
-  color: #ff6b6b;
-  cursor: pointer;
-  padding: 0;
-  font-size: 1rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  transition: transform 0.2s;
-
-  &:hover {
-    transform: scale(1.2);
-  }
-`;
-
 // Rejection Modal Components
 const RejectModalOverlay = styled.div`
   position: fixed;
@@ -2631,8 +2574,11 @@ function ContentLibrary() {
   });
   const [editMode, setEditMode] = useState(false);
   const [editedCaption, setEditedCaption] = useState('');
-  const [editedHashtags, setEditedHashtags] = useState([]);
-  const [newHashtag, setNewHashtag] = useState('');
+  const [editedHashtags, setEditedHashtags] = useState({
+    tiktok: '',
+    instagram: '',
+    youtube_shorts: ''
+  });
   const [rescheduleMode, setRescheduleMode] = useState(false);
   const [newScheduledTime, setNewScheduledTime] = useState('');
   const [scheduleMode, setScheduleMode] = useState(false);
@@ -3198,6 +3144,20 @@ function ContentLibrary() {
         youtube_shorts: platformKey === 'youtube_shorts' ? hashtagsArray : []
       };
     }
+  };
+
+  // Helper to get selected platforms from post
+  const getSelectedPlatforms = (post) => {
+    // Handle new platforms array format
+    if (post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0) {
+      return post.platforms;
+    }
+    // Handle legacy single platform format
+    if (post.platform) {
+      return [post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform];
+    }
+    // Default to all platforms if not specified
+    return ['tiktok', 'instagram', 'youtube_shorts'];
   };
 
   // Fetch stories for post creation
@@ -4110,44 +4070,69 @@ function ContentLibrary() {
     if (!selectedVideo) return;
     setEditMode(true);
     setEditedCaption(selectedVideo.caption || '');
-    setEditedHashtags([...getPostHashtags(selectedVideo)]);
-    setNewHashtag('');
+
+    // Load platform-specific hashtags
+    if (selectedVideo.hashtags) {
+      if (Array.isArray(selectedVideo.hashtags)) {
+        // Legacy format - same hashtags for all platforms
+        const hashtagsStr = selectedVideo.hashtags.join(', ');
+        setEditedHashtags({
+          tiktok: hashtagsStr,
+          instagram: hashtagsStr,
+          youtube_shorts: hashtagsStr
+        });
+      } else if (typeof selectedVideo.hashtags === 'object') {
+        // Platform-specific structure
+        setEditedHashtags({
+          tiktok: (selectedVideo.hashtags.tiktok || []).join(', '),
+          instagram: (selectedVideo.hashtags.instagram || []).join(', '),
+          youtube_shorts: (selectedVideo.hashtags.youtube_shorts || []).join(', ')
+        });
+      }
+    } else {
+      // Default hashtags (without "#" - will be added when posting)
+      setEditedHashtags({
+        tiktok: 'blushapp, romance, storytime',
+        instagram: 'blushapp, romance, storytime',
+        youtube_shorts: 'blushapp, romance, storytime'
+      });
+    }
   };
 
   const handleCancelEdit = () => {
     setEditMode(false);
     setEditedCaption('');
-    setEditedHashtags([]);
-    setNewHashtag('');
-  };
-
-  const handleAddHashtag = () => {
-    const tag = newHashtag.trim();
-    if (!tag) return;
-
-    // Add # if not present
-    const formattedTag = tag.startsWith('#') ? tag : `#${tag}`;
-
-    // Check if already exists
-    if (editedHashtags.includes(formattedTag)) {
-      alert('This hashtag already exists!');
-      return;
-    }
-
-    setEditedHashtags([...editedHashtags, formattedTag]);
-    setNewHashtag('');
-  };
-
-  const handleRemoveHashtag = (tagToRemove) => {
-    setEditedHashtags(editedHashtags.filter(tag => tag !== tagToRemove));
+    setEditedHashtags({
+      tiktok: '',
+      instagram: '',
+      youtube_shorts: ''
+    });
   };
 
   const handleSaveEdit = async () => {
     if (!selectedVideo) return;
 
     try {
-      // Create platform-specific hashtags structure
-      const updatedHashtags = createPlatformSpecificHashtags(selectedVideo, editedHashtags);
+      // Convert comma-separated strings back to arrays for each platform
+      // Strip "#" from user input before sending to backend
+      const updatedHashtags = {
+        tiktok: editedHashtags.tiktok
+          ? editedHashtags.tiktok.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : [],
+        instagram: editedHashtags.instagram
+          ? editedHashtags.instagram.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : [],
+        youtube_shorts: editedHashtags.youtube_shorts
+          ? editedHashtags.youtube_shorts.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : []
+      };
+
+      // Preserve existing hashtags for platforms not being edited
+      if (selectedVideo.hashtags && typeof selectedVideo.hashtags === 'object') {
+        if (!updatedHashtags.tiktok.length) updatedHashtags.tiktok = selectedVideo.hashtags.tiktok || [];
+        if (!updatedHashtags.instagram.length) updatedHashtags.instagram = selectedVideo.hashtags.instagram || [];
+        if (!updatedHashtags.youtube_shorts.length) updatedHashtags.youtube_shorts = selectedVideo.hashtags.youtube_shorts || [];
+      }
 
       // Try API call first (uses Vite proxy)
       const response = await fetch(`/api/content/posts/${selectedVideo._id}`, {
@@ -4184,7 +4169,17 @@ function ContentLibrary() {
     } catch (err) {
       console.error('Error saving post:', err);
       // For development, update local state anyway
-      const updatedHashtags = createPlatformSpecificHashtags(selectedVideo, editedHashtags);
+      const updatedHashtags = {
+        tiktok: editedHashtags.tiktok
+          ? editedHashtags.tiktok.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : [],
+        instagram: editedHashtags.instagram
+          ? editedHashtags.instagram.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : [],
+        youtube_shorts: editedHashtags.youtube_shorts
+          ? editedHashtags.youtube_shorts.split(',').map(t => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : []
+      };
       setPosts(prevPosts =>
         prevPosts.map(post =>
           post._id === selectedVideo._id
@@ -4922,40 +4917,25 @@ function ContentLibrary() {
                       />
 
                       <label style={{display: 'block', marginTop: '1rem', marginBottom: '0.5rem', color: '#eaeaea', fontWeight: '500'}}>
-                        Hashtags
+                        Hashtags (comma separated)
                       </label>
-                      <HashtagInputContainer>
-                        <HashtagInput
-                          type="text"
-                          value={newHashtag}
-                          onChange={(e) => setNewHashtag(e.target.value)}
-                          placeholder="Add hashtag (e.g., #romance)"
-                          onKeyPress={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleAddHashtag();
-                            }
-                          }}
-                        />
-                        <AddHashtagButton onClick={handleAddHashtag} disabled={!newHashtag.trim()}>
-                          + Add
-                        </AddHashtagButton>
-                      </HashtagInputContainer>
-                      <ModalHashtags>
-                        {editedHashtags.map((tag, index) => (
-                          <EditableHashtag key={index}>
-                            {tag}
-                            <RemoveHashtagButton onClick={() => handleRemoveHashtag(tag)}>
-                              ✖
-                            </RemoveHashtagButton>
-                          </EditableHashtag>
-                        ))}
-                        {editedHashtags.length === 0 && (
-                          <span style={{color: '#6c757d', fontSize: '0.85rem'}}>
-                            No hashtags yet. Add some above!
-                          </span>
-                        )}
-                      </ModalHashtags>
+
+                      {getSelectedPlatforms(selectedVideo).map(platform => (
+                        <div key={platform} style={{ marginBottom: '0.75rem' }}>
+                          <label style={{ fontSize: '0.85rem', color: '#a0a0a0', marginBottom: '0.25rem', display: 'block' }}>
+                            {platform === 'youtube_shorts' ? '▶️ YouTube Shorts' :
+                             platform === 'tiktok' ? '🎵 TikTok' :
+                             platform === 'instagram' ? '📸 Instagram' : platform}
+                          </label>
+                          <EditCaptionTextarea
+                            value={editedHashtags[platform] || ''}
+                            onChange={(e) => setEditedHashtags(prev => ({ ...prev, [platform]: e.target.value }))}
+                            placeholder="romance, storytime, blushapp"
+                            rows={1}
+                            style={{ minHeight: '40px', fontSize: '0.9rem' }}
+                          />
+                        </div>
+                      ))}
                     </>
                   ) : (
                     <>
@@ -4963,12 +4943,27 @@ function ContentLibrary() {
                       {selectedVideo.caption && (
                         <ModalCaption>{selectedVideo.caption}</ModalCaption>
                       )}
-                      {getPostHashtags(selectedVideo).length > 0 && (
-                        <ModalHashtags>
-                          {getPostHashtags(selectedVideo).map((tag, index) => (
-                            <Hashtag key={index}>{tag}</Hashtag>
+                      {selectedVideo.hashtags && (
+                        <HashtagPlatformsContainer>
+                          {Object.entries(selectedVideo.hashtags).filter(([platform, tags]) =>
+                            platform !== 'youtube_shorts' ? platform : ['tiktok', 'instagram', 'youtube_shorts'].includes(platform)
+                          ).map(([platform, tags]) => (
+                            tags && tags.length > 0 && (
+                              <HashtagPlatformSection key={platform}>
+                                <PlatformLabel>
+                                  {platform === 'youtube_shorts' ? '▶️ YouTube Shorts' :
+                                   platform === 'tiktok' ? '🎵 TikTok' :
+                                   platform === 'instagram' ? '📸 Instagram' : platform}
+                                </PlatformLabel>
+                                <ModalHashtags>
+                                  {tags.map((tag, index) => (
+                                    <Hashtag key={index}>{tag}</Hashtag>
+                                  ))}
+                                </ModalHashtags>
+                              </HashtagPlatformSection>
+                            )
                           ))}
-                        </ModalHashtags>
+                        </HashtagPlatformsContainer>
                       )}
                     </>
                   )}

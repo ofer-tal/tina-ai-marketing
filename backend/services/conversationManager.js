@@ -5,6 +5,9 @@ import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger('conversation-manager', 'conversation-manager');
 
+// Updated model name for marketing collection prefix
+const MarketingChatConversation = ChatConversation;
+
 /**
  * Context Window Management Configuration
  */
@@ -35,7 +38,7 @@ class ConversationManager {
    */
   async getConversation(conversationId) {
     try {
-      return await ChatConversation.findById(conversationId);
+      return await MarketingChatConversation.findById(conversationId);
     } catch (error) {
       logger.error('Error fetching conversation', {
         conversationId,
@@ -50,7 +53,7 @@ class ConversationManager {
    */
   async createConversation(initialData = {}) {
     try {
-      const conversation = new ChatConversation({
+      const conversation = new MarketingChatConversation({
         title: initialData.title || 'New Conversation',
         isActive: true,
         messages: [],
@@ -342,7 +345,7 @@ Keep it concise but preserve essential context for continuing the conversation.`
    */
   async restoreConversation(conversationId) {
     try {
-      const conversation = await ChatConversation.findOne({ _id: conversationId, isActive: false });
+      const conversation = await MarketingChatConversation.findOne({ _id: conversationId, isActive: false });
       if (!conversation) {
         throw new Error(`Archived conversation not found: ${conversationId}`);
       }
@@ -365,7 +368,7 @@ Keep it concise but preserve essential context for continuing the conversation.`
    */
   async searchConversations(query) {
     try {
-      return await ChatConversation.searchConversations(query);
+      return await MarketingChatConversation.searchConversations(query);
     } catch (error) {
       logger.error('Error searching conversations', {
         query,
@@ -380,7 +383,7 @@ Keep it concise but preserve essential context for continuing the conversation.`
    */
   async getActiveConversations(limit = 20) {
     try {
-      return await ChatConversation.getActiveConversations()
+      return await MarketingChatConversation.getActiveConversations()
         .limit(limit)
         .lean();
     } catch (error) {
@@ -425,7 +428,7 @@ Keep it concise but preserve essential context for continuing the conversation.`
    */
   async deleteConversation(conversationId) {
     try {
-      const result = await ChatConversation.deleteOne({ _id: conversationId });
+      const result = await MarketingChatConversation.deleteOne({ _id: conversationId });
       logger.info('Deleted conversation', { conversationId });
       return result.deletedCount > 0;
     } catch (error) {
@@ -442,7 +445,7 @@ Keep it concise but preserve essential context for continuing the conversation.`
    */
   async clearAllActive() {
     try {
-      const result = await ChatConversation.updateMany(
+      const result = await MarketingChatConversation.updateMany(
         { isActive: true },
         { isActive: false, archivedAt: new Date() }
       );

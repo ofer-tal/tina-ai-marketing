@@ -379,6 +379,15 @@ ${data.posts ? `${data.posts.length} posts pending approval` : 'No pending posts
 
 Use this data in your response.`;
 
+    case 'search_posts':
+      return `**Posts Found:** ${data.count || 0}
+
+${data.posts ? data.posts.map(p => `- ${p.title} (${p.contentTier}, ${p.status})
+  ID: ${p.id}
+  Scheduled: ${p.scheduledFor}`).join('\n\n') : ''}
+
+Use this data to identify posts for editing or other operations.`;
+
     case 'get_posting_schedule':
       return `**Posting Schedule Retrieved:**
 

@@ -237,10 +237,8 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
         const toolResultMessages = toolProposals.map((toolProposal, index) => ({
           role: 'tool',
           tool_call_id: response.rawToolCalls?.[index]?.id || response.toolCalls[index]?.id || `tool_${Date.now()}_${index}`,
-          // For errored tools, include the error message so Tina sees it
-          content: toolProposal.error
-            ? JSON.stringify({ error: toolProposal.error, message: toolProposal.message, success: false })
-            : JSON.stringify(toolProposal.data || { success: true })
+          // Use the formatted message for both successful and errored tools
+          content: toolProposal.message || JSON.stringify(toolProposal.data || { success: true })
         }));
 
         // Build the message array for follow-up call
@@ -270,9 +268,35 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
         let recursionCount = 0;
         const MAX_RECURSION = 5;  // Prevent infinite loops
 
+        // Track recent tool calls to detect loops
+        const recentToolCalls = new Map(); // toolName + params -> count
+        const MAX_SAME_CALLS = 2;
+
         // Loop while GLM keeps requesting more tools
         while (currentResponse.toolCalls && currentResponse.toolCalls.length > 0 && recursionCount < MAX_RECURSION) {
           recursionCount++;
+
+          // Check for duplicate tool calls
+          const hasLoop = currentResponse.toolCalls.some(tc => {
+            const key = `${tc.name}:${JSON.stringify(tc.parameters)}`;
+            const count = (recentToolCalls.get(key) || 0) + 1;
+            if (count >= MAX_SAME_CALLS) {
+              logger.warn('Detected duplicate tool call loop, breaking', {
+                toolName: tc.name,
+                parameters: tc.parameters,
+                callCount: count
+              });
+              return true;
+            }
+            recentToolCalls.set(key, count);
+            return false;
+          });
+
+          if (hasLoop) {
+            logger.info('Breaking due to detected tool call loop');
+            break;
+          }
+
           logger.info(`GLM requested additional tools (recursion ${recursionCount})`, {
             toolCount: currentResponse.toolCalls.length,
             toolNames: currentResponse.toolCalls.map(tc => tc.name)
@@ -375,11 +399,39 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
             };
           }
 
+          // Check if tools were executed successfully
+          // If tools ran but GLM returned no text, it means "work complete, nothing more to say"
+          if (allExecutedTools.length > 0 && recursionCount >= MAX_RECURSION) {
+            logger.info('GLM completed all tool executions successfully with no additional text', {
+              toolsUsed: allExecutedTools.length,
+              toolNames: allExecutedTools.map(t => t.toolName)
+            });
+
+            // Return a summary message instead of error
+            return {
+              role: "assistant",
+              content: `I've completed ${allExecutedTools.length} action(s) successfully. ${allExecutedTools.map(t => t.data?.message || t.toolName).filter(Boolean).join('. ')}`,
+              timestamp: new Date().toISOString(),
+              metadata: {
+                tokensUsed: (response.usage?.totalTokens || 0) + (currentResponse.usage?.totalTokens || 0),
+                thinkingTime: totalTime,
+                model: response.model,
+                queryType: queryType.type,
+                hasDataContext: Object.keys(dataContext).length > 0,
+                toolsUsed: allExecutedTools.map(t => t.toolName),
+                toolsData: allExecutedTools.map(t => ({ name: t.toolName, data: t.data })),
+                recursionCount: recursionCount,
+                toolsCompletedSuccessfully: true
+              }
+            };
+          }
+
           logger.warn('GLM returned empty response after tool execution', {
             hasContent: !!currentResponse.content,
             hasText: !!currentResponse.text,
             contentLength: currentResponse.content?.length,
-            recursionCount
+            recursionCount,
+            toolsExecuted: allExecutedTools.length
           });
 
           return {
@@ -419,7 +471,8 @@ async function callGLM4API(messages, conversationHistory = [], conversationId = 
       }
 
       // Handle mixed results (some executed, some errors)
-      if (executedTools.length > 0) {
+      // Only partial success if SOME tools succeeded (not all failed)
+      if (executedTools.length > 0 && erroredTools.length < executedTools.length) {
         const errorMessage = erroredTools.map(t => t.error).join('; ');
         return {
           role: "assistant",
@@ -789,54 +842,53 @@ router.post("/message", async (req, res) => {
     }
 
     // Build messages array for AI
-    let messages = [
-      {
-        role: "system",
-        content: "You are Tina, a veteran AI marketing executive.", // Will be replaced by Tina's full prompt
-      }
-    ];
-
-    // Load conversation history if conversationId is provided
+    let conversationHistory = [];
     let existingConversation = null;
     const status = databaseService.getStatus();
 
     if (conversationId) {
-      if (status.isConnected && status.readyState === 1) {
-        // Try ChatConversation model first
-        try {
+      try {
+        // Use conversationManager to load conversation history
+        // includeSystem=false because callGLM4API will add system prompt with fresh context
+        const result = await conversationManager.getMessagesForAPI(conversationId, false);
+        conversationHistory = result.messages;
+
+        logger.info('Loaded conversation history using conversationManager', {
+          conversationId,
+          messageCount: result.messageCount,
+          hasSummary: result.hasSummary,
+          messagesInContext: conversationHistory.length
+        });
+
+        // Load conversation document for updating later
+        if (status.isConnected && status.readyState === 1) {
           existingConversation = await ChatConversation.findById(conversationId);
-          if (existingConversation && existingConversation.messages) {
-            logger.info('Loaded conversation history', {
-              conversationId,
-              messageCount: existingConversation.messages.length,
-              messages: existingConversation.messages.map(m => ({ role: m.role, content: m.content?.substring(0, 30) }))
-            });
-            messages = messages.concat(existingConversation.messages);
-          } else {
-            logger.warn('Conversation not found or has no messages', { conversationId });
-          }
-        } catch (modelError) {
-          // Fallback to legacy collection
-          try {
-            const collection = mongoose.connection.db.collection("marketing_strategy");
-            existingConversation = await collection.findOne({ _id: new mongoose.Types.ObjectId(conversationId) });
-            if (existingConversation && existingConversation.messages) {
-              messages = messages.concat(existingConversation.messages);
-            }
-          } catch (fallbackError) {
-            logger.error('Error loading conversation from legacy collection', {
-              error: fallbackError.message
-            });
+          if (!existingConversation) {
+            logger.warn('Conversation not found in database', { conversationId });
+            existingConversation = null;
+            conversationHistory = [];
           }
         }
-      } else {
-        // Mock mode: load from in-memory storage
-        existingConversation = mockConversations.get(conversationId);
-        if (existingConversation && existingConversation.messages) {
-          messages = messages.concat(existingConversation.messages);
-        }
+      } catch (error) {
+        logger.error('Failed to load conversation with conversationManager, starting fresh', {
+          conversationId,
+          error: error.message
+        });
+        conversationHistory = [];
+        existingConversation = null;
       }
     }
+
+    // Build messages array - placeholder system message will be replaced by callGLM4API
+    let messages = [
+      {
+        role: "system",
+        content: "Placeholder - replaced by callGLM4API with contextual prompt",
+      }
+    ];
+
+    // Add conversation history (includes summary as system message if exists)
+    messages = messages.concat(conversationHistory);
 
     // Add current user message
     messages.push({
@@ -1491,6 +1543,24 @@ router.post("/tools/approve", async (req, res) => {
     // Update proposal with execution result
     if (result.success) {
       await proposal.markExecuted(result.data);
+
+      // Add tool execution result to conversation history so Tina knows it was executed
+      if (proposal.conversationId) {
+        const conversation = await ChatConversation.findById(proposal.conversationId);
+        if (conversation) {
+          conversation.addMessage('assistant', `✅ Tool "${proposal.toolName}" executed successfully. Result: ${result.data?.message || JSON.stringify(result.data)}`, {
+            proposalId: proposal._id,
+            toolExecution: true,
+            toolName: proposal.toolName
+          });
+          await conversation.save();
+
+          logger.info('Added tool execution result to conversation', {
+            conversationId: proposal.conversationId,
+            toolName: proposal.toolName
+          });
+        }
+      }
     } else {
       // Determine if this is a technical error (implementation bug) or business logic failure
       // Technical errors should allow retry, business failures should not
@@ -1507,12 +1577,31 @@ router.post("/tools/approve", async (req, res) => {
 
         logger.warn('Tool execution failed with technical error, proposal reset for retry', {
           proposalId,
-          toolName,
+          toolName: proposal.toolName,
           error: result.error
         });
       } else {
         // Business logic failure - mark as failed
         await proposal.markFailed(result.error);
+
+        // Add tool execution failure to conversation history
+        if (proposal.conversationId) {
+          const conversation = await ChatConversation.findById(proposal.conversationId);
+          if (conversation) {
+            conversation.addMessage('assistant', `❌ Tool "${proposal.toolName}" execution failed: ${result.error}`, {
+              proposalId: proposal._id,
+              toolExecution: true,
+              toolName: proposal.toolName,
+              error: true
+            });
+            await conversation.save();
+
+            logger.info('Added tool execution failure to conversation', {
+              conversationId: proposal.conversationId,
+              toolName: proposal.toolName
+            });
+          }
+        }
       }
     }
 

@@ -312,7 +312,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
       // Handle hashtags - both array and platform-specific object formats
       if (post.hashtags) {
         if (Array.isArray(post.hashtags)) {
-          // Legacy format - same hashtags for all platforms
+          // Legacy format - same hashtags for all platforms (stored without "#")
           const hashtagsStr = post.hashtags.join(', ');
           setHashtags({
             tiktok: hashtagsStr,
@@ -320,7 +320,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
             youtube_shorts: hashtagsStr
           });
         } else if (typeof post.hashtags === 'object') {
-          // Platform-specific structure - load hashtags for each platform
+          // Platform-specific structure - load hashtags for each platform (stored without "#")
           setHashtags({
             tiktok: (post.hashtags.tiktok || []).join(', '),
             instagram: (post.hashtags.instagram || []).join(', '),
@@ -328,11 +328,11 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
           });
         }
       } else {
-        // Default hashtags
+        // Default hashtags (without "#" - will be added when posting)
         setHashtags({
-          tiktok: '#blushapp, #romance, #storytime',
-          instagram: '#blushapp, #romance, #storytime',
-          youtube_shorts: '#blushapp, #romance, #storytime'
+          tiktok: 'blushapp, romance, storytime',
+          instagram: 'blushapp, romance, storytime',
+          youtube_shorts: 'blushapp, romance, storytime'
         });
       }
 
@@ -379,14 +379,15 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
       // Build platform-specific hashtags object
       const platformHashtags = {};
       selectedPlatforms.forEach(platform => {
+        // Strip "#" from user input before sending to backend
         const hashtagArray = (hashtags[platform] || '')
           .split(',')
-          .map(h => h.trim())
+          .map(h => h.trim().replace(/^#+/, '')) // Strip "#" for consistency
           .filter(h => h.length > 0);
 
         platformHashtags[platform] = hashtagArray.length > 0
           ? hashtagArray
-          : ['#blushapp', '#romance', '#storytime'];
+          : ['blushapp', 'romance', 'storytime']; // Also remove "#" from defaults
       });
 
       const updateData = {
@@ -512,7 +513,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
                   type="text"
                   value={hashtags[platform] || ''}
                   onChange={(e) => setHashtags(prev => ({ ...prev, [platform]: e.target.value }))}
-                  placeholder="#hashtag1, #hashtag2..."
+                  placeholder="romance, storytime, blushapp"
                   disabled={loading}
                 />
               </div>

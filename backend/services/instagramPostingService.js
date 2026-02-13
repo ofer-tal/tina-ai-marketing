@@ -20,6 +20,7 @@ import BaseApiClient from "./baseApiClient.js";
 import { getLogger } from "../utils/logger.js";
 import rateLimiterService from "./rateLimiter.js";
 import oauthManager from "./oauthManager.js";
+import { formatHashtagsForPosting } from "../utils/hashtagUtils.js";
 
 const logger = getLogger("services", "instagram-posting");
 
@@ -750,9 +751,9 @@ class InstagramPostingService extends BaseApiClient {
         this.instagramUserId,
       );
 
-      // Combine caption and hashtags
+      // Combine caption and hashtags (format with "#" prefix)
       const fullCaption =
-        hashtags.length > 0 ? `${caption}\n\n${hashtags.join(" ")}` : caption;
+        hashtags.length > 0 ? `${caption}\n\n${formatHashtagsForPosting(hashtags).join(" ")}` : caption;
 
       const params = new URLSearchParams({
         video_url: videoUrl,

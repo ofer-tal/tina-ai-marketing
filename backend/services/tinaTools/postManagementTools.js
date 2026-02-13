@@ -1012,17 +1012,25 @@ export async function editPost(params = {}) {
       changes.push('script');
     }
 
-    updates.tierParameters = tierParamsMap;
+    // Assign the Map to the post if we created a new one
+    if (tierParamsMap !== post.tierParameters) {
+      updates.tierParameters = tierParamsMap;
+    }
+
+    // CRITICAL: Mark tierParameters as modified so Mongoose persists Map changes
+    // Mongoose doesn't track in-place Map modifications, so we must explicitly mark it dirty
+    post.markModified('tierParameters');
   }
 
   if (Object.keys(updates).length === 0) {
     return {
       success: true,
-      message: 'No changes to apply',
+      message: 'The post already has the requested content. No changes are needed - the post is ready.',
       post: {
         id: post._id.toString(),
         status: post.status,
-        changes: []
+        changes: [],
+        alreadyCorrect: true
       }
     };
   }
@@ -1066,7 +1074,8 @@ export async function editPost(params = {}) {
       id: post._id.toString(),
       status: post.status,
       changes,
-      resetToPending
+      resetToPending,
+      fieldsUpdated: Object.keys(updates).join(', ')
     }
   };
 }
@@ -1152,6 +1161,82 @@ async function checkVideoServicesHealth() {
       audio: 'healthy'
     }
   };
+}
+
+/**
+ * Search posts by multiple criteria
+ *
+ * @param {Object} params - Search parameters
+ * @param {string} params.title - Partial title match (searches in title)
+ * @param {string} params.startDate - ISO date filter (scheduled >= startDate)
+ * @param {string} params.endDate - ISO date filter (scheduled <= endDate)
+ * @param {string} params.status - Filter by status
+ * @param {string} params.contentTier - Filter by content tier
+ * @param {number} params.limit - Max results (default 50)
+ * @returns {Promise<Object>} Search results
+ */
+export async function searchPosts({
+  title,
+  startDate,
+  endDate,
+  status,
+  contentTier,
+  limit = 50
+} = {}) {
+  try {
+    // Build query
+    const query = {};
+
+    // Partial title match (case-insensitive)
+    if (title) {
+      query.title = { $regex: title, $options: 'i' };
+    }
+
+    // Date range filter
+    if (startDate || endDate) {
+      query.scheduledFor = {};
+      if (startDate) {
+        query.scheduledFor.$gte = new Date(startDate).toISOString();
+      }
+      if (endDate) {
+        query.scheduledFor.$lte = new Date(endDate).toISOString();
+      }
+    }
+
+    // Status filter
+    if (status) {
+      query.status = status;
+    }
+
+    // Content tier filter
+    if (contentTier) {
+      query.contentTier = contentTier;
+    }
+
+    const posts = await MarketingPost.find(query)
+      .sort({ scheduledFor: 1 }) // Oldest first (most relevant)
+      .limit(limit);
+
+    return {
+      success: true,
+      count: posts.length,
+      posts: posts.map(post => ({
+        id: post._id.toString(),
+        title: post.title,
+        scheduledFor: post.scheduledFor,
+        status: post.status,
+        contentTier: post.contentTier,
+        script: post.tierParameters?.script || null,
+        caption: post.caption || null
+      }))
+    };
+  } catch (error) {
+    logger.error('Error searching posts', { error: error.message });
+    return {
+      success: false,
+      error: error.message
+    };
+  }
 }
 
 /**
@@ -1678,6 +1763,81 @@ export async function getRecentActivity({ limit = 20, activityType = 'all' } = {
 /**
  * Generate a human-readable time ago string
  */
+/**
+ * Get conversation history from BEFORE current conversation
+ * This allows Tina to see what was discussed in previous sessions
+ */
+export async function getConversationHistory({ limit = 5, beforeConversationId, includeSummaries = true }) {
+  try {
+    const ChatConversation = (await import('../../models/ChatConversation.js')).default;
+    const ObjectId = (await import('mongoose')).Types.ObjectId;
+
+    // Build query
+    const query = {
+      isActive: true,
+      createdAt: { $exists: true }
+    };
+
+    // Only return conversations created before the specified conversation ID (exclusive)
+    if (beforeConversationId) {
+      query._id = { $lt: new ObjectId(beforeConversationId) };
+    }
+
+    // Limit results
+    const conversations = await ChatConversation.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    // Build results with messages and optionally summaries
+    const results = [];
+    for (const conv of conversations) {
+      const result = {
+        id: conv._id.toString(),
+        title: conv.title || 'New Conversation',
+        isActive: conv.isActive,
+        messageCount: conv.messages?.length || 0,
+        createdAt: conv.createdAt,
+        updatedAt: conv.updatedAt
+      };
+
+      // Optionally include summary
+      if (includeSummaries) {
+        result.summary = conv.summary || '';
+        result.summaryPoints = conv.summaryPoints || [];
+      }
+
+      // Include messages (truncate for display)
+      result.messages = (conv.messages || []).slice(0, 5); // First 5 messages as preview
+
+      results.push(result);
+    }
+
+    logger.info('Retrieved conversation history', {
+      count: results.length,
+      limit,
+      beforeConversationId
+    });
+
+    return {
+      success: true,
+      conversations: results,
+      count: results.length,
+      message: `Found ${results.length} conversations from before ${beforeConversationId || 'start of time'}. Showing previews of first 5 messages from each conversation.`
+    };
+  } catch (error) {
+    logger.error('Error getting conversation history', { error: error.message });
+    return {
+      success: false,
+      error: error.message,
+      conversations: []
+    };
+  }
+}
+
+/**
+ * Generate a human-readable time ago string
+ */
 function getTimeAgo(date) {
   const now = new Date();
   const diffMs = now - date;
@@ -1721,5 +1881,7 @@ export default {
   generatePostVideo,
   regeneratePostVideo,
   schedulePosts,
-  getRecentActivity
+  searchPosts,
+  getRecentActivity,
+  getConversationHistory
 };

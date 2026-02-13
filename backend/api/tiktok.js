@@ -2,6 +2,7 @@ import express from 'express';
 import winston from 'winston';
 import tiktokPostingService from '../services/tiktokPostingService.js';
 import MarketingPost from '../models/MarketingPost.js';
+import { formatHashtagsForPosting } from '../utils/hashtagUtils.js';
 
 const router = express.Router();
 
@@ -369,9 +370,9 @@ router.post('/post/:postId', async (req, res) => {
 
     await post.updateUploadProgress('processing', 50, 'Triggering Buffer via Zapier');
 
-    // Get hashtags for TikTok
+    // Get hashtags for TikTok and format with "#" prefix
     const hashtags = post.hashtags?.tiktok || post.hashtags || [];
-    const hashtagString = hashtags.map(tag => tag.startsWith('#') ? tag : `#${tag}`).join(' ');
+    const hashtagString = formatHashtagsForPosting(hashtags).join(' ');
 
     const fullCaption = hashtagString
       ? `${post.caption}\n\n${hashtagString}`

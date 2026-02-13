@@ -6,7 +6,6 @@ import mongoose from 'mongoose';
  * Stores AI chat conversations with Tina (AI Marketing Executive)
  * Includes message history, summaries, and context data caching
  */
-
 const messageSchema = new mongoose.Schema({
   role: {
     type: String,
@@ -89,7 +88,7 @@ const chatConversationSchema = new mongoose.Schema({
     categoryTags: [String]
   }
 }, {
-  collection: 'chat_conversations',
+  collection: 'marketing_chat_conversations',
   timestamps: true
 });
 
@@ -117,11 +116,6 @@ chatConversationSchema.methods.addMessage = function(role, content, metadata = {
   this.metadata.messageCount = this.messages.length;
   this.markModified('messages');
   this.markModified('metadata');
-
-  // Auto-generate title from first user message if needed
-  if (this.title === 'New Conversation' && role === 'user') {
-    this.title = content.substring(0, 60) + (content.length > 60 ? '...' : '');
-  }
 
   return this;
 };

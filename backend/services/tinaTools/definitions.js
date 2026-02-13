@@ -1392,6 +1392,59 @@ Creates draft posts that can be edited, generated, and approved later.`,
     },
     expectedImpact: 'Schedules approved posts for automatic publishing at the specified time'
   },
+  {
+    name: 'delete_posts',
+    description: `Delete draft or scheduled marketing posts by criteria. Use this to remove incorrect posts before they are published.
+
+IMPORTANT: Only delete posts that have NOT been posted yet. Use with caution.
+
+PARAMETERS:
+  - postIds: Array of specific post IDs to delete (optional)
+  - status: Delete all posts with this status: 'draft', 'scheduled' (optional)
+  - dateRange: Delete posts within date range {start, end} (optional)
+  - platform: Delete posts for specific platform (optional)
+  - reason: Required - why these posts should be deleted
+
+SAFETY: Will never delete posts with status 'posted' unless explicitly confirmed by postIds.
+`,
+    requiresApproval: true,
+    parameters: {
+      type: 'object',
+      properties: {
+        postIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Specific post IDs to delete'
+        },
+        status: {
+          type: 'string',
+          enum: ['draft', 'scheduled', 'posted'],
+          description: 'Delete posts with this status'
+        },
+        dateRange: {
+          type: 'object',
+          properties: {
+            start: { type: 'string', description: 'Start date (ISO format)' },
+            end: { type: 'string', description: 'End date (ISO format)' }
+          }
+        },
+        platform: {
+          type: 'string',
+          description: 'Delete posts for specific platform'
+        },
+        reason: {
+          type: 'string',
+          description: 'Why these posts should be deleted'
+        }
+      },
+      required: ['reason']
+    },
+    exampleUsage: {
+      postIds: ['507f1f2...b4a2', '507f1f2...b4a3'],
+      reason: 'These were created with wrong defaults by mistake'
+    },
+    expectedImpact: 'Removes incorrect posts from the system'
+  },
   /**
    * Analytics Tools - Read Only
    */
@@ -1516,6 +1569,54 @@ Creates draft posts that can be edited, generated, and approved later.`,
     },
     exampleUsage: {
       limit: 20
+    }
+  },
+  {
+    name: 'search_posts',
+    description: 'Search for posts by title, date range, status, or content tier. Use this to find posts when you know the title or scheduled date but don\'t have the post ID.',
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Partial title match to search for posts by title substring',
+          maxLength: 100
+        },
+        startDate: {
+          type: 'string',
+          description: 'Filter posts scheduled on or after this ISO date (e.g., 2026-02-13)',
+          format: 'date-time'
+        },
+        endDate: {
+          type: 'string',
+          description: 'Filter posts scheduled on or before this ISO date (e.g., 2026-02-14)',
+          format: 'date-time'
+        },
+        status: {
+          type: 'string',
+          description: 'Filter by post status',
+          enum: ['draft', 'ready', 'approved', 'scheduled', 'posted']
+        },
+        contentTier: {
+          type: 'string',
+          description: 'Filter by content tier',
+          enum: ['tier_1', 'tier_2', 'tier_3']
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of posts to return',
+          minimum: 1,
+          maximum: 100
+        }
+      }
+    },
+    exampleUsage: {
+      title: 'Valentine',
+      startDate: '2026-02-13',
+      endDate: '2026-02-15',
+      status: 'draft',
+      limit: 10
     }
   },
   {
@@ -1818,6 +1919,38 @@ Creates draft posts that can be edited, generated, and approved later.`,
       limit: 20,
       activityType: 'all'
     }
+  },
+  {
+    name: 'get_conversation_history',
+    description: `Get conversation history from BEFORE the current conversation. Use this to see what was discussed in previous sessions. Returns messages from recent conversations, not just the current one. This allows Tina to remember context from earlier in the day or from previous chat sessions.`,
+    requiresApproval: false,
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maximum number of conversations to retrieve (default: 5)',
+          minimum: 1,
+          maximum: 20,
+          default: 5
+        },
+        beforeConversationId: {
+          type: 'string',
+          description: 'Only return conversations created before this conversation ID (exclusive). Retrieves conversations older than the specified conversation.'
+        },
+        includeSummaries: {
+          type: 'boolean',
+          description: 'Include conversation summaries in results (default: true)',
+          default: true
+        }
+      },
+      required: ['limit']
+    },
+    exampleUsage: {
+      limit: 3,
+      beforeConversationId: '507f1f77bcf86cd799439050'
+    },
+    expectedImpact: 'Provides conversation context from previous sessions, enabling Tina to remember what was discussed earlier today or in previous chat sessions'
   },
   /**
    * Strategy Memory Tools - Read Only (No Approval Required)
@@ -2650,6 +2783,7 @@ export const TOOL_NAMES = {
   GET_ASO_KEYWORD_STATUS: 'get_aso_keyword_status',
   GET_REVENUE_SUMMARY: 'get_revenue_summary',
   GET_PENDING_POSTS: 'get_pending_posts',
+  SEARCH_POSTS: 'search_posts',
   GET_POSTING_SCHEDULE: 'get_posting_schedule',
 
   // Read only - new Phase 1: High-Value Tools
@@ -2673,6 +2807,7 @@ export const TOOL_NAMES = {
 
   // Memory & Context Tools
   GET_RECENT_ACTIVITY: 'get_recent_activity',
+  GET_CONVERSATION_HISTORY: 'get_conversation_history',
 
   // Strategy Memory Tools - Read Only
   GET_STRATEGIES: 'get_strategies',
@@ -2820,6 +2955,9 @@ export function formatToolCallForDisplay(toolName, parameters) {
     description = `Get optimal posting times (${parameters.platform || 'all'})`;
   } else if (toolName === 'get_traffic_sources') {
     description = `Get traffic sources (last ${parameters.days || 30} days)`;
+  } else if (toolName === 'get_conversation_history') {
+    description = `Get conversation history (last ${parameters.limit || 5} conversations)`;
+    if (parameters.beforeConversationId) description += ` before ${parameters.beforeConversationId.substring(0, 8)}...`;
   } else if (toolName === 'get_strategies') {
     description = `Get marketing strategies`;
     if (parameters.status && parameters.status !== 'all') description += ` (${parameters.status})`;
@@ -2862,6 +3000,11 @@ export function formatToolCallForDisplay(toolName, parameters) {
   } else if (toolName === 'schedule_post') {
     description = `Schedule ${parameters.postIds?.length || 0} post(s)`;
     if (parameters.scheduledAt) description += ` for ${new Date(parameters.scheduledAt).toLocaleDateString()}`;
+  } else if (toolName === 'delete_posts') {
+    description = `Delete posts`;
+    if (parameters.postIds) description += ` (${parameters.postIds.length} specified)`;
+    if (parameters.status) description += ` with status: ${parameters.status}`;
+    if (parameters.reason) description += ` - Reason: "${parameters.reason.substring(0, 50)}"`;
   } else if (toolName === 'create_goal') {
     description = `Create goal: ${parameters.name || 'New Goal'}`;
   } else if (toolName === 'update_goal') {

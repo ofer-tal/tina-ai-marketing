@@ -22,6 +22,6 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["backend/**/*"],
-  "exclude": ["node_modules", "dist", "frontend"]
+  "include": ["./**/*"],
+  "exclude": ["node_modules", "dist"]
 }

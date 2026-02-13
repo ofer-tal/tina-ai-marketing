@@ -301,6 +301,28 @@ function isPostChanged(existing, updated) {
     }
   }
 
+  // Check if hashtags changed (can be array or object)
+  if (updated.hashtags) {
+    const existingHashtags = existing.hashtags;
+    const updatedHashtags = updated.hashtags;
+
+    // Handle both array and platform-specific object formats
+    if (Array.isArray(updatedHashtags)) {
+      if (JSON.stringify(existingHashtags) !== JSON.stringify(updatedHashtags)) {
+        return true;
+      }
+    } else if (typeof updatedHashtags === 'object') {
+      // Platform-specific structure - check each platform
+      for (const platform of ['tiktok', 'instagram', 'youtube_shorts']) {
+        const existingArr = existingHashtags?.[platform] || [];
+        const updatedArr = updatedHashtags[platform] || [];
+        if (JSON.stringify(existingArr) !== JSON.stringify(updatedArr)) {
+          return true;
+        }
+      }
+    }
+  }
+
   // Check nested progress objects
   if (updated.videoGenerationProgress) {
     const existingProgress = existing.videoGenerationProgress;
@@ -361,6 +383,24 @@ function isPostChanged(existing, updated) {
         existingMetrics.likes !== updatedMetrics.likes ||
         existingMetrics.shares !== updatedMetrics.shares ||
         existingMetrics.comments !== updatedMetrics.comments) {
+      return true;
+    }
+  }
+
+  // Check if tierParameters changed (Map object - needs deep comparison)
+  if (updated.tierParameters) {
+    const existingParams = existing.tierParameters;
+    const updatedParams = updated.tierParameters;
+
+    // tierParameters is a Map - convert to objects for comparison
+    const existingObj = existingParams instanceof Map
+      ? Object.fromEntries(existingParams.entries())
+      : existingParams;
+    const updatedObj = updatedParams instanceof Map
+      ? Object.fromEntries(updatedParams.entries())
+      : updatedParams;
+
+    if (JSON.stringify(existingObj) !== JSON.stringify(updatedObj)) {
       return true;
     }
   }

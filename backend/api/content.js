@@ -19,6 +19,7 @@ import { getStories, createPost } from '../services/tinaTools/postManagementTool
 import storageService from '../services/storage.js';
 import ffmpegWrapper from '../utils/ffmpegWrapper.js';
 import sseService from '../services/sseService.js';
+import { normalizeHashtagsForStorage } from '../utils/hashtagUtils.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
@@ -2295,14 +2296,19 @@ router.put('/posts/:id', async (req, res) => {
         if (Array.isArray(hashtags)) {
           // Legacy array format - convert to platform-specific structure
           const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+          const normalizedHashtags = normalizeHashtagsForStorage(hashtags);
           post.hashtags = {
-            tiktok: platformKey === 'tiktok' ? hashtags : (post.hashtags?.tiktok || []),
-            instagram: platformKey === 'instagram' ? hashtags : (post.hashtags?.instagram || []),
-            youtube_shorts: platformKey === 'youtube_shorts' ? hashtags : (post.hashtags?.youtube_shorts || [])
+            tiktok: platformKey === 'tiktok' ? normalizedHashtags : (post.hashtags?.tiktok || []),
+            instagram: platformKey === 'instagram' ? normalizedHashtags : (post.hashtags?.instagram || []),
+            youtube_shorts: platformKey === 'youtube_shorts' ? normalizedHashtags : (post.hashtags?.youtube_shorts || [])
           };
         } else if (typeof hashtags === 'object' && hashtags !== null) {
-          // Platform-specific object format - validate it has the correct structure
-          post.hashtags = hashtags;
+          // Platform-specific object format - normalize each platform's hashtags
+          post.hashtags = {
+            tiktok: hashtags.tiktok ? normalizeHashtagsForStorage(hashtags.tiktok) : (post.hashtags?.tiktok || []),
+            instagram: hashtags.instagram ? normalizeHashtagsForStorage(hashtags.instagram) : (post.hashtags?.instagram || []),
+            youtube_shorts: hashtags.youtube_shorts ? normalizeHashtagsForStorage(hashtags.youtube_shorts) : (post.hashtags?.youtube_shorts || [])
+          };
         } else {
           return res.status(400).json({
             success: false,
@@ -2357,14 +2363,19 @@ router.put('/posts/:id', async (req, res) => {
       if (Array.isArray(hashtags)) {
         // Legacy array format - convert to platform-specific structure
         const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+        const normalizedHashtags = normalizeHashtagsForStorage(hashtags);
         post.hashtags = {
-          tiktok: platformKey === 'tiktok' ? hashtags : (post.hashtags?.tiktok || []),
-          instagram: platformKey === 'instagram' ? hashtags : (post.hashtags?.instagram || []),
-          youtube_shorts: platformKey === 'youtube_shorts' ? hashtags : (post.hashtags?.youtube_shorts || [])
+          tiktok: platformKey === 'tiktok' ? normalizedHashtags : (post.hashtags?.tiktok || []),
+          instagram: platformKey === 'instagram' ? normalizedHashtags : (post.hashtags?.instagram || []),
+          youtube_shorts: platformKey === 'youtube_shorts' ? normalizedHashtags : (post.hashtags?.youtube_shorts || [])
         };
       } else if (typeof hashtags === 'object' && hashtags !== null) {
-        // Platform-specific object format
-        post.hashtags = hashtags;
+        // Platform-specific object format - normalize each platform's hashtags
+        post.hashtags = {
+          tiktok: hashtags.tiktok ? normalizeHashtagsForStorage(hashtags.tiktok) : (post.hashtags?.tiktok || []),
+          instagram: hashtags.instagram ? normalizeHashtagsForStorage(hashtags.instagram) : (post.hashtags?.instagram || []),
+          youtube_shorts: hashtags.youtube_shorts ? normalizeHashtagsForStorage(hashtags.youtube_shorts) : (post.hashtags?.youtube_shorts || [])
+        };
       }
     }
 
@@ -4050,7 +4061,7 @@ router.post('/posts/create-tier2', async (req, res) => {
       contentType: 'video',
       contentTier: 'tier_2',
       caption: caption.trim(),
-      hashtags: hashtags.map(tag => tag.trim().startsWith('#') ? tag.trim() : `#${tag.trim()}`),
+      hashtags: normalizeHashtagsForStorage(hashtags),
       scheduledAt: scheduledDate,
       videoPath: null, // No video yet
       thumbnailPath: null,

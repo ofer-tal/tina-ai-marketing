@@ -419,7 +419,22 @@ class GLMService {
 
       // Check if response contains tool calls
       const choice = data.choices?.[0];
-      const message = choice?.message;
+      const message = choice?.message || '';
+
+      // If no message content, log warning but continue processing (don't return mock)
+      if (!message) {
+        logger.warn('GLM returned empty response, continuing with empty tool_calls array', {
+          choiceId: choice?.id,
+          hasToolCalls: false,
+          hasMessage: false
+        });
+      } else if (!message.tool_calls) {
+        logger.warn('GLM returned message but no tool_calls, using empty tool_calls array', {
+          choiceId: choice?.id,
+          hasToolCalls: true,
+          hasMessage: true
+        });
+      }
 
       if (message?.tool_calls && message.tool_calls.length > 0) {
         // Return tool_use response for function calling
