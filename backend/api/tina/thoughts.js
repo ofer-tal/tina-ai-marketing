@@ -339,7 +339,7 @@ router.post('/:id/validate', async (req, res) => {
       });
     }
 
-    await thought.validate(correct, actualOutcome || '');
+    await thought.validateEntry(correct, actualOutcome || '');
 
     logger.info('Thought validated', { thoughtId: thought.thoughtId, correct });
 

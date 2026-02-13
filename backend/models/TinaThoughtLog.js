@@ -163,7 +163,7 @@ tinaThoughtLogSchema.pre('beforeValidation', function(next) {
 /**
  * Mark thought as validated
  */
-tinaThoughtLogSchema.methods.validate = function(correct, actualOutcome = '') {
+tinaThoughtLogSchema.methods.validateEntry = function(correct, actualOutcome = '') {
   this.validated = true;
   this.validationResult = {
     correct,
