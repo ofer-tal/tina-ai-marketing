@@ -12,6 +12,10 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, '..');
 dotenv.config({ path: path.join(projectRoot, '.env') });
 
+// Increase max listeners to prevent warnings from Winston logger
+// Each logger instance adds exception/rejection handlers, so with many loggers we can exceed default
+process.setMaxListeners(20);
+
 import express from "express";
 import https from "https";
 import cors from "cors";
