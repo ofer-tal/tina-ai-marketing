@@ -71,22 +71,6 @@ run_pm2() {
 }
 
 # Show current status
-  echo -e "${YELLOW}⚠️  No processes are currently running${NC}"
-  echo ""
-  if [ "$SAFE_RESTART" = "false" ]; then
-    REPLY="y"
-  else
-    read -p "Do you want to start services instead? (y/N) " -n 1 -r
-  fi
-  echo
-  if [[ $REPLY =~ ^[Yy]$ ]]; then
-    exec "$SCRIPT_DIR/start.sh"
-  else
-    exit 0
-  fi
-fi
-
-# Show current status
 echo -e "${BLUE}Current status:${NC}"
 run_pm2 status
 echo ""
