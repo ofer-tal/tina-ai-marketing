@@ -70,8 +70,7 @@ run_pm2() {
   fi
 }
 
-# Check if processes are running
-if ! run_pm2 describe blush-marketing-backend &> /dev/null; then
+# Show current status
   echo -e "${YELLOW}⚠️  No processes are currently running${NC}"
   echo ""
   if [ "$SAFE_RESTART" = "false" ]; then
