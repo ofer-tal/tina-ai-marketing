@@ -5,18 +5,12 @@
 
 set -e
 
-# Parse command line arguments
-SAFE_RESTART=true
-for arg in "$@"; do
-  case $arg in
-    -y|--yes|--skip-confirmation)
-      SAFE_RESTART="false"
-      ;;
-  esac
-done
-
-# Debug: Show if flag was detected (comment out after testing)
-# echo "DEBUG: SAFE_RESTART=$SAFE_RESTART" >&2
+# Check for -y flag more simply
+if [[ " $* " == *"yes"* ]]; then
+  SKIP_CONFIRMATION=true
+else
+  SKIP_CONFIRMATION=false
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -79,12 +73,12 @@ run_pm2 status
 echo ""
 
 # Check for active jobs (if safe restart is enabled)
-if [ "${SAFE_RESTART:-true}" = "true" ]; then
+if [ "${SKIP_CONFIRMATION:-false}" = "true" ]; then
   echo -e "${BLUE}Checking for active jobs...${NC}"
   # This is a simplified check - in production, you'd query the API
   echo -e "${YELLOW}Note: Restart may interrupt long-running jobs${NC}"
   echo ""
-  if [ "$SAFE_RESTART" = "false" ]; then
+  if [ "$SKIP_CONFIRMATION" = "true" ]; then
     REPLY="y"
   else
     read -p "Continue with restart? (y/N) " -n 1 -r
