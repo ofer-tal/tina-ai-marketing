@@ -10,10 +10,13 @@ SAFE_RESTART=true
 for arg in "$@"; do
   case $arg in
     -y|--yes|--skip-confirmation)
-      SAFE_RESTART=false
+      SAFE_RESTART="false"
       ;;
   esac
 done
+
+# Debug: Show if flag was detected (comment out after testing)
+# echo "DEBUG: SAFE_RESTART=$SAFE_RESTART" >&2
 
 # Colors for output
 RED='\033[0;31m'
@@ -76,7 +79,6 @@ run_pm2 status
 echo ""
 
 # Check for active jobs (if safe restart is enabled)
-# Set SAFE_RESTART=false to skip confirmation prompts
 if [ "${SAFE_RESTART:-true}" = "true" ]; then
   echo -e "${BLUE}Checking for active jobs...${NC}"
   # This is a simplified check - in production, you'd query the API
