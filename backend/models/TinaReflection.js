@@ -226,7 +226,7 @@ tinaReflectionSchema.index({ relatedGoalIds: 1 });
 /**
  * Generate reflection ID before validation
  */
-tinaReflectionSchema.pre('validate', function(next) {
+tinaReflectionSchema.pre('beforeValidation', function(next) {
   if (!this.reflectionId) {
     this.reflectionId = generateReflectionId();
   }

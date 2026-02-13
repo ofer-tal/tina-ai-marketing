@@ -215,7 +215,7 @@ marketingExperimentSchema.index({ platform: 1, status: 1 });
 /**
  * Generate experiment ID before validation
  */
-marketingExperimentSchema.pre('validate', function(next) {
+marketingExperimentSchema.pre('beforeValidation', function(next) {
   if (!this.experimentId) {
     this.experimentId = generateExperimentId();
   }

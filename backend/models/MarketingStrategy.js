@@ -180,7 +180,7 @@ marketingStrategySchema.index({ 'timeframe.start': 1, 'timeframe.end': 1 });
 /**
  * Generate strategy ID before validation
  */
-marketingStrategySchema.pre('validate', function(next) {
+marketingStrategySchema.pre('beforeValidation', function(next) {
   if (!this.strategyId) {
     this.strategyId = generateStrategyId();
   }

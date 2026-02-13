@@ -170,7 +170,7 @@ tinaObservationSchema.index({ relatedStrategyId: 1 });
 /**
  * Generate observation ID before validation
  */
-tinaObservationSchema.pre('validate', function(next) {
+tinaObservationSchema.pre('beforeValidation', function(next) {
   if (!this.observationId) {
     this.observationId = generateObservationId();
   }

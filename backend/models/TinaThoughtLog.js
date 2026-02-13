@@ -153,7 +153,7 @@ tinaThoughtLogSchema.index({ createdAt: -1 });
 /**
  * Generate thought ID before validation
  */
-tinaThoughtLogSchema.pre('validate', function(next) {
+tinaThoughtLogSchema.pre('beforeValidation', function(next) {
   if (!this.thoughtId) {
     this.thoughtId = generateThoughtLogId();
   }

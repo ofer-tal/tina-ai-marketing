@@ -231,7 +231,7 @@ marketingPlanSchema.index({ 'period.start': 1, 'period.end': 1 });
 /**
  * Generate plan ID before validation
  */
-marketingPlanSchema.pre('validate', function(next) {
+marketingPlanSchema.pre('beforeValidation', function(next) {
   if (!this.planId) {
     this.planId = generatePlanId();
   }

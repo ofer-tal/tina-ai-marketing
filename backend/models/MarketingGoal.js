@@ -205,7 +205,7 @@ marketingGoalSchema.index({ 'alerts.acknowledged': 1 });
 /**
  * Generate goal ID before validation
  */
-marketingGoalSchema.pre('validate', function(next) {
+marketingGoalSchema.pre('beforeValidation', function(next) {
   if (!this.goalId) {
     this.goalId = generateGoalId();
   }

@@ -170,7 +170,7 @@ tinaLearningSchema.index({ isActionable: 1, isValid: 1 });
 /**
  * Generate learning ID before validation
  */
-tinaLearningSchema.pre('validate', function(next) {
+tinaLearningSchema.pre('beforeValidation', function(next) {
   if (!this.learningId) {
     this.learningId = generateLearningId();
   }
