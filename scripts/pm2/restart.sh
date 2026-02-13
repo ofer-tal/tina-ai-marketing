@@ -1,8 +1,19 @@
 #!/bin/bash
 # PM2 Restart Script for Blush Marketing
 # Restarts services with safety check for active jobs
+# Usage: ./restart.sh [-y|--yes|--skip-confirmation]
 
 set -e
+
+# Parse command line arguments
+SAFE_RESTART=true
+for arg in "$@"; do
+  case $arg in
+    -y|--yes|--skip-confirmation)
+      SAFE_RESTART=false
+      ;;
+  esac
+done
 
 # Colors for output
 RED='\033[0;31m'
@@ -63,7 +74,11 @@ run_pm2() {
 if ! run_pm2 describe blush-marketing-backend &> /dev/null; then
   echo -e "${YELLOW}⚠️  No processes are currently running${NC}"
   echo ""
-  read -p "Do you want to start services instead? (y/N) " -n 1 -r
+  if [ "$SAFE_RESTART" = "false" ]; then
+    REPLY="y"
+  else
+    read -p "Do you want to start services instead? (y/N) " -n 1 -r
+  fi
   echo
   if [[ $REPLY =~ ^[Yy]$ ]]; then
     exec "$SCRIPT_DIR/start.sh"
@@ -74,16 +89,21 @@ fi
 
 # Show current status
 echo -e "${BLUE}Current status:${NC}"
-run_pm2 status blush-marketing-backend
+run_pm2 status
 echo ""
 
 # Check for active jobs (if safe restart is enabled)
+# Set SAFE_RESTART=false to skip confirmation prompts
 if [ "${SAFE_RESTART:-true}" = "true" ]; then
   echo -e "${BLUE}Checking for active jobs...${NC}"
   # This is a simplified check - in production, you'd query the API
   echo -e "${YELLOW}Note: Restart may interrupt long-running jobs${NC}"
   echo ""
-  read -p "Continue with restart? (y/N) " -n 1 -r
+  if [ "$SAFE_RESTART" = "false" ]; then
+    REPLY="y"
+  else
+    read -p "Continue with restart? (y/N) " -n 1 -r
+  fi
   echo
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo -e "${YELLOW}Restart cancelled${NC}"
@@ -91,9 +111,9 @@ if [ "${SAFE_RESTART:-true}" = "true" ]; then
   fi
 fi
 
-# Restart the backend
+# Restart all services (backend + frontend)
 echo -e "${BLUE}Restarting services...${NC}"
-run_pm2 restart blush-marketing-backend
+run_pm2 restart all
 
 # Save PM2 process list
 run_pm2 save

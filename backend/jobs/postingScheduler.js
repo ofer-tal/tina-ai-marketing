@@ -317,11 +317,6 @@ class PostingSchedulerJob {
    * Finds all scheduled content that should be posted now
    */
   async execute() {
-    logger.info(`[POSTING-SCHEDULER] ===== execute() called =====`, {
-      timestamp: new Date().toISOString(),
-      isRunning: this.isRunning
-    });
-
     if (this.isRunning) {
       logger.warn('[POSTING-SCHEDULER] Posting scheduler already running, skipping');
       return;
@@ -334,7 +329,6 @@ class PostingSchedulerJob {
       logger.info('[POSTING-SCHEDULER] Starting posting scheduler cycle');
 
       // STEP 1: Recover any stuck posts BEFORE finding new posts to post
-      logger.info('[POSTING-SCHEDULER] STEP 1: Running recoverStuckPosts()');
       await this.recoverStuckPosts();
 
       // STEP 2: Check for new scheduled content to post

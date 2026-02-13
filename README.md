@@ -65,9 +65,8 @@ blush-marketing/
 │       ├── hooks/              # Custom React hooks
 │       └── App.jsx            # React entry point
 ├── ecosystem/                 # PM2 ecosystem configurations
-│   ├── ecosystem.config.cjs    # Core PM2 config
-│   ├── ecosystem.development.cjs  # Dev overrides
-│   └── ecosystem.production.cjs     # Prod overrides
+│   ├── ecosystem.development.cjs  # Dev mode (backend + frontend)
+│   └── ecosystem.production.cjs     # Prod mode (backend + frontend)
 ├── scripts/
 │   ├── pm2/                # PM2 management scripts
 │   │   ├── start.sh         # Start services

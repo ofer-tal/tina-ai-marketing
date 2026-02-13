@@ -120,7 +120,7 @@ case "$MODE" in
     echo "- Crash-only restarts"
     echo "- Safe for long-running jobs"
     echo ""
-    run_pm2 start ecosystem/ecosystem.config.cjs --env development --only blush-marketing-backend
+    run_pm2 start ecosystem/ecosystem/ecosystem.development.cjs --env development --only blush-marketing-backend
     ;;
   dev-watch)
     echo -e "${BLUE}Starting in HOT RELOAD development mode...${NC}"
@@ -128,7 +128,7 @@ case "$MODE" in
     echo "- Auto-restart on changes"
     echo "- ${YELLOW}WARNING: May interrupt long-running jobs${NC}"
     echo ""
-    run_pm2 start ecosystem/ecosystem.config.cjs --env development --watch --only blush-marketing-backend
+    run_pm2 start ecosystem/ecosystem/ecosystem.development.cjs --env development --watch --only blush-marketing-backend
     ;;
   production)
     echo -e "${BLUE}Starting in PRODUCTION mode...${NC}"
@@ -136,7 +136,7 @@ case "$MODE" in
     echo "- Crash-only restarts"
     echo "- Production logging"
     echo ""
-    run_pm2 start ecosystem/ecosystem.config.cjs --env production --only blush-marketing-backend
+    run_pm2 start ecosystem/ecosystem/ecosystem.production.cjs --env production --only blush-marketing-backend
     ;;
 esac
 
