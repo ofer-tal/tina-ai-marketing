@@ -7,7 +7,7 @@ export default defineConfig({
   publicDir: 'frontend/public', // Public assets directory
   server: {
     port: 5173,
-    host: true,
+    host: '0.0.0.0',
     strictPort: false, // Allow trying other ports if 5173 is taken
     allowedHosts: ['bart.shmoop.org', 'localhost', '.shmoop.org'],
     watch: {

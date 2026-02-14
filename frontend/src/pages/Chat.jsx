@@ -129,6 +129,12 @@ const MessageBubble = styled.div`
     }
   `}
 
+  @media (max-width: 768px) {
+    max-width: 85%;
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+
   strong {
     font-weight: 600;
     color: ${props => props.$isUser ? 'white' : '#e94560'};
@@ -267,6 +273,13 @@ const CopyButton = styled.button`
     color: #00d26a;
     opacity: 1;
   }
+
+  @media (max-width: 768px) {
+    padding: 8px 12px;
+    font-size: 0.875rem;
+    top: 6px;
+    right: 6px;
+  }
 `;
 
 const InputContainer = styled.div`
@@ -276,6 +289,12 @@ const InputContainer = styled.div`
   display: flex;
   gap: 1rem;
   align-items: flex-end;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem;
+  }
 `;
 
 const MessageInput = styled.textarea`
@@ -327,6 +346,11 @@ const SendButton = styled.button`
   &:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  @media (max-width: 768px) {
+    min-width: 100%;
+    padding: 0.75rem;
   }
 `;
 

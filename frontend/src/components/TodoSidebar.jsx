@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import styled from 'styled-components';
 
 const Sidebar = styled.aside`
-  width: 320px;
+  width: ${props => props.$collapsed ? '60px' : '320px'};
   background: #16213e;
   border-right: 1px solid #2d3561;
   height: calc(100vh - 120px);
@@ -11,6 +11,7 @@ const Sidebar = styled.aside`
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  transition: width 0.2s ease;
 
   &::-webkit-scrollbar {
     width: 6px;
@@ -31,20 +32,56 @@ const Sidebar = styled.aside`
 `;
 
 const SidebarHeader = styled.div`
-  padding: 1.5rem;
+  padding: ${props => props.$collapsed ? '1rem 0.5rem' : '1.5rem'};
   border-bottom: 1px solid #2d3561;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 
   h2 {
     margin: 0;
-    font-size: 1.2rem;
+    font-size: ${props => props.$collapsed ? '0.8rem' : '1.2rem'};
     color: #eaeaea;
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    overflow: hidden;
+    white-space: nowrap;
 
     &::before {
       content: '📋';
+      font-size: ${props => props.$collapsed ? '1rem' : 'inherit'};
     }
+
+    span {
+      display: ${props => props.$collapsed ? 'none' : 'block'};
+    }
+  }
+`;
+
+const CollapseButton = styled.button`
+  background: transparent;
+  border: 1px solid #2d3561;
+  border-radius: 4px;
+  color: #eaeaea;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  transition: all 0.2s;
+  min-width: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:hover {
+    background: #e94560;
+    border-color: #e94560;
+    transform: scale(1.05);
+  }
+
+  &:active {
+    transform: scale(0.95);
   }
 `;
 
@@ -55,12 +92,12 @@ const TodoList = styled.div`
 `;
 
 const TodoItem = styled.div.withConfig({
-  shouldForwardProp: (prop) => prop !== 'overdue'
+  shouldForwardProp: (prop) => prop !== 'overdue' && prop !== '$collapsed'
 })`
   background: ${props => props.overdue ? 'rgba(233, 69, 96, 0.15)' : '#1a1a2e'};
   border: 1px solid ${props => props.overdue ? '#f8312f' : '#2d3561'};
   border-radius: 8px;
-  padding: 1rem;
+  padding: ${props => props.$collapsed ? '0.5rem' : '1rem'};
   margin-bottom: 0.75rem;
   cursor: pointer;
   transition: all 0.2s;
@@ -81,7 +118,7 @@ const TodoItem = styled.div.withConfig({
 
   &:hover {
     border-color: #e94560;
-    transform: translateX(4px);
+    transform: ${props => props.$collapsed ? 'none' : 'translateX(4px)'};
   }
 
   &:last-child {
@@ -90,7 +127,7 @@ const TodoItem = styled.div.withConfig({
 `;
 
 const TodoHeader = styled.div`
-  display: flex;
+  display: ${props => props.$collapsed ? 'none' : 'flex'};
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 0.5rem;
@@ -147,10 +184,11 @@ const TodoTitle = styled.div`
   font-weight: 500;
   line-height: 1.4;
   margin-bottom: 0.25rem;
+  display: ${props => props.$collapsed ? 'none' : 'block'};
 `;
 
 const TodoMeta = styled.div`
-  display: flex;
+  display: ${props => props.$collapsed ? 'none' : 'flex'};
   gap: 0.5rem;
   align-items: center;
   font-size: 0.75rem;
@@ -184,9 +222,57 @@ const CategoryBadge = styled.span`
   font-size: 0.65rem;
 `;
 
+// Collapsed view components
+const CollapsedTodoItem = styled.div.withConfig({
+  shouldForwardProp: (prop) => prop !== 'overdue'
+})`
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: ${props => {
+    switch (props.$priority) {
+      case 'urgent': return '#f8312f';
+      case 'high': return '#ff6b6b';
+      case 'medium': return '#ffb020';
+      case 'low': return '#00d26a';
+      default: return '#2d3561';
+    }
+  }};
+  border: ${props => props.overdue ? '2px solid #f8312f' : '2px solid transparent'};
+  margin: 0.5rem auto;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+
+  &::after {
+    content: '${props => props.$count}';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  &:hover {
+    transform: scale(1.1);
+    box-shadow: 0 0 8px ${props => {
+      switch (props.$priority) {
+        case 'urgent': return 'rgba(248, 49, 47, 0.5)';
+        case 'high': return 'rgba(255, 107, 107, 0.5)';
+        case 'medium': return 'rgba(255, 176, 32, 0.5)';
+        case 'low': return 'rgba(0, 210, 106, 0.5)';
+        default: return 'rgba(45, 53, 97, 0.5)';
+      }
+    }};
+  }
+`;
+
 const SidebarFooter = styled.div`
-  padding: 1rem;
+  padding: ${props => props.$collapsed ? '0.5rem' : '1rem'};
   border-top: 1px solid #2d3561;
+  display: ${props => props.$collapsed ? 'none' : 'block'};
 `;
 
 const ViewAllLink = styled.a`
@@ -210,17 +296,21 @@ const ViewAllLink = styled.a`
 `;
 
 const LoadingState = styled.div`
-  padding: 2rem;
+  padding: ${props => props.$collapsed ? '1rem 0.5rem' : '2rem'};
   text-align: center;
   color: #a0a0a0;
-  font-size: 0.9rem;
+  font-size: ${props => props.$collapsed ? '0.7rem' : '0.9rem'};
+  white-space: ${props => props.$collapsed ? 'nowrap' : 'normal'};
+  overflow: hidden;
 `;
 
 const EmptyState = styled.div`
-  padding: 2rem 1rem;
+  padding: ${props => props.$collapsed ? '1rem 0.5rem' : '2rem 1rem'};
   text-align: center;
   color: #a0a0a0;
-  font-size: 0.9rem;
+  font-size: ${props => props.$collapsed ? '0.7rem' : '0.9rem'};
+  white-space: ${props => props.$collapsed ? 'nowrap' : 'normal'};
+  overflow: hidden;
 `;
 
 // Modal components
@@ -431,6 +521,27 @@ function TodoSidebar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedTodo, setSelectedTodo] = useState(null);
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('todoSidebarCollapsed');
+      // Default to collapsed on mobile screens (≤768px)
+      if (window.innerWidth <= 768) {
+        return true;
+      }
+      return saved ? JSON.parse(saved) : false;
+    } catch {
+      return window.innerWidth <= 768;
+    }
+  });
+
+  // Persist collapsed state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('todoSidebarCollapsed', JSON.stringify(isCollapsed));
+    } catch (error) {
+      console.warn('Failed to save sidebar state:', error);
+    }
+  }, [isCollapsed]);
 
   useEffect(() => {
     fetchTodos();
@@ -599,15 +710,26 @@ function TodoSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <h2>Tasks</h2>
+    <Sidebar $collapsed={isCollapsed}>
+      <SidebarHeader $collapsed={isCollapsed}>
+        <h2><span>Tasks</span></h2>
+        <CollapseButton
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          aria-label={isCollapsed ? 'Expand tasks' : 'Collapse tasks'}
+          title={isCollapsed ? 'Show tasks' : 'Hide tasks'}
+        >
+          {isCollapsed ? '▶' : '◀'}
+        </CollapseButton>
       </SidebarHeader>
 
       {loading ? (
-        <LoadingState>⏳ Loading tasks...</LoadingState>
+        <LoadingState $collapsed={isCollapsed}>
+          {isCollapsed ? '⏳' : '⏳ Loading tasks...'}
+        </LoadingState>
       ) : todos.length === 0 ? (
-        <EmptyState>✓ No pending tasks</EmptyState>
+        <EmptyState $collapsed={isCollapsed}>
+          {isCollapsed ? '✓' : '✓ No pending tasks'}
+        </EmptyState>
       ) : (
         <TodoList>
           {todos.map(todo => {
@@ -616,32 +738,37 @@ function TodoSidebar() {
               <TodoItem
                 key={todo._id || todo.id}
                 overdue={overdue}
+                $collapsed={isCollapsed}
                 onClick={() => handleTodoClick(todo)}
               >
-                <TodoHeader>
-                  {overdue ? (
-                    <OverdueBadge>⚠️ Overdue</OverdueBadge>
-                  ) : (
-                    <TodoTime>{formatTime(todo.scheduledAt)}</TodoTime>
-                  )}
-                  <TodoStatus $status={todo.status}>
-                    {todo.status === 'in_progress' ? 'In Progress' : todo.status}
-                  </TodoStatus>
-                </TodoHeader>
-                <TodoTitle>{todo.title}</TodoTitle>
-                <TodoMeta>
-                  <PriorityBadge $priority={todo.priority}>
-                    {todo.priority}
-                  </PriorityBadge>
-                  <CategoryBadge>{todo.category}</CategoryBadge>
-                </TodoMeta>
+                {!isCollapsed ? (
+                  <>
+                    <TodoHeader $collapsed={isCollapsed}>
+                      {overdue ? (
+                        <OverdueBadge>⚠️ Overdue</OverdueBadge>
+                      ) : (
+                        <TodoTime>{formatTime(todo.scheduledAt)}</TodoTime>
+                      )}
+                      <TodoStatus $status={todo.status}>
+                        {todo.status === 'in_progress' ? 'In Progress' : todo.status}
+                      </TodoStatus>
+                    </TodoHeader>
+                    <TodoTitle $collapsed={isCollapsed}>{todo.title}</TodoTitle>
+                    <TodoMeta $collapsed={isCollapsed}>
+                      <PriorityBadge $priority={todo.priority}>
+                        {todo.priority}
+                      </PriorityBadge>
+                      <CategoryBadge>{todo.category}</CategoryBadge>
+                    </TodoMeta>
+                  </>
+                ) : null}
               </TodoItem>
             );
           })}
         </TodoList>
       )}
 
-      <SidebarFooter>
+      <SidebarFooter $collapsed={isCollapsed}>
         <ViewAllLink href="/todos">View All Tasks →</ViewAllLink>
       </SidebarFooter>
 
