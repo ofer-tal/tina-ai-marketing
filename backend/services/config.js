@@ -925,6 +925,22 @@ const configSchema = {
     errorMessage: 'Must not be empty if provided'
   },
 
+  BLUSH_APP_STORE_URL: {
+    required: false,
+    default: 'https://apps.apple.com/app/blush-ai-romantic-stories/id6449122808',
+    description: 'Blush app App Store URL for download links in posts',
+    validate: (value) => {
+      if (!value) return true;
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && url.hostname.includes('apple.com');
+      } catch {
+        return false;
+      }
+    },
+    errorMessage: 'Must be a valid Apple App Store URL'
+  },
+
   // Data Retention Settings
   DATA_RETENTION_POSTS_DAYS: {
     required: false,

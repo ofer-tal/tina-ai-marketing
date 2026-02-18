@@ -18,6 +18,7 @@
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
 import oauthManager from './oauthManager.js';
+import configService from './config.js';
 import path from 'path';
 import fs from 'fs';
 
@@ -419,6 +420,49 @@ class YouTubePostingService extends BaseApiClient {
   }
 
   /**
+   * Build enhanced YouTube description with hashtags and download link
+   * @param {string} baseCaption - The base caption text
+   * @param {Array<string>} hashtags - Array of hashtag strings (without #)
+   * @returns {string} Enhanced description respecting 5000 byte limit
+   */
+  buildYouTubeDescription(baseCaption, hashtags = []) {
+    const appStoreUrl = configService.get('BLUSH_APP_STORE_URL', 'https://apps.apple.com/app/blush-ai-romantic-stories/id6449122808');
+
+    // Start with base caption
+    let description = baseCaption.trim();
+
+    // Add hashtags with "#" prefix for clickability in description
+    if (hashtags && hashtags.length > 0) {
+      const hashtagLine = '\n\n' + hashtags.map(tag => `#${tag}`).join(' ');
+      description += hashtagLine;
+    }
+
+    // Add download link at the end
+    description += '\n\n📱 Download the Blush app: ' + appStoreUrl;
+
+    // YouTube API has a 5000 byte limit for description
+    const MAX_BYTES = 5000;
+    const byteLength = new Blob([description]).size;
+
+    if (byteLength > MAX_BYTES) {
+      logger.warn('Description exceeds 5000 byte limit, truncating', {
+        byteLength,
+        limit: MAX_BYTES
+      });
+
+      // Truncate from the beginning to keep hashtags and link
+      const ellipsis = '\n\n...';
+      const hashtagsAndLink = description.slice(description.lastIndexOf('\n\n'));
+      const availableSpace = MAX_BYTES - hashtagsAndLink.length - ellipsis.length;
+
+      // Keep only as much caption as fits
+      description = baseCaption.slice(0, availableSpace) + ellipsis + hashtagsAndLink;
+    }
+
+    return description;
+  }
+
+  /**
    * Upload a video to YouTube
    */
   async postVideo(videoPath, title, description, tags = [], onProgress) {
@@ -461,12 +505,18 @@ class YouTubePostingService extends BaseApiClient {
       });
       // === END path resolution ===
 
+      // Build enhanced YouTube description with hashtags and download link
+      // This adds hashtags with "#" prefix (clickable) and App Store URL
+      const enhancedDescription = this.buildYouTubeDescription(description, tags);
+
       // Prepare video metadata
+      // Note: tags are sent WITHOUT "#" for YouTube SEO
+      // Hashtags with "#" are added in description for clickability
       const videoMetadata = {
         snippet: {
           title: title,
-          description: description,
-          tags: tags,
+          description: enhancedDescription,
+          tags: tags, // Tags without "#" for YouTube SEO
           categoryId: '24', // Entertainment category
         },
         status: {

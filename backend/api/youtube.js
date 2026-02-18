@@ -399,13 +399,14 @@ router.post('/post/:postId', async (req, res) => {
     });
 
     // Upload video to YouTube
-    // Note: YouTube uses tags (not hashtags) and API expects them without "#" prefix
-    // Since we now store hashtags without "#" in the database, this works correctly
+    // Extract YouTube-specific hashtags from platform-specific hashtags object
+    const youtubeHashtags = post.hashtags?.youtube_shorts || [];
+
     const uploadResult = await youtubeService.postVideo(
       post.videoPath,
       post.caption || post.title,
       post.caption || '',
-      post.hashtags || [],
+      youtubeHashtags,
       (progress) => {
         sendProgress(progress);
       }
