@@ -962,6 +962,16 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
   };
 
   const handleSave = async () => {
+    console.log('[CreatePostModal] handleSave called', {
+      contentTier,
+      selectedStory: selectedStory?.name,
+      videoTitle,
+      selectedPlatforms,
+      selectedAvatar: selectedAvatar?.name,
+      scriptLength: script?.length,
+      loading
+    });
+
     setError(null);
 
     // Validation
@@ -992,6 +1002,8 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
         return;
       }
     }
+
+    console.log('[CreatePostModal] Validation passed, creating post...');
 
     // Build platform-specific hashtags object
     // Parse hashtags for each platform (space or comma separated, add # if missing)
@@ -1603,8 +1615,8 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
               <Tier2Notice>
                 <NoticeIcon>ℹ️</NoticeIcon>
                 <NoticeText>
-                  Tier 2 posts require manual video upload. After creating the post,
-                  you'll need to generate the video using HeyGen and upload it via the Content Library.
+                  <strong>Tier 2 posts require video upload:</strong><br />
+                  After creating this post, you'll need to upload your AI-generated video (from HeyGen or similar) through the Content Library using the "Upload Tier 2 Video" option.
                 </NoticeText>
               </Tier2Notice>
             </FormSection>
@@ -1624,123 +1636,131 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
           </FormSection>
         )}
 
-        {/* Video Style Preset */}
-        <FormSection>
-          <FormLabel>Video Style Preset</FormLabel>
-          <PresetSelector>
-            {PRESETS.map(p => (
-              <PresetOption
-                key={p.id}
-                $selected={preset === p.id}
-                onClick={() => setPreset(p.id)}
-              >
-                <input
-                  type="radio"
-                  name="preset"
-                  checked={preset === p.id}
-                  onChange={() => setPreset(p.id)}
-                  disabled={loading}
-                />
-                <PresetHeader>
-                  <PresetIcon>{p.icon}</PresetIcon>
-                  <PresetName>{p.name}</PresetName>
-                </PresetHeader>
-                <PresetDesc>{p.description}</PresetDesc>
-                <PresetSlides>
-                  {p.slides.map((s, i) => <PresetSlide key={i}>{s}</PresetSlide>)}
-                </PresetSlides>
-              </PresetOption>
-            ))}
-          </PresetSelector>
-        </FormSection>
+        {/* Video Style Preset - Tier 1 only */}
+        {contentTier === 'tier_1' && (
+          <FormSection>
+            <FormLabel>Video Style Preset</FormLabel>
+            <PresetSelector>
+              {PRESETS.map(p => (
+                <PresetOption
+                  key={p.id}
+                  $selected={preset === p.id}
+                  onClick={() => setPreset(p.id)}
+                >
+                  <input
+                    type="radio"
+                    name="preset"
+                    checked={preset === p.id}
+                    onChange={() => setPreset(p.id)}
+                    disabled={loading}
+                  />
+                  <PresetHeader>
+                    <PresetIcon>{p.icon}</PresetIcon>
+                    <PresetName>{p.name}</PresetName>
+                  </PresetHeader>
+                  <PresetDesc>{p.description}</PresetDesc>
+                  <PresetSlides>
+                    {p.slides.map((s, i) => <PresetSlide key={i}>{s}</PresetSlide>)}
+                  </PresetSlides>
+                </PresetOption>
+              ))}
+            </PresetSelector>
+          </FormSection>
+        )}
 
-        {/* Voice Selection */}
-        <FormSection>
-          <FormLabel>Voice</FormLabel>
-          <VoiceSelector>
-            {VOICES.map(v => (
-              <VoiceOption
-                key={v.id}
-                $selected={voice === v.id}
-                onClick={() => setVoice(v.id)}
-              >
-                <input
-                  type="radio"
-                  name="voice"
-                  checked={voice === v.id}
-                  onChange={() => setVoice(v.id)}
-                />
-                <VoiceIcon>{v.icon}</VoiceIcon>
-                {v.name}
-              </VoiceOption>
-            ))}
-          </VoiceSelector>
-        </FormSection>
+        {/* Voice Selection - Tier 1 only */}
+        {contentTier === 'tier_1' && (
+          <FormSection>
+            <FormLabel>Voice</FormLabel>
+            <VoiceSelector>
+              {VOICES.map(v => (
+                <VoiceOption
+                  key={v.id}
+                  $selected={voice === v.id}
+                  onClick={() => setVoice(v.id)}
+                >
+                  <input
+                    type="radio"
+                    name="voice"
+                    checked={voice === v.id}
+                    onChange={() => setVoice(v.id)}
+                  />
+                  <VoiceIcon>{v.icon}</VoiceIcon>
+                  {v.name}
+                </VoiceOption>
+              ))}
+            </VoiceSelector>
+          </FormSection>
+        )}
 
-        {/* Music Selection */}
-        <FormSection>
-          <FormLabel>Background Music (Optional)</FormLabel>
-          <MusicSelector>
-            <MusicOption
-              $selected={!selectedMusic}
-              onClick={() => !loading && setSelectedMusic(null)}
-            >
-              <input
-                type="radio"
-                name="music"
-                checked={!selectedMusic}
-                onChange={() => setSelectedMusic(null)}
-                disabled={loading}
-              />
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '24px' }}>🔇</div>
-                <div style={{ fontSize: '13px', fontWeight: 600 }}>No Music</div>
-                <div style={{ fontSize: '11px', color: '#666' }}>Narration only</div>
-              </div>
-            </MusicOption>
-            {allMusic.map(track => (
+        {/* Music Selection - Tier 1 only */}
+        {contentTier === 'tier_1' && (
+          <FormSection>
+            <FormLabel>Background Music (Optional)</FormLabel>
+            <MusicSelector>
               <MusicOption
-                key={track.id}
-                $selected={selectedMusic?.id === track.id}
-                onClick={() => !loading && setSelectedMusic(track)}
+                $selected={!selectedMusic}
+                onClick={() => !loading && setSelectedMusic(null)}
               >
                 <input
                   type="radio"
                   name="music"
-                  checked={selectedMusic?.id === track.id}
-                  onChange={() => setSelectedMusic(track)}
+                  checked={!selectedMusic}
+                  onChange={() => setSelectedMusic(null)}
                   disabled={loading}
                 />
                 <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '24px' }}>🎵</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, textTransform: 'capitalize' }}>{track.name}</div>
-                  <div style={{ fontSize: '11px', color: '#666' }}>{track.style} • {track.duration ? Math.round(track.duration) + 's' : 'N/A'}</div>
+                  <div style={{ fontSize: '24px' }}>🔇</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600 }}>No Music</div>
+                  <div style={{ fontSize: '11px', color: '#666' }}>Narration only</div>
                 </div>
               </MusicOption>
-            ))}
-          </MusicSelector>
-        </FormSection>
+              {allMusic.map(track => (
+                <MusicOption
+                  key={track.id}
+                  $selected={selectedMusic?.id === track.id}
+                  onClick={() => !loading && setSelectedMusic(track)}
+                >
+                  <input
+                    type="radio"
+                    name="music"
+                    checked={selectedMusic?.id === track.id}
+                    onChange={() => setSelectedMusic(track)}
+                    disabled={loading}
+                  />
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: '24px' }}>🎵</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, textTransform: 'capitalize' }}>{track.name}</div>
+                    <div style={{ fontSize: '11px', color: '#666' }}>{track.style} • {track.duration ? Math.round(track.duration) + 's' : 'N/A'}</div>
+                  </div>
+                </MusicOption>
+              ))}
+            </MusicSelector>
+          </FormSection>
+        )}
 
-        {/* Generate Video Checkbox */}
-        <FormSection>
-          <CheckboxWrapper>
-            <input
-              type="checkbox"
-              checked={generateVideo}
-              onChange={(e) => setGenerateVideo(e.target.checked)}
-            />
-            <div>
-              <div style={{ fontWeight: 600, color: '#eaeaea' }}>
-                Generate Video Now
+        {/* Generate Video Checkbox - Tier 1 only */}
+        {contentTier === 'tier_1' && (
+          <FormSection>
+            <CheckboxWrapper>
+              <input
+                type="checkbox"
+                checked={generateVideo}
+                onChange={(e) => setGenerateVideo(e.target.checked)}
+              />
+              <div>
+                <div style={{ fontWeight: 600, color: '#eaeaea' }}>
+                  Generate Video Now
+                </div>
+                <div style={{ fontSize: '0.9rem', color: '#a0a0a0' }}>
+                  {generateVideo
+                    ? 'Video will be generated immediately (~$0.01-0.05 per post)'
+                    : 'Save as draft, generate video later'}
+                </div>
               </div>
-              <div style={{ fontSize: '0.9rem', color: '#a0a0a0' }}>
-                {generateVideo
-                  ? 'Video will be generated immediately (~$0.01-0.05 per post)'
-                  : 'Save as draft, generate video later'}
-              </div>
-            </div>
-          </CheckboxWrapper>
-        </FormSection>
+            </CheckboxWrapper>
+          </FormSection>
+        )}
 
         {/* Preview */}
         {selectedStory && (
@@ -1772,8 +1792,8 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
           </PreviewSection>
         )}
 
-        {/* Estimated Cost */}
-        {generateVideo && (
+        {/* Estimated Cost - Tier 1 only */}
+        {contentTier === 'tier_1' && generateVideo && (
           <InfoMessage>
             💰 Estimated cost: ~${(() => {
               const presetConfig = PRESETS.find(p => p.id === preset) || PRESETS[0];
@@ -1798,19 +1818,21 @@ function CreatePostModal({ isOpen, onClose, onSave, stories = [] }) {
                 Saving...
               </LoadingSpinner>
             ) : (
-              'Save as Draft'
+              contentTier === 'tier_2' ? 'Create Post' : 'Save as Draft'
             )}
           </Button>
-          <Button className="generate" onClick={handleSave} disabled={loading}>
-            {loading ? (
-              <LoadingSpinner>
-                <Spinner />
-                Generating...
-              </LoadingSpinner>
-            ) : (
-              'Generate & Save'
-            )}
-          </Button>
+          {contentTier === 'tier_1' && (
+            <Button className="generate" onClick={handleSave} disabled={loading}>
+              {loading ? (
+                <LoadingSpinner>
+                  <Spinner />
+                  Generating...
+                </LoadingSpinner>
+              ) : (
+                'Generate & Save'
+              )}
+            </Button>
+          )}
         </ActionButtons>
       </ModalContent>
     </ModalOverlay>

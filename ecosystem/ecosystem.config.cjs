@@ -109,9 +109,6 @@ module.exports = {
       max_memory_restart: "1G",
       kill_with_signal: "SIGTERM",
       source_map_support: true,
-
-      // Don't auto-restart on 0 exit code (clean shutdown)
-      autostart: false, // Don't auto-start frontend by default
     },
   ],
 };

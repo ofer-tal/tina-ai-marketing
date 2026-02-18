@@ -425,9 +425,9 @@ function GoogleSheetsConfig() {
       <Header>
         <Title>
           <Icon>📊</Icon>
-          Google Connection
+          Google Sheets Connection
           <DevModeBadge $enabled={connectionInfo?.devMode}>
-            {connectionInfo?.devMode ? 'DEV MODE' : 'SHARED WITH YOUTUBE'}
+            {connectionInfo?.devMode ? 'DEV MODE' : 'PRODUCTION'}
           </DevModeBadge>
         </Title>
         <StatusBadge $status={connectionStatus}>
@@ -547,7 +547,7 @@ function GoogleSheetsConfig() {
 
         {connectionStatus === 'connected' && !error && (
           <SuccessMessage>
-            ✓ Google account connected successfully! This connection is shared with YouTube and Google Sheets.
+            ✓ Google Sheets connected successfully! This connection is used for Google Sheets integration only.
           </SuccessMessage>
         )}
       </Section>
@@ -581,7 +581,7 @@ function GoogleSheetsConfig() {
           </InstructionItem>
           <InstructionItem>
             <strong>Connect Google Account:</strong>{' '}
-            Click <strong>🔐 Connect Google Account</strong> to authorize. This single connection works for both YouTube and Google Sheets (uses your existing YouTube OAuth credentials).
+            Click <strong>🔐 Connect Google Account</strong> to authorize the Google Sheets integration. (YouTube has its own separate connection below.)
           </InstructionItem>
         </InstructionList>
       </Section>
@@ -590,7 +590,7 @@ function GoogleSheetsConfig() {
         <SectionTitle>⚠️ Important Notes</SectionTitle>
         <InstructionList>
           <InstructionItem>
-            This is a <strong>shared Google OAuth connection</strong> - one authorization works for both YouTube and Google Sheets.
+            This is the <strong>Google Sheets OAuth connection</strong> - used only for Google Sheets integration.
           </InstructionItem>
           <InstructionItem>
             <strong>Dev Mode</strong> routes all writes to the test sheet - safe for development without triggering Zapier.

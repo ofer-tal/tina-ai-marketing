@@ -110,7 +110,7 @@ class ConversationManager {
    */
   async getMessagesForAPI(conversationId, includeSystem = true) {
     try {
-      const conversation = await this.getConversation(conversationId);
+      let conversation = await this.getConversation(conversationId);
       if (!conversation) {
         throw new Error(`Conversation not found: ${conversationId}`);
       }

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import styled from 'styled-components';
-import { FaTiktok, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { FaTiktok, FaInstagram, FaYoutube, FaLink } from 'react-icons/fa';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import CreatePostModal from '../components/CreatePostModal.jsx';
 import GenerateVideoOptions from '../components/GenerateVideoOptions.jsx';
 import RegenerateVideoModal from '../components/RegenerateVideoModal.jsx';
 import Tier2VideoUpload from '../components/Tier2VideoUpload.jsx';
 import EditTier2PostModal from '../components/EditTier2PostModal.jsx';
+import ManualTikTokMatchDialog from '../components/ManualTikTokMatchDialog.jsx';
 import { useSseEvents } from '../hooks/useSseEvents.js';
 import {
   mergeUpdatedPost,
@@ -688,6 +689,56 @@ const PlatformMetrics = styled.span`
     color: #eaeaea;
     font-weight: 500;
   }
+`;
+
+const PerPlatformTimeContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+`;
+
+const PerPlatformTimeItem = styled.div`
+  font-size: 0.85rem;
+  color: ${props => {
+    if (props.$color === 'green') return '#40c057';
+    if (props.$color === 'red') return '#dc3545';
+    if (props.$color === 'grey') return '#a0a0a0';
+    return '#eaeaea';
+  }};
+`;
+
+const PlatformTimeLabel = styled.span`
+  font-weight: 600;
+`;
+
+const PlatformEditContainer = styled.div`
+  background: #16213e;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #2d3561;
+`;
+
+const PlatformEditLabel = styled.div`
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #eaeaea;
+`;
+
+const PlatformEditItem = styled.div`
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+`;
+
+const PlatformEditCheckbox = styled.input`
+  width: 18px;
+  height: 18px;
+  margin-right: 12px;
+  cursor: ${props => props.disabled ? 'not-allowed' : 'pointer'};
+  opacity: ${props => props.disabled ? 0.5 : 1};
+  accent-color: #e94560;
 `;
 
 const LegacyLoadingSpinner = styled.div`
@@ -1531,6 +1582,34 @@ const PostToInstagramButton = styled.button`
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(131, 58, 180, 0.3);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+  }
+`;
+
+const ManualMatchButton = styled.button`
+  flex: 1 1 0;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #f59e0b 0%, #dc2626 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
   }
 
   &:disabled {
@@ -2625,6 +2704,14 @@ function ContentLibrary() {
   const [selectedPostForTier2Upload, setSelectedPostForTier2Upload] = useState(null);
   const [editTier2Modal, setEditTier2Modal] = useState(false);
   const [selectedPostForTier2Edit, setSelectedPostForTier2Edit] = useState(null);
+  const [platformEditMode, setPlatformEditMode] = useState(false);
+
+  // Manual TikTok match dialog
+  const [manualMatchDialog, setManualMatchDialog] = useState({
+    isOpen: false,
+    postId: null,
+    postCaption: null
+  });
 
   // Function to trigger a refresh
   const triggerRefresh = useCallback(() => {
@@ -2954,6 +3041,59 @@ function ContentLibrary() {
     };
   };
 
+  // Get per-platform time display for multi-platform posts
+  const getPerPlatformTimeDisplay = (post) => {
+    if (!post.platformStatus || !isMultiPlatform(post)) {
+      return null; // Use existing getTimeDisplay for single-platform posts
+    }
+
+    const platforms = getPostPlatforms(post);
+    const platformTimes = [];
+
+    for (const platform of platforms) {
+      const platformData = post.platformStatus[platform];
+      if (!platformData) continue;
+
+      const platformName = platform === 'youtube_shorts' ? 'YouTube' :
+        platform.charAt(0).toUpperCase() + platform.slice(1);
+
+      let timeInfo = null;
+
+      if (platformData.status === 'posted' && platformData.postedAt) {
+        timeInfo = {
+          text: `Posted ${formatShortDateTime(platformData.postedAt)}`,
+          color: 'green',
+          status: 'posted'
+        };
+      } else if (platformData.status === 'posting') {
+        timeInfo = {
+          text: 'Posting...',
+          color: 'grey',
+          status: 'posting'
+        };
+      } else if (platformData.status === 'failed') {
+        timeInfo = {
+          text: 'Failed',
+          color: 'red',
+          status: 'failed'
+        };
+      } else if (post.scheduledAt) {
+        // Show scheduled time for pending platforms
+        timeInfo = {
+          text: `Scheduled ${formatShortDateTime(post.scheduledAt)}`,
+          color: null,
+          status: 'pending'
+        };
+      }
+
+      if (timeInfo) {
+        platformTimes.push({ platform: platformName, ...timeInfo });
+      }
+    }
+
+    return platformTimes;
+  };
+
   // Get display text for post status, considering partial states for multi-platform posts
   const getStatusDisplayText = (post) => {
     // For multi-platform posts, show more descriptive status
@@ -2986,6 +3126,31 @@ function ContentLibrary() {
   // Check if post is multi-platform
   const isMultiPlatform = (post) => {
     return post.platforms && Array.isArray(post.platforms) && post.platforms.length > 1;
+  };
+
+  // Check if post content can be edited (caption, hashtags, etc.)
+  const canEditContent = (post) => {
+    // Allow editing for draft, ready, rejected posts
+    if (['draft', 'ready', 'rejected', 'generating'].includes(post.status)) {
+      return true;
+    }
+    // Don't allow editing once approved, scheduled, posting, or posted
+    return false;
+  };
+
+  // Check if post platforms can be edited (add/remove platforms)
+  const canEditPlatforms = (post) => {
+    // Allow platform edits for any post that hasn't fully completed posting
+    // Check if there's at least one platform that hasn't posted yet
+    if (!post.platformStatus) return false;
+
+    const platforms = getPostPlatforms(post);
+    const hasPendingPlatforms = platforms.some(p => {
+      const status = post.platformStatus[p]?.status;
+      return status === 'pending' || status === 'failed';
+    });
+
+    return hasPendingPlatforms;
   };
 
   // Get platforms for a post (handles both new platforms array and legacy platform field)
@@ -4038,6 +4203,30 @@ function ContentLibrary() {
     }
   };
 
+  // Manual TikTok match handlers
+  const handleOpenManualMatchDialog = () => {
+    if (!selectedVideo) return;
+
+    setManualMatchDialog({
+      isOpen: true,
+      postId: selectedVideo._id,
+      postCaption: selectedVideo.caption
+    });
+  };
+
+  const handleCloseManualMatchDialog = () => {
+    setManualMatchDialog({
+      isOpen: false,
+      postId: null,
+      postCaption: null
+    });
+  };
+
+  const handleManualMatchSuccess = (data) => {
+    // Refresh the posts to get updated data
+    fetchPosts();
+  };
+
   // Generate Tier 1 Video handler
   const handleGenerateTier1Video = async () => {
     if (!selectedVideo) {
@@ -4126,6 +4315,62 @@ function ContentLibrary() {
       instagram: '',
       youtube_shorts: ''
     });
+  };
+
+  // Platform editing handlers
+  const handleEditPlatforms = () => {
+    setPlatformEditMode(true);
+  };
+
+  const handleTogglePlatform = async (platform, isSelected) => {
+    if (!selectedVideo) return;
+
+    const currentPlatforms = getPostPlatforms(selectedVideo);
+
+    if (isSelected) {
+      // Add platform if not already present
+      if (!currentPlatforms.includes(platform)) {
+        await updatePostPlatforms(selectedVideo._id, [...currentPlatforms, platform]);
+      }
+    } else {
+      // Remove platform (only if not posted/posting)
+      const platformData = selectedVideo.platformStatus?.[platform];
+      if (platformData?.status === 'posted' || platformData?.status === 'posting') {
+        alert(`Cannot remove ${platform} - already ${platformData.status}`);
+        return;
+      }
+
+      const updatedPlatforms = currentPlatforms.filter(p => p !== platform);
+      if (updatedPlatforms.length === 0) {
+        alert('At least one platform must be selected');
+        return;
+      }
+      await updatePostPlatforms(selectedVideo._id, updatedPlatforms);
+    }
+  };
+
+  const updatePostPlatforms = async (postId, newPlatforms) => {
+    try {
+      const response = await fetch(`/api/content/posts/${postId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platforms: newPlatforms })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update platforms');
+      }
+
+      const result = await response.json();
+      alert('Platforms updated successfully');
+      // Refresh posts
+      fetchPosts();
+      setSelectedVideo(result.data);
+    } catch (error) {
+      console.error('Error updating platforms:', error);
+      alert(`Failed to update platforms: ${error.message}`);
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -4664,92 +4909,136 @@ function ContentLibrary() {
                     </PlatformStatusList>
                   )}
                   <CardMeta>
-                    <ScheduledTime>
-                      🕒 <TimeLabel $color={getTimeDisplay(post).color}>{getTimeDisplay(post).text}</TimeLabel>
-                    </ScheduledTime>
+                    {/* For multi-platform posts, show per-platform times */}
+                    {(() => {
+                      const perPlatformTimes = getPerPlatformTimeDisplay(post);
+                      if (perPlatformTimes && perPlatformTimes.length > 0) {
+                        return (
+                          <ScheduledTime>
+                            <PerPlatformTimeContainer>
+                              {perPlatformTimes.map(({ platform, text, color, status }) => (
+                                <PerPlatformTimeItem key={platform} $color={color}>
+                                  🕒 <PlatformTimeLabel>{platform}:</PlatformTimeLabel> {text}
+                                </PerPlatformTimeItem>
+                              ))}
+                            </PerPlatformTimeContainer>
+                          </ScheduledTime>
+                        );
+                      }
+
+                      // Fallback to single time display
+                      const timeDisplay = getTimeDisplay(post);
+                      return (
+                        <ScheduledTime>
+                          🕒 <TimeLabel $color={timeDisplay.color}>{timeDisplay.text}</TimeLabel>
+                        </ScheduledTime>
+                      );
+                    })()}
                   </CardMeta>
 
                   {/* Posted content link and stats */}
-                  {post.status === 'posted' && (
-                    <>
-                      {getPostedLink(post)}
-                      {(() => {
-                        const platforms = getPostPlatforms(post);
-                        const isMultiPlatform = platforms.length > 1;
-                        // Also check if post has per-platform metrics in platformStatus
-                        const hasPerPlatformMetrics = post.platformStatus &&
-                          Object.keys(post.platformStatus).some(key => platforms.includes(key));
+                  {(() => {
+                    const platforms = getPostPlatforms(post);
 
-                        if ((isMultiPlatform || hasPerPlatformMetrics) && post.platformStatus) {
-                          // Always show per-platform stats for multi-platform posts, even if some platforms have 0 views
-                          return (
-                            <PerPlatformStats>
-                              {platforms.map(platform => {
-                                const platformData = post.platformStatus?.[platform];
-                                const metrics = platformData?.performanceMetrics;
-                                const isPosted = platformData?.status === 'posted';
+                    // Check if ANY platform is posted (regardless of overall status) - FIX for partial posting
+                    const postedPlatforms = platforms.filter(p =>
+                      post.platformStatus?.[p]?.status === 'posted'
+                    );
+                    const hasPostedPlatforms = postedPlatforms.length > 0;
 
-                                // Only show platforms that have been posted or have metrics
-                                if (!isPosted && !metrics) return null;
+                    // Check for aggregate metrics (improved condition to catch all metric types)
+                    const hasAggregateMetrics = post.performanceMetrics && (
+                      post.performanceMetrics.views > 0 ||
+                      post.performanceMetrics.likes > 0 ||
+                      post.performanceMetrics.comments > 0 ||
+                      post.performanceMetrics.shares > 0 ||
+                      post.performanceMetrics.saved > 0
+                    );
 
-                                const platformName = platform === 'youtube_shorts' ? 'YouTube' :
-                                  platform.charAt(0).toUpperCase() + platform.slice(1);
+                    // Show metrics section if ANY platform is posted OR if there are aggregate metrics
+                    const shouldShowMetricsSection = hasPostedPlatforms || hasAggregateMetrics;
 
-                                return (
-                                  <PlatformStatsRow key={platform}>
-                                    <PlatformStatsLabel>
-                                      {platform === 'tiktok' && <TikTokIcon />}
-                                      {platform === 'instagram' && <InstagramIcon />}
-                                      {platform === 'youtube_shorts' && <YouTubeIcon />}
-                                      {platformName}
-                                    </PlatformStatsLabel>
-                                    <PlatformMetrics>
-                                      {metrics ? (
-                                        <>
-                                          <span>👁️ <span className="stat-value">{formatNumber(metrics.views || 0)}</span></span>
-                                          <span>❤️ <span className="stat-value">{formatNumber(metrics.likes || 0)}</span></span>
-                                          {(metrics.comments || 0) > 0 && (
-                                            <span>💬 <span className="stat-value">{formatNumber(metrics.comments)}</span></span>
-                                          )}
-                                          {(metrics.shares || 0) > 0 && (
-                                            <span>🔗 <span className="stat-value">{formatNumber(metrics.shares)}</span></span>
-                                          )}
-                                        </>
-                                      ) : (
-                                        <span style={{ color: '#a0a0a0', fontSize: '0.85rem' }}>
-                                          {isPosted ? 'Fetching...' : 'Pending'}
-                                        </span>
-                                      )}
-                                    </PlatformMetrics>
-                                  </PlatformStatsRow>
-                                );
-                              })}
-                            </PerPlatformStats>
-                          );
-                        }
+                    if (!shouldShowMetricsSection) return null;
 
-                        // Single platform or legacy posts - show aggregate metrics
-                        const hasAggregateMetrics = post.performanceMetrics && (post.performanceMetrics.views > 0 || post.performanceMetrics.likes > 0);
+                    return (
+                      <>
+                        {getPostedLink(post)}
 
-                        if (hasAggregateMetrics) {
-                          // Show aggregate stats for single-platform or legacy posts
-                          return (
-                            <StatsRow>
-                              <StatItem>👁️ <span className="stat-value">{formatNumber(post.performanceMetrics.views)}</span></StatItem>
-                              <StatItem>❤️ <span className="stat-value">{formatNumber(post.performanceMetrics.likes)}</span></StatItem>
-                              {post.performanceMetrics.comments > 0 && (
-                                <StatItem>💬 <span className="stat-value">{formatNumber(post.performanceMetrics.comments)}</span></StatItem>
-                              )}
-                              {post.performanceMetrics.shares > 0 && (
-                                <StatItem>🔗 <span className="stat-value">{formatNumber(post.performanceMetrics.shares)}</span></StatItem>
-                              )}
-                            </StatsRow>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </>
-                  )}
+                        {(() => {
+                          // Check if post has per-platform metrics in platformStatus
+                          const hasPerPlatformMetrics = post.platformStatus &&
+                            Object.keys(post.platformStatus).some(key => platforms.includes(key));
+
+                          // Always show per-platform stats if platformStatus exists (even for single-platform posts)
+                          if (hasPerPlatformMetrics) {
+                            return (
+                              <PerPlatformStats>
+                                {platforms.map(platform => {
+                                  const platformData = post.platformStatus?.[platform];
+                                  const metrics = platformData?.performanceMetrics;
+                                  const isPosted = platformData?.status === 'posted';
+
+                                  // Only show platforms that have been posted OR have metrics
+                                  // This allows showing metrics for partially posted posts
+                                  if (!isPosted && (!metrics || (metrics.views || 0) === 0)) return null;
+
+                                  const platformName = platform === 'youtube_shorts' ? 'YouTube' :
+                                    platform.charAt(0).toUpperCase() + platform.slice(1);
+
+                                  return (
+                                    <PlatformStatsRow key={platform}>
+                                      <PlatformStatsLabel>
+                                        {platform === 'tiktok' && <TikTokIcon />}
+                                        {platform === 'instagram' && <InstagramIcon />}
+                                        {platform === 'youtube_shorts' && <YouTubeIcon />}
+                                        {platformName}
+                                      </PlatformStatsLabel>
+                                      <PlatformMetrics>
+                                        {metrics && (metrics.views > 0 || metrics.likes > 0 || metrics.comments > 0 || metrics.shares > 0) ? (
+                                          <>
+                                            <span>👁️ <span className="stat-value">{formatNumber(metrics.views || 0)}</span></span>
+                                            <span>❤️ <span className="stat-value">{formatNumber(metrics.likes || 0)}</span></span>
+                                            {(metrics.comments || 0) > 0 && (
+                                              <span>💬 <span className="stat-value">{formatNumber(metrics.comments)}</span></span>
+                                            )}
+                                            {(metrics.shares || 0) > 0 && (
+                                              <span>🔗 <span className="stat-value">{formatNumber(metrics.shares)}</span></span>
+                                            )}
+                                          </>
+                                        ) : (
+                                          <span style={{ color: '#a0a0a0', fontSize: '0.85rem' }}>
+                                            {isPosted ? 'Fetching...' : 'Pending'}
+                                          </span>
+                                        )}
+                                      </PlatformMetrics>
+                                    </PlatformStatsRow>
+                                  );
+                                })}
+                              </PerPlatformStats>
+                            );
+                          }
+
+                          // Fallback to aggregate metrics for legacy posts without platformStatus
+                          if (hasAggregateMetrics) {
+                            // Show aggregate stats for single-platform or legacy posts
+                            return (
+                              <StatsRow>
+                                <StatItem>👁️ <span className="stat-value">{formatNumber(post.performanceMetrics.views)}</span></StatItem>
+                                <StatItem>❤️ <span className="stat-value">{formatNumber(post.performanceMetrics.likes)}</span></StatItem>
+                                {post.performanceMetrics.comments > 0 && (
+                                  <StatItem>💬 <span className="stat-value">{formatNumber(post.performanceMetrics.comments)}</span></StatItem>
+                                )}
+                                {post.performanceMetrics.shares > 0 && (
+                                  <StatItem>🔗 <span className="stat-value">{formatNumber(post.performanceMetrics.shares)}</span></StatItem>
+                                )}
+                              </StatsRow>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </>
+                    );
+                  })()}
 
                   {/* Tier 2 script preview */}
                   {post.contentTier === 'tier_2' && !post.videoPath && (
@@ -4767,16 +5056,27 @@ function ContentLibrary() {
                     <ActionButton onClick={() => handleThumbnailClick(post)}>
                       {post.contentType === 'video' ? '▶ Play' : 'View'}
                     </ActionButton>
-                    {post.contentTier === 'tier_2' && !post.videoPath ? (
+                    {post.contentTier === 'tier_2' ? (
                       <>
-                        <ActionButton onClick={() => {
-                          setSelectedPostForTier2Upload(post);
-                          setTier2UploadModal(true);
-                        }}>📤 Upload Video</ActionButton>
+                        {!post.videoPath && (
+                          <ActionButton onClick={() => {
+                            setSelectedPostForTier2Upload(post);
+                            setTier2UploadModal(true);
+                          }}>📤 Upload Video</ActionButton>
+                        )}
                         <ActionButton onClick={() => {
                           setSelectedPostForTier2Edit(post);
                           setEditTier2Modal(true);
                         }}>✏️ Edit Details</ActionButton>
+                        {/* View button for posts with video */}
+                        {post.videoPath && (
+                          <ActionButton onClick={() => {
+                            setSelectedVideo(post);
+                            setEditMode(false);
+                            setEditedCaption('');
+                            setEditedHashtags([]);
+                          }}>View</ActionButton>
+                        )}
                       </>
                     ) : (
                       <ActionButton onClick={() => {
@@ -4784,7 +5084,6 @@ function ContentLibrary() {
                         setEditMode(false);  // View mode, not edit mode
                         setEditedCaption('');
                         setEditedHashtags([]);
-                        setNewHashtag('');
                       }}>Edit</ActionButton>
                     )}
                   </CardActions>
@@ -4956,6 +5255,42 @@ function ContentLibrary() {
                         </div>
                       ))}
                     </>
+                  ) : platformEditMode ? (
+                    <>
+                      {/* Platform Edit Mode UI */}
+                      <EditActionsRow>
+                        <EditButton onClick={() => setPlatformEditMode(false)}>✖ Cancel</EditButton>
+                      </EditActionsRow>
+
+                      <PlatformEditContainer>
+                        <PlatformEditLabel>Select Platforms to Post:</PlatformEditLabel>
+                        {['tiktok', 'instagram', 'youtube_shorts'].map(platform => {
+                          const platformData = selectedVideo.platformStatus?.[platform];
+                          const isPosted = platformData?.status === 'posted';
+                          const isPosting = platformData?.status === 'posting';
+                          const isSelected = getPostPlatforms(selectedVideo).includes(platform);
+
+                          return (
+                            <PlatformEditItem key={platform}>
+                              <PlatformEditCheckbox
+                                type="checkbox"
+                                id={`platform-${platform}`}
+                                checked={isSelected}
+                                disabled={isPosted || isPosting}
+                                onChange={(e) => handleTogglePlatform(platform, e.target.checked)}
+                              />
+                              <PlatformEditLabel htmlFor={`platform-${platform}`}>
+                                {platform === 'youtube_shorts' ? 'YouTube Shorts' :
+                                 platform.charAt(0).toUpperCase() + platform.slice(1)}
+                                {isPosted && ' ✅'}
+                                {isPosting && ' 🔄'}
+                                {!isPosted && !isPosting && platformData?.status === 'failed' && ' ❌'}
+                              </PlatformEditLabel>
+                            </PlatformEditItem>
+                          );
+                        })}
+                      </PlatformEditContainer>
+                    </>
                   ) : (
                     <>
                       {/* View Mode UI */}
@@ -5097,6 +5432,14 @@ function ContentLibrary() {
                         </PostToInstagramButton>
                       )}
 
+                      {/* MANUAL TIKTOK MATCH - shown for posts stuck in 'posting' status */}
+                      {(selectedVideo.status === 'posting' || selectedVideo.platformStatus?.tiktok?.status === 'posting') &&
+                       (selectedVideo.platform === 'tiktok' || selectedVideo.platforms?.includes('tiktok')) && (
+                        <ManualMatchButton onClick={handleOpenManualMatchDialog}>
+                          <FaLink /> Match TikTok Video
+                        </ManualMatchButton>
+                      )}
+
                       {/* GENERATE VIDEO - only for Tier 1 */}
                       {selectedVideo.contentTier === 'tier_1' && (
                         <GenerateVideoButton onClick={() => handleGenerateVideo(selectedVideo)}>
@@ -5122,9 +5465,14 @@ function ContentLibrary() {
                         </>
                       )}
 
-                      {/* EDIT button - only show when NOT in edit mode */}
-                      {!editMode && (
+                      {/* EDIT button - only show when NOT in edit mode AND content is editable */}
+                      {!editMode && canEditContent(selectedVideo) && (
                         <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      )}
+
+                      {/* EDIT PLATFORMS button - show when platforms can be modified */}
+                      {!editMode && !platformEditMode && canEditPlatforms(selectedVideo) && (
+                        <EditButton onClick={handleEditPlatforms}>🔧 Edit Platforms</EditButton>
                       )}
 
                       {/* REGENERATE - available for all tiers, including in edit mode */}
@@ -5202,6 +5550,9 @@ function ContentLibrary() {
                       )}
 
                       <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      {canEditPlatforms(selectedVideo) && (
+                        <EditButton onClick={handleEditPlatforms}>🔧 Edit Platforms</EditButton>
+                      )}
                       <RegenerateButton onClick={() => handleRegenerateVideo(selectedVideo)}>
                         🔄 Regenerate
                       </RegenerateButton>
@@ -5218,9 +5569,14 @@ function ContentLibrary() {
                   )}
 
                   {/* Show edit/download buttons for posted posts when not in edit mode */}
-                  {selectedVideo.status === 'posted' && !editMode && (
+                  {selectedVideo.status === 'posted' && !editMode && !platformEditMode && (
                     <ModalActions>
-                      <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      {canEditContent(selectedVideo) && (
+                        <EditButton onClick={handleStartEdit}>✏️ Edit Caption/Tags</EditButton>
+                      )}
+                      {canEditPlatforms(selectedVideo) && (
+                        <EditButton onClick={handleEditPlatforms}>🔧 Edit Platforms</EditButton>
+                      )}
                       <DownloadButton onClick={handleDownload}>📥 Download Content</DownloadButton>
                       <DeleteButton onClick={handleDelete}>
                         🗑️ Delete
@@ -5511,16 +5867,24 @@ function ContentLibrary() {
           onClose={() => {
             setEditTier2Modal(false);
             setSelectedPostForTier2Edit(null);
-            // No refresh needed - SSE will handle updates
           }}
           post={selectedPostForTier2Edit}
           onSave={() => {
             setEditTier2Modal(false);
             setSelectedPostForTier2Edit(null);
-            // No refresh needed - SSE will handle updates
+            fetchPosts(); // Refresh the grid to show updated hashtags
           }}
         />
       )}
+
+      {/* Manual TikTok Match Dialog */}
+      <ManualTikTokMatchDialog
+        postId={manualMatchDialog.postId}
+        postCaption={manualMatchDialog.postCaption}
+        isOpen={manualMatchDialog.isOpen}
+        onClose={handleCloseManualMatchDialog}
+        onSuccess={handleManualMatchSuccess}
+      />
     </LibraryContainer>
   );
 }

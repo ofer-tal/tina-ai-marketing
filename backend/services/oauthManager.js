@@ -10,7 +10,8 @@
  * - State parameter management for CSRF protection
  *
  * Platforms supported:
- * - google (Google Sheets, YouTube, Google Analytics)
+ * - google (Google Sheets, Google Analytics)
+ * - youtube (YouTube Data API v3 - separate from google for channel-specific authentication)
  * - tiktok
  * - instagram (Instagram Graph API via Facebook OAuth)
  *
@@ -34,7 +35,22 @@ const PLATFORM_CONFIGS = {
     clientId: process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET,
     redirectUri: process.env.GOOGLE_REDIRECT_URI || process.env.YOUTUBE_REDIRECT_URI,
-    defaultScopes: ['https://www.googleapis.com/auth/spreadsheets'],
+    defaultScopes: [
+      'https://www.googleapis.com/auth/spreadsheets',
+    ],
+    // Google uses standard OAuth2 (no PKCE needed but supported)
+    usePkce: false,
+  },
+  youtube: {
+    server: 'https://oauth2.googleapis.com/token',
+    authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+    clientId: process.env.GOOGLE_CLIENT_ID || process.env.YOUTUBE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET || process.env.YOUTUBE_CLIENT_SECRET,
+    redirectUri: process.env.YOUTUBE_REDIRECT_URI || process.env.GOOGLE_REDIRECT_URI,
+    defaultScopes: [
+      'https://www.googleapis.com/auth/youtube',
+      'https://www.googleapis.com/auth/youtube.upload',
+    ],
     // Google uses standard OAuth2 (no PKCE needed but supported)
     usePkce: false,
   },
@@ -485,14 +501,14 @@ class OAuthManager {
       authParams.responseType = 'code';
     }
 
-    // Google requires access_type=offline to get a refresh token
+    // Google/YouTube requires access_type=offline to get a refresh token
     // and prompt=consent to ensure the consent screen is shown
-    if (platform === 'google') {
+    if (platform === 'google' || platform === 'youtube') {
       authParams.extraParams = {
         access_type: 'offline',
         prompt: 'consent',
       };
-      logger.info(`[OAUTH] Added Google offline access params`);
+      logger.info(`[OAUTH] Added ${platform} offline access params`);
     }
 
     logger.info(`[OAUTH] Built auth params for ${platform}`, {

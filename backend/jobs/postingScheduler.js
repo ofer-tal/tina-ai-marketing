@@ -1,6 +1,8 @@
 import schedulerService from '../services/scheduler.js';
 import MarketingPost from '../models/MarketingPost.js';
 import instagramPostingService from '../services/instagramPostingService.js';
+import tiktokPostingService from '../services/tiktokPostingService.js';
+import youtubePostingService from '../services/youtubePostingService.js';
 import s3VideoUploader from '../services/s3VideoUploader.js';
 import googleSheetsService from '../services/googleSheetsService.js';
 import sseService from '../services/sseService.js';
@@ -231,12 +233,14 @@ class PostingSchedulerJob {
               });
             }
           } else {
-            // For Instagram/YouTube (if they have similar async posting)
+            // For Instagram/YouTube (direct API posting, immediate feedback)
             logger.debug(`[RECOVERY] Checking ${platform} platform for post ${post._id}`, {
-              platformStatus: platformStatus?.status
+              platformStatus: platformStatus?.status,
+              stuckDuration: Math.round(stuckDuration / 60000) + ' minutes'
             });
 
             if (platformStatus.status === 'pending') {
+              // Pending posts that timed out
               await post.setPlatformStatus(platform, 'failed', {
                 error: `Post timed out during posting (${Math.round(stuckDuration/60000)} minutes)`,
                 lastFailedAt: new Date()
@@ -245,6 +249,29 @@ class PostingSchedulerJob {
                 title: post.title,
                 stuckDuration: Math.round(stuckDuration / 60000) + ' minutes'
               });
+            } else if (platformStatus.status === 'posting') {
+              // CRITICAL: Handle "posting" status for YouTube/Instagram
+              // Unlike TikTok, these platforms provide immediate API feedback
+              // If stuck in "posting" for too long, the backend likely crashed during upload
+
+              const YOUTUBE_INSTAGRAM_UPLOAD_TIMEOUT = 30 * 60 * 1000; // 30 minutes (generous for large videos)
+
+              if (stuckDuration > YOUTUBE_INSTAGRAM_UPLOAD_TIMEOUT) {
+                await post.setPlatformStatus(platform, 'failed', {
+                  error: `Post stuck in 'posting' status for ${Math.round(stuckDuration/60000)} minutes - backend likely crashed during upload (ENOR: ${stuckDuration}ms)`,
+                  lastFailedAt: new Date()
+                });
+                logger.warn(`[RECOVERY] Recovered stuck ${platform} post ${post._id} - was in 'posting' status for too long, backend likely crashed`, {
+                  title: post.title,
+                  stuckDuration: Math.round(stuckDuration / 60000) + ' minutes',
+                  platformStatus: platformStatus.status
+                });
+              } else {
+                logger.debug(`[RECOVERY] ${platform} post ${post._id} is in 'posting' status, waiting for upload to complete or timeout`, {
+                  stuckDuration: Math.round(stuckDuration / 60000) + ' minutes',
+                  timeoutRemaining: Math.round((YOUTUBE_INSTAGRAM_UPLOAD_TIMEOUT - stuckDuration) / 60000) + ' minutes'
+                });
+              }
             } else {
               logger.debug(`[RECOVERY] Skipping ${platform} for post ${post._id} - status is '${platformStatus?.status}'`, {
                 platformStatus: platformStatus?.status
@@ -276,6 +303,18 @@ class PostingSchedulerJob {
           });
 
           if (hasPendingOrFailed) {
+            // CRITICAL: For TikTok, if sheetTriggeredAt exists, mark as permanently failed, don't keep as pending
+            // This prevents retrying posts that already wrote to Google Sheets
+            if (post.platformStatus?.tiktok?.status === 'failed' && post.sheetTriggeredAt) {
+              await post.setPlatformStatus('tiktok', 'failed', {
+                error: `Google Sheets already written at ${post.sheetTriggeredAt.toISOString()} - cannot retry (prevents duplicate posts)`,
+                permanentlyFailed: true
+              });
+              logger.warn(`[RECOVERY] TikTok platform for post ${post._id} marked as permanently failed - sheetTriggeredAt exists, will not retry`, {
+                sheetTriggeredAt: post.sheetTriggeredAt
+              });
+            }
+
             // Keep as 'approved' so scheduler can retry
             logger.debug(`Keeping post ${post._id} as 'approved' for retry (has pending/failed platforms)`, {
               platforms,
@@ -336,10 +375,12 @@ class PostingSchedulerJob {
 
       // Find all approved posts that have reached their scheduled time
       // 'approved' means the post is ready to go, scheduledAt determines when
+      // CRITICAL: Exclude posts that already have sheetTriggeredAt set (never re-write to Google Sheets)
       const scheduledContent = await MarketingPost.find({
         status: 'approved',
         scheduledAt: { $lte: new Date() },
-        videoPath: { $exists: true, $ne: null } // Must have video
+        videoPath: { $exists: true, $ne: null }, // Must have video
+        sheetTriggeredAt: { $exists: false } // NEW: Never pick up posts already written to sheet
       });
 
       logger.info(`Found ${scheduledContent.length} posts ready for posting`, {
@@ -368,6 +409,16 @@ class PostingSchedulerJob {
         for (const platform of platforms) {
           // Check if this platform can be posted to (not already posted, not permanently failed)
           const platformStatus = post.platformStatus?.[platform];
+
+          // CRITICAL: Skip if already wrote to Google Sheets (prevents duplicate posts)
+          if (post.sheetTriggeredAt) {
+            logger.info(`Skipping post - sheetTriggeredAt already set (guardrail to prevent duplicate Google Sheet writes)`, {
+              postId: post._id,
+              platform,
+              sheetTriggeredAt: post.sheetTriggeredAt
+            });
+            continue;
+          }
 
           // Skip if already posted for this platform
           if (platformStatus?.status === 'posted') {
@@ -554,6 +605,21 @@ class PostingSchedulerJob {
       title: post.title
     });
 
+    // CRITICAL GUARDRAIL: For TikTok, never post if sheetTriggeredAt is already set
+    // This prevents duplicate Google Sheet writes
+    if (platform === 'tiktok' && post.sheetTriggeredAt) {
+      const error = `Post ${post._id} already has sheetTriggeredAt set to ${post.sheetTriggeredAt.toISOString()} - refusing to post to TikTok again (prevents duplicate posts)`;
+      logger.error(`[GUARDRAIL] ${error}`, {
+        postId: post._id,
+        sheetTriggeredAt: post.sheetTriggeredAt
+      });
+      await post.setPlatformStatus('tiktok', 'failed', {
+        error: error,
+        lastFailedAt: new Date()
+      });
+      throw new Error(error);
+    }
+
     try {
       // Validate content has required assets
       if (!post.videoPath && !post.imagePath) {
@@ -625,7 +691,24 @@ class PostingSchedulerJob {
       const currentRetryCount = platformStatus?.retryCount || 0;
 
       if (timeSinceScheduled < RETRY_WINDOW) {
-        // Set platform status back to pending for retry
+        // CRITICAL: If already wrote to Google Sheets, do NOT retry - mark as permanently failed
+        // This prevents duplicate Google Sheet writes
+        if (post.sheetTriggeredAt) {
+          await post.setPlatformStatus(platform, 'failed', {
+            error: `Google Sheets already written at ${post.sheetTriggeredAt.toISOString()} - cannot retry (prevents duplicate posts)`,
+            lastFailedAt: new Date()
+          });
+          post.status = 'failed';
+          await post.save();
+
+          logger.error(`[GUARDRAIL] Post ${post._id} already has sheetTriggeredAt, marking as permanently failed to prevent duplicate Google Sheet writes`, {
+            sheetTriggeredAt: post.sheetTriggeredAt,
+            platform
+          });
+          throw error;
+        }
+
+        // Set platform status back to pending for retry (only if Google Sheets was never written)
         await post.setPlatformStatus(platform, 'pending', {
           error: error.message,
           lastFailedAt: new Date()
@@ -684,6 +767,14 @@ class PostingSchedulerJob {
     logger.info(`TikTok Auto-Posting: Starting for post ${post._id}`);
     logger.info(`Platform: TikTok, Title: ${post.title}`);
     logger.info(`========================================`);
+
+    // CRITICAL GUARDRAIL: Never write to Google Sheets if already written
+    // Once sheetTriggeredAt is set, that post MUST NEVER be written to the Google Sheet again
+    if (post.sheetTriggeredAt) {
+      const error = `Refusing to write post ${post._id} to Google Sheets - sheetTriggeredAt already set to ${post.sheetTriggeredAt.toISOString()}`;
+      logger.error(`[GUARDRAIL] ${error}`);
+      throw new Error(error); // Hard fail - do not retry
+    }
 
     // Check if TikTok posting is enabled
     const isEnabled = process.env.ENABLE_TIKTOK_POSTING === 'true';
@@ -787,19 +878,35 @@ class PostingSchedulerJob {
       logger.info(`  Caption length: ${fullCaption.length} chars`);
       logger.info(`  Video URL: ${uploadResult.publicUrl}`);
 
+      // CRITICAL: Set sheetTriggeredAt BEFORE calling appendRow for transactional safety
+      // This prevents duplicates if appendRow succeeds but save() fails
+      // Use a temporary marker to indicate write is in progress
+      post.sheetTriggeredAt = new Date();
+      post.sheetTabUsed = targetSheet;
+      post.sheetTriggerPending = true; // Flag to indicate write is in progress
+      await post.save(); // Save BEFORE calling appendRow
+
       const sheetsResult = await googleSheetsService.appendRow(
         targetSheet,
         [uploadResult.publicUrl, fullCaption]
       );
 
       if (!sheetsResult.success) {
+        // Rollback sheetTriggeredAt if append failed (post can be retried)
+        post.sheetTriggeredAt = undefined;
+        post.sheetTabUsed = undefined;
+        post.sheetTriggerPending = undefined;
+        await post.save();
         throw new Error(`Google Sheets append failed: ${sheetsResult.error}`);
       }
 
-      // Update post with sheet tracking info
-      post.sheetTabUsed = targetSheet;
-      post.sheetTriggeredAt = new Date();
+      // Append succeeded, clear pending flag and set publishing status
+      post.sheetTriggerPending = undefined;
       post.publishingStatus = 'triggered_zapier';
+
+      // Clear TikTok video cache since a new video was just posted
+      // This ensures the next fetch will include the newly posted video
+      tiktokPostingService.clearVideoCache();
 
       // Keep overall status as 'posting' to prevent scheduler from picking it up again
       // The tiktokVideoMatcher job will set it to 'posted' when the video is live
@@ -809,7 +916,7 @@ class PostingSchedulerJob {
       }
       post.status = 'posting';
 
-      await post.save();
+      await post.save(); // Save to clear pending flag and update status
 
       // Broadcast SSE event for status change
       sseService.broadcastPostStatusChanged(post, 'posting');
@@ -930,7 +1037,10 @@ class PostingSchedulerJob {
    * @param {MarketingPost} post - The post to publish
    */
   async postToYouTube(post) {
-    logger.info(`Posting scheduled content to YouTube: ${post._id}`);
+    logger.info(`Posting scheduled content to YouTube: ${post._id}`, {
+      title: post.title,
+      hasVideo: !!post.videoPath,
+    });
 
     // Check if YouTube posting is enabled
     const isEnabled = process.env.ENABLE_YOUTUBE_POSTING === 'true';
@@ -940,14 +1050,87 @@ class PostingSchedulerJob {
       return { success: false, skipped: true, reason: 'YouTube posting disabled' };
     }
 
-    // TODO: Implement YouTube posting service
-    logger.warn('YouTube posting not yet implemented');
+    // Validate post has video
+    if (!post.videoPath) {
+      const error = 'Post has no video to upload to YouTube';
+      logger.error(`YouTube posting failed for post ${post._id}: ${error}`);
+      await post.setPlatformStatus('youtube_shorts', 'failed', {
+        error,
+        lastFailedAt: new Date()
+      });
+      return { success: false, skipped: false, error };
+    }
 
-    return {
-      success: false,
-      skipped: true,
-      reason: 'YouTube posting not implemented'
-    };
+    // Get hashtags for YouTube
+    const hashtags = getPlatformHashtags(post, 'youtube_shorts');
+
+    try {
+      // Mark as posting
+      await post.setPlatformStatus('youtube_shorts', 'posting', {
+        postingStartedAt: new Date()
+      });
+
+      // Post video to YouTube using the posting service
+      const uploadResult = await youtubePostingService.postVideo(
+        post.videoPath,
+        post.title,
+        post.caption || '',
+        hashtags,
+        (progress) => {
+          logger.debug(`YouTube upload progress for post ${post._id}`, {
+            step: progress.step,
+            message: progress.message,
+            progress: progress.progress,
+          });
+        }
+      );
+
+      if (!uploadResult.success) {
+        throw new Error(uploadResult.error || 'YouTube upload failed');
+      }
+
+      // Update platform status to posted with video details
+      await post.setPlatformStatus('youtube_shorts', 'posted', {
+        postedAt: new Date(),
+        mediaId: uploadResult.videoId,
+        permalink: uploadResult.videoUrl,
+        shareUrl: uploadResult.videoUrl,
+      });
+
+      // Update legacy fields for backward compatibility
+      post.youtubeVideoId = uploadResult.videoId;
+      post.youtubeVideoUrl = uploadResult.videoUrl;
+      await post.save();
+
+      logger.info(`Successfully posted to YouTube: ${post._id}`, {
+        videoId: uploadResult.videoId,
+        videoUrl: uploadResult.videoUrl,
+      });
+
+      return {
+        success: true,
+        postId: post._id.toString(),
+        mediaId: uploadResult.videoId,
+        permalink: uploadResult.videoUrl,
+      };
+
+    } catch (error) {
+      logger.error(`YouTube posting failed for post ${post._id}`, {
+        error: error.message,
+        stack: error.stack,
+      });
+
+      await post.setPlatformStatus('youtube_shorts', 'failed', {
+        error: error.message,
+        lastFailedAt: new Date()
+      });
+
+      return {
+        success: false,
+        skipped: false,
+        error: error.message,
+      };
+    }
   }
 
   /**

@@ -2,9 +2,9 @@
  * YouTube Posting Service
  *
  * Handles posting content to YouTube via the YouTube Data API v3.
- * Uses unified Google OAuth (shared with Google Sheets, Analytics).
+ * Uses dedicated YouTube OAuth platform (separate from Google Sheets).
  * Features:
- * - OAuth 2.0 authentication via oauthManager
+ * - OAuth 2.0 authentication via oauthManager (youtube platform)
  * - Shorts video upload to YouTube
  * - Video metadata management (title, description, tags)
  * - Privacy status control
@@ -18,6 +18,8 @@
 import BaseApiClient from './baseApiClient.js';
 import { getLogger } from '../utils/logger.js';
 import oauthManager from './oauthManager.js';
+import path from 'path';
+import fs from 'fs';
 
 const logger = getLogger('services', 'youtube-posting');
 
@@ -38,8 +40,8 @@ class YouTubePostingService extends BaseApiClient {
     this.redirectUri = process.env.GOOGLE_REDIRECT_URI;
     this.enabled = process.env.ENABLE_YOUTUBE_POSTING === 'true';
 
-    // YouTube uses unified Google OAuth (platform: 'google')
-    this.platform = 'google';
+    // YouTube uses its own dedicated OAuth platform (platform: 'youtube')
+    this.platform = 'youtube';
     this.channelId = null;
 
     // YouTube Data API v3 endpoints
@@ -120,17 +122,31 @@ class YouTubePostingService extends BaseApiClient {
 
       // Test API key validity
       try {
-        const response = await this.get('/search', {
-          params: {
-            part: 'snippet',
-            q: 'test',
-            maxResults: 1,
-            key: this.apiKey,
-          },
+        // YouTube Data API v3 requires API key as query parameter
+        // Using direct fetch to ensure proper query string formatting
+        const apiUrl = new URL(`${this.baseURL}/search`);
+        apiUrl.searchParams.set('part', 'snippet');
+        apiUrl.searchParams.set('q', 'test');
+        apiUrl.searchParams.set('maxResults', '1');
+        apiUrl.searchParams.set('key', this.apiKey);
+
+        logger.info('Testing YouTube API key', {
+          apiKeyLast5: this.apiKey?.slice(-5),
+          url: apiUrl.toString().replace(this.apiKey, '***'),
         });
+
+        const response = await fetch(apiUrl.toString());
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error?.message || 'API request failed');
+        }
+
+        const data = await response.json();
 
         logger.info('YouTube Data API connection successful', {
           status: response.status,
+          hasItems: !!data.items,
         });
 
         return {
@@ -142,6 +158,7 @@ class YouTubePostingService extends BaseApiClient {
         logger.error('YouTube Data API key validation failed', {
           error: apiError.message,
           code: apiError.code,
+          apiKeyLast5: this.apiKey?.slice(-5),
         });
 
         return {
@@ -169,17 +186,17 @@ class YouTubePostingService extends BaseApiClient {
 
   /**
    * Get authorization URL for OAuth flow
-   * @deprecated Use oauthManager.getAuthorizationUrl('google', scopes) directly
+   * @deprecated Use oauthManager.getAuthorizationUrl('youtube', scopes) directly
    */
   getAuthorizationUrl() {
     // For backward compatibility
-    return oauthManager.getAuthorizationUrl('google', this.scopes)
+    return oauthManager.getAuthorizationUrl('youtube', this.scopes)
       .then(({ authUrl }) => authUrl);
   }
 
   /**
    * Exchange authorization code for access token
-   * @deprecated Use oauthManager.handleCallback('google', callbackUrl, state) directly
+   * @deprecated Use oauthManager.handleCallback('youtube', callbackUrl, state) directly
    */
   async exchangeCodeForToken(code) {
     logger.warn('exchangeCodeForToken is deprecated, use oauthManager.handleCallback instead');
@@ -209,7 +226,7 @@ class YouTubePostingService extends BaseApiClient {
       logger.info('Getting YouTube user channel...');
 
       const url = `${this.baseURL}${this.endpoints.channels.mine}`;
-      const response = await oauthManager.fetch('google', url);
+      const response = await oauthManager.fetch('youtube', url);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -259,8 +276,8 @@ class YouTubePostingService extends BaseApiClient {
    */
   async checkTokenStatus() {
     try {
-      const isAuthenticated = await oauthManager.isAuthenticated('google');
-      const token = await oauthManager.getToken('google');
+      const isAuthenticated = await oauthManager.isAuthenticated('youtube');
+      const token = await oauthManager.getToken('youtube');
 
       return {
         valid: isAuthenticated,
@@ -360,7 +377,7 @@ class YouTubePostingService extends BaseApiClient {
 
       // Check if we have upload permission by trying to get channel's upload playlist
       const url = `${this.baseURL}/channels?part=contentDetails&mine=true`;
-      const response = await oauthManager.fetch('google', url);
+      const response = await oauthManager.fetch('youtube', url);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -418,6 +435,32 @@ class YouTubePostingService extends BaseApiClient {
         throw new Error('Authentication required: ' + connectionResult.error);
       }
 
+      // === Path resolution for legacy format ===
+      let resolvedPath = videoPath;
+
+      // Handle legacy URL format: /storage/videos/... -> /home/ofer/blush-marketing/storage/...
+      if (videoPath.startsWith('/storage/')) {
+        resolvedPath = path.join(process.cwd(), 'storage', videoPath.substring('/storage/'.length));
+        logger.info('Converting legacy URL path to file path', {
+          original: videoPath,
+          resolved: resolvedPath,
+        });
+      }
+
+      // Verify file exists
+      if (!fs.existsSync(resolvedPath)) {
+        throw new Error(`Video file not found at: ${resolvedPath}`);
+      }
+
+      // Log file info
+      const stats = fs.statSync(resolvedPath);
+      logger.info('Video file verified', {
+        path: resolvedPath,
+        sizeBytes: stats.size,
+        sizeMB: (stats.size / 1024 / 1024).toFixed(2),
+      });
+      // === END path resolution ===
+
       // Prepare video metadata
       const videoMetadata = {
         snippet: {
@@ -438,9 +481,8 @@ class YouTubePostingService extends BaseApiClient {
         progress: 10,
       });
 
-      // Read video file
-      const fs = await import('fs');
-      const videoBuffer = fs.createReadStream(videoPath);
+      // Read video file using resolved path
+      const videoBuffer = fs.createReadStream(resolvedPath);
 
       // Upload video using resumable upload
       onProgress?.({
@@ -520,7 +562,7 @@ class YouTubePostingService extends BaseApiClient {
       const uploadBaseUrl = 'https://www.googleapis.com/upload/youtube/v3/videos';
       const initUrl = `${uploadBaseUrl}?uploadType=resumable&part=snippet,status`;
 
-      const response = await oauthManager.fetch('google', initUrl, {
+      const response = await oauthManager.fetch('youtube', initUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -540,10 +582,9 @@ class YouTubePostingService extends BaseApiClient {
       });
 
       // Step 2: Upload video bytes
-      const fs = await import('fs');
       const videoBuffer = fs.readFileSync(videoStream.path);
 
-      const uploadResponse = await oauthManager.fetch('google', uploadUrl, {
+      const uploadResponse = await oauthManager.fetch('youtube', uploadUrl, {
         method: 'PUT',
         headers: {
           'Content-Type': 'video/*',

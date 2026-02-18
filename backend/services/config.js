@@ -244,7 +244,7 @@ const configSchema = {
 
   YOUTUBE_REDIRECT_URI: {
     required: false,
-    description: 'DEPRECATED: Use GOOGLE_REDIRECT_URI instead',
+    description: 'YouTube OAuth Redirect URI (e.g., https://bart.shmoop.org:3001/auth/youtube/callback)',
     validate: (value) => {
       if (!value) return true;
       try {
@@ -555,6 +555,14 @@ const configSchema = {
     required: false,
     default: 'false',
     description: 'Enable YouTube posting functionality',
+    validate: (value) => ['true', 'false', '1', '0'].includes(value.toLowerCase()),
+    errorMessage: 'Must be true or false'
+  },
+
+  BYPASS_SCHEDULE_CONSTRAINTS: {
+    required: false,
+    default: 'false',
+    description: 'Bypass minimum scheduling time constraints (for testing only)',
     validate: (value) => ['true', 'false', '1', '0'].includes(value.toLowerCase()),
     errorMessage: 'Must be true or false'
   },
@@ -900,6 +908,21 @@ const configSchema = {
     description: 'Video quality for YouTube Shorts (720p, 1080p, 1440p)',
     validate: (value) => ['720p', '1080p', '1440p'].includes(value),
     errorMessage: 'Must be one of: 720p, 1080p, 1440p'
+  },
+
+  YOUTUBE_CHANNEL_HANDLE: {
+    required: false,
+    default: '@BlushApp',
+    description: 'Target YouTube channel handle for brand account posting',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
+  },
+
+  YOUTUBE_CHANNEL_ID: {
+    required: false,
+    description: 'Target YouTube channel ID (optional, discovered via API)',
+    validate: (value) => !value || value.length > 0,
+    errorMessage: 'Must not be empty if provided'
   },
 
   // Data Retention Settings

@@ -37,7 +37,7 @@ class TikTokVideoMatcherJob {
     this.timezone = process.env.TIKTOK_MATCHER_TIMEZONE || 'UTC';
 
     // Matching parameters
-    this.captionMatchLength = 100; // Compare first 100 characters of caption
+    this.captionMatchLength = 300; // Compare first 300 characters of caption for better matching
     this.timeWindowMinutes = 60; // Match videos within 1 hour of scheduled time
   }
 
@@ -81,6 +81,76 @@ class TikTokVideoMatcherJob {
   }
 
   /**
+   * Check for posts that have exceeded posting timeout and mark as failed
+   * Prevents wasting resources matching posts that will never succeed
+   */
+  async _checkAndMarkTimeoutPosts() {
+    const timeoutHours = parseInt(process.env.POSTING_TIMEOUT_HOURS || '2', 10);
+    const timeoutMs = timeoutHours * 60 * 60 * 1000;
+
+    logger.info(`[TIMEOUT CHECK] Starting timeout check for stuck TikTok posts`, {
+      timeoutHours,
+      timeoutMs: `${timeoutMs}ms (${Math.round(timeoutMs/60000)} minutes)`
+    });
+
+    // Find posts with:
+    // - status: 'posting'
+    // - platform: 'tiktok' OR platforms includes 'tiktok'
+    // - sheetTriggeredAt exists
+    // - platformStatus.tiktok.status is 'posting' (not already failed)
+    const timeoutCandidates = await MarketingPost.find({
+      $or: [
+        { platform: 'tiktok' },
+        { platforms: 'tiktok' }
+      ],
+      status: 'posting',
+      sheetTriggeredAt: { $exists: true, $ne: null },
+      'platformStatus.tiktok.status': 'posting'
+    }).select('_id title sheetTriggeredAt platformStatus');
+
+    if (timeoutCandidates.length === 0) {
+      logger.debug(`[TIMEOUT CHECK] No timeout candidates found`);
+      return { checked: 0, markedFailed: 0 };
+    }
+
+    let markedFailed = 0;
+
+    for (const post of timeoutCandidates) {
+      const timeSinceSheetTrigger = Date.now() - new Date(post.sheetTriggeredAt).getTime();
+
+      if (timeSinceSheetTrigger > timeoutMs) {
+        // Mark as failed - no further attempts should be made
+        await post.setPlatformStatus('tiktok', 'failed', {
+          error: `Post timed out - Google Sheets wrote successfully but video never appeared on TikTok (${Math.round(timeSinceSheetTrigger/60000)} minutes)`,
+          lastFailedAt: new Date()
+        });
+
+        logger.warn(`[TIMEOUT CHECK] Marked post as failed due to timeout`, {
+          postId: post._id,
+          title: post.title,
+          sheetTriggeredAt: post.sheetTriggeredAt,
+          timeSinceSheetTrigger: Math.round(timeSinceSheetTrigger / 60000) + ' minutes'
+        });
+
+        markedFailed++;
+      } else {
+        logger.debug(`[TIMEOUT CHECK] Post not yet timed out`, {
+          postId: post._id,
+          timeSinceSheetTrigger: Math.round(timeSinceSheetTrigger / 60000) + ' minutes',
+          timeoutRemaining: Math.round((timeoutMs - timeSinceSheetTrigger) / 60000) + ' minutes'
+        });
+      }
+    }
+
+    logger.info(`[TIMEOUT CHECK] Completed`, {
+      checked: timeoutCandidates.length,
+      markedFailed
+    });
+
+    return { checked: timeoutCandidates.length, markedFailed };
+  }
+
+  /**
    * Execute the matching job
    */
   async execute() {
@@ -93,6 +163,9 @@ class TikTokVideoMatcherJob {
     const startTime = Date.now();
 
     try {
+      // Step 0: Check for timeout posts and mark as failed
+      const timeoutStats = await this._checkAndMarkTimeoutPosts();
+
       logger.info('Starting TikTok video matching');
 
       const stats = {
@@ -103,10 +176,27 @@ class TikTokVideoMatcherJob {
         unmatched: 0,
         metricsUpdated: 0,
         errors: 0,
+        timeoutChecked: timeoutStats.checked,
+        timeoutMarkedFailed: timeoutStats.markedFailed
       };
 
-      // Step 1: Fetch all videos from TikTok
-      logger.info('Step 1: Fetching videos from TikTok API');
+      // Step 1: Check rate limit status before fetching
+      logger.info('Step 1: Checking TikTok API rate limit status');
+      const rateLimitStatus = tiktokPostingService.getRateLimitStatus();
+      if (rateLimitStatus.rateLimited) {
+        logger.warn('TikTok API is currently rate limited, skipping this run', {
+          resetAt: rateLimitStatus.resetAt,
+        });
+        return {
+          success: false,
+          skipped: true,
+          reason: 'rate_limited',
+          resetAt: rateLimitStatus.resetAt,
+        };
+      }
+
+      // Step 2: Fetch all videos from TikTok
+      logger.info('Step 2: Fetching videos from TikTok API');
       const fetchResult = await tiktokPostingService.fetchUserVideos();
 
       if (!fetchResult.success) {
@@ -117,6 +207,16 @@ class TikTokVideoMatcherJob {
       stats.videosFetched = videos.length;
 
       logger.info(`Fetched ${videos.length} videos from TikTok`);
+
+      // Filter to only process videos from the last 14 days
+      // Older videos have already been processed or are too old to match recent posts
+      const fourteenDaysAgo = new Date(Date.now() - (14 * 24 * 60 * 60 * 1000));
+      const recentVideos = videos.filter(v => {
+        const videoDate = new Date(v.create_time * 1000);
+        return videoDate >= fourteenDaysAgo;
+      });
+
+      logger.info(`Filtered to ${recentVideos.length} videos from the last 14 days (skipped ${videos.length - recentVideos.length} older videos)`);
 
       // Step 2: Get all existing tiktokVideoIds from database
       // Check both legacy platform field and new platforms array for multi-platform support
@@ -138,8 +238,8 @@ class TikTokVideoMatcherJob {
 
       logger.info(`Found ${existingVideoIds.size} existing matched videos in database`);
 
-      // Step 3: Process each video
-      for (const video of videos) {
+      // Step 3: Process each recent video
+      for (const video of recentVideos) {
         try {
           const videoId = video.id;
 
@@ -187,15 +287,6 @@ class TikTokVideoMatcherJob {
               metricsLastFetchedAt: new Date(),
             });
 
-            // Also update overall status based on all platform statuses
-            const updatedPost = await MarketingPost.findById(matchResult.postId);
-            if (updatedPost.getOverallStatus) {
-              const newStatus = updatedPost.getOverallStatus();
-              await MarketingPost.findByIdAndUpdate(matchResult.postId, {
-                status: newStatus
-              });
-            }
-
             logger.info(`Matched TikTok video to post`, {
               videoId,
               postId: matchResult.postId,
@@ -227,6 +318,8 @@ class TikTokVideoMatcherJob {
         unmatched: stats.unmatched,
         metricsUpdated: stats.metricsUpdated,
         errors: stats.errors,
+        timeoutChecked: stats.timeoutChecked,
+        timeoutMarkedFailed: stats.timeoutMarkedFailed,
         duration: `${stats.duration}ms`,
       });
 
@@ -257,9 +350,11 @@ class TikTokVideoMatcherJob {
         captionFullLength: (video.video_description || '').length
       });
 
-      // Calculate time window - use a larger window for Buffer/Zapier flow
-      const timeWindowStart = new Date(videoCreatedAt.getTime() - (4 * 60 * 60 * 1000)); // 4 hours before
-      const timeWindowEnd = new Date(videoCreatedAt.getTime() + (30 * 60 * 1000)); // 30 min after
+      // Calculate time window - use a very wide window for Buffer/Zapier flow
+      // Videos can be posted up to 24 hours before or after the sheet trigger time
+      // due to buffering, delays, or timing issues in the Zapier/Buffer pipeline
+      const timeWindowStart = new Date(videoCreatedAt.getTime() - (24 * 60 * 60 * 1000)); // 24 hours before
+      const timeWindowEnd = new Date(videoCreatedAt.getTime() + (24 * 60 * 60 * 1000)); // 24 hours after
 
       logger.info(`[TikTok Matcher] Time window`, {
         timeWindowStart: timeWindowStart.toISOString(),
@@ -269,6 +364,7 @@ class TikTokVideoMatcherJob {
       // Find posts within time window that need matching
       // Include: 'posting' status (triggered via Buffer/Zapier, waiting for video)
       // AND 'posted' posts that don't have tiktokVideoId yet (might have been missed)
+      // AND 'failed' posts (may have timed out but video was actually posted successfully)
       // Match on either scheduledAt OR sheetTriggeredAt (for Buffer/Zapier flow)
       // Check both legacy platform field and new platforms array for multi-platform support
       const candidates = await MarketingPost.find({
@@ -278,7 +374,8 @@ class TikTokVideoMatcherJob {
         ],
         $or: [
           { status: 'posting' },
-          { status: 'posted' }  // Also check posted posts that might be missing tiktokVideoId
+          { status: 'posted' },  // Also check posted posts that might be missing tiktokVideoId
+          { status: 'failed' }   // Also check failed posts (may have timed out but video was posted)
         ],
         $or: [
           { scheduledAt: { $gte: timeWindowStart, $lte: timeWindowEnd } },
@@ -313,17 +410,31 @@ class TikTokVideoMatcherJob {
       let bestTimeDiff = Infinity;
       let bestMethod = null;
 
-      // First, find exact caption matches
+      // Normalize caption by removing newlines, extra whitespace, and hashtags
+      // TikTok strips newlines and appends hashtags when posting
+      const normalizeCaption = (caption) => {
+        if (!caption) return '';
+        const normalized = caption.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+        // Remove hashtags (they're appended when posting but stored separately in database)
+        return normalized.replace(/#[\w]+/g, '').trim();
+      };
+
+      // First, find exact caption matches (using normalized captions)
       for (const post of candidates) {
-        const postCaption = post.caption.substring(0, this.captionMatchLength);
-        if (postCaption === videoCaption) {
-          // Calculate time diff from sheetTriggeredAt (or scheduledAt if no sheetTriggeredAt)
+        const postCaptionNormalized = normalizeCaption(post.caption.substring(0, this.captionMatchLength));
+        const videoCaptionNormalized = normalizeCaption(videoCaption);
+
+        if (postCaptionNormalized === videoCaptionNormalized && postCaptionNormalized.length > 0) {
+          // Calculate time diff from sheetTriggeredAt (closest estimate to when posting started)
+          // Falls back to scheduledAt if sheetTriggeredAt not set
           const referenceTime = post.sheetTriggeredAt || post.scheduledAt;
           const timeDiff = videoCreatedAt.getTime() - referenceTime.getTime();
-          // Only match if video was posted AFTER the reference time
-          if (timeDiff > 0 && timeDiff < bestTimeDiff) {
+          // Use absolute time difference since videos can be posted before OR after reference time
+          const absTimeDiff = Math.abs(timeDiff);
+          // Only match if within time window and closer than previous best match
+          if (absTimeDiff < bestTimeDiff) {
             bestMatch = post;
-            bestTimeDiff = timeDiff;
+            bestTimeDiff = absTimeDiff;
             bestMethod = 'caption_exact';
           }
         }
@@ -332,28 +443,35 @@ class TikTokVideoMatcherJob {
       // If no exact match, try fuzzy caption match
       if (!bestMatch) {
         for (const post of candidates) {
-          const postCaption = post.caption.toLowerCase();
-          const videoCaptionLower = videoCaption.toLowerCase();
+          const postCaptionNormalized = normalizeCaption(post.caption).toLowerCase();
+          const videoCaptionNormalized = normalizeCaption(videoCaption).toLowerCase();
 
-          let captionMatches = videoCaptionLower && postCaption.includes(videoCaptionLower);
-          if (!captionMatches && postCaption) {
-            captionMatches = videoCaptionLower.includes(postCaption.substring(0, 50));
+          // Try both directions of inclusion
+          let captionMatches = videoCaptionNormalized && postCaptionNormalized.includes(videoCaptionNormalized);
+          if (!captionMatches && postCaptionNormalized) {
+            captionMatches = videoCaptionNormalized.includes(postCaptionNormalized.substring(0, 50));
           }
 
           if (captionMatches) {
+            // Calculate time diff from sheetTriggeredAt (closest estimate to when posting started)
+            // Falls back to scheduledAt if sheetTriggeredAt not set
             const referenceTime = post.sheetTriggeredAt || post.scheduledAt;
             const timeDiff = videoCreatedAt.getTime() - referenceTime.getTime();
-            if (timeDiff > 0 && timeDiff < bestTimeDiff) {
+            // Use absolute time difference since videos can be posted before OR after reference time
+            const absTimeDiff = Math.abs(timeDiff);
+            if (absTimeDiff < bestTimeDiff) {
               bestMatch = post;
-              bestTimeDiff = timeDiff;
+              bestTimeDiff = absTimeDiff;
               bestMethod = 'caption_contains';
             }
           }
         }
       }
 
-      // Only match if video was posted within 60 minutes after trigger
-      if (bestMatch && bestTimeDiff < (60 * 60 * 1000)) {
+      // Only match if video was posted within 24 hours (before or after) the reference time
+      // Very generous window to accommodate Zapier/Buffer posting pipeline delays
+      const maxTimeDiffMs = 24 * 60 * 60 * 1000;
+      if (bestMatch && bestTimeDiff < maxTimeDiffMs) {
         logger.info(`[TikTok Matcher] Match found!`, {
           videoId: video.id,
           postId: bestMatch._id,
@@ -371,13 +489,23 @@ class TikTokVideoMatcherJob {
           postId: bestMatch._id,
           timeDiff: `${Math.round(bestTimeDiff / 1000)}s`,
           timeDiffMinutes: Math.round(bestTimeDiff / (60 * 1000)),
-          maxAllowed: '60 minutes'
+          maxAllowed: '24 hours'
         });
       } else {
+        // Log helpful debug info about why no match occurred
+        const normalizeCaption = (caption) => {
+          if (!caption) return '';
+          const normalized = caption.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+          // Remove hashtags (they're appended when posting but stored separately in database)
+          return normalized.replace(/#[\w]+/g, '').trim();
+        };
         logger.warn(`[TikTok Matcher] No caption match found`, {
           videoId: video.id,
           candidatesCount: candidates.length,
-          videoCaption: videoCaption.substring(0, 50)
+          videoCaptionRaw: videoCaption.substring(0, 60),
+          videoCaptionNormalized: normalizeCaption(videoCaption.substring(0, 60)),
+          samplePostCaption: candidates[0]?.caption.substring(0, 60) || 'none',
+          samplePostCaptionNormalized: normalizeCaption(candidates[0]?.caption.substring(0, 60) || '')
         });
       }
 

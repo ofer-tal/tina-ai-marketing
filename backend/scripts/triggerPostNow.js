@@ -53,6 +53,16 @@ async function triggerPost() {
     console.log('Platform:', post.platform);
     console.log('Caption:', post.caption?.substring(0, 100) + '...');
     console.log('Video Path:', post.videoPath);
+    console.log('sheetTriggeredAt:', post.sheetTriggeredAt);
+
+    // CRITICAL GUARDRAIL: Never write to Google Sheets if already written
+    if (post.sheetTriggeredAt) {
+      const error = `Refusing to write post ${post._id} to Google Sheets - sheetTriggeredAt already set to ${post.sheetTriggeredAt.toISOString()}`;
+      console.log(`\n❌ ${error}`);
+      console.log('This guardrail prevents duplicate posts to TikTok.');
+      await databaseService.disconnect();
+      process.exit(1);
+    }
 
     // Initialize Google Sheets service
     console.log('\n=== INITIALIZING GOOGLE SHEETS SERVICE ===');

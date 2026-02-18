@@ -284,7 +284,9 @@ function isPostChanged(existing, updated) {
     'views',
     'likes',
     'shares',
-    'comments'
+    'comments',
+    'platforms',
+    'platform'
   ];
 
   for (const field of keyFields) {

@@ -4,6 +4,7 @@ import TikTokSandboxConfig from '../components/TikTokSandboxConfig';
 import InstagramConfig from '../components/InstagramConfig';
 import GoogleAnalyticsConfig from '../components/GoogleAnalyticsConfig';
 import GoogleSheetsConfig from '../components/GoogleSheetsConfig';
+import YouTubeConfig from '../components/YouTubeConfig';
 import TieredVideoConfig from '../components/TieredVideoConfig';
 import LoadingSpinner from '../components/LoadingSpinner.jsx';
 import ErrorAlert from '../components/ErrorAlert.jsx';
@@ -1046,6 +1047,9 @@ function Settings() {
 
       {/* Google Sheets Configuration */}
       <GoogleSheetsConfig />
+
+      {/* YouTube Configuration */}
+      <YouTubeConfig />
 
       {/* Tiered Video Generation Configuration */}
       <TieredVideoConfig />

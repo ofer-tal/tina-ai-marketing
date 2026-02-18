@@ -93,6 +93,19 @@ class TikTokPostingService extends BaseApiClient {
       appSecretConfigured: !!this.appSecret,
       redirectUriConfigured: !!this.redirectUri,
     });
+
+    // Video cache configuration
+    const cacheTtl = parseInt(process.env.TIKTOK_CACHE_TTL || '1500000', 10); // 25 minutes default
+    this.videoCache = {
+      data: null,
+      timestamp: null,
+      ttl: cacheTtl,
+    };
+
+    // Rate limiting configuration
+    this.maxRetries = parseInt(process.env.TIKTOK_MAX_RETRIES || '3', 10);
+    this.pageDelay = parseInt(process.env.TIKTOK_PAGE_DELAY || '1000', 10); // 1 second between pages
+    this.maxVideoPages = parseInt(process.env.TIKTOK_MAX_VIDEO_PAGES || '5', 10); // Max pages to fetch (5 pages = 100 videos)
   }
 
   /**
@@ -641,15 +654,122 @@ class TikTokPostingService extends BaseApiClient {
   }
 
   /**
+   * Fetch with retry logic for 429 rate limit errors
+   * Implements exponential backoff: 1s, 2s, 4s delays
+   */
+  async _fetchWithRetry(provider, url, options = {}) {
+    let lastError = null;
+    const maxRetries = this.maxRetries;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const response = await oauthManager.fetch(provider, url, options);
+
+        // Check if response is not OK and might be a rate limit
+        if (!response.ok) {
+          const status = response.status;
+
+          // If it's a 429 rate limit error and we have retries left
+          if (status === 429 && attempt < maxRetries) {
+            // Calculate exponential backoff delay
+            const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000); // 1s, 2s, 4s
+
+            logger.warn(`TikTok API rate limit hit, retrying...`, {
+              attempt: attempt + 1,
+              maxRetries: maxRetries + 1,
+              delayMs: `${delayMs}ms`,
+              url: url.substring(0, 100),
+            });
+
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+            continue;
+          }
+        }
+
+        // Return response if successful or non-retryable error
+        return response;
+      } catch (error) {
+        lastError = error;
+
+        // Check if it's a rate limit error from the rate limiter
+        if (error.status === 429 && attempt < maxRetries) {
+          const delayMs = Math.min(1000 * Math.pow(2, attempt), 4000);
+
+          logger.warn(`Rate limit error from rateLimiter, retrying...`, {
+            attempt: attempt + 1,
+            maxRetries: maxRetries + 1,
+            delayMs: `${delayMs}ms`,
+          });
+
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        // For non-rate-limit errors, throw immediately
+        throw error;
+      }
+    }
+
+    // All retries exhausted
+    logger.error(`All retry attempts exhausted for TikTok API`, {
+      url: url.substring(0, 100),
+      attempts: maxRetries + 1,
+    });
+
+    throw lastError || new Error('Max retries exceeded');
+  }
+
+  /**
+   * Clear the video cache (call after posting new videos)
+   */
+  clearVideoCache() {
+    this.videoCache.data = null;
+    this.videoCache.timestamp = null;
+    logger.info('TikTok video cache cleared');
+  }
+
+  /**
+   * Get rate limit status for TikTok API
+   */
+  getRateLimitStatus() {
+    return rateLimiterService.getHostStatus('open.tiktokapis.com');
+  }
+
+  /**
    * Fetch all user videos from TikTok with pagination
    */
   async fetchUserVideos() {
+    // Check cache first
+    const now = Date.now();
+    const cacheAge = this.videoCache.timestamp ? now - this.videoCache.timestamp : Infinity;
+
+    if (this.videoCache.data && cacheAge < this.videoCache.ttl) {
+      logger.info('Returning cached TikTok videos', {
+        cacheAge: `${Math.round(cacheAge / 1000)}s`,
+        ttl: `${Math.round(this.videoCache.ttl / 1000)}s`,
+        videoCount: this.videoCache.data.videos.length,
+      });
+
+      return {
+        success: true,
+        videos: this.videoCache.data.videos,
+        totalCount: this.videoCache.data.totalCount,
+        cached: true,
+      };
+    }
+
+    logger.info('Cache miss or expired, fetching fresh TikTok videos', {
+      cached: !!this.videoCache.data,
+      cacheAge: this.videoCache.timestamp ? `${Math.round(cacheAge / 1000)}s` : 'none',
+    });
+
     const fields = 'id,title,video_description,create_time,share_url,like_count,comment_count,share_count,view_count';
     const uniqueVideos = new Map();
     let cursor = 0;
     let hasMore = true;
     let pageCount = 0;
-    const maxPages = 10;
+    const maxPages = this.maxVideoPages;
 
     while (hasMore && pageCount < maxPages) {
       pageCount++;
@@ -662,7 +782,8 @@ class TikTokPostingService extends BaseApiClient {
         body.cursor = cursor;
       }
 
-      const response = await oauthManager.fetch('tiktok', apiUrl, {
+      // Use _fetchWithRetry instead of oauthManager.fetch
+      const response = await this._fetchWithRetry('tiktok', apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -696,15 +817,33 @@ class TikTokPostingService extends BaseApiClient {
       if (videos.length === 0 || !hasMore) {
         break;
       }
+
+      // Add delay between pagination pages to reduce rate limiting
+      if (hasMore && pageCount < maxPages) {
+        logger.debug(`Waiting ${this.pageDelay}ms before fetching next page...`);
+        await new Promise(resolve => setTimeout(resolve, this.pageDelay));
+      }
     }
 
     logger.info(`Fetched ${uniqueVideos.size} unique TikTok videos from ${pageCount} pages`);
 
-    return {
+    // Update cache
+    const resultData = {
       success: true,
       videos: Array.from(uniqueVideos.values()),
       totalCount: uniqueVideos.size,
+      cached: false,
     };
+
+    this.videoCache.data = resultData;
+    this.videoCache.timestamp = now;
+
+    logger.info('TikTok video cache updated', {
+      videoCount: uniqueVideos.size,
+      ttl: `${Math.round(this.videoCache.ttl / 1000)}s`,
+    });
+
+    return resultData;
   }
 
   /**

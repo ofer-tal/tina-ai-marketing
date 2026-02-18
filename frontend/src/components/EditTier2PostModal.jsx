@@ -122,6 +122,11 @@ const FormTextarea = styled.textarea`
   &::placeholder {
     color: #666;
   }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
 `;
 
 const ScriptCharCount = styled.div`
@@ -363,16 +368,16 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
     setLoading(true);
 
     try {
-      // Validate scheduled time is at least 4 hours in the future
+      // Warn if scheduled time is less than 4 hours in the future (but don't block)
       if (scheduledAt) {
         const newScheduledDate = new Date(scheduledAt);
         const now = new Date();
-        const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000);
+        const minScheduleTime = new Date(now.getTime() + 4 * 60 * 60 * 1000); // 4 hours
 
         if (newScheduledDate < minScheduleTime) {
-          setError('Scheduled time must be at least 4 hours in the future');
-          setLoading(false);
-          return;
+          const timeUntilSchedule = Math.round((newScheduledDate - now) / (1000 * 60)); // minutes
+          setError(`⚠️ Warning: Scheduled time is less than 4 hours away (${timeUntilSchedule} minutes). This may not give enough time for manual video upload and review. Proceed with caution.`);
+          // Don't return - let the user proceed with the warning
         }
       }
 
@@ -390,12 +395,18 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
           : ['blushapp', 'romance', 'storytime']; // Also remove "#" from defaults
       });
 
+      // Determine if caption/script editing should be blocked (approved+ posts)
+      const isApprovedOrLater = ['approved', 'scheduled', 'posting', 'posted', 'partial_posted'].includes(post?.status);
+
       const updateData = {
         platforms: selectedPlatforms,
         title: videoTitle,
-        caption,
+        // Only send caption/script if post is NOT approved+
+        ...(isApprovedOrLater ? {} : {
+          caption,
+          script
+        }),
         hashtags: platformHashtags,
-        script,
         scheduledAt: scheduledAt ? new Date(scheduledAt).toISOString() : undefined
       };
 
@@ -410,6 +421,24 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
         throw new Error(errorData.error || 'Failed to update post');
       }
 
+      // Fetch the updated post data from the server
+      const getResponse = await fetch(`/api/content/posts/${post._id}`);
+      if (!getResponse.ok) {
+        throw new Error('Failed to fetch updated post data');
+      }
+      const getResult = await getResponse.json();
+      const updatedPost = getResult.data;
+
+      // Update local state with fresh data from server
+      if (updatedPost.hashtags && typeof updatedPost.hashtags === 'object') {
+        setHashtags({
+          tiktok: (updatedPost.hashtags.tiktok || []).join(', '),
+          instagram: (updatedPost.hashtags.instagram || []).join(', '),
+          youtube_shorts: (updatedPost.hashtags.youtube_shorts || []).join(', ')
+        });
+      }
+
+      setLoading(false);
       onSave?.();
     } catch (err) {
       setError(err.message);
@@ -497,7 +526,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
               onChange={(e) => setCaption(e.target.value)}
               placeholder="Enter the caption for this post..."
               rows={3}
-              disabled={loading}
+              disabled={loading || ['approved', 'scheduled', 'posting', 'posted', 'partial_posted'].includes(post?.status)}
             />
           </FormSection>
 
@@ -527,7 +556,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
               onChange={(e) => setScript(e.target.value)}
               placeholder="Enter the script that the AI avatar will speak..."
               rows={6}
-              disabled={loading}
+              disabled={loading || ['approved', 'scheduled', 'posting', 'posted', 'partial_posted'].includes(post?.status)}
             />
             <ScriptCharCount $warning={script.length > 500}>
               {script.length} characters
@@ -543,7 +572,7 @@ function EditTier2PostModal({ isOpen, onClose, post, onSave }) {
               disabled={loading}
             />
             <div style={{ fontSize: '0.8rem', color: '#a0a0a0', marginTop: '0.5rem' }}>
-              Must be at least 4 hours in the future
+              Recommended: 4+ hours in the future (allows time for video upload and review)
             </div>
           </FormSection>
 

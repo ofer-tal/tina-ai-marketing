@@ -3,17 +3,19 @@
  *
  * Handles Google Sheets API operations using unified OAuth manager.
  * Features:
- * - OAuth authentication via oauthManager
+ * - OAuth authentication via oauthManager (platform: 'google')
  * - Automatic token refresh via OAuth2Fetch
  * - Spreadsheet metadata retrieval
  * - Sheet enumeration and data reading
  * - Row appending for Zapier/Buffer integration
  * - Error handling and retry logic
  *
- * Uses unified Google OAuth credentials shared across all Google services:
+ * Uses Google OAuth credentials for the 'google' platform:
  * - GOOGLE_CLIENT_ID → Google OAuth client ID
  * - GOOGLE_CLIENT_SECRET → Google OAuth client secret
  * - GOOGLE_REDIRECT_URI → OAuth callback URL
+ *
+ * Note: YouTube uses a separate 'youtube' OAuth platform.
  *
  * @see backend/services/oauthManager.js
  */
@@ -285,6 +287,30 @@ class GoogleSheetsService {
   }
 
   /**
+   * Check if a video URL already exists in the sheet (defense in depth)
+   * @param {string} sheetName - Name of the sheet/tab to check
+   * @param {string} videoUrl - Video URL to search for
+   * @returns {Promise<boolean>} - True if duplicate found
+   */
+  async checkRowExists(sheetName, videoUrl) {
+    try {
+      // Read recent rows from the sheet (last 100 rows for efficiency)
+      const result = await this.readSheet(sheetName, 'A1:B100');
+      if (!result.success) return false;
+
+      // Check if videoUrl already exists in first column
+      const exists = result.data.values.some(row => row[0] === videoUrl);
+      return exists;
+    } catch (error) {
+      logger.warn('Failed to check for duplicate row', {
+        error: error.message,
+        sheetName,
+      });
+      return false;
+    }
+  }
+
+  /**
    * Append a row to a sheet
    * @param {string} sheetName - Name of the sheet/tab to append to
    * @param {Array} values - Array of values to append (row data)
@@ -299,6 +325,23 @@ class GoogleSheetsService {
         valueCount: values.length,
         devMode: this.devMode,
       });
+
+      // DEFENSE IN DEPTH: Check for duplicates before appending
+      // This is the last line of defense if all other checks fail
+      const videoUrl = values[0]; // First column is the video URL
+      const exists = await this.checkRowExists(targetSheetName, videoUrl);
+
+      if (exists) {
+        logger.warn(`[GUARDRAIL] Duplicate row detected in sheet ${targetSheetName}, not appending: ${videoUrl}`, {
+          videoUrl,
+          sheetName: targetSheetName
+        });
+        return {
+          success: false,
+          error: 'Duplicate row - video URL already exists in sheet',
+          code: 'DUPLICATE',
+        };
+      }
 
       const encodedRange = encodeURIComponent(`${targetSheetName}!A1:Z1`);
       const url = `${GOOGLE_SHEETS_API_BASE}/${this.spreadsheetId}/values/${encodedRange}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;

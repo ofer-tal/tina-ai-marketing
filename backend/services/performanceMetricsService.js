@@ -233,7 +233,7 @@ class PerformanceMetricsService extends BaseApiClient {
       const insightsEndpoint = `/${mediaId}/insights`;
 
       const params = new URLSearchParams({
-        metric: 'impressions,engagement,reach,saves',
+        metric: 'impressions,reach,saved,video_views',
       });
 
       logger.info(`Fetching Instagram insights for media ${mediaId}`, {
@@ -280,9 +280,9 @@ class PerformanceMetricsService extends BaseApiClient {
       };
 
       const impressions = getMetricValue('impressions');
-      const engagement = getMetricValue('engagement'); // Total engagement (likes + comments + shares + saves)
       const reach = getMetricValue('reach');
-      const saves = getMetricValue('saves');
+      const saved = getMetricValue('saved');
+      const video_views = getMetricValue('video_views');
 
       // Engagement is a composite metric - we need individual metrics
       // Fetch media object to get likes, comments, shares separately
@@ -313,14 +313,15 @@ class PerformanceMetricsService extends BaseApiClient {
       }
 
       // Calculate views (impressions) from insights
-      const views = impressions;
+      // Use video_views for Reels if available, otherwise fall back to impressions
+      const views = video_views || impressions;
 
       logger.info(`Instagram metrics fetched for media ${mediaId}`, {
         views,
         likes,
         comments,
         shares,
-        saves,
+        saved,
         reach,
       });
 
@@ -331,14 +332,14 @@ class PerformanceMetricsService extends BaseApiClient {
           likes,
           comments,
           shares,
-          saved: saves,
+          saved,
           reach,
         },
       };
 
     } catch (error) {
       logger.error('Failed to fetch Instagram metrics', {
-        mediaId,
+        postId: post?._id,
         error: error.message,
         stack: error.stack,
       });
@@ -351,14 +352,84 @@ class PerformanceMetricsService extends BaseApiClient {
   }
 
   /**
-   * Fetch YouTube metrics for a post (placeholder)
+   * Fetch YouTube metrics for a post
+   * Uses YouTube Data API v3 videos.list endpoint with statistics part
    */
   async fetchYouTubeMetricsForPost(post) {
-    // TODO: Implement YouTube metrics fetching
-    return {
-      success: false,
-      error: 'YouTube metrics not yet implemented',
-    };
+    try {
+      const videoId = post.platformStatus?.youtube_shorts?.mediaId ||
+                      post.youtubeVideoId;
+
+      if (!videoId) {
+        return {
+          success: false,
+          error: 'No YouTube video ID found',
+          code: 'MISSING_VIDEO_ID',
+        };
+      }
+
+      logger.info(`Fetching YouTube metrics for video ${videoId}...`);
+
+      // YouTube Data API v3 - videos.list endpoint
+      // NOTE: Statistics are public, no OAuth required - just API key
+      const apiKey = this.platforms.youtube.apiKey;
+
+      if (!apiKey) {
+        return {
+          success: false,
+          error: 'YouTube API key not configured',
+          code: 'MISSING_API_KEY',
+        };
+      }
+
+      const url = `https://www.googleapis.com/youtube/v3/videos?id=${videoId}&part=statistics&key=${apiKey}`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || 'Failed to fetch video statistics');
+      }
+
+      const data = await response.json();
+
+      if (!data.items || data.items.length === 0) {
+        return {
+          success: false,
+          error: 'Video not found or statistics not available',
+          code: 'VIDEO_NOT_FOUND',
+        };
+      }
+
+      const stats = data.items[0].statistics;
+
+      logger.info(`YouTube metrics fetched for video ${videoId}`, {
+        views: stats.viewCount,
+        likes: stats.likeCount,
+        comments: stats.commentCount,
+      });
+
+      return {
+        success: true,
+        data: {
+          views: parseInt(stats.viewCount) || 0,
+          likes: parseInt(stats.likeCount) || 0,
+          comments: parseInt(stats.commentCount) || 0,
+          shares: 0, // YouTube API doesn't provide shares
+        },
+      };
+
+    } catch (error) {
+      logger.error('Failed to fetch YouTube metrics', {
+        postId: post?._id,
+        error: error.message,
+      });
+
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
   }
 
   /**

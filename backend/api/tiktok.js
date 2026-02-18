@@ -305,6 +305,20 @@ router.post('/post/:postId', async (req, res) => {
       });
     }
 
+    // CRITICAL GUARDRAIL: Never write to Google Sheets if already written
+    // Once sheetTriggeredAt is set, that post MUST NEVER be written to the Google Sheet again
+    if (post.sheetTriggeredAt) {
+      const error = `Refusing to write post ${post._id} to Google Sheets - sheetTriggeredAt already set to ${post.sheetTriggeredAt.toISOString()}`;
+      logger.error(`[GUARDRAIL] ${error}`, {
+        postId: post._id,
+        sheetTriggeredAt: post.sheetTriggeredAt
+      });
+      return res.status(400).json({
+        success: false,
+        error: error
+      });
+    }
+
     // Import services for Buffer/Zapier flow
     const s3VideoUploader = (await import('../services/s3VideoUploader.js')).default;
     const googleSheetsService = (await import('../services/googleSheetsService.js')).default;
@@ -755,5 +769,203 @@ router.get('/matcher/status', async (req, res) => {
     });
   }
 });
+
+/**
+ * POST /api/tiktok/manual-match
+ * Manually match a post to a TikTok video
+ * Used when automatic matching fails due to timing issues
+ */
+router.post('/manual-match', async (req, res) => {
+  try {
+    const { postId, tiktokUrl, tiktokVideoId } = req.body;
+
+    // Validate inputs
+    if (!postId) {
+      return res.status(400).json({
+        success: false,
+        error: 'postId is required'
+      });
+    }
+
+    if (!tiktokUrl && !tiktokVideoId) {
+      return res.status(400).json({
+        success: false,
+        error: 'tiktokUrl or tiktokVideoId is required'
+      });
+    }
+
+    logger.info('Manual TikTok match requested', { postId, tiktokUrl, tiktokVideoId });
+
+    // Extract video ID from URL if needed
+    let videoId = tiktokVideoId;
+    if (tiktokUrl) {
+      try {
+        videoId = extractVideoIdFromUrl(tiktokUrl);
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    // Validate video ID format (should be numeric, reasonable length)
+    if (!videoId || !/^\d{10,20}$/.test(videoId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid TikTok video ID format'
+      });
+    }
+
+    // Check if post exists
+    const post = await MarketingPost.findById(postId);
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        error: 'Post not found'
+      });
+    }
+
+    // Check if post is a TikTok post (handles both new platforms array and legacy platform field)
+    const platforms = post.platforms && Array.isArray(post.platforms) && post.platforms.length > 0
+      ? post.platforms
+      : [post.platform];
+
+    if (!platforms.includes('tiktok')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Post is not a TikTok post'
+      });
+    }
+
+    // Check if post already has a TikTok video linked (optional warning)
+    const existingVideoId = post.tiktokVideoId || post.platformStatus?.tiktok?.mediaId;
+    if (existingVideoId) {
+      logger.warn('Post already has a TikTok video linked', {
+        postId,
+        existingVideoId,
+        newVideoId: videoId
+      });
+      // Continue anyway - allow re-matching if needed
+    }
+
+    // Fetch video data from TikTok API
+    const fetchResult = await tiktokPostingService.fetchUserVideos();
+    if (!fetchResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to fetch videos from TikTok',
+        details: fetchResult.error
+      });
+    }
+
+    // Find the video
+    const video = fetchResult.videos.find(v => v.id === videoId);
+    if (!video) {
+      return res.status(404).json({
+        success: false,
+        error: 'Video not found in TikTok account',
+        details: `Video ID ${videoId} not found in the account's videos`
+      });
+    }
+
+    // Calculate engagement rate
+    const engagementRate = video.view_count > 0
+      ? ((video.like_count + video.comment_count + video.share_count) / video.view_count) * 100
+      : 0;
+
+    const postedAt = new Date(video.create_time * 1000);
+
+    // Update the post with TikTok data
+    // Update both legacy fields and new platformStatus for multi-platform posts
+    await MarketingPost.findByIdAndUpdate(postId, {
+      // Legacy fields (for backward compatibility)
+      tiktokVideoId: video.id,
+      tiktokShareUrl: video.share_url,
+      postedAt: postedAt,
+      // New multi-platform fields
+      'platformStatus.tiktok.status': 'posted',
+      'platformStatus.tiktok.mediaId': video.id,
+      'platformStatus.tiktok.shareUrl': video.share_url,
+      'platformStatus.tiktok.postedAt': postedAt,
+      'platformStatus.tiktok.performanceMetrics.views': video.view_count || 0,
+      'platformStatus.tiktok.performanceMetrics.likes': video.like_count || 0,
+      'platformStatus.tiktok.performanceMetrics.comments': video.comment_count || 0,
+      'platformStatus.tiktok.performanceMetrics.shares': video.share_count || 0,
+      'platformStatus.tiktok.performanceMetrics.engagementRate': engagementRate,
+      'platformStatus.tiktok.lastFetchedAt': new Date(),
+      'platformStatus.tiktok.error': null,
+      // Legacy overall performanceMetrics
+      'performanceMetrics.views': video.view_count || 0,
+      'performanceMetrics.likes': video.like_count || 0,
+      'performanceMetrics.comments': video.comment_count || 0,
+      'performanceMetrics.shares': video.share_count || 0,
+      'performanceMetrics.engagementRate': engagementRate,
+      metricsLastFetchedAt: new Date(),
+    });
+
+    logger.info('Manual TikTok match successful', {
+      postId,
+      videoId: video.id,
+      views: video.view_count,
+      likes: video.like_count,
+      postedAt
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        postId,
+        videoId: video.id,
+        shareUrl: video.share_url,
+        views: video.view_count,
+        likes: video.like_count,
+        comments: video.comment_count,
+        shares: video.share_count,
+        engagementRate,
+        postedAt
+      }
+    });
+  } catch (error) {
+    logger.error('Manual TikTok match error', {
+      error: error.message,
+      stack: error.stack
+    });
+    return res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+/**
+ * Helper function to extract video ID from various TikTok URL formats
+ * Supports:
+ * - https://www.tiktok.com/@user/video/1234567890
+ * - https://www.tiktok.com/@blush.app/video/7606860514483916045
+ * - https://www.tiktok.com/v/1234567890
+ * - Direct ID input: 1234567890
+ */
+function extractVideoIdFromUrl(url) {
+  // Match various TikTok URL formats:
+  const patterns = [
+    /\/video\/(\d+)/,
+    /\/v\/(\d+)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) {
+      return match[1];
+    }
+  }
+
+  // If no pattern matched, check if the input is a direct ID (numeric, 10-20 digits)
+  if (/^\d{10,20}$/.test(url.trim())) {
+    return url.trim();
+  }
+
+  throw new Error('Could not extract video ID from URL. Please enter a valid TikTok URL or video ID.');
+}
 
 export default router;

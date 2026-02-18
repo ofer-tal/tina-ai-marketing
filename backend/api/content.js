@@ -283,6 +283,7 @@ router.post('/posts/create', async (req, res) => {
 
     const {
       storyId,
+      title,
       platforms,
       caption,
       hook,
@@ -301,10 +302,19 @@ router.post('/posts/create', async (req, res) => {
     } = req.body;
 
     // Validate required fields
-    if (!storyId) {
+    // storyId is required for tier_1, but optional for tier_2
+    if (contentTier === 'tier_1' && !storyId) {
       return res.status(400).json({
         success: false,
-        error: 'Missing required field: storyId'
+        error: 'Missing required field: storyId (required for tier_1 posts)'
+      });
+    }
+
+    // For tier_2, if no storyId, title must be provided
+    if (contentTier === 'tier_2' && !storyId && !req.body.title) {
+      return res.status(400).json({
+        success: false,
+        error: 'For tier_2 posts, either storyId or title is required'
       });
     }
 
@@ -321,6 +331,7 @@ router.post('/posts/create', async (req, res) => {
     // Use the createPost function from postManagementTools
     const result = await createPost({
       storyId,
+      title,
       platforms,
       caption,
       hook,
@@ -2199,7 +2210,7 @@ router.post('/posts/bulk/reject', async (req, res) => {
 router.put('/posts/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { caption, hashtags, script, scheduledAt, platforms, ...otherUpdates } = req.body;
+    const { title, caption, hashtags, script, scheduledAt, platforms, ...otherUpdates } = req.body;
 
     logger.info('Updating marketing post', { id, updates: req.body });
 
@@ -2212,12 +2223,40 @@ router.put('/posts/:id', async (req, res) => {
       });
     }
 
+    // Update title (metadata, always allowed)
+    if (title !== undefined) {
+      post.title = title;
+    }
+
+    // Restrict content editing after approval
+    const isCaptionOrScriptEdit = caption !== undefined || script !== undefined;
+    const isHashtagEdit = hashtags !== undefined;
+    const isApprovedOrLater = ['approved', 'scheduled', 'posting', 'posted', 'partial_posted'].includes(post.status);
+    const isPostedOrLater = ['posting', 'posted', 'partial_posted'].includes(post.status);
+
+    // Block caption/script editing for all approved+ posts
+    if (isCaptionOrScriptEdit && isApprovedOrLater) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot edit content (caption, script) when post is ${post.status}. Only hashtag and platform changes are allowed.`
+      });
+    }
+
+    // Allow hashtag editing for approved/scheduled (but NOT posting/posted/partial_posted)
+    if (isHashtagEdit && isPostedOrLater) {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot edit hashtags when post is ${post.status}. Hashtags are locked once posting begins.`
+      });
+    }
+
     // Handle tier_2 posts with special rules
     if (post.contentTier === 'tier_2') {
       // If video already exists, lock most fields
       if (post.videoPath) {
-        // Only allow updating scheduledAt after video is uploaded
+        // Allow updating scheduledAt AND platforms after video is uploaded
         const allowedUpdates = {};
+
         if (scheduledAt !== undefined) {
           // Validate date is valid - no 4-hour minimum for UI edits
           const newScheduledDate = new Date(scheduledAt);
@@ -2230,6 +2269,99 @@ router.put('/posts/:id', async (req, res) => {
           }
 
           allowedUpdates.scheduledAt = newScheduledDate;
+        }
+
+        // CRITICAL FIX: Also allow platforms updates
+        // Handle hashtags update (allowed for approved/scheduled posts even with video)
+        if (hashtags !== undefined) {
+          // Handle both array (legacy) and object (platform-specific) formats
+          if (Array.isArray(hashtags)) {
+            // Legacy array format - convert to platform-specific structure
+            const platformKey = post.platform === 'youtube_shorts' ? 'youtube_shorts' : post.platform;
+            const normalizedHashtags = normalizeHashtagsForStorage(hashtags);
+            allowedUpdates.hashtags = {
+              tiktok: platformKey === 'tiktok' ? normalizedHashtags : (post.hashtags?.tiktok || []),
+              instagram: platformKey === 'instagram' ? normalizedHashtags : (post.hashtags?.instagram || []),
+              youtube_shorts: platformKey === 'youtube_shorts' ? normalizedHashtags : (post.hashtags?.youtube_shorts || [])
+            };
+          } else if (typeof hashtags === 'object' && hashtags !== null) {
+            // Platform-specific object format - normalize each platform's hashtags
+            allowedUpdates.hashtags = {
+              tiktok: hashtags.tiktok ? normalizeHashtagsForStorage(hashtags.tiktok) : (post.hashtags?.tiktok || []),
+              instagram: hashtags.instagram ? normalizeHashtagsForStorage(hashtags.instagram) : (post.hashtags?.instagram || []),
+              youtube_shorts: hashtags.youtube_shorts ? normalizeHashtagsForStorage(hashtags.youtube_shorts) : (post.hashtags?.youtube_shorts || [])
+            };
+          } else {
+            return res.status(400).json({
+              success: false,
+              error: 'hashtags must be an array or object'
+            });
+          }
+
+          logger.info('Updated hashtags for post with video', {
+            postId: post._id,
+            hashtags: allowedUpdates.hashtags
+          });
+        }
+
+        if (platforms !== undefined && Array.isArray(platforms) && platforms.length > 0) {
+          // Validate platforms
+          const validPlatforms = ['tiktok', 'instagram', 'youtube_shorts'];
+          const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
+
+          if (invalidPlatforms.length > 0) {
+            return res.status(400).json({
+              success: false,
+              error: `Invalid platforms: ${invalidPlatforms.join(', ')}`
+            });
+          }
+
+          // Prevent removing platforms that are already posted or posting
+          if (post.platformStatus) {
+            const currentPlatforms = post.platforms || [post.platform].filter(Boolean);
+            const removedPlatforms = currentPlatforms.filter(p => !platforms.includes(p));
+
+            for (const platform of removedPlatforms) {
+              const platformStatus = post.platformStatus[platform]?.status;
+              if (platformStatus === 'posted' || platformStatus === 'posting') {
+                return res.status(400).json({
+                  success: false,
+                  error: `Cannot remove ${platform} - platform is ${platformStatus}`
+                });
+              }
+            }
+          }
+
+          // Update platforms array
+          allowedUpdates.platforms = platforms;
+
+          // Update legacy platform field (first platform)
+          allowedUpdates.platform = platforms[0];
+
+          // Initialize platformStatus for any new platforms
+          for (const platform of platforms) {
+            if (!post.platformStatus) {
+              post.platformStatus = {};
+            }
+            if (!post.platformStatus[platform]) {
+              post.platformStatus[platform] = {
+                status: 'pending',
+                postedAt: null,
+                mediaId: null,
+                error: null,
+                retryCount: 0
+              };
+            }
+          }
+
+          // Mark removed platforms as 'skipped' in platformStatus
+          if (post.platformStatus) {
+            for (const platform of validPlatforms) {
+              if (post.platformStatus[platform] && !platforms.includes(platform)) {
+                post.platformStatus[platform].status = 'skipped';
+              }
+            }
+          }
         }
 
         if (Object.keys(allowedUpdates).length > 0) {
@@ -2262,6 +2394,22 @@ router.put('/posts/:id', async (req, res) => {
             });
           }
 
+          // Prevent removing platforms that are already posted or posting
+          if (post.platformStatus) {
+            const currentPlatforms = post.platforms || [post.platform].filter(Boolean);
+            const removedPlatforms = currentPlatforms.filter(p => !platforms.includes(p));
+
+            for (const platform of removedPlatforms) {
+              const platformStatus = post.platformStatus[platform]?.status;
+              if (platformStatus === 'posted' || platformStatus === 'posting') {
+                return res.status(400).json({
+                  success: false,
+                  error: `Cannot remove ${platform} - platform is ${platformStatus}`
+                });
+              }
+            }
+          }
+
           // Update platforms array
           post.platforms = platforms;
 
@@ -2284,9 +2432,23 @@ router.put('/posts/:id', async (req, res) => {
             }
           }
 
+          // Mark removed platforms as 'skipped' in platformStatus
+          if (post.platformStatus) {
+            for (const platform of validPlatforms) {
+              if (post.platformStatus[platform] && !platforms.includes(platform)) {
+                post.platformStatus[platform].status = 'skipped';
+              }
+            }
+          }
+
           logger.info('Updated platforms for post', {
             postId: post._id,
             platforms
+          });
+        } else {
+          return res.status(400).json({
+            success: false,
+            error: 'platforms must be a non-empty array'
           });
         }
       }
@@ -2356,6 +2518,79 @@ router.put('/posts/:id', async (req, res) => {
     // Process caption
     if (caption !== undefined) {
       post.caption = caption.trim();
+    }
+
+    // Handle platforms update (for tier_1 and other posts)
+    if (platforms !== undefined) {
+      if (Array.isArray(platforms) && platforms.length > 0) {
+        // Validate platforms
+        const validPlatforms = ['tiktok', 'instagram', 'youtube_shorts'];
+        const invalidPlatforms = platforms.filter(p => !validPlatforms.includes(p));
+
+        if (invalidPlatforms.length > 0) {
+          return res.status(400).json({
+            success: false,
+            error: `Invalid platforms: ${invalidPlatforms.join(', ')}`
+          });
+        }
+
+        // Prevent removing platforms that are already posted or posting
+        if (post.platformStatus) {
+          const currentPlatforms = post.platforms || [post.platform].filter(Boolean);
+          const removedPlatforms = currentPlatforms.filter(p => !platforms.includes(p));
+
+          for (const platform of removedPlatforms) {
+            const platformStatus = post.platformStatus[platform]?.status;
+            if (platformStatus === 'posted' || platformStatus === 'posting') {
+              return res.status(400).json({
+                success: false,
+                error: `Cannot remove ${platform} - platform is ${platformStatus}`
+              });
+            }
+          }
+        }
+
+        // Update platforms array
+        post.platforms = platforms;
+
+        // Update legacy platform field (first platform)
+        post.platform = platforms[0];
+
+        // Initialize platformStatus for any new platforms
+        for (const platform of platforms) {
+          if (!post.platformStatus) {
+            post.platformStatus = {};
+          }
+          if (!post.platformStatus[platform]) {
+            post.platformStatus[platform] = {
+              status: 'pending',
+              postedAt: null,
+              mediaId: null,
+              error: null,
+              retryCount: 0
+            };
+          }
+        }
+
+        // Mark removed platforms as 'skipped' in platformStatus
+        if (post.platformStatus) {
+          for (const platform of validPlatforms) {
+            if (post.platformStatus[platform] && !platforms.includes(platform)) {
+              post.platformStatus[platform].status = 'skipped';
+            }
+          }
+        }
+
+        logger.info('Updated platforms for post', {
+          postId: post._id,
+          platforms
+        });
+      } else {
+        return res.status(400).json({
+          success: false,
+          error: 'platforms must be a non-empty array'
+        });
+      }
     }
 
     // Process hashtags - handle both array and platform-specific object formats
@@ -3118,13 +3353,64 @@ router.post('/:id/fetch-metrics', async (req, res) => {
     const result = await performanceMetricsService.fetchPostMetrics(id);
 
     if (result.success) {
+      const post = await MarketingPost.findById(id);
+
+      // Save metrics to database for each platform
+      const results = result.results || {};
+      const platforms = Object.keys(results);
+
+      for (const platform of platforms) {
+        const metrics = results[platform];
+
+        // Calculate engagement rate
+        const engagementRate = metrics.views > 0
+          ? ((metrics.likes + metrics.comments + (metrics.shares || 0)) / metrics.views) * 100
+          : 0;
+
+        // Update platform-specific metrics
+        const platformField = platform === 'youtube_shorts' ? 'youtube_shorts' : platform;
+        await MarketingPost.findByIdAndUpdate(id, {
+          [`platformStatus.${platformField}.performanceMetrics.views`]: metrics.views || 0,
+          [`platformStatus.${platformField}.performanceMetrics.likes`]: metrics.likes || 0,
+          [`platformStatus.${platformField}.performanceMetrics.comments`]: metrics.comments || 0,
+          [`platformStatus.${platformField}.performanceMetrics.shares`]: metrics.shares || 0,
+          [`platformStatus.${platformField}.performanceMetrics.engagementRate`]: engagementRate,
+          [`platformStatus.${platformField}.lastFetchedAt`]: new Date(),
+        });
+      }
+
+      // Calculate and save aggregate metrics
+      if (platforms.length > 0) {
+        let aggregateViews = 0, aggregateLikes = 0, aggregateComments = 0, aggregateShares = 0;
+
+        for (const platform of platforms) {
+          aggregateViews += results[platform].views || 0;
+          aggregateLikes += results[platform].likes || 0;
+          aggregateComments += results[platform].comments || 0;
+          aggregateShares += results[platform].shares || 0;
+        }
+
+        const aggregateEngagementRate = aggregateViews > 0
+          ? ((aggregateLikes + aggregateComments + aggregateShares) / aggregateViews) * 100
+          : 0;
+
+        await MarketingPost.findByIdAndUpdate(id, {
+          'performanceMetrics.views': aggregateViews,
+          'performanceMetrics.likes': aggregateLikes,
+          'performanceMetrics.comments': aggregateComments,
+          'performanceMetrics.shares': aggregateShares,
+          'performanceMetrics.engagementRate': aggregateEngagementRate,
+          'metricsLastFetchedAt': new Date(),
+        });
+      }
+
       // Fetch updated post to return current metrics
       const updatedPost = await MarketingPost.findById(id);
 
       res.json({
         success: true,
         data: {
-          message: 'Metrics fetched successfully',
+          message: 'Metrics fetched and saved successfully',
           results: result.results,
           aggregate: result.aggregate,
           performanceMetrics: updatedPost.performanceMetrics,
@@ -4210,9 +4496,9 @@ router.post('/posts/:id/upload-tier2-video', videoUpload.single('video'), async 
       // Continue without thumbnail
     }
 
-    // Update post - store URL paths for frontend access (not local file paths)
-    post.videoPath = `/storage/videos/tier2/final/${filename}`;
-    post.thumbnailPath = `/storage/thumbnails/${thumbnailFilename}`;
+    // Update post - store absolute file paths for video operations
+    post.videoPath = videoPath;
+    post.thumbnailPath = thumbnailPath;
     post.status = 'ready'; // Ready for approval
     await post.save();
 
@@ -4222,14 +4508,18 @@ router.post('/posts/:id/upload-tier2-video', videoUpload.single('video'), async 
       thumbnailPath
     });
 
+    // Convert absolute paths to URL paths for frontend
+    const videoUrl = `/storage/videos/tier2/final/${filename}`;
+    const thumbnailUrl = post.thumbnailPath ? `/storage/thumbnails/${thumbnailFilename}` : null;
+
     res.json({
       success: true,
       data: {
         id: post._id,
-        videoPath: post.videoPath,
-        videoUrl: `/storage/videos/tier2/final/${filename}`,
-        thumbnailPath: post.thumbnailPath,
-        thumbnailUrl: post.thumbnailPath ? `/storage/thumbnails/${thumbnailFilename}` : null,
+        videoPath: videoUrl, // URL path for frontend
+        videoUrl: videoUrl,
+        thumbnailPath: thumbnailUrl, // URL path for frontend
+        thumbnailUrl: thumbnailUrl,
         status: post.status
       }
     });

@@ -17,27 +17,21 @@ const logger = getLogger('api', 'youtube');
 /**
  * GET /api/youtube/authorization-url
  *
- * Step 3 of YouTube API integration: Get OAuth authorization URL
- * Returns URL for user to authorize the app
+ * Get OAuth authorization URL for YouTube
+ * This will present brand account selection in the Google OAuth dialog
  */
 router.get('/authorization-url', async (req, res) => {
   try {
     logger.info('Getting YouTube OAuth authorization URL...');
 
-    const result = await youtubeService.getAuthorizationUrl();
-
-    if (!result.success) {
-      return res.status(400).json({
-        success: false,
-        error: result.error,
-        code: result.code,
-      });
-    }
+    // Get auth URL for the 'youtube' platform (not 'google')
+    const { authUrl } = await oauthManager.getAuthorizationUrl('youtube');
 
     res.json({
       success: true,
       data: {
-        authorizationUrl: result.authUrl,
+        authorizationUrl: authUrl,
+        instructions: 'In the Google OAuth dialog, select the @BlushApp brand account when prompted',
       },
     });
   } catch (error) {
@@ -55,14 +49,46 @@ router.get('/authorization-url', async (req, res) => {
 });
 
 /**
+ * GET /api/youtube/authorize-url
+ *
+ * Alias for /authorization-url (matches Google Sheets pattern)
+ */
+router.get('/authorize-url', async (req, res) => {
+  try {
+    logger.info('Getting YouTube OAuth authorize URL...');
+
+    const { authUrl } = await oauthManager.getAuthorizationUrl('youtube');
+
+    res.json({
+      success: true,
+      data: {
+        authorizationUrl: authUrl,
+        instructions: 'In the Google OAuth dialog, select the @BlushApp brand account when prompted',
+      },
+    });
+  } catch (error) {
+    logger.error('Failed to get YouTube authorize URL', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate authorization URL',
+      details: error.message,
+    });
+  }
+});
+
+/**
  * POST /api/youtube/callback
  *
- * OAuth callback handler
- * Exchanges authorization code for access token
+ * OAuth callback handler for YouTube
+ * Uses the 'youtube' platform (not 'google')
  */
 router.post('/callback', async (req, res) => {
   try {
-    const { code } = req.body;
+    const { code, state } = req.body;
 
     if (!code) {
       return res.status(400).json({
@@ -73,17 +99,20 @@ router.post('/callback', async (req, res) => {
 
     logger.info('Processing YouTube OAuth callback...');
 
-    const result = await youtubeService.exchangeCodeForToken(code);
+    // Construct callback URL for oauthManager
+    const callbackUrl = `${process.env.GOOGLE_REDIRECT_URI}?code=${code}&state=${state}`;
+
+    // Handle callback for the 'youtube' platform
+    const result = await oauthManager.handleCallback('youtube', callbackUrl, state);
 
     if (!result.success) {
       return res.status(400).json({
         success: false,
         error: result.error,
-        code: result.code,
       });
     }
 
-    // Get user's channel
+    // Get the authenticated channel to verify it's the correct one
     const channelResult = await youtubeService.getUserChannel();
 
     res.json({
@@ -92,6 +121,7 @@ router.post('/callback', async (req, res) => {
       data: {
         authenticated: true,
         channel: channelResult.channel,
+        platform: 'youtube',
       },
     });
   } catch (error) {
@@ -111,32 +141,103 @@ router.post('/callback', async (req, res) => {
 /**
  * POST /api/youtube/test-connection
  *
- * Step 4 of YouTube API integration: Test API connection
- * Verifies credentials and authentication status
+ * Test both OAuth connection and API key
+ * - OAuth: Required for posting videos
+ * - API Key: Required for fetching public metrics
  */
 router.post('/test-connection', async (req, res) => {
   try {
+    logger.info('Testing YouTube connection (OAuth + API Key)...');
+
+    const results = {
+      oauth: { success: false, message: '' },
+      apiKey: { success: false, message: '' },
+    };
+
+    // Test OAuth connection (for posting videos)
+    const oauthResult = await youtubeService.verifyConnection();
+    results.oauth = {
+      success: oauthResult.success,
+      message: oauthResult.success ? 'OAuth connection verified' : oauthResult.error,
+      code: oauthResult.code,
+      channel: oauthResult.channel,
+    };
+
+    // Test API key (for fetching metrics)
+    const apiKeyTest = await youtubeService.testConnection();
+    results.apiKey = {
+      success: apiKeyTest.success,
+      message: apiKeyTest.success ? 'API key valid' : apiKeyTest.error,
+      code: apiKeyTest.code,
+    };
+
+    // Overall success requires OAuth to work (API key is optional but recommended)
+    const overallSuccess = oauthResult.success;
+    const message = [];
+
+    if (oauthResult.success) {
+      message.push('✓ OAuth connected (can post videos)');
+    } else {
+      message.push(`✗ OAuth failed: ${oauthResult.error}`);
+    }
+
+    if (apiKeyTest.success) {
+      message.push('✓ API key valid (can fetch metrics)');
+    } else {
+      message.push(`⚠ API key issue: ${apiKeyTest.error} (metrics won't work)`);
+    }
+
+    res.json({
+      success: overallSuccess,
+      message: message.join(' | '),
+      data: {
+        oauth: results.oauth,
+        apiKey: results.apiKey,
+        canPost: oauthResult.success,
+        canFetchMetrics: apiKeyTest.success,
+      },
+    });
+  } catch (error) {
+    logger.error('YouTube connection test failed', {
+      error: error.message,
+      stack: error.stack,
+    });
+
+    res.status(500).json({
+      success: false,
+      error: 'Connection test failed',
+      details: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/youtube/test-connection
+ *
+ * GET endpoint for test-connection (convenience method)
+ */
+router.get('/test-connection', async (req, res) => {
+  try {
     logger.info('Testing YouTube API connection...');
 
-    const result = await youtubeService.testConnection();
+    const connectionResult = await youtubeService.verifyConnection();
 
-    if (!result.success) {
+    if (!connectionResult.success) {
       return res.status(400).json({
         success: false,
-        error: result.error,
-        code: result.code,
-        details: result.details,
+        error: connectionResult.error,
+        code: connectionResult.code,
+        details: connectionResult.details,
       });
     }
 
     res.json({
       success: true,
-      message: result.message,
-      data: {
-        connectionStatus: 'ok',
-        authenticated: await oauthManager.isAuthenticated('google'), // YouTube uses Google OAuth
-        hasChannel: !!youtubeService.channelId,
-      },
+      message: connectionResult.message,
+      code: connectionResult.code,
+      channelId: connectionResult.channelId,
+      channel: connectionResult.channel,
+      authenticated: await oauthManager.isAuthenticated('youtube'),
     });
   } catch (error) {
     logger.error('YouTube connection test failed', {
@@ -360,6 +461,91 @@ router.post('/post/:postId', async (req, res) => {
     })}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
+  }
+});
+
+/**
+ * GET /api/youtube/test-channels
+ *
+ * Discovery test: See what channels the API returns when authenticated
+ * This will tell us if the Blush brand account is accessible
+ */
+router.get('/test-channels', async (req, res) => {
+  try {
+    logger.info('Testing YouTube channel access...');
+
+    // Test 1: Call channels.list with mine=true
+    const url1 = 'https://www.googleapis.com/youtube/v3/channels?part=snippet,contentDetails,statistics&mine=true';
+    const response1 = await oauthManager.fetch('youtube', url1);
+
+    if (!response1.ok) {
+      const error = await response1.json();
+      return res.status(500).json({
+        success: false,
+        error: error.error?.message || 'Failed to fetch channels',
+        details: error,
+      });
+    }
+
+    const data1 = await response1.json();
+
+    logger.info('channels.list with mine=true returned:', {
+      count: data1.items?.length || 0,
+      channels: data1.items?.map(c => ({
+        id: c.id,
+        title: c.snippet?.title,
+        customUrl: c.snippet?.customUrl,
+      })),
+    });
+
+    // Test 2: Try listing all channels without mine parameter
+    // (This might return channels the user manages)
+    const url2 = 'https://www.googleapis.com/youtube/v3/channels?part=snippet&managedByMe=true';
+    const response2 = await oauthManager.fetch('youtube', url2);
+
+    let data2 = null;
+    if (response2.ok) {
+      data2 = await response2.json();
+      logger.info('channels.list with managedByMe=true returned:', {
+        count: data2.items?.length || 0,
+      });
+    } else {
+      logger.warn('managedByMe parameter failed (expected for non-CMS accounts)');
+    }
+
+    return res.json({
+      success: true,
+      results: {
+        mine: {
+          count: data1.items?.length || 0,
+          channels: data1.items?.map(c => ({
+            id: c.id,
+            title: c.snippet?.title,
+            customUrl: c.snippet?.customUrl,
+            description: c.snippet?.description,
+          })),
+        },
+        managedByMe: data2 ? {
+          count: data2.items?.length || 0,
+          channels: data2.items?.map(c => ({
+            id: c.id,
+            title: c.snippet?.title,
+          })),
+        } : null,
+      },
+      nextSteps: {
+        ifMultipleChannels: 'If multiple channels returned, we can add channel selection',
+        ifOneChannel: 'If only one channel, we need to explore other approaches',
+        lookFor: 'Look for a channel titled "BlushApp" or similar',
+      },
+    });
+
+  } catch (error) {
+    logger.error('YouTube test-channels error', { error: error.message });
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 });
 

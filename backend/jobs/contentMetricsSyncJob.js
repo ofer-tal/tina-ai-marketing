@@ -6,7 +6,7 @@
  * - Instagram post metrics
  * - YouTube Shorts metrics
  *
- * Runs every 2 hours to keep content performance data fresh
+ * Runs every 3 hours to keep content performance data fresh
  */
 
 import schedulerService from '../services/scheduler.js';
@@ -18,6 +18,65 @@ import { getLogger } from '../utils/logger.js';
 const logger = getLogger('content-metrics-sync', 'scheduler');
 
 /**
+ * Calculates aggregate metrics from all posted platforms
+ * Uses SUM for views, likes, comments, shares, saved
+ * Uses MAX for reach and weighted average for engagement rate
+ *
+ * @param {Object} platformStatus - The platformStatus object from a post
+ * @returns {Object} Aggregate metrics
+ */
+function calculateAggregateMetrics(platformStatus) {
+  if (!platformStatus) {
+    return {
+      views: 0,
+      likes: 0,
+      comments: 0,
+      shares: 0,
+      saved: 0,
+      reach: 0,
+      engagementRate: 0
+    };
+  }
+
+  let aggregate = {
+    views: 0,
+    likes: 0,
+    comments: 0,
+    shares: 0,
+    saved: 0,
+    reach: 0,
+    engagementRate: 0
+  };
+
+  // Find all platforms that are actually posted
+  const postedPlatforms = Object.entries(platformStatus)
+    .filter(([_, data]) => data?.status === 'posted');
+
+  if (postedPlatforms.length === 0) {
+    return aggregate;
+  }
+
+  // Aggregate metrics from all posted platforms
+  postedPlatforms.forEach(([_, data]) => {
+    const pm = data.performanceMetrics || {};
+    aggregate.views += pm.views || 0;
+    aggregate.likes += pm.likes || 0;
+    aggregate.comments += pm.comments || 0;
+    aggregate.shares += pm.shares || 0;
+    aggregate.saved += pm.saved || 0;
+    aggregate.reach = Math.max(aggregate.reach, pm.reach || 0);
+  });
+
+  // Calculate weighted average engagement rate
+  const totalEngagement = aggregate.likes + aggregate.comments + aggregate.shares;
+  aggregate.engagementRate = aggregate.views > 0
+    ? (totalEngagement / aggregate.views) * 100
+    : 0;
+
+  return aggregate;
+}
+
+/**
  * Content Metrics Sync Job Class
  */
 class ContentMetricsSyncJob {
@@ -27,7 +86,7 @@ class ContentMetricsSyncJob {
     this.lastSyncStats = null;
 
     // Configuration from environment
-    this.syncSchedule = process.env.CONTENT_METRICS_SYNC_SCHEDULE || '0 */2 * * *'; // Every 2 hours
+    this.syncSchedule = process.env.CONTENT_METRICS_SYNC_SCHEDULE || '0 */3 * * *'; // Every 3 hours (reduced from every 2 hours)
     this.timezone = process.env.CONTENT_METRICS_SYNC_TIMEZONE || 'UTC';
   }
 
@@ -130,6 +189,15 @@ class ContentMetricsSyncJob {
     const result = { updated: 0, failed: 0, matched: 0, unmatched: 0 };
 
     try {
+      // Check rate limit status before fetching
+      const rateLimitStatus = tiktokPostingService.getRateLimitStatus();
+      if (rateLimitStatus.rateLimited) {
+        logger.warn('TikTok API is currently rate limited, skipping metrics sync', {
+          resetAt: rateLimitStatus.resetAt,
+        });
+        return result;
+      }
+
       // Fetch all videos from TikTok API
       const fetchResult = await tiktokPostingService.fetchUserVideos();
 
@@ -145,13 +213,21 @@ class ContentMetricsSyncJob {
 
       // Get all TikTok posts that need metrics updating
       // Check both legacy platform field and new platforms array for multi-platform support
+      // CRITICAL FIX: Also check platform-specific status for partially posted posts
       const tiktokPosts = await MarketingPost.find({
         $or: [
           { platform: 'tiktok' },
           { platforms: 'tiktok' }
         ],
-        status: { $in: ['posted', 'scheduled', 'approved'] },
-        postedAt: { $exists: true },
+        $or: [
+          { status: { $in: ['posted', 'scheduled', 'approved'] } }, // Legacy field check
+          { 'platformStatus.tiktok.status': 'posted' } // Multi-platform posts with TikTok posted
+        ],
+        // Check for postedAt at EITHER top level OR platform-specific level
+        $or: [
+          { postedAt: { $exists: true } }, // Legacy field
+          { 'platformStatus.tiktok.postedAt': { $exists: true } } // Platform-specific field
+        ]
       });
 
       if (tiktokPosts.length === 0) {
@@ -175,27 +251,47 @@ class ContentMetricsSyncJob {
 
         if (post) {
           try {
-            // Calculate engagement rate
+            // Calculate engagement rate for TikTok
             const engagementRate = video.view_count > 0
               ? ((video.like_count + video.comment_count + video.share_count) / video.view_count) * 100
               : 0;
 
-            // Update both legacy performanceMetrics and new platformStatus.tiktok.performanceMetrics
-            // logger.info(`Before TikTok update - post ${post._id} platformStatus.tiktok:`, post.platformStatus?.tiktok);
+            // First, update TikTok-specific metrics
+            const updatedPlatformStatus = {
+              ...(post.platformStatus || {}),
+              tiktok: {
+                ...(post.platformStatus?.tiktok || {}),
+                performanceMetrics: {
+                  views: video.view_count || 0,
+                  likes: video.like_count || 0,
+                  comments: video.comment_count || 0,
+                  shares: video.share_count || 0,
+                  engagementRate: engagementRate,
+                },
+                lastFetchedAt: new Date(),
+              }
+            };
 
-            const tiktokUpdateResult = await MarketingPost.findByIdAndUpdate(post._id, {
-              'performanceMetrics.views': video.view_count || 0,
-              'performanceMetrics.likes': video.like_count || 0,
-              'performanceMetrics.comments': video.comment_count || 0,
-              'performanceMetrics.shares': video.share_count || 0,
-              'performanceMetrics.engagementRate': engagementRate,
-              // Also update per-platform metrics for multi-platform posts
+            // Calculate aggregate metrics from ALL posted platforms (not just TikTok)
+            const aggregateMetrics = calculateAggregateMetrics(updatedPlatformStatus);
+
+            // Now update both platform-specific AND aggregate metrics
+            await MarketingPost.findByIdAndUpdate(post._id, {
+              // Platform-specific TikTok metrics
               'platformStatus.tiktok.performanceMetrics.views': video.view_count || 0,
               'platformStatus.tiktok.performanceMetrics.likes': video.like_count || 0,
               'platformStatus.tiktok.performanceMetrics.comments': video.comment_count || 0,
               'platformStatus.tiktok.performanceMetrics.shares': video.share_count || 0,
               'platformStatus.tiktok.performanceMetrics.engagementRate': engagementRate,
               'platformStatus.tiktok.lastFetchedAt': new Date(),
+              // Overall aggregate metrics (sum of ALL posted platforms)
+              'performanceMetrics.views': aggregateMetrics.views,
+              'performanceMetrics.likes': aggregateMetrics.likes,
+              'performanceMetrics.comments': aggregateMetrics.comments,
+              'performanceMetrics.shares': aggregateMetrics.shares,
+              'performanceMetrics.saved': aggregateMetrics.saved,
+              'performanceMetrics.reach': aggregateMetrics.reach,
+              'performanceMetrics.engagementRate': aggregateMetrics.engagementRate,
               metricsLastFetchedAt: new Date(),
             });
 
@@ -244,15 +340,23 @@ class ContentMetricsSyncJob {
     const result = { updated: 0, failed: 0 };
 
     try {
-      // Find all posted Instagram posts
-      // Check both legacy platform field and new platforms array for multi-platform support
+      // Find all Instagram posts that are posted
+      // CRITICAL FIX: Check both legacy status field AND platform-specific status for multi-platform posts
+      // This ensures we sync metrics for partially posted posts (e.g., Instagram posted, TikTok failed)
       const instagramPosts = await MarketingPost.find({
         $or: [
           { platform: 'instagram' },
           { platforms: 'instagram' }
         ],
-        status: 'posted',
-        postedAt: { $exists: true }
+        $or: [
+          { status: 'posted' }, // Legacy single-platform posts
+          { 'platformStatus.instagram.status': 'posted' } // Multi-platform posts with Instagram posted
+        ],
+        // Check for postedAt at EITHER top level OR platform-specific level
+        $or: [
+          { postedAt: { $exists: true } }, // Legacy field
+          { 'platformStatus.instagram.postedAt': { $exists: true } } // Platform-specific field
+        ]
       });
 
       if (instagramPosts.length === 0) {
@@ -292,19 +396,30 @@ class ContentMetricsSyncJob {
                 engagementRate: engagementRate
               });
 
-              // CRITICAL FIX: Actually update the database with Instagram metrics
-              // Same pattern as TikTok - update both legacy and new platformStatus fields
-              logger.info(`Before update - post ${post._id} current platformStatus:`, post.platformStatus);
+              // Build updated platformStatus with Instagram metrics
+              const updatedPlatformStatus = {
+                ...(post.platformStatus || {}),
+                instagram: {
+                  ...(post.platformStatus?.instagram || {}),
+                  performanceMetrics: {
+                    views: instaMetrics.views || 0,
+                    likes: instaMetrics.likes || 0,
+                    comments: instaMetrics.comments || 0,
+                    shares: instaMetrics.shares || 0,
+                    saved: instaMetrics.saved || 0,
+                    reach: instaMetrics.reach || 0,
+                    engagementRate: engagementRate,
+                  },
+                  lastFetchedAt: new Date(),
+                }
+              };
 
+              // Calculate aggregate metrics from ALL posted platforms (not just Instagram)
+              const aggregateMetrics = calculateAggregateMetrics(updatedPlatformStatus);
+
+              // Update both platform-specific AND aggregate metrics
               const updateResult = await MarketingPost.findByIdAndUpdate(post._id, {
-                'performanceMetrics.views': instaMetrics.views || 0,
-                'performanceMetrics.likes': instaMetrics.likes || 0,
-                'performanceMetrics.comments': instaMetrics.comments || 0,
-                'performanceMetrics.shares': instaMetrics.shares || 0,
-                'performanceMetrics.engagementRate': engagementRate,
-                'performanceMetrics.saved': instaMetrics.saved || 0,
-                'performanceMetrics.reach': instaMetrics.reach || 0,
-                // Also update per-platform metrics for multi-platform posts
+                // Platform-specific Instagram metrics
                 'platformStatus.instagram.performanceMetrics.views': instaMetrics.views || 0,
                 'platformStatus.instagram.performanceMetrics.likes': instaMetrics.likes || 0,
                 'platformStatus.instagram.performanceMetrics.comments': instaMetrics.comments || 0,
@@ -313,14 +428,24 @@ class ContentMetricsSyncJob {
                 'platformStatus.instagram.performanceMetrics.saved': instaMetrics.saved || 0,
                 'platformStatus.instagram.performanceMetrics.reach': instaMetrics.reach || 0,
                 'platformStatus.instagram.lastFetchedAt': new Date(),
-                'metricsLastFetchedAt': new Date(),
-              });
+                // Overall aggregate metrics (sum of ALL posted platforms)
+                'performanceMetrics.views': aggregateMetrics.views,
+                'performanceMetrics.likes': aggregateMetrics.likes,
+                'performanceMetrics.comments': aggregateMetrics.comments,
+                'performanceMetrics.shares': aggregateMetrics.shares,
+                'performanceMetrics.saved': aggregateMetrics.saved,
+                'performanceMetrics.reach': aggregateMetrics.reach,
+                'performanceMetrics.engagementRate': aggregateMetrics.engagementRate,
+                metricsLastFetchedAt: new Date(),
+              }, { new: true }); // Return the updated document
 
-              logger.info(`After update - post ${post._id} platformStatus.instagram:`, {
-                performanceMetrics: updateResult.platformStatus?.instagram?.performanceMetrics,
-                views: updateResult.performanceMetrics?.views,
-                lastFetchedAt: updateResult.platformStatus?.instagram?.lastFetchedAt
-              });
+              if (updateResult) {
+                logger.info(`After update - post ${post._id} platformStatus.instagram:`, {
+                  performanceMetrics: updateResult.platformStatus?.instagram?.performanceMetrics,
+                  views: updateResult.performanceMetrics?.views,
+                  lastFetchedAt: updateResult.platformStatus?.instagram?.lastFetchedAt
+                });
+              }
 
               result.updated++;
             } else {
@@ -352,13 +477,21 @@ class ContentMetricsSyncJob {
     try {
       // Find all posted YouTube posts
       // Check both legacy platform field and new platforms array for multi-platform support
+      // CRITICAL FIX: Also check platform-specific status for partially posted posts
       const youtubePosts = await MarketingPost.find({
         $or: [
           { platform: 'youtube_shorts' },
           { platforms: 'youtube_shorts' }
         ],
-        status: 'posted',
-        postedAt: { $exists: true }
+        $or: [
+          { status: 'posted' }, // Legacy single-platform posts
+          { 'platformStatus.youtube_shorts.status': 'posted' } // Multi-platform posts with YouTube posted
+        ],
+        // Check for postedAt at EITHER top level OR platform-specific level
+        $or: [
+          { postedAt: { $exists: true } }, // Legacy field
+          { 'platformStatus.youtube_shorts.postedAt': { $exists: true } } // Platform-specific field
+        ]
       });
 
       if (youtubePosts.length === 0) {
@@ -368,13 +501,93 @@ class ContentMetricsSyncJob {
 
       logger.info(`Found ${youtubePosts.length} YouTube posts to sync metrics for`);
 
-      // For each post, we would fetch metrics from YouTube API
+      // For each post, fetch metrics from YouTube API
       for (const post of youtubePosts) {
         try {
-          // TODO: Implement actual YouTube API call to get video statistics
-          // const metrics = await youtubeService.getVideoStats(post.externalPostId);
+          // Get video ID from platform status or legacy field
+          const platformStatus = post.platformStatus?.youtube_shorts;
+          const videoId = platformStatus?.mediaId || post.youtubeVideoId;
 
-          result.updated++;
+          if (!videoId) {
+            logger.debug(`Skipping YouTube post ${post._id} - no video ID found`);
+            continue;
+          }
+
+          // Fetch metrics using performance metrics service
+          const metricsResult = await performanceMetricsService.fetchYouTubeMetricsForPost({
+            ...post.toObject(),
+            youtubeVideoId: videoId,
+          });
+
+          if (metricsResult.success) {
+            const metrics = metricsResult.data;
+
+            // Calculate engagement rate for YouTube
+            const engagementRate = metrics.views > 0
+              ? ((metrics.likes + metrics.comments) / metrics.views) * 100
+              : 0;
+
+            logger.info(`Updating YouTube metrics for post ${post._id}`, {
+              views: metrics.views,
+              likes: metrics.likes,
+              comments: metrics.comments,
+              engagementRate: engagementRate
+            });
+
+            // Build updated platformStatus with YouTube metrics
+            const updatedPlatformStatus = {
+              ...(post.platformStatus || {}),
+              youtube_shorts: {
+                ...(post.platformStatus?.youtube_shorts || {}),
+                performanceMetrics: {
+                  views: metrics.views || 0,
+                  likes: metrics.likes || 0,
+                  comments: metrics.comments || 0,
+                  shares: 0, // YouTube API doesn't provide shares
+                  saved: 0, // YouTube API doesn't provide saves
+                  reach: 0, // YouTube API doesn't provide reach
+                  engagementRate: engagementRate,
+                },
+                lastFetchedAt: new Date(),
+              }
+            };
+
+            // Calculate aggregate metrics from ALL posted platforms (not just YouTube)
+            const aggregateMetrics = calculateAggregateMetrics(updatedPlatformStatus);
+
+            // Update both platform-specific AND aggregate metrics
+            const updateResult = await MarketingPost.findByIdAndUpdate(post._id, {
+              // Platform-specific YouTube metrics
+              'platformStatus.youtube_shorts.performanceMetrics.views': metrics.views || 0,
+              'platformStatus.youtube_shorts.performanceMetrics.likes': metrics.likes || 0,
+              'platformStatus.youtube_shorts.performanceMetrics.comments': metrics.comments || 0,
+              'platformStatus.youtube_shorts.performanceMetrics.engagementRate': engagementRate,
+              'platformStatus.youtube_shorts.lastFetchedAt': new Date(),
+              // Overall aggregate metrics (sum of ALL posted platforms)
+              'performanceMetrics.views': aggregateMetrics.views,
+              'performanceMetrics.likes': aggregateMetrics.likes,
+              'performanceMetrics.comments': aggregateMetrics.comments,
+              'performanceMetrics.shares': aggregateMetrics.shares,
+              'performanceMetrics.saved': aggregateMetrics.saved,
+              'performanceMetrics.reach': aggregateMetrics.reach,
+              'performanceMetrics.engagementRate': aggregateMetrics.engagementRate,
+              metricsLastFetchedAt: new Date(),
+            }, { new: true }); // Return the updated document
+
+            if (updateResult) {
+              logger.debug(`After update - post ${post._id} platformStatus.youtube_shorts:`, {
+                performanceMetrics: updateResult.platformStatus?.youtube_shorts?.performanceMetrics,
+                views: updateResult.performanceMetrics?.views,
+                lastFetchedAt: updateResult.platformStatus?.youtube_shorts?.lastFetchedAt
+              });
+            }
+
+            result.updated++;
+          } else {
+            logger.warn(`Failed to fetch YouTube metrics for post ${post._id}: ${metricsResult.error}`);
+            result.failed++;
+          }
+
         } catch (error) {
           logger.warn(`Failed to sync metrics for YouTube post ${post._id}: ${error.message}`);
           result.failed++;
@@ -382,7 +595,10 @@ class ContentMetricsSyncJob {
       }
 
     } catch (error) {
-      logger.error('Error syncing YouTube metrics:', error);
+      logger.error('Error syncing YouTube metrics:', {
+        error: error.message,
+        stack: error.stack,
+      });
     }
 
     return result;

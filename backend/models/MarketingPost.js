@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import configService from '../services/config.js';
 
 /**
  * Marketing Post Schema
@@ -391,6 +392,10 @@ const marketingPostSchema = new mongoose.Schema({
   },
   sheetTriggeredAt: {
     type: Date
+  },
+  sheetTriggerPending: {
+    type: Boolean,
+    default: false
   },
 
   // TikTok publishing via Buffer
@@ -876,11 +881,16 @@ marketingPostSchema.methods.scheduleFor = function(date) {
     throw new Error('Invalid scheduled date');
   }
 
-  // Validate the date is in the future (at least 30 minutes from now)
-  const now = new Date();
-  const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
-  if (date < minScheduleTime) {
-    throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${now.toISOString()}, Minimum: ${minScheduleTime.toISOString()}`);
+  // Check if we should bypass schedule constraints (for testing)
+  const bypassConstraints = configService.get('BYPASS_SCHEDULE_CONSTRAINTS') === 'true';
+
+  if (!bypassConstraints) {
+    // Validate the date is in the future (at least 30 minutes from now)
+    const now = new Date();
+    const minScheduleTime = new Date(now.getTime() + 30 * 60 * 1000);
+    if (date < minScheduleTime) {
+      throw new Error(`Scheduled date must be at least 30 minutes in the future. Current time: ${now.toISOString()}, Minimum: ${minScheduleTime.toISOString()}`);
+    }
   }
 
   this.status = 'scheduled';
@@ -960,11 +970,13 @@ marketingPostSchema.methods.getOverallStatus = function() {
     if (platformStatuses.some(s => s === 'posting' || s === 'pending')) return 'posting';
 
     // Default to the current status if no clear derived status
-    return this.status;
+    // Fallback to 'draft' if status is undefined to prevent validation errors
+    return this.status || 'draft';
   }
 
   // Legacy single-platform posts - return current status
-  return this.status;
+  // Fallback to 'draft' if status is undefined to prevent validation errors
+  return this.status || 'draft';
 };
 
 /**
@@ -1039,6 +1051,12 @@ marketingPostSchema.methods.setPlatformStatus = async function(platform, status,
  */
 marketingPostSchema.methods.canPostToPlatform = function(platform) {
   const platformStatus = this.platformStatus?.[platform];
+
+  // CRITICAL: Never post to TikTok if sheetTriggeredAt is set
+  // This prevents duplicate Google Sheet writes
+  if (platform === 'tiktok' && this.sheetTriggeredAt) {
+    return false;
+  }
 
   // If no status yet, can post
   if (!platformStatus) return true;
