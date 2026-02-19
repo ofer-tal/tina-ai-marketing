@@ -230,14 +230,66 @@ class PerformanceMetricsService extends BaseApiClient {
       // CRITICAL: Use media ID from platformStatus.instagram.mediaId
       // The insights endpoint is: /{media_id}/insights?metric=...
       const baseURL = 'https://graph.facebook.com/v18.0';
-      const insightsEndpoint = `/${mediaId}/insights`;
 
+      // CRITICAL FIX: First get media product type to determine which metrics to request
+      // Different media types (REELS, STORY, FEED) support different metrics
+      // Reference: https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-media/insights
+      logger.info(`Fetching media product type for ${mediaId}...`);
+
+      const mediaInfoResponse = await fetch(`${baseURL}/${mediaId}?fields=media_product_type,media_type`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${pageAccessToken}`,
+        },
+      });
+
+      if (!mediaInfoResponse.ok) {
+        const errorText = await mediaInfoResponse.text();
+        throw new Error(`Instagram media info API error ${mediaInfoResponse.status}: ${errorText}`);
+      }
+
+      const mediaInfo = await mediaInfoResponse.json();
+
+      if (mediaInfo.error) {
+        throw new Error(`Instagram media info API error: ${mediaInfo.error.message} (${mediaInfo.error.code})`);
+      }
+
+      const mediaProductType = mediaInfo.media_product_type; // 'FEED', 'STORY', 'REELS', or 'AD'
+
+      logger.info(`Media product type: ${mediaProductType}`, {
+        mediaId,
+        mediaProductType,
+        mediaType: mediaInfo.media_type,
+      });
+
+      // Select metrics based on media product type
+      // IMPORTANT: Different media types support different metrics
+      // - REELS: views (new), reach, saved, shares, likes, comments, total_interactions
+      // - STORY: impressions (for stories created before July 2, 2024), reach, saved, replies, navigation
+      // - FEED: impressions, reach, saved, shares
+      let metricsToRequest;
+      if (mediaProductType === 'REELS') {
+        // REELS-specific metrics (impressions and video_views NOT available)
+        // 'views' replaced 'video_views' (deprecated)
+        metricsToRequest = 'views,reach,saved,likes,comments,shares';
+      } else if (mediaProductType === 'STORY') {
+        // STORY metrics (includes impressions for stories created before July 2, 2024)
+        metricsToRequest = 'impressions,reach,saved,replies,navigation';
+      } else {
+        // FEED posts (or default)
+        metricsToRequest = 'impressions,reach,saved,shares';
+      }
+
+      const insightsEndpoint = `/${mediaId}/insights`;
       const params = new URLSearchParams({
-        metric: 'impressions,reach,saved,video_views',
+        metric: metricsToRequest,
       });
 
       logger.info(`Fetching Instagram insights for media ${mediaId}`, {
         endpoint: `${baseURL}${insightsEndpoint}?${params}`,
+        mediaProductType,
+        metricsToRequest,
       });
 
       const response = await fetch(`${baseURL}${insightsEndpoint}?${params}`, {
@@ -279,10 +331,12 @@ class PerformanceMetricsService extends BaseApiClient {
         return 0;
       };
 
-      const impressions = getMetricValue('impressions');
+      // Get metrics based on what was requested
+      // For REELS: views is the primary view metric (replaces deprecated video_views)
+      // For FEED/STORY: may still get impressions
+      const views = getMetricValue('views') || getMetricValue('impressions') || 0;
       const reach = getMetricValue('reach');
       const saved = getMetricValue('saved');
-      const video_views = getMetricValue('video_views');
 
       // Engagement is a composite metric - we need individual metrics
       // Fetch media object to get likes, comments, shares separately
@@ -311,10 +365,6 @@ class PerformanceMetricsService extends BaseApiClient {
           error: mediaError.message,
         });
       }
-
-      // Calculate views (impressions) from insights
-      // Use video_views for Reels if available, otherwise fall back to impressions
-      const views = video_views || impressions;
 
       logger.info(`Instagram metrics fetched for media ${mediaId}`, {
         views,

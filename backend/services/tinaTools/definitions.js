@@ -1217,9 +1217,35 @@ Creates draft posts that can be edited, generated, and approved later.`,
           description: 'New hook text'
         },
         hashtags: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'New hashtags'
+          oneOf: [
+            {
+              type: 'object',
+              description: 'Platform-specific hashtags (recommended for multi-platform posts)',
+              properties: {
+                tiktok: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'TikTok-specific hashtags'
+                },
+                instagram: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Instagram-specific hashtags'
+                },
+                youtube_shorts: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'YouTube Shorts-specific hashtags'
+                }
+              }
+            },
+            {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Hashtags for all platforms (same hashtags used for all platforms)'
+            }
+          ],
+          description: 'New hashtags (platform-specific object or array for all platforms)'
         },
         voice: {
           type: 'string',

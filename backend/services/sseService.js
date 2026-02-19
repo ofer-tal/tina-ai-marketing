@@ -375,6 +375,24 @@ class SSEService {
   serializePost(post) {
     if (!post) return null;
 
+    // Helper function to convert storage paths to URLs
+    const pathToUrl = (filePath) => {
+      if (!filePath) return null;
+      // Already a URL path (starts with /storage/)
+      if (filePath.startsWith('/storage/')) return filePath;
+      // Convert absolute path to URL
+      const normalizedPath = filePath.replace(/\\/g, '/');
+      // Match various storage path patterns
+      const storageMatch = normalizedPath.match(/\/?mnt\/[cC]\/Projects\/blush-marketing\/storage\/(.+)/) ||
+                          normalizedPath.match(/[A-Z]:\/Projects\/blush-marketing\/storage\/(.+)/) ||
+                          normalizedPath.match(/\/storage\/(.+)/);
+      if (storageMatch) {
+        return `/storage/${storageMatch[1]}`;
+      }
+      // Return as-is if no pattern matches
+      return filePath;
+    };
+
     // Handle both Mongoose documents and plain objects
     const plainPost = post.toObject ? post.toObject() : post;
 
@@ -401,9 +419,9 @@ class SSEService {
       cta: plainPost.cta,
       hashtags: plainPost.hashtags,
       tierParameters, // Include tierParameters for tier_2 posts
-      videoPath: plainPost.videoPath,
-      thumbnailPath: plainPost.thumbnailPath,
-      imagePath: plainPost.imagePath,
+      videoPath: pathToUrl(plainPost.videoPath),
+      thumbnailPath: pathToUrl(plainPost.thumbnailPath),
+      imagePath: pathToUrl(plainPost.imagePath),
       scheduledAt: plainPost.scheduledAt?.toISOString() || plainPost.scheduledAt,
       postedAt: plainPost.postedAt?.toISOString() || plainPost.postedAt,
       createdAt: plainPost.createdAt?.toISOString() || plainPost.createdAt,

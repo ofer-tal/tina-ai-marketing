@@ -21,6 +21,44 @@ import { fromTinaTime, formatForTina, getLocalNow } from '../../utils/tz/timezon
 const logger = getLogger('post-management-tools', 'post-management-tools');
 
 /**
+ * Parse hashtags parameter which may be:
+ * - A proper object: { tiktok: [...], instagram: [...], youtube_shorts: [...] }
+ * - A JSON string: '{"tiktok": [...], "instagram": [...]}'
+ * - An array: ["#tag1", "#tag2"]
+ *
+ * @param {*} hashtags - The hashtags parameter to parse
+ * @returns {Object|null} Normalized hashtags object or null if invalid
+ */
+function parseHashtagsParam(hashtags) {
+  if (!hashtags) return null;
+
+  // Already an object (platform-specific)
+  if (typeof hashtags === 'object' && !Array.isArray(hashtags)) {
+    return hashtags;
+  }
+
+  // Array format (legacy - same hashtags for all platforms)
+  if (Array.isArray(hashtags)) {
+    return { _all: hashtags };  // Special marker for "apply to all"
+  }
+
+  // String that might be JSON
+  if (typeof hashtags === 'string') {
+    try {
+      const parsed = JSON.parse(hashtags);
+      // Recursively handle in case of double-encoding
+      return parseHashtagsParam(parsed);
+    } catch (e) {
+      // Not valid JSON, return null to trigger fallback
+      logger.warn('Failed to parse hashtags string', { hashtags: hashtags.substring(0, 100) });
+      return null;
+    }
+  }
+
+  return null;
+}
+
+/**
  * Convert storage file path to URL for frontend access
  * Converts Windows and WSL paths to /storage/ URLs
  * @param {string} filePath - Absolute file path
@@ -470,17 +508,18 @@ export async function createPost(params = {}) {
   }
 
   // Auto-generate hashtags if not provided
-  // Generate platform-specific hashtags for each platform
+  // Parse hashtags parameter (handles string, object, or array formats)
+  const parsedHashtags = parseHashtagsParam(providedHashtags);
   const platformHashtags = {};
   const fallbackHashtags = ['#blushapp', '#romance', '#storytime', '#fyp', '#viral'];
 
   for (const platform of platforms) {
-    if (providedHashtags && providedHashtags[platform]) {
+    if (parsedHashtags && parsedHashtags[platform]) {
       // Platform-specific hashtags provided
-      platformHashtags[platform] = providedHashtags[platform];
-    } else if (providedHashtags && Array.isArray(providedHashtags)) {
+      platformHashtags[platform] = parsedHashtags[platform];
+    } else if (parsedHashtags && parsedHashtags._all) {
       // Legacy array format - use for all platforms
-      platformHashtags[platform] = providedHashtags;
+      platformHashtags[platform] = parsedHashtags._all;
     } else {
       // Generate hashtags for this specific platform
       try {
@@ -933,8 +972,28 @@ export async function editPost(params = {}) {
   }
 
   if (hashtags !== undefined) {
-    updates.hashtags = hashtags;
-    changes.push('hashtags');
+    const parsedHashtags = parseHashtagsParam(hashtags);
+
+    if (parsedHashtags) {
+      // If platform-specific object, merge with existing hashtags
+      if (!parsedHashtags._all) {
+        updates.hashtags = {
+          ...(post.hashtags || {}),
+          ...parsedHashtags
+        };
+      } else {
+        // Legacy array format - apply to all platforms
+        const allTags = parsedHashtags._all;
+        updates.hashtags = {
+          tiktok: allTags,
+          instagram: allTags,
+          youtube_shorts: allTags
+        };
+      }
+      changes.push('hashtags');
+    } else {
+      logger.warn('Invalid hashtags format provided, ignoring', { postId, hashtags });
+    }
   }
 
   if (voice !== undefined) {

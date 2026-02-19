@@ -11,9 +11,11 @@ import ManualTikTokMatchDialog from '../components/ManualTikTokMatchDialog.jsx';
 import { useSseEvents } from '../hooks/useSseEvents.js';
 import {
   mergeUpdatedPost,
+  mergeUpdatedPostWithSort,
   mergeNewPosts,
   removeDeletedPost,
-  mergeProgressUpdate
+  mergeProgressUpdate,
+  mergeMetricsUpdate
 } from '../utils/postUpdater.js';
 
 const LibraryContainer = styled.div`
@@ -2740,13 +2742,13 @@ function ContentLibrary() {
   // SSE event handlers with smart in-place merging (renamed to avoid conflicts)
   const handleSsePostCreated = useCallback((newPost) => {
     console.log('[SSE] Post created:', newPost._id);
-    setPosts(prevPosts => mergeUpdatedPost(prevPosts, newPost));
+    setPosts(prevPosts => mergeUpdatedPostWithSort(prevPosts, newPost));
     lastSseUpdateRef.current = Date.now();
   }, []);
 
   const handleSsePostUpdated = useCallback((updatedPost) => {
     console.log('[SSE] Post updated:', updatedPost._id);
-    setPosts(prevPosts => mergeUpdatedPost(prevPosts, updatedPost));
+    setPosts(prevPosts => mergeUpdatedPostWithSort(prevPosts, updatedPost));
     lastSseUpdateRef.current = Date.now();
   }, []);
 
@@ -2759,7 +2761,7 @@ function ContentLibrary() {
   const handleSsePostStatusChanged = useCallback((data) => {
     console.log('[SSE] Post status changed:', data.postId, data.newStatus);
     if (data.post) {
-      setPosts(prevPosts => mergeUpdatedPost(prevPosts, data.post));
+      setPosts(prevPosts => mergeUpdatedPostWithSort(prevPosts, data.post));
     }
     lastSseUpdateRef.current = Date.now();
   }, []);
@@ -2884,10 +2886,25 @@ function ContentLibrary() {
       const data = await response.json();
       const fetchedPosts = data.data.posts || [];
 
-      // Sort posts by: posted date > scheduled date > created date (descending)
+      // Sort posts by: actual post/attempt date > scheduled date > created date (descending)
       const sortedPosts = [...fetchedPosts].sort((a, b) => {
         const getDate = (post) => {
-          // If posted, use posted date
+          // Check platformStatus for earliest actual post/attempt date across all platforms
+          if (post.platformStatus) {
+            const dates = [];
+            // Check each platform for postedAt or lastFailedAt (attempted but failed)
+            Object.values(post.platformStatus).forEach(platformStatus => {
+              if (platformStatus) {
+                if (platformStatus.postedAt) dates.push(new Date(platformStatus.postedAt).getTime());
+                if (platformStatus.lastFailedAt) dates.push(new Date(platformStatus.lastFailedAt).getTime());
+              }
+            });
+            if (dates.length > 0) {
+              // Return the earliest date across all platforms
+              return Math.min(...dates);
+            }
+          }
+          // Fallback to postedAt for single-platform posts without platformStatus
           if (post.status === 'posted' && post.postedAt) {
             return new Date(post.postedAt).getTime();
           }
@@ -2926,7 +2943,22 @@ function ContentLibrary() {
 
   // Helper function to get the sort date for a post
   const getSortDate = (post) => {
-    // If posted, use posted date
+    // Check platformStatus for earliest actual post/attempt date across all platforms
+    if (post.platformStatus) {
+      const dates = [];
+      // Check each platform for postedAt or lastFailedAt (attempted but failed)
+      Object.values(post.platformStatus).forEach(platformStatus => {
+        if (platformStatus) {
+          if (platformStatus.postedAt) dates.push(new Date(platformStatus.postedAt).getTime());
+          if (platformStatus.lastFailedAt) dates.push(new Date(platformStatus.lastFailedAt).getTime());
+        }
+      });
+      if (dates.length > 0) {
+        // Return the earliest date across all platforms
+        return Math.min(...dates);
+      }
+    }
+    // Fallback to postedAt for single-platform posts without platformStatus
     if (post.status === 'posted' && post.postedAt) {
       return new Date(post.postedAt).getTime();
     }

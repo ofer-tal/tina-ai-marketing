@@ -16,6 +16,7 @@ import { getLogger } from '../utils/logger.js';
 import * as tieredVideoGenerator from '../services/tieredVideoGenerator.js';
 import * as runPodTTSGenerator from '../services/runPodTTSGenerator.js';
 import MarketingPost from '../models/MarketingPost.js';
+import sseService from '../services/sseService.js';
 
 // Available presets for validation
 const AVAILABLE_PRESETS = ['triple_visual', 'hook_first'];
@@ -466,6 +467,8 @@ router.post('/regenerate/:postId', async (req, res) => {
         });
         post.status = 'draft';
         await post.save();
+        // Broadcast SSE event for post update (status reset)
+        sseService.broadcastPostUpdated(post);
       } else {
         // genuinely still generating, reject request
         return res.status(409).json({
@@ -487,6 +490,8 @@ router.post('/regenerate/:postId', async (req, res) => {
 
     // Set status to generating before starting
     await post.startVideoGeneration();
+    // Broadcast SSE event for post update (generation started)
+    sseService.broadcastPostUpdated(post);
 
     // Respond immediately with generation started status
     res.json({
@@ -507,6 +512,8 @@ router.post('/regenerate/:postId', async (req, res) => {
 
         if (!story) {
           await post.failVideoGeneration('Associated story not found');
+          // Broadcast SSE event for post update (generation failed)
+          sseService.broadcastPostUpdated(post);
           logger.error('Story not found for video generation', { postId, storyId: post.storyId });
           return;
         }
@@ -613,6 +620,9 @@ router.post('/regenerate/:postId', async (req, res) => {
           result.metadata
         );
 
+        // Broadcast SSE event for post update (video ready)
+        sseService.broadcastPostUpdated(post);
+
         logger.info('Video regenerated successfully', {
           requestId,
           postId,
@@ -621,6 +631,8 @@ router.post('/regenerate/:postId', async (req, res) => {
 
       } catch (error) {
         await post.failVideoGeneration(error.message);
+        // Broadcast SSE event for post update (generation failed)
+        sseService.broadcastPostUpdated(post);
         logger.error('Video regeneration background job failed', {
           requestId,
           postId,

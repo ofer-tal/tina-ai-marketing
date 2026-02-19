@@ -2986,28 +2986,98 @@ router.get('/posts', async (req, res) => {
 
     logger.info('MongoDB query', { query });
 
-    const posts = await MarketingPost.find(query)
-      .populate('storyId', 'title coverPath spiciness category')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(parseInt(skip));
+    // Use aggregation to properly sort posts by their "display date"
+    // For multi-platform posts: use earliest platform postedAt or lastFailedAt
+    // For single-platform posted posts: use postedAt
+    // For non-posted posts: use scheduledAt
+    // For posts with neither: use createdAt
+    const aggregationPipeline = [
+      { $match: query },
+      {
+        $addFields: {
+          // Compute a sortDate field for proper sorting
+          sortDate: {
+            $cond: {
+              if: { $eq: ['$status', 'posted'] },
+              then: {
+                $ifNull: [
+                  '$postedAt',
+                  // For multi-platform, try to get earliest platform postedAt
+                  {
+                    $min: [
+                      { $ifNull: ['$platformStatus.tiktok.postedAt', null] },
+                      { $ifNull: ['$platformStatus.instagram.postedAt', null] },
+                      { $ifNull: ['$platformStatus.youtube_shorts.postedAt', null] },
+                      // Also check failed attempts
+                      { $ifNull: ['$platformStatus.tiktok.lastFailedAt', null] },
+                      { $ifNull: ['$platformStatus.instagram.lastFailedAt', null] },
+                      { $ifNull: ['$platformStatus.youtube_shorts.lastFailedAt', null] },
+                    ]
+                  },
+                  '$scheduledAt',
+                  '$createdAt'
+                ]
+              },
+              else: {
+                $ifNull: [
+                  // For non-posted posts, also check platform failed attempts
+                  {
+                    $min: [
+                      { $ifNull: ['$platformStatus.tiktok.lastFailedAt', null] },
+                      { $ifNull: ['$platformStatus.instagram.lastFailedAt', null] },
+                      { $ifNull: ['$platformStatus.youtube_shorts.lastFailedAt', null] },
+                    ]
+                  },
+                  '$scheduledAt',
+                  '$createdAt'
+                ]
+              }
+            }
+          }
+        }
+      },
+      { $sort: { sortDate: -1, createdAt: -1 } },
+      { $skip: parseInt(skip) },
+      { $limit: parseInt(limit) }
+    ];
+
+    const posts = await MarketingPost.aggregate(aggregationPipeline);
+
+    // Manually populate storyId since aggregation doesn't support populate()
+    const storyIds = posts.map(p => p.storyId).filter(id => id);
+    let storiesMap = {};
+    if (storyIds.length > 0) {
+      const Story = (await import('../models/Story.js')).default;
+      const stories = await Story.find({ _id: { $in: storyIds } })
+        .select('title coverPath spiciness category tags');
+      storiesMap = Object.fromEntries(stories.map(s => [s._id.toString(), s]));
+    }
+
+    // Attach story data to posts
+    const postsWithStories = posts.map(post => ({
+      ...post,
+      story: post.storyId ? storiesMap[post.storyId.toString()] : null
+    }));
 
     const total = await MarketingPost.countDocuments(query);
 
     // Convert file paths to URLs for frontend access
-    const postsWithUrls = posts.map(post => {
-      const plainPost = post.toObject();
+    const postsWithUrls = postsWithStories.map(post => {
+      // For aggregation results, post is already a plain object
+      const plainPost = post;
 
-      // Explicitly convert tierParameters Map to plain object
-      if (plainPost.tierParameters instanceof Map) {
-        plainPost.tierParameters = Object.fromEntries(plainPost.tierParameters);
+      // Explicitly convert tierParameters Map to plain object (if it's a Map)
+      let tierParameters = plainPost.tierParameters;
+      if (tierParameters instanceof Map) {
+        tierParameters = Object.fromEntries(tierParameters);
       }
 
       return {
         ...plainPost,
-        videoPath: storagePathToUrl(post.videoPath),
-        imagePath: storagePathToUrl(post.imagePath),
-        thumbnailPath: storagePathToUrl(post.thumbnailPath)
+        tierParameters,
+        videoPath: storagePathToUrl(plainPost.videoPath),
+        imagePath: storagePathToUrl(plainPost.imagePath),
+        thumbnailPath: storagePathToUrl(plainPost.thumbnailPath)
       };
     });
 
@@ -4496,30 +4566,33 @@ router.post('/posts/:id/upload-tier2-video', videoUpload.single('video'), async 
       // Continue without thumbnail
     }
 
-    // Update post - store absolute file paths for video operations
-    post.videoPath = videoPath;
-    post.thumbnailPath = thumbnailPath;
+    // Convert to URL paths for storage (consistent with tier_1 videos)
+    const videoUrl = `/storage/videos/tier2/final/${filename}`;
+    const thumbnailUrl = thumbnailPath ? `/storage/thumbnails/${thumbnailFilename}` : null;
+
+    // Update post - store URL paths for frontend
+    post.videoPath = videoUrl;
+    post.thumbnailPath = thumbnailUrl;
     post.status = 'ready'; // Ready for approval
     await post.save();
 
+    // Broadcast SSE event for post update (video uploaded)
+    sseService.broadcastPostUpdated(post);
+
     logger.info('Tier_2 video uploaded successfully', {
       postId: id,
-      videoPath,
-      thumbnailPath
+      videoPath: post.videoPath,
+      thumbnailPath: post.thumbnailPath
     });
-
-    // Convert absolute paths to URL paths for frontend
-    const videoUrl = `/storage/videos/tier2/final/${filename}`;
-    const thumbnailUrl = post.thumbnailPath ? `/storage/thumbnails/${thumbnailFilename}` : null;
 
     res.json({
       success: true,
       data: {
         id: post._id,
-        videoPath: videoUrl, // URL path for frontend
-        videoUrl: videoUrl,
-        thumbnailPath: thumbnailUrl, // URL path for frontend
-        thumbnailUrl: thumbnailUrl,
+        videoPath: post.videoPath,
+        videoUrl: post.videoPath,
+        thumbnailPath: post.thumbnailPath,
+        thumbnailUrl: post.thumbnailPath,
         status: post.status
       }
     });

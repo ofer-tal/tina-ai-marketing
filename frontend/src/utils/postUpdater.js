@@ -10,6 +10,41 @@
  */
 
 /**
+ * Get the sort date for a post
+ * Matches the sorting logic in ContentLibrary.jsx
+ *
+ * @param {Object} post - Post object
+ * @returns {number} Timestamp for sorting
+ */
+function getSortDate(post) {
+  // Check platformStatus for earliest actual post/attempt date across all platforms
+  if (post.platformStatus) {
+    const dates = [];
+    // Check each platform for postedAt or lastFailedAt (attempted but failed)
+    Object.values(post.platformStatus).forEach(platformStatus => {
+      if (platformStatus) {
+        if (platformStatus.postedAt) dates.push(new Date(platformStatus.postedAt).getTime());
+        if (platformStatus.lastFailedAt) dates.push(new Date(platformStatus.lastFailedAt).getTime());
+      }
+    });
+    if (dates.length > 0) {
+      // Return the earliest date across all platforms
+      return Math.min(...dates);
+    }
+  }
+  // Fallback to postedAt for single-platform posts without platformStatus
+  if (post.status === 'posted' && post.postedAt) {
+    return new Date(post.postedAt).getTime();
+  }
+  // If scheduled but not posted, use scheduled date
+  if (post.scheduledAt) {
+    return new Date(post.scheduledAt).getTime();
+  }
+  // Otherwise use creation date
+  return new Date(post.createdAt || 0).getTime();
+}
+
+/**
  * Merge a single updated post into existing posts array
  * Updates the post in-place if it exists, or prepends if new
  *
@@ -75,6 +110,31 @@ export function mergeUpdatedPost(posts, updatedPost) {
   };
 
   return newPosts;
+}
+
+/**
+ * Merge a single updated post and re-sort the array
+ * Use this for posts whose sort date may have changed (status changes, posting, etc.)
+ *
+ * @param {Array<Object>} posts - Current posts array
+ * @param {Object} updatedPost - Post data to merge
+ * @returns {Array<Object>} Updated posts array (same ref if no change)
+ */
+export function mergeUpdatedPostWithSort(posts, updatedPost) {
+  if (!posts || !updatedPost) {
+    return posts;
+  }
+
+  // First, merge the update (or add as new)
+  const mergedPosts = mergeUpdatedPost(posts, updatedPost);
+
+  // If no changes (same reference), return as-is
+  if (mergedPosts === posts) {
+    return posts;
+  }
+
+  // Re-sort the array
+  return [...mergedPosts].sort((a, b) => getSortDate(b) - getSortDate(a));
 }
 
 /**
@@ -451,6 +511,7 @@ export function applyBatchUpdates(posts, events) {
 
 export default {
   mergeUpdatedPost,
+  mergeUpdatedPostWithSort,
   mergeNewPosts,
   removeDeletedPost,
   mergeProgressUpdate,

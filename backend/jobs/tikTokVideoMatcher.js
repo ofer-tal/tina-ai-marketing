@@ -19,6 +19,7 @@
 import schedulerService from '../services/scheduler.js';
 import MarketingPost from '../models/MarketingPost.js';
 import tiktokPostingService from '../services/tiktokPostingService.js';
+import sseService from '../services/sseService.js';
 import { getLogger } from '../utils/logger.js';
 
 const logger = getLogger('tiktok-video-matcher', 'scheduler');
@@ -131,6 +132,13 @@ class TikTokVideoMatcherJob {
           sheetTriggeredAt: post.sheetTriggeredAt,
           timeSinceSheetTrigger: Math.round(timeSinceSheetTrigger / 60000) + ' minutes'
         });
+
+        // Broadcast SSE event for status change (non-blocking)
+        try {
+          sseService.broadcastPostStatusChanged(post, 'posting');
+        } catch (sseError) {
+          logger.warn('Failed to broadcast SSE status change', { error: sseError.message });
+        }
 
         markedFailed++;
       } else {
@@ -292,6 +300,14 @@ class TikTokVideoMatcherJob {
               postId: matchResult.postId,
               matchMethod: matchResult.method,
             });
+
+            // Broadcast SSE event for status change (non-blocking)
+            try {
+              const updatedPost = await MarketingPost.findById(matchResult.postId);
+              sseService.broadcastPostStatusChanged(updatedPost, 'posting');
+            } catch (sseError) {
+              logger.warn('Failed to broadcast SSE status change', { error: sseError.message });
+            }
 
             stats.matched++;
             existingVideoIds.add(videoId);
@@ -579,6 +595,30 @@ class TikTokVideoMatcherJob {
           },
         }
       );
+
+      // Broadcast SSE event for metrics update (non-blocking)
+      try {
+        const views = video.view_count || 0;
+        const likes = video.like_count || 0;
+        const comments = video.comment_count || 0;
+        const shares = video.share_count || 0;
+        sseService.broadcastPostMetricsUpdated(post._id.toString(), {
+          platformStatus: {
+            tiktok: {
+              performanceMetrics: {
+                views,
+                likes,
+                comments,
+                shares,
+                engagementRate,
+              }
+            }
+          },
+          performanceMetrics: { views, likes, comments, shares, engagementRate }
+        });
+      } catch (sseError) {
+        logger.warn('Failed to broadcast SSE metrics update', { error: sseError.message });
+      }
 
     } catch (error) {
       logger.warn('Failed to update video metrics', {
